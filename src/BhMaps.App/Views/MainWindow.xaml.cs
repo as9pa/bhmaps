@@ -19,4 +19,6 @@ public partial class MainWindow : Window
             await vm.RescanAsync();
         }
     }
+
+    private void ApplyFrom_Click(object sender, RoutedEventArgs e) => DropdownButton.Open(sender);
 }

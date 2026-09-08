@@ -1,7 +1,11 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Media;
 using BhMaps.App.Services;
+using BhMaps.Core.Game;
+using BhMaps.Core.Model;
+using BhMaps.Core.Operations;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -10,11 +14,13 @@ namespace BhMaps.App.ViewModels;
 public partial class MainViewModel : ObservableObject
 {
     private readonly AppServices _services;
+    private readonly IDialogs _dialogs;
     private CancellationTokenSource? _cts;
 
-    public MainViewModel(AppServices services)
+    public MainViewModel(AppServices services, IDialogs dialogs)
     {
         _services = services;
+        _dialogs = dialogs;
         ProgressText = "";
         StatusText = services.GamePath;
     }
@@ -23,12 +29,21 @@ public partial class MainViewModel : ObservableObject
 
     public ObservableCollection<FolderCardViewModel> Folders { get; } = new();
 
+    /// <summary>Result of the last successful scan. Null until the first scan completes.</summary>
+    protected ScanSnapshot? Snapshot { get; private set; }
+
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ApplyAllCommand), nameof(OpenPackFolderCommand))]
     public partial PackItemViewModel? SelectedPack { get; set; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsNotBusy))]
-    [NotifyCanExecuteChangedFor(nameof(RefreshCommand))]
+    [NotifyCanExecuteChangedFor(
+        nameof(RefreshCommand),
+        nameof(ResetAllCommand),
+        nameof(LaunchGameCommand),
+        nameof(ApplyAllCommand),
+        nameof(OpenPackFolderCommand))]
     public partial bool IsBusy { get; set; }
 
     [ObservableProperty]
@@ -41,11 +56,124 @@ public partial class MainViewModel : ObservableObject
 
     private bool CanAct() => !IsBusy;
 
+    private bool HasSelectedPack() => !IsBusy && SelectedPack is not null;
+
     [RelayCommand(CanExecute = nameof(CanAct))]
     private Task RefreshAsync() => RescanAsync();
 
     [RelayCommand]
     private void Cancel() => _cts?.Cancel();
+
+    [RelayCommand(CanExecute = nameof(CanAct))]
+    private void LaunchGame() => GameProcess.Launch();
+
+    [RelayCommand(CanExecute = nameof(CanAct))]
+    private async Task ResetAllAsync()
+    {
+        if (Snapshot is null)
+        {
+            return;
+        }
+
+        var count = Snapshot.Tree.Folders.Count;
+        if (!_dialogs.Confirm("Reset all", $"Delete the map art in all {count} folders? Brawlhalla regenerates the defaults on its next launch."))
+        {
+            return;
+        }
+
+        if (!ConfirmIfGameRunning())
+        {
+            return;
+        }
+
+        ResetResult? result = null;
+        await RunBusyAsync(
+            "Resetting",
+            (progress, ct) => Task.Run(() => { result = GameResetter.ResetAll(_services.GamePath, progress, ct); }, ct));
+        if (result is not null)
+        {
+            _dialogs.ShowFailures("Some files could not be deleted", result.Failures);
+        }
+
+        await RescanAsync();
+    }
+
+    [RelayCommand(CanExecute = nameof(HasSelectedPack))]
+    private async Task ApplyAllAsync()
+    {
+        var pack = SelectedPack?.Pack;
+        if (pack is null || !ConfirmIfGameRunning())
+        {
+            return;
+        }
+
+        ApplyResult? result = null;
+        await RunBusyAsync(
+            $"Applying {pack.Name}",
+            (progress, ct) => Task.Run(() => { result = PackApplier.ApplyPack(pack, _services.GamePath, progress, ct); }, ct));
+        if (result is not null)
+        {
+            _dialogs.ShowFailures("Some files could not be copied", result.Failures);
+        }
+
+        await RescanAsync();
+    }
+
+    [RelayCommand(CanExecute = nameof(HasSelectedPack))]
+    private void OpenPackFolder()
+    {
+        var pack = SelectedPack?.Pack;
+        if (pack is null)
+        {
+            return;
+        }
+
+        Process.Start(new ProcessStartInfo("explorer.exe", $"\"{pack.FullPath}\"") { UseShellExecute = true })?.Dispose();
+    }
+
+    public async Task ApplyFolderFromPackAsync(string folderName, string packName)
+    {
+        var pack = FindPack(packName);
+        if (pack is null || !ConfirmIfGameRunning())
+        {
+            return;
+        }
+
+        ApplyResult? result = null;
+        await RunBusyAsync(
+            $"Applying {folderName} from {packName}",
+            (progress, ct) => Task.Run(() => { result = PackApplier.ApplyFolder(pack, folderName, _services.GamePath, progress, ct); }, ct));
+        if (result is not null)
+        {
+            _dialogs.ShowFailures("Some files could not be copied", result.Failures);
+        }
+
+        await RescanAsync();
+    }
+
+    public async Task ResetFolderAsync(string folderName)
+    {
+        if (!_dialogs.Confirm("Reset folder", $"Delete the map art in {folderName}? Brawlhalla regenerates the defaults on its next launch."))
+        {
+            return;
+        }
+
+        if (!ConfirmIfGameRunning())
+        {
+            return;
+        }
+
+        ResetResult? result = null;
+        await RunBusyAsync(
+            $"Resetting {folderName}",
+            (_, _) => Task.Run(() => { result = GameResetter.ResetFolder(_services.GamePath, folderName); }));
+        if (result is not null)
+        {
+            _dialogs.ShowFailures("Some files could not be deleted", result.Failures);
+        }
+
+        await RescanAsync();
+    }
 
     public async Task RescanAsync()
     {
@@ -58,8 +186,19 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
+        Snapshot = snapshot;
         Populate(snapshot);
     }
+
+    /// <summary>Spec 6: warn when Brawlhalla is running. True means go ahead.</summary>
+    protected bool ConfirmIfGameRunning() =>
+        !GameProcess.IsRunning()
+        || _dialogs.Confirm(
+            "Brawlhalla is running",
+            "Brawlhalla is running. Changes will not show until it restarts, and some files may be locked. Continue?");
+
+    protected Pack? FindPack(string name) =>
+        Snapshot?.Packs.FirstOrDefault(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>Runs one long operation with the busy flag, progress text, and Cancel. False when cancelled or failed.</summary>
     protected async Task<bool> RunBusyAsync(string label, Func<IProgress<string>, CancellationToken, Task> work)
@@ -84,7 +223,7 @@ public partial class MainViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            MessageBox.Show(ex.Message, "Something went wrong", MessageBoxButton.OK, MessageBoxImage.Error);
+            _dialogs.Error("Something went wrong", ex.Message);
             return false;
         }
         finally
@@ -111,7 +250,7 @@ public partial class MainViewModel : ObservableObject
         var tile = Application.Current.TryFindResource("BackgroundsTile") as ImageSource;
         foreach (var folder in snapshot.Tree.Folders)
         {
-            var card = new FolderCardViewModel(folder, snapshot.Status.ForFolder(folder.Name));
+            var card = new FolderCardViewModel(this, folder, snapshot.Status.ForFolder(folder.Name), snapshot.Packs);
             Folders.Add(card);
             _ = card.LoadThumbnailAsync(_services.Thumbnails, tile);
         }
