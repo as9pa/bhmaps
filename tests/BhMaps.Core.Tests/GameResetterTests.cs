@@ -1,3 +1,5 @@
+using System.Security.AccessControl;
+using System.Security.Principal;
 using BhMaps.Core.Operations;
 using BhMaps.Core.Tests.Helpers;
 
@@ -5,6 +7,24 @@ namespace BhMaps.Core.Tests;
 
 public class GameResetterTests
 {
+    /// <summary>Denies this user permission to list the folder, so enumerating it throws while it still exists.</summary>
+    private static void SetListingDenied(string directory, bool denied)
+    {
+        var info = new DirectoryInfo(directory);
+        var security = info.GetAccessControl();
+        var rule = new FileSystemAccessRule(WindowsIdentity.GetCurrent().User!, FileSystemRights.ListDirectory, AccessControlType.Deny);
+        if (denied)
+        {
+            security.AddAccessRule(rule);
+        }
+        else
+        {
+            security.RemoveAccessRule(rule);
+        }
+
+        info.SetAccessControl(security);
+    }
+
     [Fact]
     public void ResetFolder_DeletesPngAndJpgCaseInsensitivelyOnly()
     {
@@ -35,6 +55,32 @@ public class GameResetterTests
 
         Assert.Equal(0, result.Deleted);
         Assert.Empty(result.Failures);
+    }
+
+    [Fact]
+    public void ResetFolder_UnreadableFolderIsRecordedAsFailure()
+    {
+        using var tmp = new TempDir();
+        var game = Path.Combine(tmp.Path, "game");
+        new FakeGameTree(game).File("BloodMoon", "A.png", "x");
+        var denied = Path.Combine(game, "BloodMoon");
+
+        SetListingDenied(denied, denied: true);
+        try
+        {
+            var result = GameResetter.ResetFolder(game, "BloodMoon");
+
+            Assert.Equal(0, result.Deleted);
+            var failure = Assert.Single(result.Failures);
+            Assert.Equal(denied, failure.Path);
+            Assert.NotEmpty(failure.Error);
+        }
+        finally
+        {
+            SetListingDenied(denied, denied: false);
+        }
+
+        Assert.True(File.Exists(Path.Combine(game, "BloodMoon", "A.png")));
     }
 
     [Fact]

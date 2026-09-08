@@ -8,9 +8,22 @@ public static class GameResetter
 {
     public static ResetResult ResetFolder(string gamePath, string folderName)
     {
+        var directory = Path.Combine(gamePath, folderName);
         var deleted = 0;
         var failures = new List<FileFailure>();
-        foreach (var file in ImageFiles.ListImageFiles(Path.Combine(gamePath, folderName)))
+
+        IReadOnlyList<GameFile> files;
+        try
+        {
+            files = ImageFiles.ListImageFiles(directory);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // An unreadable folder is one failure for the folder, not an aborted batch.
+            return new ResetResult(0, [new FileFailure(directory, ex.Message)]);
+        }
+
+        foreach (var file in files)
         {
             DeleteOne(file.FullPath, ref deleted, failures);
         }
