@@ -49,4 +49,13 @@ public class ThumbnailProviderTests
         Assert.Null(await new ThumbnailProvider().GetAsync(bogus, 1));
         Assert.Null(ThumbnailProvider.Decode(Path.Combine(tmp.Path, "missing.png")));
     }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task GetAsync_ReturnsNullForEmptyOrWhitespacePath(string path)
+    {
+        Assert.Null(ThumbnailProvider.Decode(path));
+        Assert.Null(await new ThumbnailProvider().GetAsync(path, 1));
+    }
 }
