@@ -118,8 +118,10 @@ dotnet run --project src\BhMaps.App -- --game "$env:TEMP\bhmaps-dev\game" --libr
 
 `--game`, `--library`, and `--appdata` each take a path. The first two override the saved settings
 for that run only and are never written back; `--appdata` chooses the folder holding `settings.json`
-and `hashcache.json`. Any of the three may be left out. The script prints the command with the paths
-already filled in.
+and `hashcache.json`. Passing `--game` or `--library` without `--appdata` is refused at startup with
+an error dialog and a non-zero exit code, because only `--appdata` moves the settings file: such a
+run would otherwise still write the real `%APPDATA%\BhMaps\settings.json`. Give all three or none.
+The script prints the command with the paths already filled in.
 
 Formatting and layout:
 
