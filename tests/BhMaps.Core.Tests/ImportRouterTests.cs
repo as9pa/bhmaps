@@ -1,3 +1,5 @@
+using System.Security.AccessControl;
+using System.Security.Principal;
 using BhMaps.Core.Model;
 using BhMaps.Core.Operations;
 using BhMaps.Core.Scanning;
@@ -15,6 +17,24 @@ public class ImportRouterTests
     }
 
     private static string Src(TempDir tmp) => Path.Combine(tmp.Path, "src");
+
+    /// <summary>Denies this user permission to list the folder, so enumerating it throws while it still exists.</summary>
+    private static void SetListingDenied(string directory, bool denied)
+    {
+        var info = new DirectoryInfo(directory);
+        var security = info.GetAccessControl();
+        var rule = new FileSystemAccessRule(WindowsIdentity.GetCurrent().User!, FileSystemRights.ListDirectory, AccessControlType.Deny);
+        if (denied)
+        {
+            security.AddAccessRule(rule);
+        }
+        else
+        {
+            security.RemoveAccessRule(rule);
+        }
+
+        info.SetAccessControl(security);
+    }
 
     [Fact]
     public void ParentFolderNameWinsEvenForCollidingAndUnknownNames()
@@ -88,6 +108,46 @@ public class ImportRouterTests
     }
 
     [Fact]
+    public void UnreadableSubfolderIsSkippedInsteadOfAbortingThePlan()
+    {
+        using var tmp = new TempDir();
+        var tree = StandardTree(tmp);
+        new FakeGameTree(Src(tmp)).File("Swamp", "Mud1.png", "readable").File("locked", "LeftWall.png", "x");
+        var denied = Path.Combine(Src(tmp), "locked");
+
+        SetListingDenied(denied, denied: true);
+        try
+        {
+            var plan = ImportRouter.Plan(Src(tmp), tree);
+
+            var row = Assert.Single(plan.Rows);
+            Assert.Equal(Path.Combine(Src(tmp), "Swamp", "Mud1.png"), row.SourcePath);
+            Assert.Equal("Swamp", row.TargetFolder);
+            Assert.Equal(1, plan.IncludedCount);
+        }
+        finally
+        {
+            SetListingDenied(denied, denied: false);
+        }
+    }
+
+    [Fact]
+    public void HiddenImagesAreStillPlanned()
+    {
+        using var tmp = new TempDir();
+        var tree = StandardTree(tmp);
+        new FakeGameTree(Src(tmp)).File("Swamp", "Mud1.png", "x");
+        var hidden = Path.Combine(Src(tmp), "Swamp", "Mud1.png");
+        File.SetAttributes(hidden, FileAttributes.Hidden);
+
+        var plan = ImportRouter.Plan(Src(tmp), tree);
+
+        var row = Assert.Single(plan.Rows);
+        Assert.Equal(hidden, row.SourcePath);
+        Assert.Equal("Swamp", row.TargetFolder);
+    }
+
+    [Fact]
     public void MissingSourceFolderYieldsEmptyPlan()
     {
         using var tmp = new TempDir();
@@ -122,6 +182,43 @@ public class ImportRouterTests
         plan.SetInclude(ambiguous, false);
         Assert.False(ambiguous.Include);
         Assert.Equal(1, plan.IncludedCount);
+    }
+
+    [Theory]
+    [InlineData("Zombie")]
+    [InlineData("BloodMoon")]
+    [InlineData("My Folder")]
+    public void AssignFolderAcceptsAnOrdinaryFolderName(string folderName)
+    {
+        using var tmp = new TempDir();
+        var tree = StandardTree(tmp);
+        new FakeGameTree(Src(tmp)).File("stuff", "Whatever.png", "x");
+        var plan = ImportRouter.Plan(Src(tmp), tree);
+
+        plan.AssignFolder(plan.Rows[0], folderName);
+
+        Assert.Equal(Route.Routed, plan.Rows[0].Route);
+        Assert.Equal(folderName, plan.Rows[0].TargetFolder);
+        Assert.Equal(1, plan.IncludedCount);
+    }
+
+    [Theory]
+    [InlineData("..")]
+    [InlineData("C:\\Windows")]
+    [InlineData("sub\\folder")]
+    [InlineData("")]
+    public void AssignFolderRejectsNamesThatAreNotOneFolder(string folderName)
+    {
+        using var tmp = new TempDir();
+        var tree = StandardTree(tmp);
+        new FakeGameTree(Src(tmp)).File("stuff", "Whatever.png", "x");
+        var plan = ImportRouter.Plan(Src(tmp), tree);
+
+        Assert.Throws<ArgumentException>(() => plan.AssignFolder(plan.Rows[0], folderName));
+
+        Assert.Equal(Route.Unmatched, plan.Rows[0].Route);
+        Assert.Null(plan.Rows[0].TargetFolder);
+        Assert.Equal(0, plan.IncludedCount);
     }
 
     [Fact]
