@@ -93,6 +93,22 @@ public class SettingsStoreTests
     }
 
     [Fact]
+    public void ValidateGamePath_ReportsAnUnreadableFolderAsAnError()
+    {
+        using var tmp = new TempDir();
+        var game = Path.Combine(tmp.Path, "game");
+        Directory.CreateDirectory(Path.Combine(game, "BloodMoon"));
+
+        using (AccessDenial.DenyListing(game))
+        {
+            Assert.False(SettingsStore.ValidateGamePath(game, out var error));
+            Assert.Contains("Game folder cannot be read:", error);
+        }
+
+        Assert.True(SettingsStore.ValidateGamePath(game, out _));
+    }
+
+    [Fact]
     public void ValidateLibraryPath_AcceptsExistingOrCreatableAbsolutePaths()
     {
         using var tmp = new TempDir();
