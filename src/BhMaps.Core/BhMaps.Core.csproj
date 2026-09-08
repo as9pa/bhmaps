@@ -9,4 +9,8 @@
     <RootNamespace>BhMaps.Core</RootNamespace>
   </PropertyGroup>
 
+  <ItemGroup>
+    <Using Include="System.IO" />
+  </ItemGroup>
+
 </Project>

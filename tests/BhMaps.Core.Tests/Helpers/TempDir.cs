@@ -1,5 +1,3 @@
-using System.IO;
-
 namespace BhMaps.Core.Tests.Helpers;
 
 /// <summary>A unique folder under the system temp path, deleted on dispose.</summary>
