@@ -3,6 +3,9 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Import into a pack" Width="1000" Height="660" MinWidth="780" MinHeight="440"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+  <Window.Resources>
+    <BooleanToVisibilityConverter x:Key="BoolToVis" />
+  </Window.Resources>
   <DockPanel Margin="12">
     <Grid DockPanel.Dock="Top" Margin="0,0,0,8">
       <Grid.ColumnDefinitions>
@@ -24,6 +27,8 @@
       <TextBlock Grid.Row="1" Text="Pack name" VerticalAlignment="Center" Margin="0,0,8,4" />
       <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding PackName, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,6,4" Padding="3" />
       <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding NameError}" Foreground="#C62828" VerticalAlignment="Center" />
+      <TextBlock Grid.Row="2" Text="Scanning..." Foreground="#555555" VerticalAlignment="Center"
+                 Visibility="{Binding IsScanning, Converter={StaticResource BoolToVis}}" />
       <TextBlock Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding Summary}" TextWrapping="Wrap" Foreground="#555555" />
     </Grid>
     <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
