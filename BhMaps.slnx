@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/BhMaps.App/BhMaps.App.csproj" />
+    <Project Path="src/BhMaps.Core/BhMaps.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/BhMaps.Core.Tests/BhMaps.Core.Tests.csproj" />
+  </Folder>
+</Solution>
