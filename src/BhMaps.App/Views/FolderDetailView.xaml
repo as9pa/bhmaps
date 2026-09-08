@@ -37,6 +37,8 @@
                   </ContextMenu>
                 </Button.ContextMenu>
               </Button>
+              <Button Content="Edit..." Padding="8,2" Margin="4,0" Command="{Binding EditCommand}"
+                      Visibility="{Binding CanEdit, Converter={StaticResource BoolToVis}}" />
               <Button Content="Reset" Padding="8,2" Margin="4,0" Command="{Binding ResetCommand}" />
             </StackPanel>
             <StackPanel VerticalAlignment="Center">

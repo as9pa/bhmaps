@@ -50,6 +50,12 @@ public partial class FileRowViewModel : ObservableObject
 
     public bool CanReset => !IsMissing;
 
+    /// <summary>Spec 5.2: only Backgrounds rows get an Edit button.</summary>
+    public bool CanEdit => _folderName.Equals("Backgrounds", StringComparison.OrdinalIgnoreCase);
+
+    [RelayCommand]
+    private Task EditAsync() => _main.OpenBackgroundEditorAsync(FileName);
+
     [ObservableProperty]
     public partial ImageSource? Thumbnail { get; set; }
 
