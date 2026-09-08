@@ -56,7 +56,7 @@ public static class SettingsStore
         AtomicFile.WriteAllText(settingsPath, JsonSerializer.Serialize(file, JsonOptions));
     }
 
-    /// <summary>The game path must exist and contain at least one subfolder.</summary>
+    /// <summary>The game path must exist, be readable, and contain at least one subfolder.</summary>
     public static bool ValidateGamePath(string? path, out string error)
     {
         error = "";
@@ -72,7 +72,18 @@ public static class SettingsStore
             return false;
         }
 
-        if (!Directory.EnumerateDirectories(path).Any())
+        bool hasMapFolder;
+        try
+        {
+            hasMapFolder = Directory.EnumerateDirectories(path).Any();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            error = $"Game folder cannot be read: {ex.Message}";
+            return false;
+        }
+
+        if (!hasMapFolder)
         {
             error = $"Game path has no map folders inside it: {path}";
             return false;
