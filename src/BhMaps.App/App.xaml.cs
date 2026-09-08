@@ -18,6 +18,14 @@ public partial class App : Application
         };
 
         var parsed = CommandLine.Parse(e.Args);
+        if (parsed.MissingAppDataError() is { } overrideError)
+        {
+            // Refuse before anything loads settings or scans, so the real %APPDATA% files stay as they were.
+            MessageBox.Show(overrideError, "Development overrides need --appdata", MessageBoxButton.OK, MessageBoxImage.Error);
+            Shutdown(1);
+            return;
+        }
+
         var services = new AppServices(parsed.AppData ?? SettingsStore.DefaultAppDataDir, parsed.Game, parsed.Library);
         var dialogs = new WpfDialogs();
 
