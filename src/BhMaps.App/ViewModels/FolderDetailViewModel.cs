@@ -15,7 +15,6 @@ public partial class FolderDetailViewModel : ObservableObject
     {
         _main = main;
         FolderName = folderName;
-        IsBackgrounds = folderName.Equals("Backgrounds", StringComparison.OrdinalIgnoreCase);
 
         var gameFolder = snapshot.Tree.FindFolder(folderName);
         var gameFiles = gameFolder?.Files ?? Array.Empty<GameFile>();
@@ -52,8 +51,6 @@ public partial class FolderDetailViewModel : ObservableObject
     }
 
     public string FolderName { get; }
-
-    public bool IsBackgrounds { get; }
 
     public string Title { get; }
 
