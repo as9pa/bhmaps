@@ -21,11 +21,18 @@ public partial class App : Application
         var services = new AppServices(parsed.AppData ?? SettingsStore.DefaultAppDataDir, parsed.Game, parsed.Library);
         var dialogs = new WpfDialogs();
 
-        if (!SettingsStore.ValidateGamePath(services.GamePath, out var error))
+        // Spec 6: no valid game path means Settings first, not a crash and not an empty grid.
+        while (!SettingsStore.ValidateGamePath(services.GamePath, out var error))
         {
-            dialogs.Error("BhMaps", $"{error}\n\nEdit {services.SettingsPath} or start with --game <path>.");
-            Shutdown();
-            return;
+            var settings = new SettingsWindow
+            {
+                DataContext = new SettingsViewModel(services, dialogs, $"Set the Brawlhalla mapArt folder to continue. {error}"),
+            };
+            if (settings.ShowDialog() != true)
+            {
+                Shutdown();
+                return;
+            }
         }
 
         var window = new MainWindow { DataContext = new MainViewModel(services, dialogs) };

@@ -52,7 +52,8 @@ public partial class MainViewModel : ObservableObject
         nameof(OpenPackFolderCommand),
         nameof(ImportCommand),
         nameof(SaveCurrentCommand),
-        nameof(NewBackgroundCommand))]
+        nameof(NewBackgroundCommand),
+        nameof(OpenSettingsCommand))]
     public partial bool IsBusy { get; set; }
 
     [ObservableProperty]
@@ -75,6 +76,23 @@ public partial class MainViewModel : ObservableObject
 
     [RelayCommand(CanExecute = nameof(CanAct))]
     private void LaunchGame() => GameProcess.Launch();
+
+    [RelayCommand(CanExecute = nameof(CanAct))]
+    private async Task OpenSettingsAsync()
+    {
+        var window = new SettingsWindow
+        {
+            DataContext = new SettingsViewModel(_services, _dialogs, null),
+            Owner = Application.Current.MainWindow,
+        };
+        if (window.ShowDialog() != true)
+        {
+            return;
+        }
+
+        StatusText = _services.GamePath;
+        await RescanAsync();
+    }
 
     [RelayCommand(CanExecute = nameof(CanAct))]
     private async Task ResetAllAsync()
