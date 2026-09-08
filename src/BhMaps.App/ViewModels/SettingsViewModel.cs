@@ -70,8 +70,10 @@ public partial class SettingsViewModel : ObservableObject
     [RelayCommand]
     private void Ok()
     {
-        var game = GamePath.Trim();
-        var library = LibraryPath.Trim();
+        var game = Normalize(GamePath);
+        var library = Normalize(LibraryPath);
+        GamePath = game;
+        LibraryPath = library;
         var gameOk = SettingsStore.ValidateGamePath(game, out var gameError);
         var libraryOk = SettingsStore.ValidateLibraryPath(library, out var libraryError);
         GameError = gameOk ? "" : gameError;
@@ -93,5 +95,14 @@ public partial class SettingsViewModel : ObservableObject
         }
 
         CloseRequested?.Invoke(true);
+    }
+
+    /// <summary>Explorer's "Copy as path" wraps the path in quotes; strip one surrounding pair so it still resolves.</summary>
+    private static string Normalize(string path)
+    {
+        var trimmed = path.Trim();
+        return trimmed.Length >= 2 && trimmed.StartsWith('"') && trimmed.EndsWith('"')
+            ? trimmed[1..^1]
+            : trimmed;
     }
 }
