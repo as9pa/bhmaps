@@ -174,8 +174,13 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
+        // Inside RunBusyAsync so the pack stays selected but Apply All, Open Folder, Import and
+        // Save Current cannot run against a folder that is being deleted underneath them.
         var libraryPath = _services.LibraryPath;
-        var error = await Task.Run(() => PackDeleter.Delete(libraryPath, pack.Name));
+        string? error = null;
+        await RunBusyAsync(
+            $"Deleting pack {pack.Name}",
+            (_, _) => Task.Run(() => { error = PackDeleter.Delete(libraryPath, pack.Name); }));
         if (error is not null)
         {
             _dialogs.Error("Could not delete pack", error);
