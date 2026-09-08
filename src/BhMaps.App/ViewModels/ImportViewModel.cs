@@ -47,12 +47,20 @@ public partial class ImportViewModel : ObservableObject
     [ObservableProperty]
     public partial string Summary { get; set; }
 
+    /// <summary>True while the source folder is being walked off the UI thread (spec 5.5).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanImport))]
+    [NotifyCanExecuteChangedFor(nameof(BrowseCommand), nameof(ScanCommand), nameof(ImportCommand))]
+    public partial bool IsScanning { get; set; }
+
     public string NameError => PackNameValidator.IsValid(PackName, out var error) ? "" : error;
 
-    public bool CanImport => Plan is not null && IncludedCount > 0 && NameError.Length == 0;
+    public bool CanImport => !IsScanning && Plan is not null && IncludedCount > 0 && NameError.Length == 0;
 
-    [RelayCommand]
-    private void Browse()
+    private bool CanBrowse() => !IsScanning;
+
+    [RelayCommand(CanExecute = nameof(CanBrowse))]
+    private async Task BrowseAsync()
     {
         var folder = _dialogs.PickFolder("Choose a folder to import");
         if (folder is null)
@@ -66,22 +74,38 @@ public partial class ImportViewModel : ObservableObject
             PackName = Path.GetFileName(folder.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
         }
 
-        Scan();
+        await ScanAsync();
     }
 
-    private bool CanScan() => Directory.Exists(SourcePath);
+    private bool CanScan() => !IsScanning && Directory.Exists(SourcePath);
 
+    /// <summary>Spec 5.5: the dialog is modal, so walking a large source folder must not run on the UI thread.</summary>
     [RelayCommand(CanExecute = nameof(CanScan))]
-    private void Scan()
+    private async Task ScanAsync()
     {
-        Plan = ImportRouter.Plan(SourcePath, _tree);
-        Rows.Clear();
-        foreach (var row in Plan.Rows)
+        var source = SourcePath;
+        IsScanning = true;
+        try
         {
-            Rows.Add(new ImportRowViewModel(this, row));
+            var plan = await Task.Run(() => ImportRouter.Plan(source, _tree));
+            Plan = plan;
+            Rows.Clear();
+            foreach (var row in plan.Rows)
+            {
+                Rows.Add(new ImportRowViewModel(this, row));
+            }
         }
-
-        RefreshCounts();
+        catch (Exception ex)
+        {
+            Plan = null;
+            Rows.Clear();
+            _dialogs.Error("Could not read that folder", ex.Message);
+        }
+        finally
+        {
+            IsScanning = false;
+            RefreshCounts();
+        }
     }
 
     [RelayCommand(CanExecute = nameof(CanImport))]

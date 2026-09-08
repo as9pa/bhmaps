@@ -180,6 +180,12 @@ public partial class MainViewModel : ObservableObject
 
         var tree = Snapshot.Tree;
         var plan = await Task.Run(() => ImportRouter.Plan(tree.RootPath, tree));
+        if (plan.IncludedCount == 0)
+        {
+            _dialogs.Info("Nothing to save", "The game folder has no image files to save as a pack.");
+            return;
+        }
+
         await RunImportAsync(plan, name);
     }
 
