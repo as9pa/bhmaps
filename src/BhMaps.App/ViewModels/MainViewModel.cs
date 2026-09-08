@@ -3,9 +3,11 @@ using System.Diagnostics;
 using System.Windows;
 using System.Windows.Media;
 using BhMaps.App.Services;
+using BhMaps.App.Views;
 using BhMaps.Core.Game;
 using BhMaps.Core.Model;
 using BhMaps.Core.Operations;
+using BhMaps.Core.Scanning;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -47,7 +49,9 @@ public partial class MainViewModel : ObservableObject
         nameof(ResetAllCommand),
         nameof(LaunchGameCommand),
         nameof(ApplyAllCommand),
-        nameof(OpenPackFolderCommand))]
+        nameof(OpenPackFolderCommand),
+        nameof(ImportCommand),
+        nameof(SaveCurrentCommand))]
     public partial bool IsBusy { get; set; }
 
     [ObservableProperty]
@@ -133,6 +137,75 @@ public partial class MainViewModel : ObservableObject
         }
 
         Process.Start(new ProcessStartInfo("explorer.exe", $"\"{pack.FullPath}\"") { UseShellExecute = true })?.Dispose();
+    }
+
+    [RelayCommand(CanExecute = nameof(CanAct))]
+    private async Task ImportAsync()
+    {
+        if (Snapshot is null)
+        {
+            return;
+        }
+
+        var vm = new ImportViewModel(Snapshot.Tree, _dialogs);
+        var window = new ImportWindow { DataContext = vm, Owner = Application.Current.MainWindow };
+        if (window.ShowDialog() != true || vm.Plan is null)
+        {
+            return;
+        }
+
+        await RunImportAsync(vm.Plan, vm.PackName.Trim());
+    }
+
+    [RelayCommand(CanExecute = nameof(CanAct))]
+    private async Task SaveCurrentAsync()
+    {
+        if (Snapshot is null)
+        {
+            return;
+        }
+
+        var name = _dialogs.PromptText("Save current map art as a pack", "Pack name:", $"backup-{DateTime.Now:yyyy-MM-dd}");
+        if (name is null)
+        {
+            return;
+        }
+
+        name = name.Trim();
+        if (!PackNameValidator.IsValid(name, out var error))
+        {
+            _dialogs.Error("Invalid pack name", error);
+            return;
+        }
+
+        var tree = Snapshot.Tree;
+        var plan = await Task.Run(() => ImportRouter.Plan(tree.RootPath, tree));
+        await RunImportAsync(plan, name);
+    }
+
+    /// <summary>Spec 6: merge prompt when the pack exists, then Execute as a long operation, rescan, and select the pack.</summary>
+    protected async Task RunImportAsync(ImportPlan plan, string packName)
+    {
+        var packDir = Path.Combine(PackScanner.PacksRoot(_services.LibraryPath), packName);
+        if (Directory.Exists(packDir)
+            && !_dialogs.Confirm(
+                "Pack already exists",
+                $"A pack named '{packName}' already exists. Merge into it? Files with the same name are overwritten; other files stay."))
+        {
+            return;
+        }
+
+        ApplyResult? result = null;
+        await RunBusyAsync(
+            $"Importing into {packName}",
+            (progress, ct) => Task.Run(() => { result = ImportRouter.Execute(plan, packName, _services.LibraryPath, progress, ct); }, ct));
+        if (result is not null)
+        {
+            _dialogs.ShowFailures("Some files could not be imported", result.Failures);
+        }
+
+        await RescanAsync();
+        SelectedPack = Packs.FirstOrDefault(p => p.Name.Equals(packName, StringComparison.OrdinalIgnoreCase));
     }
 
     public async Task ApplyFolderFromPackAsync(string folderName, string packName)
