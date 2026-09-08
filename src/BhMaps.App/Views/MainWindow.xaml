@@ -31,6 +31,7 @@
         <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
           <Button Content="Refresh" Command="{Binding RefreshCommand}" Padding="12,4" Margin="0,0,6,0" />
           <Button Content="Reset All" Command="{Binding ResetAllCommand}" Padding="12,4" Margin="0,0,6,0" />
+          <Button Content="Settings" Command="{Binding OpenSettingsCommand}" Padding="12,4" Margin="0,0,6,0" />
           <Button Content="Launch Brawlhalla" Command="{Binding LaunchGameCommand}" Padding="12,4" Margin="0,0,6,0" />
           <Button Content="New Background..." Command="{Binding NewBackgroundCommand}" Padding="12,4" Margin="0,0,6,0" />
         </StackPanel>

@@ -1,0 +1,36 @@
+<Window x:Class="BhMaps.App.Views.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Settings" Width="680" SizeToContent="Height" ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen" ShowInTaskbar="True">
+  <Window.Resources>
+    <BooleanToVisibilityConverter x:Key="BoolToVis" />
+  </Window.Resources>
+  <StackPanel Margin="14">
+    <TextBlock Text="{Binding Message}" TextWrapping="Wrap" Margin="0,0,0,10"
+               Visibility="{Binding HasMessage, Converter={StaticResource BoolToVis}}" />
+    <TextBlock Text="{Binding OverrideNote}" TextWrapping="Wrap" Foreground="#B26A00" Margin="0,0,0,10"
+               Visibility="{Binding HasOverrideNote, Converter={StaticResource BoolToVis}}" />
+
+    <TextBlock Text="Brawlhalla mapArt folder" FontWeight="SemiBold" />
+    <DockPanel Margin="0,4,0,2">
+      <Button DockPanel.Dock="Right" Content="Browse..." Command="{Binding BrowseGameCommand}" Padding="10,2" Margin="6,0,0,0" />
+      <TextBox Text="{Binding GamePath, UpdateSourceTrigger=PropertyChanged}" Padding="3" />
+    </DockPanel>
+    <TextBlock Text="{Binding GameError}" Foreground="#C62828" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,10" />
+
+    <TextBlock Text="Pack library folder" FontWeight="SemiBold" />
+    <DockPanel Margin="0,4,0,2">
+      <Button DockPanel.Dock="Right" Content="Browse..." Command="{Binding BrowseLibraryCommand}" Padding="10,2" Margin="6,0,0,0" />
+      <TextBox Text="{Binding LibraryPath, UpdateSourceTrigger=PropertyChanged}" Padding="3" />
+    </DockPanel>
+    <TextBlock Text="{Binding LibraryError}" Foreground="#C62828" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,10" />
+    <TextBlock Text="Packs live in &lt;library&gt;\packs. Nothing else inside the library folder is read or written."
+               Foreground="#888888" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,12" />
+
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+      <Button Content="OK" Command="{Binding OkCommand}" Width="90" IsDefault="True" Margin="0,0,6,0" />
+      <Button Content="Cancel" Width="90" IsCancel="True" />
+    </StackPanel>
+  </StackPanel>
+</Window>
