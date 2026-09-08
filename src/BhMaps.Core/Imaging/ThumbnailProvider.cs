@@ -37,7 +37,7 @@ public sealed class ThumbnailProvider
             ct);
     }
 
-    /// <summary>Decodes at DecodeWidth pixels wide. Returns null for a missing or undecodable file.</summary>
+    /// <summary>Decodes at DecodeWidth pixels wide. Returns null for a missing, malformed or undecodable path.</summary>
     public static BitmapSource? Decode(string fullPath)
     {
         try
@@ -52,7 +52,7 @@ public sealed class ThumbnailProvider
             bitmap.Freeze();
             return bitmap;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or FileFormatException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or FileFormatException or ArgumentException)
         {
             return null;
         }
