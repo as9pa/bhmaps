@@ -28,7 +28,15 @@ public static class ImportRouter
         var rows = new List<ImportRow>();
         if (Directory.Exists(sourcePath))
         {
-            var paths = Directory.EnumerateFiles(sourcePath, "*", SearchOption.AllDirectories)
+            // A subfolder this user cannot list is skipped, not an aborted plan. AttributesToSkip stays 0
+            // so that, unlike the EnumerationOptions default, hidden files still import.
+            var options = new EnumerationOptions
+            {
+                RecurseSubdirectories = true,
+                IgnoreInaccessible = true,
+                AttributesToSkip = 0,
+            };
+            var paths = Directory.EnumerateFiles(sourcePath, "*", options)
                 .OrderBy(p => p, StringComparer.OrdinalIgnoreCase);
             foreach (var path in paths)
             {

@@ -96,8 +96,15 @@ public sealed class ImportPlan
     }
 
     /// <summary>Routes the row to <paramref name="folderName"/>, recomputes conflicts, and includes it.</summary>
+    /// <exception cref="ArgumentException">The name is not usable as one folder under the pack root.</exception>
     public void AssignFolder(ImportRow row, string folderName)
     {
+        // The same rules a pack name obeys: one folder name, so the target can never escape the pack root.
+        if (!PackNameValidator.IsValid(folderName, out var error))
+        {
+            throw new ArgumentException(error, nameof(folderName));
+        }
+
         row.SetTarget(folderName);
         RefreshConflicts();
         SetInclude(row, true);
