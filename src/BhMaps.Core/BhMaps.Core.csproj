@@ -13,4 +13,8 @@
     <Using Include="System.IO" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="BhMaps.Core.Tests" />
+  </ItemGroup>
+
 </Project>

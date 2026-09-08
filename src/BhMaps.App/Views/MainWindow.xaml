@@ -52,6 +52,7 @@
         <UniformGrid DockPanel.Dock="Bottom" Columns="2" Margin="0,8,0,0">
           <Button Content="Apply All" Command="{Binding ApplyAllCommand}" Margin="2" Padding="6,4" />
           <Button Content="Open Folder" Command="{Binding OpenPackFolderCommand}" Margin="2" Padding="6,4" />
+          <Button Content="Delete" Command="{Binding DeletePackCommand}" Margin="2" Padding="6,4" />
           <Button Content="Import..." Command="{Binding ImportCommand}" Margin="2" Padding="6,4" />
           <Button Content="Save Current..." Command="{Binding SaveCurrentCommand}" Margin="2" Padding="6,4" />
         </UniformGrid>

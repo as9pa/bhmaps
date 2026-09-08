@@ -18,6 +18,7 @@ public partial class MainViewModel : ObservableObject
     private readonly AppServices _services;
     private readonly IDialogs _dialogs;
     private CancellationTokenSource? _cts;
+    private bool _firstRunOffered;
 
     public MainViewModel(AppServices services, IDialogs dialogs)
     {
@@ -39,7 +40,7 @@ public partial class MainViewModel : ObservableObject
     public partial FolderDetailViewModel? Detail { get; set; }
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(ApplyAllCommand), nameof(OpenPackFolderCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ApplyAllCommand), nameof(OpenPackFolderCommand), nameof(DeletePackCommand))]
     public partial PackItemViewModel? SelectedPack { get; set; }
 
     [ObservableProperty]
@@ -53,7 +54,8 @@ public partial class MainViewModel : ObservableObject
         nameof(ImportCommand),
         nameof(SaveCurrentCommand),
         nameof(NewBackgroundCommand),
-        nameof(OpenSettingsCommand))]
+        nameof(OpenSettingsCommand),
+        nameof(DeletePackCommand))]
     public partial bool IsBusy { get; set; }
 
     [ObservableProperty]
@@ -156,6 +158,69 @@ public partial class MainViewModel : ObservableObject
         }
 
         Process.Start(new ProcessStartInfo("explorer.exe", $"\"{pack.FullPath}\"") { UseShellExecute = true })?.Dispose();
+    }
+
+    [RelayCommand(CanExecute = nameof(HasSelectedPack))]
+    private async Task DeletePackAsync()
+    {
+        var pack = SelectedPack?.Pack;
+        if (pack is null)
+        {
+            return;
+        }
+
+        if (!_dialogs.Confirm("Delete pack", $"Delete pack '{pack.Name}' and all {pack.FileCount} files in it? This cannot be undone."))
+        {
+            return;
+        }
+
+        var libraryPath = _services.LibraryPath;
+        var error = await Task.Run(() => PackDeleter.Delete(libraryPath, pack.Name));
+        if (error is not null)
+        {
+            _dialogs.Error("Could not delete pack", error);
+        }
+
+        await RescanAsync();
+    }
+
+    /// <summary>Spec 3 first run: offer one snapshot of the current game folder, then never ask again.</summary>
+    private async Task OfferFirstRunBackupAsync()
+    {
+        if (_firstRunOffered || _services.Settings.FirstRunDone || Snapshot is null)
+        {
+            return;
+        }
+
+        _firstRunOffered = true;
+        var name = $"backup-{DateTime.Now:yyyy-MM-dd}";
+        var yes = _dialogs.Confirm(
+            "Back up current map art?",
+            $"This is the first run. Save the current contents of the game folder as pack '{name}' so it can be restored later?");
+        try
+        {
+            _services.UpdateSettings(_services.Settings with { FirstRunDone = true });
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The choice still applies to this run; only remembering it failed.
+            _dialogs.Error("Settings not saved", ex.Message);
+        }
+
+        if (!yes)
+        {
+            return;
+        }
+
+        var tree = Snapshot.Tree;
+        var plan = await Task.Run(() => ImportRouter.Plan(tree.RootPath, tree));
+        if (plan.IncludedCount == 0)
+        {
+            _dialogs.Info("Nothing to save", "The game folder has no image files to save as a pack.");
+            return;
+        }
+
+        await RunImportAsync(plan, name);
     }
 
     [RelayCommand(CanExecute = nameof(CanAct))]
@@ -366,6 +431,7 @@ public partial class MainViewModel : ObservableObject
 
         Snapshot = snapshot;
         Populate(snapshot);
+        await OfferFirstRunBackupAsync();
     }
 
     /// <summary>Spec 6: warn when Brawlhalla is running. True means go ahead.</summary>
