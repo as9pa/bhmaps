@@ -7,12 +7,17 @@
   <Window.Resources>
     <conv:StatusToBrushConverter x:Key="StatusToBrush" />
     <BooleanToVisibilityConverter x:Key="BoolToVis" />
+    <Style x:Key="ApplyFromMenu" TargetType="ContextMenu">
+      <Setter Property="DataContext" Value="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}" />
+    </Style>
   </Window.Resources>
   <DockPanel>
     <Border DockPanel.Dock="Top" Padding="10,8" Background="#ECECEC" BorderBrush="#D6D6D6" BorderThickness="0,0,0,1">
       <DockPanel>
         <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
           <Button Content="Refresh" Command="{Binding RefreshCommand}" Padding="12,4" Margin="0,0,6,0" />
+          <Button Content="Reset All" Command="{Binding ResetAllCommand}" Padding="12,4" Margin="0,0,6,0" />
+          <Button Content="Launch Brawlhalla" Command="{Binding LaunchGameCommand}" Padding="12,4" Margin="0,0,6,0" />
         </StackPanel>
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
           <TextBlock Text="{Binding ProgressText}" VerticalAlignment="Center" Margin="0,0,8,0"
@@ -24,14 +29,19 @@
       </DockPanel>
     </Border>
 
-    <Border DockPanel.Dock="Left" Width="260" Padding="10" Background="White" BorderBrush="#D6D6D6" BorderThickness="0,0,1,0">
+    <Border DockPanel.Dock="Left" Width="260" Padding="10" Background="White" BorderBrush="#D6D6D6" BorderThickness="0,0,1,0"
+            IsEnabled="{Binding IsNotBusy}">
       <DockPanel>
         <TextBlock DockPanel.Dock="Top" Text="Packs" FontWeight="SemiBold" FontSize="14" Margin="0,0,0,8" />
+        <UniformGrid DockPanel.Dock="Bottom" Columns="2" Margin="0,8,0,0">
+          <Button Content="Apply All" Command="{Binding ApplyAllCommand}" Margin="2" Padding="6,4" />
+          <Button Content="Open Folder" Command="{Binding OpenPackFolderCommand}" Margin="2" Padding="6,4" />
+        </UniformGrid>
         <ListBox ItemsSource="{Binding Packs}" SelectedItem="{Binding SelectedPack}" BorderThickness="0">
           <ListBox.ItemTemplate>
             <DataTemplate>
               <DockPanel Margin="2">
-                <TextBlock DockPanel.Dock="Right" Foreground="#888888" Text="{Binding FileCount, StringFormat='{}{0} files'}" />
+                <TextBlock DockPanel.Dock="Right" Foreground="#888888" Margin="8,0,0,0" Text="{Binding FileCount, StringFormat='{}{0} files'}" />
                 <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
               </DockPanel>
             </DataTemplate>
@@ -59,6 +69,21 @@
                 <Border Background="{Binding State, Converter={StaticResource StatusToBrush}}" CornerRadius="3" Padding="6,2">
                   <TextBlock Text="{Binding StatusText}" Foreground="White" FontSize="11" TextWrapping="Wrap" />
                 </Border>
+                <DockPanel Margin="0,6,0,0">
+                  <Button DockPanel.Dock="Right" Content="Reset" Command="{Binding ResetCommand}" Padding="8,2" Margin="4,0,0,0" />
+                  <Button Content="Apply from &#x25BE;" Padding="8,2" IsEnabled="{Binding HasApplyOptions}" Click="ApplyFrom_Click">
+                    <Button.ContextMenu>
+                      <ContextMenu Style="{StaticResource ApplyFromMenu}" ItemsSource="{Binding ApplyFromOptions}">
+                        <ContextMenu.ItemContainerStyle>
+                          <Style TargetType="MenuItem">
+                            <Setter Property="Header" Value="{Binding Name}" />
+                            <Setter Property="Command" Value="{Binding ApplyCommand}" />
+                          </Style>
+                        </ContextMenu.ItemContainerStyle>
+                      </ContextMenu>
+                    </Button.ContextMenu>
+                  </Button>
+                </DockPanel>
               </StackPanel>
             </Border>
           </DataTemplate>
