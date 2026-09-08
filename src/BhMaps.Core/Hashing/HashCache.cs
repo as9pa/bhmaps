@@ -36,22 +36,28 @@ public sealed class HashCache
     /// <summary>Loads the cache file. A missing or unreadable file yields an empty cache.</summary>
     public static HashCache Load(string cachePath)
     {
-        Dictionary<string, HashEntry>? loaded = null;
+        var entries = new Dictionary<string, HashEntry>(StringComparer.OrdinalIgnoreCase);
         if (File.Exists(cachePath))
         {
             try
             {
-                loaded = JsonSerializer.Deserialize<Dictionary<string, HashEntry>>(File.ReadAllText(cachePath), JsonOptions);
+                var loaded = JsonSerializer.Deserialize<Dictionary<string, HashEntry>>(File.ReadAllText(cachePath), JsonOptions);
+                if (loaded is not null)
+                {
+                    foreach (var (path, entry) in loaded)
+                    {
+                        // Through the indexer rather than the copy constructor: one path stored twice
+                        // under different casing overwrites instead of throwing.
+                        entries[path] = entry;
+                    }
+                }
             }
-            catch (JsonException)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
             {
-                loaded = null;
+                entries.Clear();
             }
         }
 
-        var entries = loaded is null
-            ? new Dictionary<string, HashEntry>(StringComparer.OrdinalIgnoreCase)
-            : new Dictionary<string, HashEntry>(loaded, StringComparer.OrdinalIgnoreCase);
         return new HashCache(cachePath, entries);
     }
 

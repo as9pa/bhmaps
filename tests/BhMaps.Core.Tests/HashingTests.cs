@@ -1,3 +1,4 @@
+using System.Text.Json;
 using BhMaps.Core.Hashing;
 using BhMaps.Core.Storage;
 using BhMaps.Core.Tests.Helpers;
@@ -115,5 +116,42 @@ public class HashingTests
         Assert.Equal(0, HashCache.Load(cachePath).Count);
         File.WriteAllText(cachePath, "{ not json");
         Assert.Equal(0, HashCache.Load(cachePath).Count);
+    }
+
+    [Fact]
+    public void HashCache_LoadIgnoresUnreadableFile()
+    {
+        using var tmp = new TempDir();
+        var cachePath = tmp.Sub("cache.json");
+        File.WriteAllText(cachePath, "{}");
+
+        // A cache file another process is holding exclusively must not take the app down.
+        using (File.Open(cachePath, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            Assert.Equal(0, HashCache.Load(cachePath).Count);
+        }
+
+        var directoryInTheWay = tmp.Sub("blocked.json");
+        Directory.CreateDirectory(directoryInTheWay);
+        Assert.Equal(0, HashCache.Load(directoryInTheWay).Count);
+    }
+
+    [Fact]
+    public void HashCache_LoadKeepsOneEntryWhenPathsDifferOnlyByCase()
+    {
+        using var tmp = new TempDir();
+        var cachePath = tmp.Sub("cache.json");
+        var file = Path.Combine(tmp.Path, "a.png");
+        File.WriteAllText(cachePath, JsonSerializer.Serialize(new Dictionary<string, HashEntry>
+        {
+            [file.ToUpperInvariant()] = new(3, 100, "aa"),
+            [file.ToLowerInvariant()] = new(3, 100, "bb"),
+        }));
+
+        var cache = HashCache.Load(cachePath);
+
+        Assert.Equal(1, cache.Count);
+        // The last entry in the file wins, and the hit proves nothing was rehashed: a.png never existed.
+        Assert.Equal("bb", cache.GetOrCompute(file, 3, 100));
     }
 }
