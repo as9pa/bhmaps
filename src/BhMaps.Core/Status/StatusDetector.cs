@@ -13,10 +13,16 @@ public static class StatusDetector
 
         foreach (var gameFolder in gameTree.Folders)
         {
-            var gameHashes = gameFolder.Files.ToDictionary(
-                f => f.Name, f => hashCache.GetOrCompute(f), StringComparer.OrdinalIgnoreCase);
-            var packsPerFile = gameFolder.Files.ToDictionary(
-                f => f.Name, _ => new List<string>(), StringComparer.OrdinalIgnoreCase);
+            var gameHashes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var packsPerFile = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+            foreach (var file in gameFolder.Files)
+            {
+                // Through the indexer rather than ToDictionary: a case-sensitive directory can hold
+                // two names differing only in case, and last one wins beats throwing.
+                gameHashes[file.Name] = hashCache.GetOrCompute(file);
+                packsPerFile[file.Name] = new List<string>();
+            }
+
             var applied = new List<string>();
 
             foreach (var pack in packs)
