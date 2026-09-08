@@ -32,6 +32,10 @@ public partial class MainViewModel : ObservableObject
     /// <summary>Result of the last successful scan. Null until the first scan completes.</summary>
     protected ScanSnapshot? Snapshot { get; private set; }
 
+    /// <summary>Non-null while the folder detail panel replaces the grid (spec 5.2).</summary>
+    [ObservableProperty]
+    public partial FolderDetailViewModel? Detail { get; set; }
+
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ApplyAllCommand), nameof(OpenPackFolderCommand))]
     public partial PackItemViewModel? SelectedPack { get; set; }
@@ -175,6 +179,62 @@ public partial class MainViewModel : ObservableObject
         await RescanAsync();
     }
 
+    public void OpenDetail(string folderName)
+    {
+        if (Snapshot is null)
+        {
+            return;
+        }
+
+        Detail = new FolderDetailViewModel(this, Snapshot, folderName, _services.Thumbnails);
+    }
+
+    public void CloseDetail() => Detail = null;
+
+    public async Task ApplyFileFromPackAsync(string folderName, string fileName, string packName)
+    {
+        var pack = FindPack(packName);
+        if (pack is null || !ConfirmIfGameRunning())
+        {
+            return;
+        }
+
+        ApplyResult? result = null;
+        await RunBusyAsync(
+            $"Applying {folderName}\\{fileName} from {packName}",
+            (_, _) => Task.Run(() => { result = PackApplier.ApplyFile(pack, folderName, fileName, _services.GamePath); }));
+        if (result is not null)
+        {
+            _dialogs.ShowFailures("The file could not be copied", result.Failures);
+        }
+
+        await RescanAsync();
+    }
+
+    public async Task ResetFileAsync(string folderName, string fileName)
+    {
+        if (!_dialogs.Confirm("Reset file", $"Delete {folderName}\\{fileName}? Brawlhalla regenerates the default on its next launch."))
+        {
+            return;
+        }
+
+        if (!ConfirmIfGameRunning())
+        {
+            return;
+        }
+
+        ResetResult? result = null;
+        await RunBusyAsync(
+            $"Resetting {folderName}\\{fileName}",
+            (_, _) => Task.Run(() => { result = GameResetter.ResetFile(_services.GamePath, folderName, fileName); }));
+        if (result is not null)
+        {
+            _dialogs.ShowFailures("The file could not be deleted", result.Failures);
+        }
+
+        await RescanAsync();
+    }
+
     public async Task RescanAsync()
     {
         ScanSnapshot? snapshot = null;
@@ -256,5 +316,10 @@ public partial class MainViewModel : ObservableObject
         }
 
         StatusText = $"{_services.GamePath}   |   {snapshot.Tree.Folders.Count} folders, {snapshot.Packs.Count} packs";
+
+        if (Detail is { } open)
+        {
+            Detail = new FolderDetailViewModel(this, snapshot, open.FolderName, _services.Thumbnails);
+        }
     }
 }

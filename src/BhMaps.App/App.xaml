@@ -7,6 +7,10 @@
       <ResourceDictionary.MergedDictionaries>
         <ResourceDictionary Source="Assets/BackgroundsTile.xaml" />
       </ResourceDictionary.MergedDictionaries>
+      <!-- Shared by the folder cards and the detail rows: a context menu used as a dropdown inherits its button's row. -->
+      <Style x:Key="ApplyFromMenu" TargetType="ContextMenu">
+        <Setter Property="DataContext" Value="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}" />
+      </Style>
     </ResourceDictionary>
   </Application.Resources>
 </Application>

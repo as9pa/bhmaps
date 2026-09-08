@@ -48,6 +48,9 @@ public partial class FolderCardViewModel : ObservableObject
     [RelayCommand]
     private Task ResetAsync() => _main.ResetFolderAsync(Name);
 
+    [RelayCommand]
+    private void Open() => _main.OpenDetail(Name);
+
     /// <summary>Backgrounds shows the fixed tile; every other folder shows its largest file, decoded off the UI thread.</summary>
     public async Task LoadThumbnailAsync(ThumbnailProvider thumbnails, ImageSource? backgroundsTile)
     {
