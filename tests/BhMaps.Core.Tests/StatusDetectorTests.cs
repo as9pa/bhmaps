@@ -127,6 +127,34 @@ public class StatusDetectorTests
     }
 
     [Fact]
+    public void CaseDuplicateFileNamesInOneFolderDoNotThrow()
+    {
+        using var tmp = new TempDir();
+        var game = Path.Combine(tmp.Path, "game");
+        var lib = Path.Combine(tmp.Path, "lib");
+        new FakeGameTree(game).File("BloodMoon", "Plat.png", "a");
+        PackTree(lib, "flower").File("BloodMoon", "Plat.png", "a");
+
+        // A case-sensitive directory can hold Plat.png and plat.png side by side. The scanner
+        // cannot produce that on an ordinary NTFS folder, so model the tree directly; both
+        // entries point at the one real file on disk.
+        var path = Path.Combine(game, "BloodMoon", "Plat.png");
+        var info = new FileInfo(path);
+        var folder = new GameFolder("BloodMoon", Path.GetDirectoryName(path)!, new[]
+        {
+            new GameFile("Plat.png", path, info.Length, info.LastWriteTimeUtc.Ticks),
+            new GameFile("plat.png", path, info.Length, info.LastWriteTimeUtc.Ticks),
+        });
+
+        var report = StatusDetector.Detect(
+            new GameTree(game, new[] { folder }), PackScanner.ScanAll(lib), HashCache.Load(tmp.Sub("cache.json")));
+
+        Assert.Equal(FolderState.Applied, report.ForFolder("BloodMoon").State);
+        Assert.Equal(new[] { "flower" }, report.ForFile("BloodMoon", "Plat.png").PackNames);
+        Assert.Equal(new[] { "flower" }, report.ForFile("BloodMoon", "plat.png").PackNames);
+    }
+
+    [Fact]
     public void PerFileStatusListsPacksWithIdenticalCopy()
     {
         using var tmp = new TempDir();
