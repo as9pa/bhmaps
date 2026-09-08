@@ -51,7 +51,8 @@ public partial class MainViewModel : ObservableObject
         nameof(ApplyAllCommand),
         nameof(OpenPackFolderCommand),
         nameof(ImportCommand),
-        nameof(SaveCurrentCommand))]
+        nameof(SaveCurrentCommand),
+        nameof(NewBackgroundCommand))]
     public partial bool IsBusy { get; set; }
 
     [ObservableProperty]
@@ -187,6 +188,26 @@ public partial class MainViewModel : ObservableObject
         }
 
         await RunImportAsync(plan, name);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanAct))]
+    private Task NewBackgroundAsync() => OpenBackgroundEditorAsync(null);
+
+    public async Task OpenBackgroundEditorAsync(string? initialSlot)
+    {
+        if (Snapshot is null)
+        {
+            return;
+        }
+
+        var slots = Snapshot.Tree.FindFolder("Backgrounds")?.Files.Select(f => f.Name).ToList() ?? new List<string>();
+        var packNames = Snapshot.Packs.Select(p => p.Name).ToList();
+        var vm = new BackgroundEditorViewModel(_services, _dialogs, slots, packNames, initialSlot);
+        var window = new BackgroundEditorWindow { DataContext = vm, Owner = Application.Current.MainWindow };
+        if (window.ShowDialog() == true)
+        {
+            await RescanAsync();
+        }
     }
 
     /// <summary>Spec 6: merge prompt when the pack exists, then Execute as a long operation, rescan, and select the pack.</summary>
