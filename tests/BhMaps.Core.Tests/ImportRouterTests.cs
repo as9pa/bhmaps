@@ -1,5 +1,3 @@
-using System.Security.AccessControl;
-using System.Security.Principal;
 using BhMaps.Core.Model;
 using BhMaps.Core.Operations;
 using BhMaps.Core.Scanning;
@@ -17,24 +15,6 @@ public class ImportRouterTests
     }
 
     private static string Src(TempDir tmp) => Path.Combine(tmp.Path, "src");
-
-    /// <summary>Denies this user permission to list the folder, so enumerating it throws while it still exists.</summary>
-    private static void SetListingDenied(string directory, bool denied)
-    {
-        var info = new DirectoryInfo(directory);
-        var security = info.GetAccessControl();
-        var rule = new FileSystemAccessRule(WindowsIdentity.GetCurrent().User!, FileSystemRights.ListDirectory, AccessControlType.Deny);
-        if (denied)
-        {
-            security.AddAccessRule(rule);
-        }
-        else
-        {
-            security.RemoveAccessRule(rule);
-        }
-
-        info.SetAccessControl(security);
-    }
 
     [Fact]
     public void ParentFolderNameWinsEvenForCollidingAndUnknownNames()
@@ -115,8 +95,7 @@ public class ImportRouterTests
         new FakeGameTree(Src(tmp)).File("Swamp", "Mud1.png", "readable").File("locked", "LeftWall.png", "x");
         var denied = Path.Combine(Src(tmp), "locked");
 
-        SetListingDenied(denied, denied: true);
-        try
+        using (AccessDenial.DenyListing(denied))
         {
             var plan = ImportRouter.Plan(Src(tmp), tree);
 
@@ -124,10 +103,6 @@ public class ImportRouterTests
             Assert.Equal(Path.Combine(Src(tmp), "Swamp", "Mud1.png"), row.SourcePath);
             Assert.Equal("Swamp", row.TargetFolder);
             Assert.Equal(1, plan.IncludedCount);
-        }
-        finally
-        {
-            SetListingDenied(denied, denied: false);
         }
     }
 
