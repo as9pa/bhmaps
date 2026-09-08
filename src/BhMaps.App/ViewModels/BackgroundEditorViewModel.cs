@@ -200,12 +200,18 @@ public partial class BackgroundEditorViewModel : ObservableObject
             return;
         }
 
+        var packFile = Path.Combine(PackScanner.PacksRoot(_services.LibraryPath), packName, "Backgrounds", slot);
+        if (File.Exists(packFile)
+            && !_dialogs.Confirm("Replace background?", $"{slot} already exists in pack {packName}. Replace it?"))
+        {
+            return;
+        }
+
         var path = SourcePath;
         var options = Options;
         try
         {
             var bytes = await Task.Run(() => BackgroundFitter.Fit(path, options));
-            var packFile = Path.Combine(PackScanner.PacksRoot(_services.LibraryPath), packName, "Backgrounds", slot);
             Directory.CreateDirectory(Path.GetDirectoryName(packFile)!);
             await File.WriteAllBytesAsync(packFile, bytes);
             if (ApplyNow)
