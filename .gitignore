@@ -1,0 +1,18 @@
+# Build output
+bin/
+obj/
+publish/
+*.publish/
+
+# IDE
+.vs/
+.vscode/
+*.user
+*.suo
+*.swp
+*.DotSettings.user
+
+# Test and tooling artifacts
+TestResults/
+*.trx
+.idea/
