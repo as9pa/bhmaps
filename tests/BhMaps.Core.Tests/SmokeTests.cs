@@ -1,4 +1,3 @@
-using System.IO;
 using BhMaps.Core.Tests.Helpers;
 
 namespace BhMaps.Core.Tests;
