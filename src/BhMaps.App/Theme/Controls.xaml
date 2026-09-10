@@ -18,9 +18,9 @@
 
   <!-- The button styles below replace the theme's own, so they lose its focus visual with it, and the stock
        dashed adorner is close to invisible on this palette. All three wear this instead, and so do a dialog's
-       checkboxes and radios: the same 1 px TextBrush ring at the same radius the tiles and the sidebar rows
-       draw, in the adorner layer, so it costs the shared templates nothing (spec 7.8). Declared first because a
-       StaticResource cannot reach forward inside one dictionary. -->
+       checkboxes and radios: the same 1 px TextBrush ring at the same radius and the same 60% the tiles and the
+       sidebar rows draw, in the adorner layer, so it costs the shared templates nothing (spec 7.8). Declared
+       first because a StaticResource cannot reach forward inside one dictionary. -->
   <Style x:Key="DialogFocusRing">
     <Setter Property="Control.Template">
       <Setter.Value>
@@ -29,6 +29,7 @@
                   BorderBrush="{StaticResource TextBrush}"
                   BorderThickness="1"
                   CornerRadius="{StaticResource Radius}"
+                  Opacity="0.6"
                   SnapsToDevicePixels="True" />
         </ControlTemplate>
       </Setter.Value>
