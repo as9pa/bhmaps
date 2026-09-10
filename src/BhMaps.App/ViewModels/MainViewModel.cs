@@ -107,7 +107,6 @@ public partial class MainViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsNotBusy))]
     [NotifyCanExecuteChangedFor(
         nameof(RefreshCommand),
-        nameof(ResetAllCommand),
         nameof(LaunchGameCommand),
         nameof(ImportCommand))]
     public partial bool IsBusy { get; set; }
@@ -262,37 +261,6 @@ public partial class MainViewModel : ObservableObject
 
     [RelayCommand(CanExecute = nameof(CanAct))]
     private void LaunchGame() => GameProcess.Launch();
-
-    [RelayCommand(CanExecute = nameof(CanAct))]
-    private async Task ResetAllAsync()
-    {
-        if (Snapshot is null)
-        {
-            return;
-        }
-
-        var count = Snapshot.Tree.Folders.Count;
-        if (!Dialogs.Confirm("Reset all", $"Delete the map art in all {count} folders? Brawlhalla regenerates the defaults on its next launch."))
-        {
-            return;
-        }
-
-        if (!ConfirmIfGameRunning())
-        {
-            return;
-        }
-
-        ResetResult? result = null;
-        await RunBusyAsync(
-            "Resetting",
-            (progress, ct) => Task.Run(() => { result = GameResetter.ResetAll(Services.GamePath, progress, ct); }, ct));
-        if (result is not null)
-        {
-            Dialogs.ShowFailures("Some files could not be deleted", result.Failures);
-        }
-
-        await RescanAsync();
-    }
 
     [RelayCommand(CanExecute = nameof(CanAct))]
     private async Task ImportAsync()

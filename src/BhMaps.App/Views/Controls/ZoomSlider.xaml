@@ -1,0 +1,16 @@
+<UserControl x:Class="BhMaps.App.Views.Controls.ZoomSlider"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Name="Root">
+  <StackPanel VerticalAlignment="Center" Orientation="Horizontal">
+    <Slider AutomationProperties.Name="Columns"
+            Maximum="{Binding Maximum, ElementName=Root}"
+            Minimum="{Binding Minimum, ElementName=Root}"
+            Style="{StaticResource ZoomSliderStyle}"
+            Value="{Binding Value, ElementName=Root, Mode=TwoWay}" />
+    <TextBlock Margin="8,0,0,0"
+               VerticalAlignment="Center"
+               Style="{StaticResource MonoText}"
+               Text="{Binding Value, ElementName=Root}" />
+  </StackPanel>
+</UserControl>
