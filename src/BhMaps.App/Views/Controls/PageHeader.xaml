@@ -1,0 +1,88 @@
+<UserControl x:Class="BhMaps.App.Views.Controls.PageHeader"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Name="Root">
+  <UserControl.Resources>
+    <BooleanToVisibilityConverter x:Key="BoolToVis" />
+  </UserControl.Resources>
+  <Grid Height="56">
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="Auto" />
+      <ColumnDefinition Width="*" />
+      <ColumnDefinition Width="Auto" />
+    </Grid.ColumnDefinitions>
+
+    <TextBlock Grid.Column="0"
+               VerticalAlignment="Center"
+               FontSize="20"
+               FontWeight="SemiBold"
+               Text="{Binding Title, ElementName=Root}" />
+
+    <!-- The busy line, the done line and the missing-folder notice belong to the shell, not to the page, so this
+         one cell binds past the page view model to the window's MainViewModel (decision D11). Only one of the
+         three is ever visible. -->
+    <Grid Grid.Column="1"
+          Margin="16,0"
+          HorizontalAlignment="Right"
+          VerticalAlignment="Center"
+          DataContext="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}">
+      <!-- Spec 7.8, and it outranks the other two: with the folder gone, a progress line describes work that
+           cannot happen and a done line describes files that are not there. -->
+      <TextBlock VerticalAlignment="Center"
+                 Foreground="{StaticResource MissingFgBrush}"
+                 Text="Game folder not found. Check Settings."
+                 Visibility="{Binding GameFolderMissing, Converter={StaticResource BoolToVis}}" />
+      <StackPanel Orientation="Horizontal">
+        <StackPanel.Style>
+          <Style TargetType="StackPanel">
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+              <DataTrigger Binding="{Binding IsBusy}" Value="True">
+                <Setter Property="Visibility" Value="Visible" />
+              </DataTrigger>
+
+              <!-- Last, so it wins over the one above when both match. -->
+              <DataTrigger Binding="{Binding GameFolderMissing}" Value="True">
+                <Setter Property="Visibility" Value="Collapsed" />
+              </DataTrigger>
+            </Style.Triggers>
+          </Style>
+        </StackPanel.Style>
+        <TextBlock VerticalAlignment="Center" Foreground="{StaticResource Text2Brush}" Text="{Binding ProgressText}" />
+        <Button Margin="8,0,0,0" Command="{Binding CancelCommand}" Content="Cancel" Style="{StaticResource PlainButton}" />
+      </StackPanel>
+      <StackPanel Orientation="Horizontal">
+        <StackPanel.Style>
+          <!-- Visible only when the shell is idle, has something to report, and has a folder to report it about;
+               triggers test equality, so the three ways of having nothing to show are what switch it off. -->
+          <Style TargetType="StackPanel">
+            <Setter Property="Visibility" Value="Visible" />
+            <Style.Triggers>
+              <DataTrigger Binding="{Binding IsBusy}" Value="True">
+                <Setter Property="Visibility" Value="Collapsed" />
+              </DataTrigger>
+              <DataTrigger Binding="{Binding DoneText}" Value="">
+                <Setter Property="Visibility" Value="Collapsed" />
+              </DataTrigger>
+              <DataTrigger Binding="{Binding GameFolderMissing}" Value="True">
+                <Setter Property="Visibility" Value="Collapsed" />
+              </DataTrigger>
+            </Style.Triggers>
+          </Style>
+        </StackPanel.Style>
+        <TextBlock VerticalAlignment="Center" Foreground="{StaticResource Text2Brush}" Text="{Binding DoneText}" />
+
+        <!-- Only beside a line a game write left: a library-only line has no snapshot behind it, and Undo there
+             would put back an older write the line says nothing about. -->
+        <Button Margin="8,0,0,0"
+                Command="{Binding UndoCommand}"
+                Content="Undo"
+                IsEnabled="{Binding CanUndo}"
+                Style="{StaticResource PlainButton}"
+                Visibility="{Binding DoneUndoable, Converter={StaticResource BoolToVis}}" />
+      </StackPanel>
+    </Grid>
+
+    <ContentPresenter Grid.Column="2" VerticalAlignment="Center" Content="{Binding Actions, ElementName=Root}" />
+  </Grid>
+</UserControl>

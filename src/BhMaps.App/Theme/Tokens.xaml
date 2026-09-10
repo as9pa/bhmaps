@@ -1,0 +1,27 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=System.Runtime">
+  <!-- Design tokens, spec 7.1. The hex values are exact; nothing here is a suggestion. -->
+  <SolidColorBrush x:Key="BgBrush" Color="#161514" />
+  <SolidColorBrush x:Key="SurfaceBrush" Color="#1C1B1A" />
+  <SolidColorBrush x:Key="Surface2Brush" Color="#242220" />
+  <SolidColorBrush x:Key="LineBrush" Color="#2A2827" />
+  <SolidColorBrush x:Key="Line2Brush" Color="#3A3734" />
+  <SolidColorBrush x:Key="TextBrush" Color="#F1EFEA" />
+  <SolidColorBrush x:Key="Text2Brush" Color="#9C9891" />
+  <SolidColorBrush x:Key="Text3Brush" Color="#6B675F" />
+  <SolidColorBrush x:Key="TileBrush" Color="#2F2D2B" />
+  <SolidColorBrush x:Key="MissingBgBrush" Color="#3A1A1C" />
+  <SolidColorBrush x:Key="MissingFgBrush" Color="#E57A7A" />
+  <!-- The one restrained accent: the Text colour used as a fill for a page's single primary action. -->
+  <SolidColorBrush x:Key="AccentBrush" Color="#F1EFEA" />
+
+  <CornerRadius x:Key="Radius">6</CornerRadius>
+  <sys:Double x:Key="SidebarWidth">240</sys:Double>
+  <sys:Double x:Key="PanelWidth">360</sys:Double>
+
+  <!-- What a button in a page header measures: 1 px border, 7 px padding, a 13 px line, 7 and 1 again. A field
+       beside one is given this so the two line up; without it a TextBox asks for ten more pixels than the button
+       and reads as two lines tall. -->
+  <sys:Double x:Key="ActionHeight">33</sys:Double>
+</ResourceDictionary>

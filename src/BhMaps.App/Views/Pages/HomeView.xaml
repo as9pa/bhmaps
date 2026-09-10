@@ -1,0 +1,738 @@
+﻿<UserControl x:Class="BhMaps.App.Views.Pages.HomeView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:BhMaps.App.Views.Controls"
+             xmlns:converters="clr-namespace:BhMaps.App.Converters"
+             xmlns:imaging="clr-namespace:BhMaps.Core.Imaging;assembly=BhMaps.Core"
+             xmlns:pages="clr-namespace:BhMaps.App.ViewModels.Pages"
+             xmlns:primitives="clr-namespace:System.Windows.Controls.Primitives;assembly=PresentationFramework">
+  <UserControl.Resources>
+    <BooleanToVisibilityConverter x:Key="BoolToVis" />
+    <converters:NullToVisibilityConverter x:Key="NullToVis" />
+
+    <!-- A chip is a ListBoxItem so the list owns which one is on, and the theme's ChipToggle draws it. The toggle
+         is chrome only: hit testing and focus belong to the row, which is what Tab and the arrow keys walk. -->
+    <Style x:Key="ChipRow" TargetType="ListBoxItem">
+      <Setter Property="Margin" Value="0,0,8,0" />
+      <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ListBoxItem">
+            <Grid>
+              <primitives:ToggleButton x:Name="Chip"
+                                       Content="{TemplateBinding Content}"
+                                       Focusable="False"
+                                       IsChecked="{Binding IsSelected, RelativeSource={RelativeSource TemplatedParent}}"
+                                       IsHitTestVisible="False"
+                                       Style="{StaticResource ChipToggle}" />
+
+              <!-- Keyboard focus is visible on every chip (spec 7.8), drawn at the same 60% as the tiles. -->
+              <Border x:Name="Ring"
+                      BorderBrush="{StaticResource TextBrush}"
+                      BorderThickness="1"
+                      CornerRadius="14"
+                      IsHitTestVisible="False"
+                      Opacity="0" />
+            </Grid>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Chip" Property="Background" Value="{StaticResource Surface2Brush}" />
+              </Trigger>
+              <Trigger Property="IsKeyboardFocused" Value="True">
+                <Setter TargetName="Ring" Property="Opacity" Value="0.6" />
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <!-- A card is a Button, so a click and Space or Enter on a focused card open the same map, and the focus ring
+         is the one the tiles wear. -->
+    <Style x:Key="MapCard" TargetType="Button">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="Margin" Value="0,0,12,12" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Grid>
+              <Border x:Name="Chrome" Padding="8" Style="{StaticResource CardBorder}">
+                <ContentPresenter />
+              </Border>
+              <Border x:Name="Ring"
+                      BorderBrush="{StaticResource TextBrush}"
+                      BorderThickness="1"
+                      CornerRadius="{StaticResource Radius}"
+                      IsHitTestVisible="False"
+                      Opacity="0" />
+            </Grid>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Chrome" Property="Background" Value="{StaticResource Surface2Brush}" />
+              </Trigger>
+              <Trigger Property="IsKeyboardFocused" Value="True">
+                <Setter TargetName="Ring" Property="Opacity" Value="0.6" />
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <!-- Everything clickable in the panel that is a picture rather than a label: no chrome of its own, the tiles'
+         60% focus ring, and the same Surface2 hover the cards use. -->
+    <Style x:Key="PanelTileButton" TargetType="Button">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+      <Setter Property="Padding" Value="4" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Grid>
+              <Border x:Name="Chrome"
+                      Background="{TemplateBinding Background}"
+                      CornerRadius="{StaticResource Radius}"
+                      Padding="{TemplateBinding Padding}">
+                <ContentPresenter />
+              </Border>
+              <Border x:Name="Ring"
+                      BorderBrush="{StaticResource TextBrush}"
+                      BorderThickness="1"
+                      CornerRadius="{StaticResource Radius}"
+                      IsHitTestVisible="False"
+                      Opacity="0" />
+            </Grid>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Chrome" Property="Background" Value="{StaticResource Surface2Brush}" />
+              </Trigger>
+              <Trigger Property="IsKeyboardFocused" Value="True">
+                <Setter TargetName="Ring" Property="Opacity" Value="0.6" />
+              </Trigger>
+              <Trigger Property="IsEnabled" Value="False">
+                <Setter TargetName="Chrome" Property="Opacity" Value="0.4" />
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <!-- The panel's Close: the canvas's cross as a geometry rather than a glyph font or an emoji, named for the
+         automation tree. -->
+    <Style x:Key="IconButton" TargetType="Button" BasedOn="{StaticResource PanelTileButton}">
+      <Setter Property="Padding" Value="8" />
+      <Setter Property="VerticalAlignment" Value="Top" />
+    </Style>
+
+    <!-- Revealed by hover or by keyboard focus reaching into the tile (spec 7.8), never by Visibility: a collapsed
+         button cannot be tabbed to, so it would be mouse-only. -->
+    <Style x:Key="UseButton" TargetType="Button" BasedOn="{StaticResource OutlineButton}">
+      <Setter Property="Background" Value="{StaticResource BgBrush}" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Opacity" Value="0" />
+      <Setter Property="Padding" Value="12,4" />
+      <Style.Triggers>
+        <Trigger Property="IsKeyboardFocused" Value="True">
+          <Setter Property="BorderBrush" Value="{StaticResource TextBrush}" />
+        </Trigger>
+      </Style.Triggers>
+    </Style>
+
+    <!-- Radius 6 everywhere, so the picture is an ImageBrush on a Border rather than an Image with square corners.
+         The tile colour behind it is what an empty slot shows. -->
+    <Style x:Key="PictureTile" TargetType="Border">
+      <Setter Property="Background" Value="{StaticResource TileBrush}" />
+      <Setter Property="CornerRadius" Value="{StaticResource Radius}" />
+    </Style>
+
+    <!-- The set the game is showing wears a ring; keyboard focus lifts the fill instead, so the two never read as
+         the same thing. -->
+    <Style x:Key="SetTileBorder" TargetType="Border" BasedOn="{StaticResource CardBorder}">
+      <Setter Property="Padding" Value="6" />
+      <Setter Property="Width" Value="152" />
+      <Setter Property="Margin" Value="0,0,8,8" />
+    </Style>
+
+    <Style x:Key="TileCaption" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="{StaticResource Text2Brush}" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+
+    <Style x:Key="QuietNote" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="{StaticResource Text3Brush}" />
+    </Style>
+
+    <!-- The file list's header. The canvas's two chevrons rather than one rotated, which needs no transform
+         origin, and they lead the label the way it draws them. Foreground on the style, so the icon inherits the
+         colour the label states for itself: the implicit TextBlock style would beat inheritance on the text. -->
+    <Style x:Key="FilesToggle" TargetType="primitives:ToggleButton">
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+      <Setter Property="Foreground" Value="{StaticResource Text2Brush}" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="primitives:ToggleButton">
+            <Grid>
+              <Border x:Name="Chrome"
+                      Background="Transparent"
+                      CornerRadius="{StaticResource Radius}"
+                      Padding="8,6">
+                <StackPanel Orientation="Horizontal">
+                  <controls:Icon x:Name="Chevron"
+                                 Margin="0,0,8,0"
+                                 VerticalAlignment="Center"
+                                 Geometry="{StaticResource Icon.ChevronRight}"
+                                 Size="14" />
+                  <TextBlock Foreground="{StaticResource Text2Brush}"
+                             Text="{Binding Content, RelativeSource={RelativeSource TemplatedParent}}" />
+                </StackPanel>
+              </Border>
+              <Border x:Name="Ring"
+                      BorderBrush="{StaticResource TextBrush}"
+                      BorderThickness="1"
+                      CornerRadius="{StaticResource Radius}"
+                      IsHitTestVisible="False"
+                      Opacity="0" />
+            </Grid>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsChecked" Value="True">
+                <Setter TargetName="Chevron" Property="Geometry" Value="{StaticResource Icon.ChevronDown}" />
+              </Trigger>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Chrome" Property="Background" Value="{StaticResource Surface2Brush}" />
+              </Trigger>
+              <Trigger Property="IsKeyboardFocused" Value="True">
+                <Setter TargetName="Ring" Property="Opacity" Value="0.6" />
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <!-- Without these the container a generated item sits in announces the view model's type name. -->
+    <Style x:Key="ChoiceContainer" TargetType="ContentPresenter">
+      <Setter Property="AutomationProperties.Name" Value="{Binding Label}" />
+    </Style>
+
+    <Style x:Key="SetContainer" TargetType="ContentPresenter">
+      <Setter Property="AutomationProperties.Name" Value="{Binding PackName}" />
+    </Style>
+
+    <!-- One background the map can be given. The whole tile is the button: one map's slots need no confirm.
+         CanWrite, not IsNotBusy: it writes into the game folder, so it is also off while that folder is
+         missing (spec 7.8). -->
+    <DataTemplate x:Key="BackgroundChoice">
+      <Button AutomationProperties.Name="{Binding Label}"
+              Command="{Binding ApplyCommand}"
+              IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}"
+              Style="{StaticResource PanelTileButton}"
+              ToolTip="{Binding Label}">
+        <StackPanel Width="96">
+          <Grid>
+            <Border Height="54" Style="{StaticResource PictureTile}">
+              <Border CornerRadius="{StaticResource Radius}" RenderOptions.BitmapScalingMode="HighQuality">
+                <Border.Background>
+                  <ImageBrush ImageSource="{Binding Thumbnail}" Stretch="UniformToFill" />
+                </Border.Background>
+              </Border>
+            </Border>
+
+            <Border x:Name="InUseRing"
+                    BorderBrush="{StaticResource TextBrush}"
+                    BorderThickness="1"
+                    CornerRadius="{StaticResource Radius}"
+                    Visibility="Collapsed" />
+
+            <Border x:Name="InUseTick"
+                    Margin="0,4,4,0"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Top"
+                    Background="{StaticResource BgBrush}"
+                    CornerRadius="4"
+                    Padding="4,3"
+                    Visibility="Collapsed">
+              <Path Data="M0,3.4 L2.8,6.2 L8,0.6"
+                    Stroke="{StaticResource TextBrush}"
+                    StrokeEndLineCap="Round"
+                    StrokeLineJoin="Round"
+                    StrokeStartLineCap="Round"
+                    StrokeThickness="1.6" />
+            </Border>
+          </Grid>
+
+          <TextBlock Margin="0,4,0,0"
+                     HorizontalAlignment="Center"
+                     Style="{StaticResource TileCaption}"
+                     Text="{Binding PackName}" />
+        </StackPanel>
+      </Button>
+      <DataTemplate.Triggers>
+        <DataTrigger Binding="{Binding InUse}" Value="True">
+          <Setter TargetName="InUseRing" Property="Visibility" Value="Visible" />
+          <Setter TargetName="InUseTick" Property="Visibility" Value="Visible" />
+        </DataTrigger>
+      </DataTemplate.Triggers>
+    </DataTemplate>
+
+    <!-- One platform set. Hover, or keyboard focus inside the tile, reveals Use (spec 7.2). -->
+    <DataTemplate x:Key="PlatformSet">
+      <Border x:Name="Tile" Style="{StaticResource SetTileBorder}">
+        <StackPanel>
+          <Grid>
+            <Border Height="78" Style="{StaticResource PictureTile}">
+              <Border CornerRadius="{StaticResource Radius}" RenderOptions.BitmapScalingMode="HighQuality">
+                <Border.Background>
+                  <ImageBrush ImageSource="{Binding Preview}" Stretch="UniformToFill" />
+                </Border.Background>
+              </Border>
+            </Border>
+
+            <Border x:Name="InGameTick"
+                    Margin="0,4,4,0"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Top"
+                    Background="{StaticResource BgBrush}"
+                    CornerRadius="4"
+                    Padding="4,3"
+                    Visibility="Collapsed">
+              <Path Data="M0,3.4 L2.8,6.2 L8,0.6"
+                    Stroke="{StaticResource TextBrush}"
+                    StrokeEndLineCap="Round"
+                    StrokeLineJoin="Round"
+                    StrokeStartLineCap="Round"
+                    StrokeThickness="1.6" />
+            </Border>
+
+            <!-- CanWrite, not IsNotBusy: applying a set writes into the game folder (spec 7.8). -->
+            <Button x:Name="Use"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    AutomationProperties.Name="Use"
+                    Command="{Binding UseCommand}"
+                    Content="Use"
+                    controls:Icon.Glyph="{StaticResource Icon.Download}"
+                    IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}"
+                    Style="{StaticResource UseButton}" />
+          </Grid>
+
+          <TextBlock Margin="0,6,0,0" Style="{StaticResource TileCaption}" Text="{Binding PackName}" />
+        </StackPanel>
+      </Border>
+      <DataTemplate.Triggers>
+        <DataTrigger Binding="{Binding InGame}" Value="True">
+          <Setter TargetName="Tile" Property="BorderBrush" Value="{StaticResource TextBrush}" />
+          <Setter TargetName="InGameTick" Property="Visibility" Value="Visible" />
+        </DataTrigger>
+        <Trigger SourceName="Tile" Property="IsMouseOver" Value="True">
+          <Setter TargetName="Use" Property="Opacity" Value="1" />
+        </Trigger>
+        <Trigger SourceName="Tile" Property="IsKeyboardFocusWithin" Value="True">
+          <Setter TargetName="Use" Property="Opacity" Value="1" />
+          <Setter TargetName="Tile" Property="Background" Value="{StaticResource Surface2Brush}" />
+        </Trigger>
+      </DataTemplate.Triggers>
+    </DataTemplate>
+
+    <!-- One platform file: its thumbnail, its name, and where the game's copy came from. -->
+    <DataTemplate x:Key="PlatformFile">
+      <Grid Margin="0,0,0,8">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <Border Width="48"
+                Height="27"
+                VerticalAlignment="Top"
+                Style="{StaticResource PictureTile}">
+          <Border CornerRadius="{StaticResource Radius}" RenderOptions.BitmapScalingMode="HighQuality">
+            <Border.Background>
+              <ImageBrush ImageSource="{Binding Thumbnail}" Stretch="UniformToFill" />
+            </Border.Background>
+          </Border>
+        </Border>
+
+        <StackPanel Grid.Column="1" Margin="8,0,0,0">
+          <TextBlock Style="{StaticResource MonoText}"
+                     Text="{Binding FileName}"
+                     TextTrimming="CharacterEllipsis"
+                     ToolTip="{Binding RelativePath}" />
+
+          <StackPanel Margin="0,3,0,0" Orientation="Horizontal">
+            <Border Style="{StaticResource StateTagBorder}" Visibility="{Binding ShowSource, Converter={StaticResource BoolToVis}}">
+              <TextBlock Text="{Binding SourceText}" />
+            </Border>
+
+            <!-- A transparent file is a note, never an error (spec 6.4). -->
+            <TextBlock Margin="6,0,0,0"
+                       VerticalAlignment="Center"
+                       Style="{StaticResource QuietNote}"
+                       Text="changes nothing"
+                       Visibility="{Binding ChangesNothing, Converter={StaticResource BoolToVis}}" />
+          </StackPanel>
+        </StackPanel>
+      </Grid>
+    </DataTemplate>
+  </UserControl.Resources>
+
+  <DockPanel Margin="24,16,24,24">
+    <controls:PageHeader DockPanel.Dock="Top" Title="Home">
+      <controls:PageHeader.Actions>
+        <StackPanel Orientation="Horizontal">
+          <!-- Spec 7.1: one search string for the sidebar list and the current page, so this box is the shell's,
+               reached the same way the header's busy line reaches it (decision D11). Centred at the action height,
+               or the StackPanel stretches box and button to the taller of the two and the box reads as two lines. -->
+          <Grid Width="200" Height="{StaticResource ActionHeight}" VerticalAlignment="Center">
+            <!-- Its own padding, not the style's: a TextBox reserves the whole of Geist's line box, which at this
+                 size is taller than an action, and the style's 6 top and bottom would clip the text out of a box
+                 this high. 3 and 0 leave the line box room and put the glyphs on the button's own rows. The left
+                 padding is the canvas's: 10 to the icon, 15 of icon, 8 to the text. -->
+            <TextBox Padding="33,3,10,0"
+                     AutomationProperties.Name="Search maps"
+                     Style="{StaticResource FieldTextBox}"
+                     Text="{Binding DataContext.SearchText, RelativeSource={RelativeSource AncestorType=Window}, UpdateSourceTrigger=PropertyChanged}" />
+
+            <!-- Text3, the placeholder's own colour: nothing about a search box hovers or disables. -->
+            <controls:Icon Margin="11,0,0,0"
+                           HorizontalAlignment="Left"
+                           VerticalAlignment="Center"
+                           Foreground="{StaticResource Text3Brush}"
+                           Geometry="{StaticResource Icon.Search}"
+                           Size="15" />
+
+            <!-- Hit test off, so the placeholder never swallows the click that focuses the box. Centred, so it sits
+                 on the same rows the box draws its own text on and nothing shifts when typing starts. -->
+            <TextBlock Margin="34,0,11,0" VerticalAlignment="Center" IsHitTestVisible="False" Text="Search maps">
+              <TextBlock.Style>
+                <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                  <Setter Property="Foreground" Value="{StaticResource Text3Brush}" />
+                  <Setter Property="Visibility" Value="Collapsed" />
+                  <Style.Triggers>
+                    <DataTrigger Binding="{Binding DataContext.SearchText, RelativeSource={RelativeSource AncestorType=Window}}" Value="">
+                      <Setter Property="Visibility" Value="Visible" />
+                    </DataTrigger>
+                  </Style.Triggers>
+                </Style>
+              </TextBlock.Style>
+            </TextBlock>
+          </Grid>
+
+          <!-- CanWrite, not IsNotBusy: this writes into the game folder, so it is also off while that folder is
+               missing and its confirm cannot be reached from a live-looking button (spec 7.8). -->
+          <Button Margin="8,0,0,0"
+                  Command="{Binding ResetAllCommand}"
+                  Content="Reset all to default"
+                  controls:Icon.Glyph="{StaticResource Icon.Undo}"
+                  IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}"
+                  Style="{StaticResource OutlineButton}" />
+        </StackPanel>
+      </controls:PageHeader.Actions>
+    </controls:PageHeader>
+
+    <Grid DockPanel.Dock="Top" Margin="0,4,0,16">
+      <ListBox HorizontalAlignment="Left"
+               ItemContainerStyle="{StaticResource ChipRow}"
+               ItemsSource="{Binding Chips}"
+               SelectedItem="{Binding SelectedChip}"
+               Style="{StaticResource TileListBox}">
+        <ListBox.ItemsPanel>
+          <ItemsPanelTemplate>
+            <StackPanel Orientation="Horizontal" />
+          </ItemsPanelTemplate>
+        </ListBox.ItemsPanel>
+      </ListBox>
+
+      <controls:ZoomSlider HorizontalAlignment="Right"
+                           VerticalAlignment="Center"
+                           Maximum="{x:Static pages:HomeViewModel.MaxZoom}"
+                           Minimum="{x:Static pages:HomeViewModel.MinZoom}"
+                           Value="{Binding Zoom}" />
+    </Grid>
+
+    <!-- The grid first and the panel second, because WPF tabs in declaration order: a DockPanel would have to
+         declare the docked panel before the fill child and Tab would reach it before the cards. -->
+    <Grid>
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="Auto" />
+      </Grid.ColumnDefinitions>
+
+      <Grid>
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+          <!-- Top aligned, or a UniformGrid handed the whole viewport stretches its rows and a short list comes
+               out with enormous cards (the Backgrounds grid's lesson from Task 26). -->
+          <ItemsControl VerticalAlignment="Top" ItemsSource="{Binding Cards}">
+            <ItemsControl.ItemContainerStyle>
+              <!-- Without it the container a card sits in announces the view model's type name. -->
+              <Style TargetType="ContentPresenter">
+                <Setter Property="AutomationProperties.Name" Value="{Binding DisplayName}" />
+              </Style>
+            </ItemsControl.ItemContainerStyle>
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <UniformGrid Columns="{Binding DataContext.Zoom, RelativeSource={RelativeSource AncestorType=ItemsControl}}" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Button AutomationProperties.Name="{Binding DisplayName}"
+                        Command="{Binding DataContext.OpenMapCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                        CommandParameter="{Binding FolderName}"
+                        Style="{StaticResource MapCard}">
+                  <StackPanel>
+                    <!-- The Viewbox holds the card source's shape at any column width, so a card that has not
+                         drawn its preview yet is the same size as one that has and nothing jumps. The size comes
+                         from the compositor that renders it, so the two cannot drift apart. Through a OneTime
+                         Binding rather than a bare x:Static: the constants are pixel counts and so int, and
+                         setting a Double property from an int markup extension throws at load. -->
+                    <Viewbox Stretch="Uniform">
+                      <Grid Width="{Binding Source={x:Static imaging:MapCompositor.CardWidth}, Mode=OneTime}"
+                            Height="{Binding Source={x:Static imaging:MapCompositor.CardHeight}, Mode=OneTime}"
+                            Background="{StaticResource TileBrush}">
+                        <Image RenderOptions.BitmapScalingMode="HighQuality"
+                               Source="{Binding Preview}"
+                               Stretch="UniformToFill" />
+                      </Grid>
+                    </Viewbox>
+
+                    <TextBlock Margin="2,8,2,0" Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" />
+
+                    <!-- Two tags, because Missing is a style of its own rather than a colour on the ordinary one.
+                         Each sits in a wrapper that carries the visibility, so neither theme style is derived from. -->
+                    <Grid Margin="2,6,2,0" HorizontalAlignment="Left">
+                      <Grid>
+                        <Grid.Style>
+                          <Style TargetType="Grid">
+                            <Style.Triggers>
+                              <DataTrigger Binding="{Binding IsMissing}" Value="True">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                              </DataTrigger>
+                              <DataTrigger Binding="{Binding StateText}" Value="">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                              </DataTrigger>
+                            </Style.Triggers>
+                          </Style>
+                        </Grid.Style>
+                        <Border Style="{StaticResource StateTagBorder}">
+                          <TextBlock Text="{Binding StateText}" />
+                        </Border>
+                      </Grid>
+                      <Grid>
+                        <Grid.Style>
+                          <Style TargetType="Grid">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                              <DataTrigger Binding="{Binding IsMissing}" Value="True">
+                                <Setter Property="Visibility" Value="Visible" />
+                              </DataTrigger>
+                            </Style.Triggers>
+                          </Style>
+                        </Grid.Style>
+                        <Border Style="{StaticResource MissingTagBorder}">
+                          <TextBlock Text="{Binding StateText}" />
+                        </Border>
+                      </Grid>
+                    </Grid>
+                  </StackPanel>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+
+        <!-- Spec 7.8: no results for a chip or a search says so, and offers the way back. -->
+        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+          <StackPanel.Style>
+            <Style TargetType="StackPanel">
+              <Setter Property="Visibility" Value="Collapsed" />
+              <Style.Triggers>
+                <DataTrigger Binding="{Binding Cards.Count}" Value="0">
+                  <Setter Property="Visibility" Value="Visible" />
+                </DataTrigger>
+              </Style.Triggers>
+            </Style>
+          </StackPanel.Style>
+          <TextBlock HorizontalAlignment="Center"
+                     Foreground="{StaticResource Text2Brush}"
+                     Text="No maps match this filter." />
+          <Button Margin="0,8,0,0"
+                  HorizontalAlignment="Center"
+                  Command="{Binding ShowAllCommand}"
+                  Content="Show all"
+                  Style="{StaticResource PlainButton}" />
+        </StackPanel>
+      </Grid>
+
+      <!-- Spec 7.2: the right panel for one map, 360 px, open exactly while a card is selected. -->
+      <Border Grid.Column="1"
+              Width="{StaticResource PanelWidth}"
+              Margin="16,0,0,0"
+              AutomationProperties.Name="{Binding DisplayName}"
+              DataContext="{Binding Panel}"
+              Style="{StaticResource CardBorder}"
+              Visibility="{Binding DataContext.Panel, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource NullToVis}}">
+        <Grid>
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+          </Grid.RowDefinitions>
+
+          <Grid Margin="16,12,8,4">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <TextBlock VerticalAlignment="Center"
+                       FontSize="16"
+                       FontWeight="SemiBold"
+                       Text="{Binding DisplayName}"
+                       TextTrimming="CharacterEllipsis" />
+
+            <Button Grid.Column="1"
+                    AutomationProperties.Name="Close"
+                    Command="{Binding CloseCommand}"
+                    Foreground="{StaticResource Text2Brush}"
+                    Style="{StaticResource IconButton}"
+                    ToolTip="Close">
+              <controls:Icon Geometry="{StaticResource Icon.X}" Size="16" />
+            </Button>
+          </Grid>
+
+          <!-- The right margin is 4 and the content's is 12, so the overlay scrollbar rides in a gutter of its own
+               instead of sitting on top of the tiles and Add picture. -->
+          <ScrollViewer Grid.Row="1"
+                        Margin="16,4,4,0"
+                        HorizontalScrollBarVisibility="Disabled"
+                        VerticalScrollBarVisibility="Auto">
+            <!-- The bottom margin keeps the last file row clear of the actions row under it. -->
+            <StackPanel Margin="0,0,12,16">
+              <!-- The panel preview's source is 1280x720 (spec 7.2); 16:9 at the panel's own width is 185 px tall. -->
+              <Border Height="185" Style="{StaticResource PictureTile}">
+                <Border CornerRadius="{StaticResource Radius}" RenderOptions.BitmapScalingMode="HighQuality">
+                  <Border.Background>
+                    <ImageBrush ImageSource="{Binding Preview}" Stretch="UniformToFill" />
+                  </Border.Background>
+                </Border>
+              </Border>
+
+              <Grid Margin="0,16,0,0">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel VerticalAlignment="Center">
+                  <TextBlock Style="{StaticResource SectionHeaderText}" Text="Background" />
+                  <TextBlock Margin="0,2,0,0"
+                             Style="{StaticResource MonoText}"
+                             Text="{Binding CurrentBackgroundName}"
+                             TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+
+                <!-- Spec 6.8's window is Task 27's; the button is the panel's. -->
+                <Button Grid.Column="1"
+                        VerticalAlignment="Center"
+                        Command="{Binding AddPictureCommand}"
+                        Content="Add picture"
+                        controls:Icon.Glyph="{StaticResource Icon.Plus}"
+                        IsEnabled="{Binding DataContext.IsNotBusy, RelativeSource={RelativeSource AncestorType=Window}}"
+                        Style="{StaticResource OutlineButton}" />
+              </Grid>
+
+              <!-- One strip of candidates from every pack. Tab enters it once and the arrow keys walk it, because
+                   a library of a hundred backgrounds is a hundred tab stops otherwise. -->
+              <ScrollViewer Margin="0,8,0,0"
+                            HorizontalScrollBarVisibility="Auto"
+                            VerticalScrollBarVisibility="Disabled">
+                <ItemsControl Focusable="False"
+                              ItemContainerStyle="{StaticResource ChoiceContainer}"
+                              ItemTemplate="{StaticResource BackgroundChoice}"
+                              ItemsSource="{Binding BackgroundChoices}"
+                              KeyboardNavigation.DirectionalNavigation="Contained"
+                              KeyboardNavigation.TabNavigation="Once">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <StackPanel Orientation="Horizontal" />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                </ItemsControl>
+              </ScrollViewer>
+
+              <TextBlock Margin="0,20,0,8" Style="{StaticResource SectionHeaderText}" Text="Platforms" />
+
+              <ItemsControl Focusable="False"
+                            ItemContainerStyle="{StaticResource SetContainer}"
+                            ItemTemplate="{StaticResource PlatformSet}"
+                            ItemsSource="{Binding PlatformSets}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <WrapPanel />
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+              </ItemsControl>
+
+              <primitives:ToggleButton Margin="0,8,0,0"
+                                       Content="{Binding FilesHeader}"
+                                       IsChecked="{Binding FilesExpanded}"
+                                       Style="{StaticResource FilesToggle}" />
+
+              <!-- The list scrolls inside the panel (spec 7.2), so a map with twenty files does not push Reset and
+                   Open folder out of reach. -->
+              <ScrollViewer MaxHeight="240"
+                            Margin="8,4,0,0"
+                            HorizontalScrollBarVisibility="Disabled"
+                            VerticalScrollBarVisibility="Auto"
+                            Visibility="{Binding FilesExpanded, Converter={StaticResource BoolToVis}}">
+                <ItemsControl Focusable="False"
+                              ItemContainerStyle="{StaticResource FileContainer}"
+                              ItemTemplate="{StaticResource PlatformFile}"
+                              ItemsSource="{Binding PlatformFiles}" />
+              </ScrollViewer>
+            </StackPanel>
+          </ScrollViewer>
+
+          <StackPanel Grid.Row="2" Margin="16,8,16,16">
+            <!-- Why Reset is off, rather than a disabled button with no explanation (spec 7.8). The empty hint is
+                 what switches the line off, the same way the header's done line works. -->
+            <TextBlock Margin="0,0,0,8" Text="{Binding ResetHint}" TextWrapping="Wrap">
+              <TextBlock.Style>
+                <Style TargetType="TextBlock" BasedOn="{StaticResource QuietNote}">
+                  <Style.Triggers>
+                    <DataTrigger Binding="{Binding ResetHint}" Value="">
+                      <Setter Property="Visibility" Value="Collapsed" />
+                    </DataTrigger>
+                  </Style.Triggers>
+                </Style>
+              </TextBlock.Style>
+            </TextBlock>
+
+            <StackPanel Orientation="Horizontal">
+              <!-- CanWrite, not IsNotBusy: a reset writes into the game folder (spec 7.8). -->
+              <Button Command="{Binding ResetCommand}"
+                      Content="Reset to default (this map)"
+                      controls:Icon.Glyph="{StaticResource Icon.Undo}"
+                      IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}"
+                      Style="{StaticResource OutlineButton}" />
+
+              <Button Margin="8,0,0,0"
+                      Command="{Binding OpenFolderCommand}"
+                      Content="Open folder"
+                      controls:Icon.Glyph="{StaticResource Icon.FolderOpen}"
+                      Style="{StaticResource PlainButton}" />
+            </StackPanel>
+          </StackPanel>
+        </Grid>
+      </Border>
+    </Grid>
+  </DockPanel>
+</UserControl>

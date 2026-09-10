@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <RootNamespace>BhMaps.App</RootNamespace>
+    <AssemblyName>BhMaps</AssemblyName>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- Application.ThemeMode and Window.ThemeMode are [Experimental("WPF0001")];
+         TreatWarningsAsErrors would otherwise fail the build. -->
+    <NoWarn>$(NoWarn);WPF0001</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Theme\Fonts\*.ttf" />
+    <None Include="Theme\Fonts\OFL.txt" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\BhMaps.Core\BhMaps.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="System.IO" />
+  </ItemGroup>
+
+</Project>

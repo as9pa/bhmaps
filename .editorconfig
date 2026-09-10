@@ -1,0 +1,15 @@
+root = true
+
+[*]
+end_of_line = crlf
+insert_final_newline = true
+charset = utf-8
+indent_style = space
+indent_size = 4
+trim_trailing_whitespace = true
+
+[*.{xml,csproj,props,targets,xaml,json,slnx,md,yml,editorconfig}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false

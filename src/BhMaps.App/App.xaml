@@ -1,0 +1,45 @@
+<Application x:Class="BhMaps.App.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:pages="clr-namespace:BhMaps.App.ViewModels.Pages"
+             xmlns:pageviews="clr-namespace:BhMaps.App.Views.Pages"
+             ShutdownMode="OnExplicitShutdown"
+             ThemeMode="Dark">
+  <Application.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="Assets/BackgroundsTile.xaml" />
+        <ResourceDictionary Source="Theme/Fonts.xaml" />
+        <ResourceDictionary Source="Theme/Tokens.xaml" />
+        <ResourceDictionary Source="Theme/Icons.xaml" />
+        <ResourceDictionary Source="Theme/Controls.xaml" />
+      </ResourceDictionary.MergedDictionaries>
+      <!-- Home's panel and the Platforms page list the same platform files, so the container style that names a
+           generated row for a screen reader is declared once here rather than copied into both pages. -->
+      <Style x:Key="FileContainer" TargetType="ContentPresenter">
+        <Setter Property="AutomationProperties.Name" Value="{Binding RelativePath}" />
+      </Style>
+
+      <!-- One implicit template per page, so the shell's ContentControl picks the view from CurrentPage's type
+           (decision D10) and each page task owns its own files. -->
+      <DataTemplate DataType="{x:Type pages:HomeViewModel}">
+        <pageviews:HomeView />
+      </DataTemplate>
+      <DataTemplate DataType="{x:Type pages:BackgroundsViewModel}">
+        <pageviews:BackgroundsView />
+      </DataTemplate>
+      <DataTemplate DataType="{x:Type pages:PlatformsViewModel}">
+        <pageviews:PlatformsView />
+      </DataTemplate>
+      <DataTemplate DataType="{x:Type pages:PacksViewModel}">
+        <pageviews:PacksView />
+      </DataTemplate>
+      <DataTemplate DataType="{x:Type pages:PackDetailViewModel}">
+        <pageviews:PackDetailView />
+      </DataTemplate>
+      <DataTemplate DataType="{x:Type pages:SettingsPageViewModel}">
+        <pageviews:SettingsPageView />
+      </DataTemplate>
+    </ResourceDictionary>
+  </Application.Resources>
+</Application>
