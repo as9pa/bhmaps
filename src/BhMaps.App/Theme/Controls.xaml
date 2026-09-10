@@ -32,6 +32,7 @@
             <!-- The TextBlock ContentPresenter makes for string content has no logical parent, so the
                  implicit style still reaches it from Application.Resources and beats this button's own
                  Foreground. Templating the string writes those values back as local values, which win. -->
+            <!-- Underscores render literally: no keyboard mnemonics in this app, and labels carry pack names. -->
             <DataTemplate DataType="{x:Type sys:String}">
               <TextBlock Text="{Binding}"
                          FontFamily="{Binding FontFamily, RelativeSource={RelativeSource AncestorType={x:Type ButtonBase}}}"
@@ -43,7 +44,7 @@
                   Background="{TemplateBinding Background}"
                   CornerRadius="{StaticResource Radius}"
                   Padding="{TemplateBinding Padding}">
-            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" RecognizesAccessKey="True" />
+            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
           </Border>
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
@@ -87,7 +88,7 @@
                   BorderThickness="{TemplateBinding BorderThickness}"
                   CornerRadius="{StaticResource Radius}"
                   Padding="{TemplateBinding Padding}">
-            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" RecognizesAccessKey="True" />
+            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
           </Border>
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
@@ -128,7 +129,7 @@
                   Background="{TemplateBinding Background}"
                   CornerRadius="{StaticResource Radius}"
                   Padding="{TemplateBinding Padding}">
-            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" RecognizesAccessKey="True" />
+            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
           </Border>
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
@@ -170,7 +171,7 @@
                   BorderThickness="{TemplateBinding BorderThickness}"
                   CornerRadius="14"
                   Padding="{TemplateBinding Padding}">
-            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" RecognizesAccessKey="True" />
+            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
           </Border>
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
