@@ -4,7 +4,7 @@
 param(
     [string]$Dest = (Join-Path $env:TEMP "bhmaps-dev"),
     [string]$GameRoot = "C:\Program Files (x86)\Steam\steamapps\common\Brawlhalla",
-    [string]$Library = "C:\Users\alexa\files\bh",
+    [string]$Library = (Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'BhMaps'),
     [switch]$RealArt,
     [switch]$Welcome
 )
