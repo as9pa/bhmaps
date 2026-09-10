@@ -28,7 +28,7 @@ public partial class WelcomeViewModel : ObservableObject
             : SteamLocator.FindMapArt() ?? "";
         LibraryPath = SettingsStore.ValidateLibraryPath(services.LibraryPath, out _)
             ? services.LibraryPath
-            : DefaultLibraryPath;
+            : AppSettings.DefaultLibraryPath;
         GameError = "";
         LibraryError = "";
         ProgressText = "";
@@ -36,10 +36,6 @@ public partial class WelcomeViewModel : ObservableObject
     }
 
     public event Action<bool>? CloseRequested;
-
-    /// <summary>Step 2's default when nothing usable is configured yet.</summary>
-    private static string DefaultLibraryPath =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "BhMaps");
 
     [ObservableProperty]
     public partial string GamePath { get; set; }
