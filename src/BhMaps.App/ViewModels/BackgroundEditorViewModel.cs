@@ -16,11 +16,9 @@ public partial class BackgroundEditorViewModel : ObservableObject
     public const string NewPackChoice = "New pack...";
     public const string DefaultPackName = "My Backgrounds";
 
-    private static readonly TimeSpan Debounce = TimeSpan.FromMilliseconds(150);
-
     private readonly AppServices _services;
     private readonly IDialogs _dialogs;
-    private CancellationTokenSource? _renderCts;
+    private readonly Debouncer _render = new();
 
     public BackgroundEditorViewModel(
         AppServices services,
@@ -229,41 +227,38 @@ public partial class BackgroundEditorViewModel : ObservableObject
         }
     }
 
-    /// <summary>Spec 5.3: debounce 150 ms, render off the UI thread, latest request wins.</summary>
-    private async void ScheduleRender()
+    /// <summary>Spec 5.3: debounce 150 ms, render off the UI thread, latest request wins. A source that is not
+    /// there clears the preview at once rather than after the quiet period, because there is nothing to wait for.</summary>
+    private void ScheduleRender()
     {
-        _renderCts?.Cancel();
-        _renderCts = new CancellationTokenSource();
-        var ct = _renderCts.Token;
         var path = SourcePath;
         var options = Options;
         if (!File.Exists(path))
         {
+            _render.Cancel();
             Preview = null;
             return;
         }
 
-        try
+        _ = _render.RunAsync(async ct =>
         {
-            await Task.Delay(Debounce, ct);
-            var bitmap = await Task.Run(() => BackgroundFitter.Render(path, options, PreviewWidth, PreviewHeight), ct);
-            if (!ct.IsCancellationRequested)
+            try
             {
-                Preview = bitmap;
-                Error = "";
+                var bitmap = await Task.Run(() => BackgroundFitter.Render(path, options, PreviewWidth, PreviewHeight), ct);
+                if (!ct.IsCancellationRequested)
+                {
+                    Preview = bitmap;
+                    Error = "";
+                }
             }
-        }
-        catch (OperationCanceledException)
-        {
-            // Superseded by a newer request.
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or FileFormatException)
-        {
-            if (!ct.IsCancellationRequested)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or FileFormatException)
             {
-                Preview = null;
-                Error = "Could not read the image: " + ex.Message;
+                if (!ct.IsCancellationRequested)
+                {
+                    Preview = null;
+                    Error = "Could not read the image: " + ex.Message;
+                }
             }
-        }
+        });
     }
 }

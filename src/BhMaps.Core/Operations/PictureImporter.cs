@@ -12,6 +12,16 @@ public enum PictureFit
     Fit,
 }
 
+/// <summary>What one import call did. Written holds the file names that landed in the pack, in source order and
+/// with the suffix each one actually took, so a caller that goes on to use those pictures does not have to guess
+/// which name a collision was given. A source that failed contributes a failure and no name.</summary>
+public sealed record PictureImportResult(IReadOnlyList<string> Written, IReadOnlyList<FileFailure> Failures)
+{
+    public int Copied => Written.Count;
+
+    public int Failed => Failures.Count;
+}
+
 /// <summary>Turns loose pictures into pack backgrounds. Never moves or deletes a source; overwrites same-named files.</summary>
 public static class PictureImporter
 {
@@ -31,7 +41,7 @@ public static class PictureImporter
     public static string TargetFileName(string sourcePath) => Path.ChangeExtension(Path.GetFileName(sourcePath), ".jpg");
 
     /// <summary>Each image becomes &lt;library&gt;\packs\&lt;packName&gt;\Backgrounds\&lt;source name&gt;.jpg at 2048x1151. A source that will not decode is a failure, not an abort.</summary>
-    public static ApplyResult Import(IReadOnlyList<string> sourcePaths, string libraryPath, string packName,
+    public static PictureImportResult Import(IReadOnlyList<string> sourcePaths, string libraryPath, string packName,
         PictureFit fit, IProgress<string>? progress = null, CancellationToken ct = default)
     {
         if (!PackNameValidator.IsValid(packName, out var error))
@@ -41,13 +51,13 @@ public static class PictureImporter
 
         var options = ToFitOptions(fit);
         var targetDir = Path.Combine(PackScanner.PacksRoot(libraryPath), packName, BackgroundsFolder);
-        var copied = 0;
+        var written = new List<string>();
         var failures = new List<FileFailure>();
-        var written = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var taken = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var source in sourcePaths)
         {
             ct.ThrowIfCancellationRequested();
-            var name = FreeName(TargetFileName(source), written);
+            var name = FreeName(TargetFileName(source), taken);
             var target = Path.Combine(targetDir, name);
             progress?.Report(Path.Combine(BackgroundsFolder, name));
             try
@@ -55,8 +65,8 @@ public static class PictureImporter
                 var bytes = BackgroundFitter.Fit(source, options);
                 Directory.CreateDirectory(targetDir);
                 File.WriteAllBytes(target, bytes);
+                taken.Add(name);
                 written.Add(name);
-                copied++;
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or FileFormatException)
             {
@@ -65,13 +75,13 @@ public static class PictureImporter
         }
 
         Directory.CreateDirectory(targetDir);
-        return new ApplyResult(copied, failures);
+        return new PictureImportResult(written, failures);
     }
 
     /// <summary>Keeps every picture in one call: a name this call already wrote becomes "photo (2).jpg", then "photo (3).jpg". A file left by an earlier import is still overwritten.</summary>
-    private static string FreeName(string name, HashSet<string> written)
+    private static string FreeName(string name, HashSet<string> taken)
     {
-        if (!written.Contains(name))
+        if (!taken.Contains(name))
         {
             return name;
         }
@@ -85,7 +95,7 @@ public static class PictureImporter
             candidate = $"{stem} ({next}){extension}";
             next++;
         }
-        while (written.Contains(candidate));
+        while (taken.Contains(candidate));
 
         return candidate;
     }

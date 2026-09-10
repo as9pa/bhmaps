@@ -7,6 +7,7 @@ using BhMaps.App.Services;
 using BhMaps.App.ViewModels.Pages;
 using BhMaps.App.Views;
 using BhMaps.Core.Game;
+using BhMaps.Core.Maps;
 using BhMaps.Core.Model;
 using BhMaps.Core.Operations;
 using BhMaps.Core.Scanning;
@@ -330,10 +331,122 @@ public partial class MainViewModel : ObservableObject
         await RescanAsync();
     }
 
-    /// <summary>Opens the Add pictures window (spec 6.8). <paramref name="mapFolder"/> is the one map the
-    /// pictures should also be applied to, from the Home panel; null means the sidebar's selection decides.
-    /// Empty until Task 27 builds the window; the Home panel and the Backgrounds page already call it.</summary>
-    public Task OpenAddPicturesAsync(string? mapFolder) => Task.CompletedTask;
+    /// <summary>Opens the Add pictures window (spec 6.8), then imports what it collected and, when it asked for
+    /// it, applies those pictures to the maps. <paramref name="mapFolder"/> is the one map the pictures should
+    /// also go to, from the Home panel; null means the sidebar's ticked maps decide.</summary>
+    public async Task OpenAddPicturesAsync(string? mapFolder)
+    {
+        if (Snapshot is not { } snapshot)
+        {
+            return;
+        }
+
+        var maps = AddPicturesTargets(snapshot, mapFolder);
+        var vm = new AddPicturesViewModel(
+            Dialogs, snapshot.Packs.Select(p => p.Name).ToList(), maps.Count, mapFolder is not null);
+        var window = new AddPicturesWindow { DataContext = vm, Owner = Application.Current.MainWindow };
+        if (window.ShowDialog() != true)
+        {
+            return;
+        }
+
+        var sources = vm.Files.Select(f => f.FullPath).ToList();
+        var packName = vm.EffectivePackName;
+        var apply = vm.ApplyToMaps && maps.Count > 0;
+
+        // Spec 6.3: the maps are named before more than one of them is written. Declining leaves the import to
+        // run on its own, so the work of choosing the pictures is not thrown away with the apply.
+        if (apply
+            && maps.Count > 1
+            && !Dialogs.Confirm(
+                "Apply pictures",
+                $"Apply these pictures to these {maps.Count} maps?\n\n{string.Join(", ", maps.Select(m => m.DisplayName))}"))
+        {
+            apply = false;
+        }
+
+        // A library write: no undo snapshot and no game-running policy, so RunBusyAsync rather than a game write.
+        PictureImportResult? result = null;
+        var ok = await RunBusyAsync(
+            $"Importing into {packName}",
+            (progress, ct) => Task.Run(
+                () => { result = PictureImporter.Import(sources, Services.LibraryPath, packName, vm.Fit, progress, ct); },
+                ct));
+        if (result is not null)
+        {
+            Dialogs.ShowFailures("Some pictures could not be imported", result.Failures);
+        }
+
+        // Nothing landing in the pack leaves nothing to apply, however the checkbox was left.
+        if (ok && apply && result is { Written.Count: > 0 })
+        {
+            // The apply rescans on its way out, and its done line is the one that ends up in the header.
+            await ApplyPicturesAsync(maps, packName, result.Written);
+            return;
+        }
+
+        if (ok)
+        {
+            DoneText = result?.Copied == 1
+                ? $"Imported 1 picture into {packName}"
+                : $"Imported {result?.Copied ?? 0} pictures into {packName}";
+        }
+
+        await RescanAsync();
+    }
+
+    /// <summary>The maps the Add pictures dialog would write to: the one map the Home panel named, or the
+    /// sidebar's ticked maps. A map with no background slots is left out, because without level data there is
+    /// nothing to write into (spec 3.6).</summary>
+    private IReadOnlyList<MapEntry> AddPicturesTargets(ScanSnapshot snapshot, string? mapFolder)
+    {
+        IEnumerable<string> folders = mapFolder is null ? SelectedMaps.Select(m => m.FolderName) : [mapFolder];
+        return folders
+            .Select(snapshot.Catalog.ByFolder)
+            .OfType<MapEntry>()
+            .Where(m => m.BackgroundSlots.Count > 0)
+            .ToList();
+    }
+
+    /// <summary>Spec 6.8's optional half, as one game write: the imported pictures go to the maps in order,
+    /// starting again from the first picture when there are more maps than pictures, and a picture past the last
+    /// map is imported only.</summary>
+    private async Task ApplyPicturesAsync(IReadOnlyList<MapEntry> maps, string packName, IReadOnlyList<string> written)
+    {
+        var backgrounds = Path.Combine(
+            PackScanner.PacksRoot(Services.LibraryPath), packName, PictureImporter.BackgroundsFolder);
+        var pictures = written.Select(name => Path.Combine(backgrounds, name)).ToList();
+
+        var gamePath = Services.GamePath;
+        var undoPaths = maps
+            .SelectMany(m => BackgroundApplier.TargetPaths(m.BackgroundSlots))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var used = Math.Min(pictures.Count, maps.Count);
+        var failures = new List<FileFailure>();
+        await RunGameWriteAsync(
+            "Applying pictures",
+            undoPaths,
+            (progress, ct) => Task.Run(
+                () =>
+                {
+                    for (var i = 0; i < maps.Count; i++)
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        progress.Report(maps[i].DisplayName);
+                        var result = BackgroundApplier.Apply(pictures[i % pictures.Count], gamePath, maps[i].BackgroundSlots, null, ct);
+                        failures.AddRange(result.Failures);
+                    }
+                },
+                ct),
+            $"{Count(used, "picture")} applied to {Count(maps.Count, "map")}");
+
+        Dialogs.ShowFailures("Some pictures could not be applied", failures);
+    }
+
+    /// <summary>"1 map" or "3 maps": the done lines count things and every one of them can be one.</summary>
+    private static string Count(int n, string noun) => n == 1 ? $"1 {noun}" : $"{n} {noun}s";
 
     public async Task OpenBackgroundEditorAsync(string? initialSlot)
     {
