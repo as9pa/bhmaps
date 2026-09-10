@@ -115,10 +115,7 @@
       <Setter Property="AutomationProperties.Name" Value="{Binding PackName}" />
     </Style>
 
-    <Style x:Key="FileContainer" TargetType="ContentPresenter">
-      <Setter Property="AutomationProperties.Name" Value="{Binding RelativePath}" />
-    </Style>
-
+    <!-- FileContainer, the one this page shares with Home's panel, is in App.xaml. -->
     <Style x:Key="MapRowContainer" TargetType="ContentPresenter">
       <Setter Property="AutomationProperties.Name" Value="{Binding DisplayName}" />
     </Style>

@@ -6,53 +6,6 @@
   <UserControl.Resources>
     <BooleanToVisibilityConverter x:Key="BoolToVis" />
 
-    <!-- The theme's buttons keep WPF's own focus visual, which is a dark dotted rectangle and invisible on this
-         ground, so the page's buttons wear the 60% ring the tiles and rows draw (spec 7.8). The same three styles
-         the Packs page carries, and they go when the theme grows a focus visual of its own. -->
-    <Style x:Key="ActionFocusVisual">
-      <Setter Property="Control.Template">
-        <Setter.Value>
-          <ControlTemplate>
-            <Border BorderBrush="{StaticResource TextBrush}"
-                    BorderThickness="1"
-                    CornerRadius="{StaticResource Radius}"
-                    Opacity="0.6"
-                    SnapsToDevicePixels="True" />
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-
-    <!-- The solid button is filled with the Text colour, so the ring above would be white on white and was
-         invisible in the running app. This one is drawn in Bg and inset by 2, radius 4 so the two curves stay
-         concentric, which is how the Platforms page keeps focus visible on its filled segment. -->
-    <Style x:Key="ActionFocusVisualOnFill">
-      <Setter Property="Control.Template">
-        <Setter.Value>
-          <ControlTemplate>
-            <Border Margin="2"
-                    BorderBrush="{StaticResource BgBrush}"
-                    BorderThickness="1"
-                    CornerRadius="4"
-                    Opacity="0.6"
-                    SnapsToDevicePixels="True" />
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-
-    <Style x:Key="ActionPrimaryButton" TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
-      <Setter Property="FocusVisualStyle" Value="{StaticResource ActionFocusVisualOnFill}" />
-    </Style>
-
-    <Style x:Key="ActionOutlineButton" TargetType="Button" BasedOn="{StaticResource OutlineButton}">
-      <Setter Property="FocusVisualStyle" Value="{StaticResource ActionFocusVisual}" />
-    </Style>
-
-    <Style x:Key="ActionPlainButton" TargetType="Button" BasedOn="{StaticResource PlainButton}">
-      <Setter Property="FocusVisualStyle" Value="{StaticResource ActionFocusVisual}" />
-    </Style>
-
     <!-- What a section says when it holds nothing. Collapsed by default; each one carries its own trigger. -->
     <Style x:Key="SectionNote" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
       <Setter Property="Foreground" Value="{StaticResource Text3Brush}" />
@@ -118,15 +71,20 @@
         <!-- Disabled while the shell is busy, the same hop past the page to the window's MainViewModel the header
              itself makes (decision D11), so a second operation cannot be started from a live-looking button. -->
         <StackPanel IsEnabled="{Binding DataContext.IsNotBusy, RelativeSource={RelativeSource AncestorType=Window}}" Orientation="Horizontal">
-          <Button Command="{Binding ApplyAllCommand}" Content="Apply all" Style="{StaticResource ActionPrimaryButton}" />
+          <!-- CanWrite on top of the panel's IsNotBusy: applying a pack writes into the game folder, so it is
+               also off while that folder is missing (spec 7.8). The two beside it only read the library. -->
+          <Button Command="{Binding ApplyAllCommand}"
+                  Content="Apply all"
+                  IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}"
+                  Style="{StaticResource PrimaryButton}" />
           <Button Margin="8,0,0,0"
                   Command="{Binding OpenFolderCommand}"
                   Content="Open folder"
-                  Style="{StaticResource ActionOutlineButton}" />
+                  Style="{StaticResource OutlineButton}" />
           <Button Margin="8,0,0,0"
                   Command="{Binding BackToPacksCommand}"
                   Content="Back to packs"
-                  Style="{StaticResource ActionPlainButton}" />
+                  Style="{StaticResource PlainButton}" />
         </StackPanel>
       </controls:PageHeader.Actions>
     </controls:PageHeader>
@@ -219,7 +177,7 @@
               <Button HorizontalAlignment="Right"
                       Command="{Binding RemoveTransparentCommand}"
                       Content="Remove"
-                      Style="{StaticResource ActionOutlineButton}" />
+                      Style="{StaticResource OutlineButton}" />
             </Grid>
           </Border>
         </StackPanel>
