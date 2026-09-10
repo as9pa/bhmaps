@@ -132,7 +132,12 @@
           <Border Grid.Row="3" Style="{StaticResource SettingRule}" />
           <TextBlock Grid.Row="3" Grid.Column="0" Style="{StaticResource SettingLabel}" Text="Defaults" />
           <StackPanel Grid.Row="3" Style="{StaticResource SettingActions}">
-            <Button Command="{Binding CaptureDefaultsCommand}" Content="Capture defaults" Style="{StaticResource OutlineButton}" />
+            <!-- The only row here that reads the game folder, so the only one that also needs CanWrite; the
+                 panel above already ands in IsNotBusy for every row (spec 7.8). -->
+            <Button Command="{Binding CaptureDefaultsCommand}"
+                    Content="Capture defaults"
+                    IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}"
+                    Style="{StaticResource OutlineButton}" />
           </StackPanel>
 
           <!-- While the game runs -->

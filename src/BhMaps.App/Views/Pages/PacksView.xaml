@@ -50,12 +50,15 @@
     <controls:PageHeader DockPanel.Dock="Top" Title="Packs">
       <controls:PageHeader.Actions>
         <!-- Disabled while the shell is busy, the same hop past the page to the window's MainViewModel the header
-             itself makes (decision D11), so a second operation cannot be started from a live-looking button. -->
+             itself makes (decision D11), so a second operation cannot be started from a live-looking button.
+             Import and Open library are library-only and stop there; Capture defaults reads the game folder, so
+             it takes CanWrite on top, which WPF ands with this one (spec 7.8). -->
         <StackPanel IsEnabled="{Binding DataContext.IsNotBusy, RelativeSource={RelativeSource AncestorType=Window}}" Orientation="Horizontal">
           <Button Command="{Binding ImportCommand}" Content="Import folder" Style="{StaticResource OutlineButton}" />
           <Button Margin="8,0,0,0"
                   Command="{Binding CaptureDefaultsCommand}"
                   Content="Capture defaults"
+                  IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}"
                   Style="{StaticResource OutlineButton}" />
           <Button Margin="8,0,0,0"
                   Command="{Binding OpenLibraryCommand}"
@@ -101,9 +104,12 @@
                               Margin="8,0,10,0"
                               VerticalAlignment="Center"
                               Orientation="Horizontal">
+                    <!-- The one action in the row that writes into the game, so the only one gated on CanWrite;
+                         Remove, Export and Open folder are the library's own (spec 7.8). -->
                     <Button Command="{Binding DataContext.ApplyAllCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                             CommandParameter="{Binding}"
                             Content="Apply all"
+                            IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}"
                             Style="{StaticResource OutlineButton}" />
                     <Button Margin="6,0,0,0"
                             Command="{Binding DataContext.RemoveCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
@@ -143,7 +149,10 @@
         </StackPanel.Style>
         <TextBlock HorizontalAlignment="Center" Foreground="{StaticResource Text2Brush}" Text="No packs yet." />
         <StackPanel Margin="0,14,0,0" HorizontalAlignment="Center" Orientation="Horizontal">
-          <Button Command="{Binding CaptureDefaultsCommand}" Content="Capture defaults" Style="{StaticResource PrimaryButton}" />
+          <Button Command="{Binding CaptureDefaultsCommand}"
+                  Content="Capture defaults"
+                  IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}"
+                  Style="{StaticResource PrimaryButton}" />
           <Button Margin="8,0,0,0"
                   Command="{Binding ImportCommand}"
                   Content="Import folder"

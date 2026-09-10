@@ -105,10 +105,12 @@
             </TextBlock>
           </Grid>
 
+          <!-- CanWrite, not IsNotBusy: this writes into the game folder, so it is also off while that folder is
+               missing and its confirm cannot be reached from a live-looking button (spec 7.8). -->
           <Button Margin="8,0,0,0"
                   Command="{Binding ResetAllCommand}"
                   Content="Reset all to default"
-                  IsEnabled="{Binding DataContext.IsNotBusy, RelativeSource={RelativeSource AncestorType=Window}}"
+                  IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}"
                   Style="{StaticResource OutlineButton}" />
         </StackPanel>
       </controls:PageHeader.Actions>
