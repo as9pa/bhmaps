@@ -1,0 +1,59 @@
+<UserControl x:Class="BhMaps.App.Views.Controls.PageHeader"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Name="Root">
+  <UserControl.Resources>
+    <BooleanToVisibilityConverter x:Key="BoolToVis" />
+  </UserControl.Resources>
+  <Grid Height="56">
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="Auto" />
+      <ColumnDefinition Width="*" />
+      <ColumnDefinition Width="Auto" />
+    </Grid.ColumnDefinitions>
+
+    <TextBlock Grid.Column="0"
+               VerticalAlignment="Center"
+               FontSize="20"
+               FontWeight="SemiBold"
+               Text="{Binding Title, ElementName=Root}" />
+
+    <!-- The busy line and the done line belong to the shell, not to the page, so this one cell binds past the
+         page view model to the window's MainViewModel (decision D11). Only one of the two is ever visible. -->
+    <Grid Grid.Column="1"
+          Margin="16,0"
+          HorizontalAlignment="Right"
+          VerticalAlignment="Center"
+          DataContext="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}">
+      <StackPanel Orientation="Horizontal" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}">
+        <TextBlock VerticalAlignment="Center" Foreground="{StaticResource Text2Brush}" Text="{Binding ProgressText}" />
+        <Button Margin="8,0,0,0" Command="{Binding CancelCommand}" Content="Cancel" Style="{StaticResource PlainButton}" />
+      </StackPanel>
+      <StackPanel Orientation="Horizontal">
+        <StackPanel.Style>
+          <!-- Visible only when the shell is idle and has something to report; triggers test equality, so the
+               two ways of having nothing to show are what switch it off. -->
+          <Style TargetType="StackPanel">
+            <Setter Property="Visibility" Value="Visible" />
+            <Style.Triggers>
+              <DataTrigger Binding="{Binding IsBusy}" Value="True">
+                <Setter Property="Visibility" Value="Collapsed" />
+              </DataTrigger>
+              <DataTrigger Binding="{Binding DoneText}" Value="">
+                <Setter Property="Visibility" Value="Collapsed" />
+              </DataTrigger>
+            </Style.Triggers>
+          </Style>
+        </StackPanel.Style>
+        <TextBlock VerticalAlignment="Center" Foreground="{StaticResource Text2Brush}" Text="{Binding DoneText}" />
+        <Button Margin="8,0,0,0"
+                Command="{Binding UndoCommand}"
+                Content="Undo"
+                IsEnabled="{Binding CanUndo}"
+                Style="{StaticResource PlainButton}" />
+      </StackPanel>
+    </Grid>
+
+    <ContentPresenter Grid.Column="2" VerticalAlignment="Center" Content="{Binding Actions, ElementName=Root}" />
+  </Grid>
+</UserControl>

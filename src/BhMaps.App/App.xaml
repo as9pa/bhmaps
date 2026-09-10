@@ -1,6 +1,8 @@
 <Application x:Class="BhMaps.App.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:pages="clr-namespace:BhMaps.App.ViewModels.Pages"
+             xmlns:pageviews="clr-namespace:BhMaps.App.Views.Pages"
              ShutdownMode="OnExplicitShutdown"
              ThemeMode="Dark">
   <Application.Resources>
@@ -15,6 +17,27 @@
       <Style x:Key="ApplyFromMenu" TargetType="ContextMenu">
         <Setter Property="DataContext" Value="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}" />
       </Style>
+
+      <!-- One implicit template per page, so the shell's ContentControl picks the view from CurrentPage's type
+           (decision D10) and each page task owns its own files. -->
+      <DataTemplate DataType="{x:Type pages:HomeViewModel}">
+        <pageviews:HomeView />
+      </DataTemplate>
+      <DataTemplate DataType="{x:Type pages:BackgroundsViewModel}">
+        <pageviews:BackgroundsView />
+      </DataTemplate>
+      <DataTemplate DataType="{x:Type pages:PlatformsViewModel}">
+        <pageviews:PlatformsView />
+      </DataTemplate>
+      <DataTemplate DataType="{x:Type pages:PacksViewModel}">
+        <pageviews:PacksView />
+      </DataTemplate>
+      <DataTemplate DataType="{x:Type pages:PackDetailViewModel}">
+        <pageviews:PackDetailView />
+      </DataTemplate>
+      <DataTemplate DataType="{x:Type pages:SettingsPageViewModel}">
+        <pageviews:SettingsPageView />
+      </DataTemplate>
     </ResourceDictionary>
   </Application.Resources>
 </Application>
