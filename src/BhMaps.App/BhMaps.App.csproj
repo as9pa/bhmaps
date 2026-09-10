@@ -11,8 +11,19 @@
     <AssemblyName>BhMaps</AssemblyName>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <!-- Application.ThemeMode and Window.ThemeMode are [Experimental("WPF0001")];
+         TreatWarningsAsErrors would otherwise fail the build. -->
+    <NoWarn>$(NoWarn);WPF0001</NoWarn>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Theme\Fonts\*.ttf" />
+    <None Include="Theme\Fonts\OFL.txt" />
   </ItemGroup>
 
   <ItemGroup>
