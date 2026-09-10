@@ -468,6 +468,9 @@ public partial class MainViewModel : ObservableObject
     /// <summary>"1 map" or "3 maps": the done lines count things and every one of them can be one.</summary>
     private static string Count(int n, string noun) => n == 1 ? $"1 {noun}" : $"{n} {noun}s";
 
+    /// <summary>Spec 5.3: the editor fits a picture and saves it into a pack. That is a library write and its own
+    /// business; the "Apply to game now" it offers is a game write, so the pack file it left is copied into the
+    /// slot here, with the boundary, the snapshot and the running-game policy every other one gets.</summary>
     public async Task OpenBackgroundEditorAsync(string? initialSlot)
     {
         if (Snapshot is null)
@@ -479,10 +482,31 @@ public partial class MainViewModel : ObservableObject
         var packNames = Snapshot.Packs.Select(p => p.Name).ToList();
         var vm = new BackgroundEditorViewModel(Services, Dialogs, slots, packNames, initialSlot);
         var window = new BackgroundEditorWindow { DataContext = vm, Owner = Application.Current.MainWindow };
-        if (window.ShowDialog() == true)
+        if (window.ShowDialog() != true)
         {
-            await RescanAsync();
+            return;
         }
+
+        if (vm.Saved is not { ApplyToGame: true } saved)
+        {
+            // Saved into the pack and no further, so nothing in the game folder moved and there is nothing to undo.
+            await RescanAsync();
+            return;
+        }
+
+        var gamePath = Services.GamePath;
+        var source = saved.PackFile;
+        var slot = saved.Slot;
+        var failures = new List<FileFailure>();
+        await RunGameWriteAsync(
+            $"Applying {slot}",
+            BackgroundApplier.TargetPaths([slot]),
+            (_, ct) => Task.Run(
+                () => failures.AddRange(BackgroundApplier.Apply(source, gamePath, [slot], null, ct).Failures),
+                ct),
+            $"Background applied to {slot}");
+
+        Dialogs.ShowFailures("Some backgrounds could not be applied", failures);
     }
 
     /// <summary>Spec 6: all of the plans as one long operation, one failure summary, and one rescan at the end

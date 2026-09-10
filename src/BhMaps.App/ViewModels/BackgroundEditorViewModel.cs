@@ -1,6 +1,5 @@
 using System.Windows.Media;
 using BhMaps.App.Services;
-using BhMaps.Core.Game;
 using BhMaps.Core.Imaging;
 using BhMaps.Core.Operations;
 using BhMaps.Core.Scanning;
@@ -8,6 +7,10 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
 namespace BhMaps.App.ViewModels;
+
+/// <summary>What one Save left in the library: the fitted picture, the slot it was fitted for, and whether the
+/// user asked for it to go into the game as well. The shell does that part, so the editor never writes there.</summary>
+public sealed record BackgroundSave(string PackFile, string Slot, bool ApplyToGame);
 
 public partial class BackgroundEditorViewModel : ObservableObject
 {
@@ -47,6 +50,10 @@ public partial class BackgroundEditorViewModel : ObservableObject
     public IReadOnlyList<string> Slots { get; }
 
     public IReadOnlyList<string> PackChoices { get; }
+
+    /// <summary>What Save wrote into the library, or null while nothing has been saved. The shell reads it once
+    /// the window closes with OK and applies it to the game when it says so.</summary>
+    public BackgroundSave? Saved { get; private set; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SlotError), nameof(CanSave))]
@@ -184,20 +191,14 @@ public partial class BackgroundEditorViewModel : ObservableObject
         }
     }
 
+    /// <summary>Saves the fitted picture into the pack and nothing else. The apply the "Apply to game now" box asks
+    /// for is a game write, so it is left to the shell, which has the busy boundary, the undo snapshot and the
+    /// running-game policy to put around it.</summary>
     [RelayCommand(CanExecute = nameof(CanSave))]
     private async Task SaveAsync()
     {
         var packName = EffectivePackName;
         var slot = Slot.Trim();
-        if (ApplyNow
-            && GameProcess.IsRunning()
-            && !_dialogs.Confirm(
-                "Brawlhalla is running",
-                "Brawlhalla is running. Changes will not show until it restarts, and some files may be locked. Continue?"))
-        {
-            return;
-        }
-
         var packFile = Path.Combine(PackScanner.PacksRoot(_services.LibraryPath), packName, "Backgrounds", slot);
         if (File.Exists(packFile)
             && !_dialogs.Confirm("Replace background?", $"{slot} already exists in pack {packName}. Replace it?"))
@@ -212,13 +213,7 @@ public partial class BackgroundEditorViewModel : ObservableObject
             var bytes = await Task.Run(() => BackgroundFitter.Fit(path, options));
             Directory.CreateDirectory(Path.GetDirectoryName(packFile)!);
             await File.WriteAllBytesAsync(packFile, bytes);
-            if (ApplyNow)
-            {
-                var gameFile = Path.Combine(_services.GamePath, "Backgrounds", slot);
-                Directory.CreateDirectory(Path.GetDirectoryName(gameFile)!);
-                await File.WriteAllBytesAsync(gameFile, bytes);
-            }
-
+            Saved = new BackgroundSave(packFile, slot, ApplyNow);
             CloseRequested?.Invoke(true);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or FileFormatException)
