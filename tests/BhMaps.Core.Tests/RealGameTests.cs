@@ -46,6 +46,29 @@ public class RealGameTests
         Assert.Equal("Twilight Grove", grove!.DisplayName);
     }
 
+    /// <summary>Enigma hangs every one of its unthemed platform images off the Platform element itself except
+    /// Platform_Steam2B.png: five draws over four files, measured against the shipped LevelDesc_Enigma.xml.</summary>
+    [Fact]
+    public void EnigmaCollectsEveryUnthemedPlatformInput()
+    {
+        if (Root() is not { } root)
+        {
+            return;
+        }
+
+        var catalog = MapCatalog.Build(LevelDataReader.Read(root, null).Model!);
+        var enigma = catalog.ByFolder("Enigma");
+        Assert.NotNull(enigma);
+
+        var inputs = MapCompositor.CollectInputs(enigma!.BaseLevel, new AssetSources(Path.Combine(root, "mapArt")));
+        var platforms = inputs
+            .Where(p => !p.Contains(@"\Backgrounds\", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        Assert.InRange(platforms.Count, 5, 100);
+        Assert.InRange(platforms.Distinct(StringComparer.OrdinalIgnoreCase).Count(), 4, 100);
+    }
+
     [Theory]
     [InlineData("Grove")]
     [InlineData("Blackguard")]

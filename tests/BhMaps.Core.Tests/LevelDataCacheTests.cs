@@ -156,6 +156,34 @@ public class LevelDataCacheTests
         Assert.Null(LevelDataCache.Load(path));
     }
 
+    /// <summary>The stamp only notices the game changing, so a model written by an older build of the app has to
+    /// be turned away by its version or it would be served forever.</summary>
+    [Fact]
+    public void Load_ReturnsNullWhenTheSchemaVersionIsMissingOrDifferent()
+    {
+        using var tmp = new TempDir();
+        var root = BuildGameRoot(tmp);
+        var read = LevelDataReader.Read(root, null);
+        var path = LevelDataCache.PathFor(Path.Combine(tmp.Path, "appdata"));
+        LevelDataCache.Save(path, read.Model!, LevelDataReader.Stamp(root, read.Key));
+        var stamped = File.ReadAllText(path);
+        var missing = stamped.Replace($"\"version\":{LevelDataCache.SchemaVersion},", "");
+        var older = stamped.Replace($"\"version\":{LevelDataCache.SchemaVersion}", "\"version\":1");
+
+        // Both edits must bite, or the test would pass on a cache file it never changed.
+        Assert.NotEqual(stamped, missing);
+        Assert.NotEqual(stamped, older);
+
+        File.WriteAllText(path, missing);
+        Assert.Null(LevelDataCache.Load(path));
+
+        File.WriteAllText(path, older);
+        Assert.Null(LevelDataCache.Load(path));
+
+        File.WriteAllText(path, stamped);
+        Assert.NotNull(LevelDataCache.Load(path));
+    }
+
     [Fact]
     public void Save_LeavesNoTempFileBehind()
     {
@@ -186,7 +214,9 @@ public class LevelDataCacheTests
         LevelDataCache.Save(path, read.Model!, LevelDataReader.Stamp(root, read.Key));
         var loaded = LevelDataCache.Load(path);
 
-        Assert.DoesNotContain("isThemed", File.ReadAllText(path), StringComparison.OrdinalIgnoreCase);
+        var json = File.ReadAllText(path);
+        Assert.DoesNotContain("isThemed", json, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains($"\"version\":{LevelDataCache.SchemaVersion}", json, StringComparison.Ordinal);
         var platform = Assert.Single(Assert.Single(loaded!.Value.Model.Levels).Platforms);
         Assert.Equal(2, platform.Scale);
         Assert.Equal("Snow", platform.Theme);

@@ -7,6 +7,10 @@ namespace BhMaps.Core.LevelData;
 /// unchanged game skips the scan and a game update re-reads (spec 3.5).</summary>
 public static class LevelDataCache
 {
+    /// <summary>Bumped whenever a parser change makes a model written by an older build wrong. A cache stamped
+    /// with any other version is a cache miss, because the stamp alone only notices the game changing.</summary>
+    public const int SchemaVersion = 2;
+
     /// <summary>Not indented: this file is a few megabytes.</summary>
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -14,18 +18,21 @@ public static class LevelDataCache
         WriteIndented = false,
     };
 
-    /// <summary>JSON shape of the cache file.</summary>
-    private sealed record CacheFile(LevelDataStamp Stamp, LevelDataModel Model);
+    /// <summary>JSON shape of the cache file. A file written before the version existed reads back as 0.</summary>
+    private sealed record CacheFile(int Version, LevelDataStamp Stamp, LevelDataModel Model);
 
     public static string PathFor(string appDataDir) => Path.Combine(appDataDir, "leveldata.json");
 
-    /// <summary>A missing, unreadable or corrupt cache loads as null, which is just a cache miss.</summary>
+    /// <summary>A missing, unreadable, corrupt or older-schema cache loads as null, which is just a cache
+    /// miss.</summary>
     public static (LevelDataModel Model, LevelDataStamp Stamp)? Load(string cachePath)
     {
         try
         {
             var file = JsonSerializer.Deserialize<CacheFile>(File.ReadAllText(cachePath), JsonOptions);
-            return file is { Model: not null, Stamp.Files: not null } ? (file.Model, file.Stamp) : null;
+            return file is { Version: SchemaVersion, Model: not null, Stamp.Files: not null }
+                ? (file.Model, file.Stamp)
+                : null;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or ArgumentException or NotSupportedException)
         {
@@ -35,5 +42,6 @@ public static class LevelDataCache
     }
 
     public static void Save(string cachePath, LevelDataModel model, LevelDataStamp stamp) =>
-        AtomicFile.WriteAllText(cachePath, JsonSerializer.Serialize(new CacheFile(stamp, model), JsonOptions));
+        AtomicFile.WriteAllText(
+            cachePath, JsonSerializer.Serialize(new CacheFile(SchemaVersion, stamp, model), JsonOptions));
 }
