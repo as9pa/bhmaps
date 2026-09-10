@@ -248,13 +248,13 @@ public partial class MainViewModel : ObservableObject
     }
 
     /// <summary>Spec 6: warn when Brawlhalla is running. True means go ahead.</summary>
-    protected bool ConfirmIfGameRunning() =>
+    public bool ConfirmIfGameRunning() =>
         !GameProcess.IsRunning()
         || Dialogs.Confirm(
             "Brawlhalla is running",
             "Brawlhalla is running. Changes will not show until it restarts, and some files may be locked. Continue?");
 
-    protected Pack? FindPack(string name) =>
+    public Pack? FindPack(string name) =>
         Snapshot?.Packs.FirstOrDefault(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>Runs one long operation with the busy flag, progress text, and Cancel. False when cancelled or failed.</summary>
@@ -306,12 +306,21 @@ public partial class MainViewModel : ObservableObject
             async () =>
             {
                 // Inside the launcher's callback, so with whileRunning=restart the game is already closed and its
-                // files are the ones being snapshotted. Only the write itself takes the busy boundary.
-                Services.Undo.Begin().Capture(gamePath, undoPaths);
+                // files are the ones being snapshotted. The capture is the first step of the busy operation, not a
+                // step before it: it is file copying, so it belongs off the UI thread, behind a progress line, and
+                // inside the boundary that turns an IO failure into the same dialog any other write failure gets.
+                var ok = await RunBusyAsync(
+                    label,
+                    async (progress, ct) =>
+                    {
+                        progress.Report("Saving undo");
+                        await Task.Run(() => Services.Undo.Begin().Capture(gamePath, undoPaths), ct);
+                        await work(progress, ct);
+                    });
 
                 // Begin has already replaced the previous snapshot, so a write that was cancelled or failed has to
                 // clear the done line too; leaving it would describe something Undo no longer restores.
-                DoneText = await RunBusyAsync(label, work) ? doneText : "";
+                DoneText = ok ? doneText : "";
             });
 
         // A restore that fully succeeds discards its snapshot, so what can be undone is always read back from the
