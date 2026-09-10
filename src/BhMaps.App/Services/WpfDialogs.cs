@@ -7,6 +7,8 @@ namespace BhMaps.App.Services;
 
 public sealed class WpfDialogs : IDialogs
 {
+    private const string ImageFilter = "Images|*.png;*.jpg;*.jpeg;*.bmp;*.webp|All files|*.*";
+
     private static Window? Owner =>
         Application.Current?.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive)
         ?? Application.Current?.MainWindow;
@@ -39,12 +41,14 @@ public sealed class WpfDialogs : IDialogs
 
     public string? PickImageFile(string title)
     {
-        var dialog = new OpenFileDialog
-        {
-            Title = title,
-            Filter = "Images|*.png;*.jpg;*.jpeg;*.bmp;*.webp|All files|*.*",
-        };
+        var dialog = new OpenFileDialog { Title = title, Filter = ImageFilter };
         return ShowDialog(dialog) ? dialog.FileName : null;
+    }
+
+    public IReadOnlyList<string>? PickImageFiles(string title)
+    {
+        var dialog = new OpenFileDialog { Title = title, Multiselect = true, Filter = ImageFilter };
+        return ShowDialog(dialog) ? dialog.FileNames : null;
     }
 
     public string? PromptText(string title, string message, string initial)
