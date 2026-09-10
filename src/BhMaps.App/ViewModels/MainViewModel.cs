@@ -313,20 +313,34 @@ public partial class MainViewModel : ObservableObject
     }
 
     /// <summary>Spec 6.4: puts back the files the last game write was about to overwrite or delete. A restore is a
-    /// game write, so it is off while the folder is missing (spec 7.8).</summary>
+    /// game write, so it is off while the folder is missing (spec 7.8), it goes through the same game-running
+    /// policy as any other, and it takes no snapshot of its own: the one it is restoring is the only one there is.</summary>
     [RelayCommand(CanExecute = nameof(CanWrite))]
     private async Task UndoAsync()
     {
-        if (Services.Undo.Latest is not { } session)
+        if (Services.Undo.Latest is not { } session || IsBusy)
         {
             return;
         }
 
         var gamePath = Services.GamePath;
         ApplyResult? result = null;
+        var accepted = true;
         await RunBusyAsync(
             "Undoing",
-            (_, _) => Task.Run(() => { result = Services.Undo.Restore(session, gamePath); }));
+            async (_, _) =>
+            {
+                accepted = await _launcher.RunWriteAsync(
+                    "Undoing",
+                    () => Task.Run(() => { result = Services.Undo.Restore(session, gamePath); }));
+            });
+        if (!accepted)
+        {
+            // The user declined the restart, or the game would not close. Nothing was put back, so the snapshot is
+            // still there to be undone from and the header still says what the last write did.
+            return;
+        }
+
         if (result is not null)
         {
             Dialogs.ShowFailures("Some files could not be restored", result.Failures);
