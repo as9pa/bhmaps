@@ -78,8 +78,9 @@ public partial class SettingsPageViewModel : PageViewModel
         GameDataStatus = Services.LevelData.StatusSentence;
     }
 
-    /// <summary>Pick, validate, save, rescan. A path that does not pass stays on the row rather than in a dialog,
-    /// and nothing is saved. With an override active the save still happens, and the row still shows the override.</summary>
+    /// <summary>Pick, validate, save, re-read the game's data, rescan. A path that does not pass stays on the row
+    /// rather than in a dialog, and nothing is saved. With an override active the save still happens, and the row
+    /// still shows the override.</summary>
     [RelayCommand]
     private async Task ChangeGameAsync()
     {
@@ -101,7 +102,10 @@ public partial class SettingsPageViewModel : PageViewModel
             return;
         }
 
-        await Shell.RescanAsync();
+        // The level data belongs to the install, so a new game folder needs the same re-read Refresh now does,
+        // not just a rescan: the saved path is already in AppServices, so LevelDataService reads the new root.
+        // The rescan behind it is that method's, which is why there is no second one here.
+        await RefreshGameDataAsync();
     }
 
     [RelayCommand]
