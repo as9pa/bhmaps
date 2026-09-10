@@ -194,4 +194,19 @@ public class PictureImporterTests
         Assert.Equal(2, result.Copied);
         Assert.Equal(new[] { Path.Combine("Backgrounds", "one.jpg"), Path.Combine("Backgrounds", "two.jpg") }, progress);
     }
+
+    [Fact]
+    public void Import_SuffixesSameCallCollisionsSoBothPicturesSurvive()
+    {
+        using var tmp = new TempDir();
+        var one = SyntheticImage.SaveQuadrants(tmp.Sub("a", "photo.png"), 100, 60);
+        var two = SyntheticImage.SaveQuadrants(tmp.Sub("b", "photo.JPG"), 60, 100);
+
+        var result = PictureImporter.Import([one, two], Lib(tmp), "shots", PictureFit.Fit);
+
+        Assert.Equal(2, result.Copied);
+        Assert.Empty(result.Failures);
+        Assert.True(File.Exists(PackFile(tmp, "shots", "photo.jpg")));
+        Assert.True(File.Exists(PackFile(tmp, "shots", "photo (2).jpg")));
+    }
 }

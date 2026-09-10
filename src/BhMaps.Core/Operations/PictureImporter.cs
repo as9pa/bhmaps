@@ -43,10 +43,11 @@ public static class PictureImporter
         var targetDir = Path.Combine(PackScanner.PacksRoot(libraryPath), packName, BackgroundsFolder);
         var copied = 0;
         var failures = new List<FileFailure>();
+        var written = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var source in sourcePaths)
         {
             ct.ThrowIfCancellationRequested();
-            var name = TargetFileName(source);
+            var name = FreeName(TargetFileName(source), written);
             var target = Path.Combine(targetDir, name);
             progress?.Report(Path.Combine(BackgroundsFolder, name));
             try
@@ -54,6 +55,7 @@ public static class PictureImporter
                 var bytes = BackgroundFitter.Fit(source, options);
                 Directory.CreateDirectory(targetDir);
                 File.WriteAllBytes(target, bytes);
+                written.Add(name);
                 copied++;
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or FileFormatException)
@@ -64,5 +66,27 @@ public static class PictureImporter
 
         Directory.CreateDirectory(targetDir);
         return new ApplyResult(copied, failures);
+    }
+
+    /// <summary>Keeps every picture in one call: a name this call already wrote becomes "photo (2).jpg", then "photo (3).jpg". A file left by an earlier import is still overwritten.</summary>
+    private static string FreeName(string name, HashSet<string> written)
+    {
+        if (!written.Contains(name))
+        {
+            return name;
+        }
+
+        var stem = Path.GetFileNameWithoutExtension(name);
+        var extension = Path.GetExtension(name);
+        var next = 2;
+        string candidate;
+        do
+        {
+            candidate = $"{stem} ({next}){extension}";
+            next++;
+        }
+        while (written.Contains(candidate));
+
+        return candidate;
     }
 }
