@@ -240,7 +240,7 @@ public partial class BackgroundEditorViewModel : ObservableObject
             return;
         }
 
-        _ = _render.RunAsync(async ct =>
+        _render.Run(async ct =>
         {
             try
             {

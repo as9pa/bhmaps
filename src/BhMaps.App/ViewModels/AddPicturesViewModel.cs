@@ -237,7 +237,7 @@ public partial class AddPicturesViewModel : ObservableObject
             return;
         }
 
-        _ = _preview.RunAsync(async ct =>
+        _preview.Run(async ct =>
         {
             try
             {

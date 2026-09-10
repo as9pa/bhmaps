@@ -21,6 +21,12 @@ public sealed class Debouncer
     /// <summary>Drops the pending request without starting one, for a change that has nothing to render.</summary>
     public void Cancel() => _cts?.Cancel();
 
+    /// <summary>The fire-and-forget form, for a caller with no task to await. Deliberately async void: a
+    /// non-cancellation failure is posted back to the UI thread and reaches App's DispatcherUnhandledException
+    /// handler, where discarding the task with <c>_ =</c> would leave it unobserved and the preview merely
+    /// looking stuck.</summary>
+    public async void Run(Func<CancellationToken, Task> work) => await RunAsync(work);
+
     /// <summary>Runs <paramref name="work"/> after the quiet period, unless a later call arrives first. Never
     /// throws for a cancellation; anything else the work throws is the caller's to handle.</summary>
     public async Task RunAsync(Func<CancellationToken, Task> work)
