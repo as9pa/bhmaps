@@ -700,29 +700,52 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
+        if (IsBusy)
+        {
+            // Spec 7.1: one operation at a time, and the launcher's confirm and close are part of this one. Taken
+            // here rather than left to RunBusyAsync below, because a refused write must not clear the done line or
+            // start a rescan of its own.
+            return;
+        }
+
         var gamePath = Services.GamePath;
-        await _launcher.RunWriteAsync(
+
+        // False only when the launcher turned the write away: an exception inside the write comes back out through
+        // RunBusyAsync, which never reaches the assignment, so this starts as the value that case wants.
+        var accepted = true;
+        var ok = await RunBusyAsync(
             label,
-            async () =>
+            async (progress, ct) =>
             {
-                // Inside the launcher's callback, so with whileRunning=restart the game is already closed and its
-                // files are the ones being snapshotted. The capture is the first step of the busy operation, not a
-                // step before it: it is file copying, so it belongs off the UI thread, behind a progress line, and
-                // inside the boundary that turns an IO failure into the same dialog any other write failure gets.
-                var ok = await RunBusyAsync(
+                // The launcher runs inside the boundary, so the "Restart and apply" confirm and the wait for the
+                // game to close happen with everything else disabled. Outside it, a second write could start while
+                // the game was closing and be copying files when the launcher's finally relaunched it.
+                accepted = await _launcher.RunWriteAsync(
                     label,
-                    async (progress, ct) =>
+                    async () =>
                     {
+                        // Inside the launcher's callback, so with whileRunning=restart the game is already closed
+                        // and its files are the ones being snapshotted. The capture is the first step of the work,
+                        // not a step before it: it is file copying, so it belongs off the UI thread, behind a
+                        // progress line, and inside the boundary that turns an IO failure into the same dialog any
+                        // other write failure gets.
                         progress.Report("Saving undo");
                         await Task.Run(() => Services.Undo.Begin().Capture(gamePath, undoPaths), ct);
                         await work(progress, ct);
                     });
-
-                // Begin has already replaced the previous snapshot, so a write that was cancelled or failed has to
-                // clear the done line too; leaving it would describe something Undo no longer restores.
-                DoneText = ok ? doneText : "";
-                DoneUndoable = ok;
             });
+
+        if (!accepted)
+        {
+            // The user declined the restart, or the game would not close. Nothing was written and no snapshot was
+            // taken, so the header still describes whatever the write before this one did.
+            return;
+        }
+
+        // Begin has already replaced the previous snapshot, so a write that was cancelled or failed has to clear
+        // the done line too; leaving it would describe something Undo no longer restores.
+        DoneText = ok ? doneText : "";
+        DoneUndoable = ok;
 
         // A restore that fully succeeds discards its snapshot, so what can be undone is always read back from the
         // store rather than remembered.
