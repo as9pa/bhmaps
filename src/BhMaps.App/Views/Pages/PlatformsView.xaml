@@ -235,9 +235,12 @@
       <controls:PageHeader.Actions>
         <StackPanel Orientation="Horizontal">
           <TextBlock VerticalAlignment="Center" Style="{StaticResource ResetHintText}" Text="{Binding ResetHint}" />
+          <!-- Off while any operation runs, like the tiles' Use. WPF ands this with the command's CanExecute,
+               so the no-Default-pack disable still holds. -->
           <Button Margin="8,0,0,0"
                   Command="{Binding ResetCommand}"
                   Content="Reset to default (this map)"
+                  IsEnabled="{Binding DataContext.IsNotBusy, RelativeSource={RelativeSource AncestorType=Window}}"
                   Style="{StaticResource OutlineButton}"
                   ToolTip="{Binding ResetTooltip}"
                   ToolTipService.ShowOnDisabled="True" />
