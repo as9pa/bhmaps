@@ -32,6 +32,10 @@ public partial class MainViewModel : ObservableObject
     private readonly DispatcherTimer _gameTimer;
     private CancellationTokenSource? _cts;
 
+    /// <summary>Set when the game data lands while a scan is running, so the rescan it needs happens once the
+    /// busy boundary clears instead of being dropped.</summary>
+    private bool _rescanPending;
+
     public MainViewModel(AppServices services, IDialogs dialogs)
     {
         Services = services;
@@ -54,6 +58,11 @@ public partial class MainViewModel : ObservableObject
         SettingsPage = new SettingsPageViewModel(this);
         _pages = [Home, Backgrounds, Platforms, Packs, PackDetail, SettingsPage];
         CurrentPage = Home;
+
+        // The startup read usually lands after the first scan, and the catalog that scan built came from the cache
+        // or from nothing, so the names have to be rebuilt when it does (spec 3.5). Subscribed once, for the life
+        // of the app: the shell outlives the service.
+        services.LevelData.Changed += OnLevelDataChanged;
 
         // Nothing tells the app when Brawlhalla starts or stops, so the sidebar's game block asks every 3 seconds.
         GameRunning = GameProcess.IsRunning();
@@ -104,12 +113,20 @@ public partial class MainViewModel : ObservableObject
     public partial PageViewModel? CurrentPage { get; set; }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsNotBusy))]
+    [NotifyPropertyChangedFor(nameof(IsNotBusy), nameof(CanWrite))]
     [NotifyCanExecuteChangedFor(
         nameof(RefreshCommand),
         nameof(LaunchGameCommand),
-        nameof(ImportCommand))]
+        nameof(ImportCommand),
+        nameof(UndoCommand))]
     public partial bool IsBusy { get; set; }
+
+    /// <summary>Spec 7.8: the configured game folder is not there. The page header says so and every write into
+    /// the game is off until a rescan finds it again. Recomputed around each scan, never guessed.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanWrite))]
+    [NotifyCanExecuteChangedFor(nameof(UndoCommand))]
+    public partial bool GameFolderMissing { get; set; }
 
     [ObservableProperty]
     public partial string ProgressText { get; set; }
@@ -128,7 +145,15 @@ public partial class MainViewModel : ObservableObject
 
     public bool IsNotBusy => !IsBusy;
 
+    /// <summary>IsNotBusy's sibling for anything that writes into the game folder: a write also needs the folder
+    /// to be there (spec 7.8).</summary>
+    public bool CanWrite => !IsBusy && !GameFolderMissing;
+
     private bool CanAct() => !IsBusy;
+
+    /// <summary>Whether the configured game folder is there right now. The only test for GameFolderMissing, so a
+    /// folder that came back clears the notice by itself on the next scan.</summary>
+    private bool GameFolderExists() => Directory.Exists(Services.GamePath);
 
     [RelayCommand]
     private void NavigateHome() => CurrentPage = Home;
@@ -280,8 +305,9 @@ public partial class MainViewModel : ObservableObject
         await RunImportAsync(vm.Plan, vm.PackName.Trim());
     }
 
-    /// <summary>Spec 6.4: puts back the files the last game write was about to overwrite or delete.</summary>
-    [RelayCommand]
+    /// <summary>Spec 6.4: puts back the files the last game write was about to overwrite or delete. A restore is a
+    /// game write, so it is off while the folder is missing (spec 7.8).</summary>
+    [RelayCommand(CanExecute = nameof(CanWrite))]
     private async Task UndoAsync()
     {
         if (Services.Undo.Latest is not { } session)
@@ -353,10 +379,14 @@ public partial class MainViewModel : ObservableObject
     /// <summary>Scans, then refreshes every page, not just the current one, so switching pages never shows stale data.</summary>
     public async Task RescanAsync()
     {
+        // Before the scan, because a missing folder scans to an empty tree rather than throwing, and after it,
+        // because the folder can go or come back while the scan is reading it.
+        GameFolderMissing = !GameFolderExists();
         ScanSnapshot? snapshot = null;
         var ok = await RunBusyAsync(
             "Scanning",
             (progress, ct) => Task.Run(() => { snapshot = Services.Scan(progress, ct); }, ct));
+        GameFolderMissing = !GameFolderExists();
         if (!ok || snapshot is null)
         {
             return;
@@ -374,15 +404,39 @@ public partial class MainViewModel : ObservableObject
         CanUndo = Services.Undo.Latest is not null;
     }
 
-    /// <summary>Stops the game poll. Called once, when the window closes, so the timer does not keep ticking on
-    /// a dispatcher that is on its way out.</summary>
-    public void Shutdown() => _gameTimer.Stop();
+    /// <summary>Spec 3.5: the game data has been read, so the catalog the last scan built from the cache, or from
+    /// nothing, is out of date. A read that lands mid-scan is remembered rather than started on top of it, and
+    /// RunBusyAsync runs the one rescan it asked for when the boundary clears.</summary>
+    private void OnLevelDataChanged()
+    {
+        if (IsBusy)
+        {
+            _rescanPending = true;
+            return;
+        }
+
+        _ = RescanAsync();
+    }
+
+    /// <summary>Stops the game poll and drops the level-data subscription. Called once, when the window closes, so
+    /// neither keeps waking a dispatcher that is on its way out.</summary>
+    public void Shutdown()
+    {
+        _gameTimer.Stop();
+        Services.LevelData.Changed -= OnLevelDataChanged;
+    }
 
     /// <summary>Copies the game folder into the Default pack (spec 6.1), asking before replacing one that already
     /// exists. Shared by the Packs and Settings pages so the confirm text and the busy boundary are the same
     /// from both. A library-only write: no undo snapshot and no game-running policy.</summary>
     public async Task CaptureDefaultsAsync()
     {
+        if (GameFolderMissing)
+        {
+            // Nothing to copy from. The header already says the folder is gone, so this is silent (spec 7.8).
+            return;
+        }
+
         var library = Services.LibraryPath;
         if (DefaultPack.Exists(library)
             && !Dialogs.Confirm(
@@ -437,6 +491,13 @@ public partial class MainViewModel : ObservableObject
         {
             return false;
         }
+        catch (Exception ex) when (ex is DirectoryNotFoundException or FileNotFoundException && !GameFolderExists())
+        {
+            // The game folder went away under the operation. Spec 7.8 calls that a state the header reports, not a
+            // failure worth a dialog: every write stays off until a scan finds the folder again.
+            GameFolderMissing = true;
+            return false;
+        }
         catch (Exception ex)
         {
             Dialogs.Error("Something went wrong", ex.Message);
@@ -448,6 +509,15 @@ public partial class MainViewModel : ObservableObject
             ProgressText = "";
             _cts.Dispose();
             _cts = null;
+
+            // Last, after the token is cleared: a rescan started any earlier would take _cts for itself and have it
+            // disposed out from under it by the lines above. Cleared before the start, so the rescan's own turn
+            // through this boundary cannot start a second one.
+            if (_rescanPending)
+            {
+                _rescanPending = false;
+                _ = RescanAsync();
+            }
         }
     }
 
@@ -459,6 +529,13 @@ public partial class MainViewModel : ObservableObject
         Func<IProgress<string>, CancellationToken, Task> work,
         string doneText)
     {
+        if (GameFolderMissing)
+        {
+            // There is nothing to write into and nothing to snapshot for undo. The header carries the notice, so
+            // the write is refused silently rather than telling the user twice (spec 7.8).
+            return;
+        }
+
         var gamePath = Services.GamePath;
         await _launcher.RunWriteAsync(
             label,
