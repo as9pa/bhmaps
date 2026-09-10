@@ -52,7 +52,8 @@ public sealed class GameLauncher
         }
         finally
         {
-            // BhMaps closed the game, so it starts it again whether or not the write worked.
+            // BhMaps closed the game, so it owns reopening it even when the write failed; the busy boundary
+            // nested inside write is what reports that failure.
             Relaunch();
         }
 
