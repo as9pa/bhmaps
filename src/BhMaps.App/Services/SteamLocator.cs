@@ -60,24 +60,12 @@ public static class SteamLocator
         return key?.GetValue("SteamPath") as string;
     }
 
-    /// <summary>Every "path" value in steamapps\libraryfolders.vdf, by a plain text scan rather than a parse: the
-    /// file is a nest of quoted key/value lines and only those values matter. The values escape their backslashes.</summary>
-    private static IEnumerable<string> LibraryFolders(string steamPath)
+    /// <summary>The library folders steamapps\libraryfolders.vdf lists. Reading the file is this project's job;
+    /// the scan of its text is <see cref="SteamLibraryFolders"/>'s, in Core, where a test can reach it. An
+    /// unreadable file throws here and is caught by <see cref="FindMapArt"/>, one frame up.</summary>
+    private static IReadOnlyList<string> LibraryFolders(string steamPath)
     {
         var vdf = Path.Combine(steamPath, @"steamapps\libraryfolders.vdf");
-        if (!File.Exists(vdf))
-        {
-            yield break;
-        }
-
-        foreach (var line in File.ReadLines(vdf))
-        {
-            // A key/value line splits into indent, key, gap, value and tail, so the value is always the fourth piece.
-            var parts = line.Split('"');
-            if (parts.Length >= 5 && parts[1] == "path")
-            {
-                yield return parts[3].Replace(@"\\", @"\");
-            }
-        }
+        return File.Exists(vdf) ? SteamLibraryFolders.Parse(File.ReadAllText(vdf)) : [];
     }
 }
