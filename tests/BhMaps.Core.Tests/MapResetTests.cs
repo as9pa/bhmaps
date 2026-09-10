@@ -1,0 +1,218 @@
+using BhMaps.Core.Model;
+using BhMaps.Core.Operations;
+using BhMaps.Core.Scanning;
+using BhMaps.Core.Tests.Helpers;
+
+namespace BhMaps.Core.Tests;
+
+public class MapResetTests
+{
+    private static Pack ScanDefault(string libraryPath) => DefaultPack.Find(PackScanner.ScanAll(libraryPath))!;
+
+    private static string PackPath(string libraryPath, params string[] parts) =>
+        Path.Combine([PackScanner.PacksRoot(libraryPath), DefaultPack.Name, .. parts]);
+
+    private static string Read(string root, string folder, string name) => File.ReadAllText(Path.Combine(root, folder, name));
+
+    [Fact]
+    public void Find_MatchesTheDefaultPackCaseInsensitively()
+    {
+        using var tmp = new TempDir();
+        var lib = Path.Combine(tmp.Path, "lib");
+        new FakeGameTree(Path.Combine(lib, "packs", "default")).File("Grove", "a.png", "x");
+        new FakeGameTree(Path.Combine(lib, "packs", "dark")).File("Grove", "a.png", "x");
+
+        var found = DefaultPack.Find(PackScanner.ScanAll(lib));
+
+        Assert.NotNull(found);
+        Assert.Equal("default", found.Name);
+    }
+
+    [Fact]
+    public void Find_ReturnsNullWhenNoDefaultPackExists()
+    {
+        using var tmp = new TempDir();
+        var lib = Path.Combine(tmp.Path, "lib");
+        new FakeGameTree(Path.Combine(lib, "packs", "dark")).File("Grove", "a.png", "x");
+
+        Assert.Null(DefaultPack.Find(PackScanner.ScanAll(lib)));
+        Assert.False(DefaultPack.Exists(lib));
+    }
+
+    [Fact]
+    public void Capture_ReplacesAnExistingDefaultPackRatherThanMergingIntoIt()
+    {
+        using var tmp = new TempDir();
+        var game = Path.Combine(tmp.Path, "game");
+        FakeGameTree.Standard(game);
+        var lib = Path.Combine(tmp.Path, "lib");
+        new FakeGameTree(PackPath(lib)).File("Stale", "old.png", "stale");
+        Assert.True(DefaultPack.Exists(lib));
+
+        var result = DefaultPack.Capture(game, lib);
+
+        Assert.Equal(0, result.Failed);
+        Assert.False(Directory.Exists(PackPath(lib, "Stale")));
+        var captured = ScanDefault(lib);
+        Assert.Equal(8, captured.Folders.Count);
+        foreach (var folder in GameTreeScanner.Scan(game).Folders)
+        {
+            Assert.NotNull(captured.FindFolder(folder.Name));
+        }
+    }
+
+    [Fact]
+    public void Capture_CopiesEveryGameFolderIntoPacksDefault()
+    {
+        using var tmp = new TempDir();
+        var game = Path.Combine(tmp.Path, "game");
+        FakeGameTree.Standard(game);
+        var lib = Path.Combine(tmp.Path, "lib");
+        var progress = new List<string>();
+
+        var result = DefaultPack.Capture(game, lib, new SyncProgress(progress));
+
+        Assert.Equal(13, result.Copied);
+        Assert.Empty(result.Failures);
+        Assert.True(DefaultPack.Exists(lib));
+        Assert.True(File.Exists(PackPath(lib, "BloodMoon", "BloodMoon_PlatformA01.png")));
+        Assert.Equal("bm-a01", Read(PackPath(lib), "BloodMoon", "BloodMoon_PlatformA01.png"));
+        Assert.Equal("bg-sewer", Read(PackPath(lib), "Backgrounds", "BG_Sewer.jpg"));
+        Assert.Equal(13, progress.Count);
+    }
+
+    [Fact]
+    public void ResetMap_RestoresTheDefaultPackFilesForThatFolder()
+    {
+        using var tmp = new TempDir();
+        var game = Path.Combine(tmp.Path, "game");
+        new FakeGameTree(game).File("Grove", "a.png", "bad");
+        var lib = Path.Combine(tmp.Path, "lib");
+        new FakeGameTree(PackPath(lib)).File("Grove", "a.png", "good");
+
+        var outcome = MapReset.ResetMap(game, "Grove", [], ScanDefault(lib));
+
+        Assert.Equal(1, outcome.Restored);
+        Assert.Equal(0, outcome.Deleted);
+        Assert.Equal(1, outcome.Changed);
+        Assert.Equal(0, outcome.Failed);
+        Assert.Equal("good", Read(game, "Grove", "a.png"));
+    }
+
+    [Fact]
+    public void ResetMap_AlsoRestoresTheMapsBackgroundSlots()
+    {
+        using var tmp = new TempDir();
+        var game = Path.Combine(tmp.Path, "game");
+        new FakeGameTree(game).File("Grove", "a.png", "bad").File("Backgrounds", "BG_Grove.jpg", "bad-bg");
+        var lib = Path.Combine(tmp.Path, "lib");
+        new FakeGameTree(PackPath(lib))
+            .File("Grove", "a.png", "good")
+            .File("Backgrounds", "BG_Grove.jpg", "good-bg")
+            .File("Backgrounds", "BG_Sewer.jpg", "other-bg");
+
+        var outcome = MapReset.ResetMap(game, "Grove", ["BG_Grove.jpg"], ScanDefault(lib));
+
+        Assert.Equal(2, outcome.Restored);
+        Assert.Equal(0, outcome.Failed);
+        Assert.Equal("good-bg", Read(game, "Backgrounds", "BG_Grove.jpg"));
+        Assert.False(File.Exists(Path.Combine(game, "Backgrounds", "BG_Sewer.jpg")));
+    }
+
+    [Fact]
+    public void ResetMap_IgnoresSlotsTheDefaultPackDoesNotHave()
+    {
+        using var tmp = new TempDir();
+        var game = Path.Combine(tmp.Path, "game");
+        new FakeGameTree(game).File("Grove", "a.png", "bad");
+        var lib = Path.Combine(tmp.Path, "lib");
+        new FakeGameTree(PackPath(lib)).File("Grove", "a.png", "good").File("Backgrounds", "BG_Grove.jpg", "good-bg");
+
+        var outcome = MapReset.ResetMap(game, "Grove", ["BG_Grove.jpg", "BG_Gone.jpg"], ScanDefault(lib));
+
+        Assert.Equal(2, outcome.Restored);
+        Assert.Empty(outcome.Failures);
+        Assert.False(File.Exists(Path.Combine(game, "Backgrounds", "BG_Gone.jpg")));
+    }
+
+    [Fact]
+    public void ResetMap_DeletesTheFolderImagesWhenThereIsNoDefaultPack()
+    {
+        using var tmp = new TempDir();
+        var game = Path.Combine(tmp.Path, "game");
+        new FakeGameTree(game)
+            .File("Grove", "a.png", "x")
+            .File("Grove", "b.jpg", "x")
+            .File("Grove", "notes.txt", "x")
+            .File("Backgrounds", "BG_Grove.jpg", "keep");
+
+        var outcome = MapReset.ResetMap(game, "Grove", ["BG_Grove.jpg"], defaultPack: null);
+
+        Assert.Equal(0, outcome.Restored);
+        Assert.Equal(2, outcome.Deleted);
+        Assert.Equal(0, outcome.Failed);
+        Assert.Equal(new[] { "notes.txt" }, Directory.GetFiles(Path.Combine(game, "Grove")).Select(Path.GetFileName));
+        Assert.Equal("keep", Read(game, "Backgrounds", "BG_Grove.jpg"));
+    }
+
+    [Fact]
+    public void ResetAll_AppliesTheWholeDefaultPackWhenThereIsOne()
+    {
+        using var tmp = new TempDir();
+        var game = Path.Combine(tmp.Path, "game");
+        new FakeGameTree(game)
+            .File("Grove", "a.png", "bad")
+            .File("Backgrounds", "BG_Grove.jpg", "bad-bg")
+            .File("Snow", "Snow1.png", "bad-snow")
+            .File("Grove", "custom.png", "custom");
+        var lib = Path.Combine(tmp.Path, "lib");
+        new FakeGameTree(PackPath(lib))
+            .File("Grove", "a.png", "good")
+            .File("Backgrounds", "BG_Grove.jpg", "good-bg")
+            .File("Snow", "Snow1.png", "good-snow");
+
+        var outcome = MapReset.ResetAll(game, ScanDefault(lib));
+
+        Assert.Equal(3, outcome.Restored);
+        Assert.Equal(0, outcome.Deleted);
+        Assert.Equal(0, outcome.Failed);
+        Assert.Equal("good", Read(game, "Grove", "a.png"));
+        Assert.Equal("good-bg", Read(game, "Backgrounds", "BG_Grove.jpg"));
+        Assert.Equal("good-snow", Read(game, "Snow", "Snow1.png"));
+        Assert.Equal("custom", Read(game, "Grove", "custom.png"));
+    }
+
+    [Fact]
+    public void ResetAll_FallsBackToDeletingEveryFolderWhenThereIsNoDefaultPack()
+    {
+        using var tmp = new TempDir();
+        var game = Path.Combine(tmp.Path, "game");
+        FakeGameTree.Standard(game).File("Snow", "Snow1.png", "theme").File("Test", "Test1.png", "theme");
+
+        var outcome = MapReset.ResetAll(game, defaultPack: null);
+
+        Assert.Equal(0, outcome.Restored);
+        Assert.Equal(15, outcome.Deleted);
+        Assert.Equal(0, outcome.Failed);
+        Assert.Equal(10, Directory.GetDirectories(game).Length);
+        Assert.Empty(Directory.GetFiles(game, "*", SearchOption.AllDirectories));
+    }
+
+    [Fact]
+    public void ResetAll_ReportsProgressPerFolder()
+    {
+        using var tmp = new TempDir();
+        var game = Path.Combine(tmp.Path, "game");
+        FakeGameTree.Standard(game);
+        var lib = Path.Combine(tmp.Path, "lib");
+        DefaultPack.Capture(game, lib);
+        var fromPack = new List<string>();
+        var fromDelete = new List<string>();
+
+        MapReset.ResetAll(game, ScanDefault(lib), new SyncProgress(fromPack));
+        MapReset.ResetAll(game, null, new SyncProgress(fromDelete));
+
+        Assert.NotEmpty(fromPack);
+        Assert.NotEmpty(fromDelete);
+    }
+}
