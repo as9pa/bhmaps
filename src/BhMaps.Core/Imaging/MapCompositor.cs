@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -6,10 +7,10 @@ using BhMaps.Core.LevelData;
 namespace BhMaps.Core.Imaging;
 
 /// <summary>Decides where each asset comes from: the game folder, a pack folder,
-/// or a specific background image.</summary>
+/// or a specific background image. Safe to share across threads and across concurrent renders.</summary>
 public sealed class AssetSources
 {
-    private readonly Dictionary<string, bool> _transparency = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, bool> _transparency = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>mapArtPath is the game's mapArt folder, which every relative path from a LevelDesc hangs off.</summary>
     public AssetSources(string mapArtPath, string? packRoot = null, string? backgroundOverride = null)
@@ -64,18 +65,12 @@ public sealed class AssetSources
         return File.Exists(gamePath) ? gamePath : null;
     }
 
-    /// <summary>Memoised because one render asks about the same pack file once per slot that names it.</summary>
-    private bool IsFullyTransparent(string path)
-    {
-        if (_transparency.TryGetValue(path, out var known))
-        {
-            return known;
-        }
-
-        var transparent = TransparentPng.IsFullyTransparent(path);
-        _transparency[path] = transparent;
-        return transparent;
-    }
+    /// <summary>Memoised because one render asks about the same pack file once per slot that names it.
+    /// Concurrent because one instance serves both the caller thread collecting inputs and the render thread
+    /// drawing them, and two previews may share it. A racing pair may both decode the file; the check is pure,
+    /// so the only cost is one wasted decode.</summary>
+    private bool IsFullyTransparent(string path) =>
+        _transparency.GetOrAdd(path, static p => TransparentPng.IsFullyTransparent(p));
 }
 
 /// <summary>Draws a map the way the game composes it: the background stretched over the camera bounds,
