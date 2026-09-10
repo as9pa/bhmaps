@@ -91,6 +91,26 @@ public class PreviewCacheTests
     }
 
     [Fact]
+    public async Task GetOrRenderAsync_RendersTwoPreviewsThatShareOneAssetSources()
+    {
+        using var tmp = new TempDir();
+        Art(tmp);
+        // A pack copy of the asset is what makes both calls consult the shared transparency memo.
+        SyntheticImage.SavePng(Path.Combine(tmp.Path, "pack", "Grove", "a.png"), 8, 8, (_, _) => (0, 255, 0, 255));
+        var sources = new AssetSources(Path.Combine(tmp.Path, "game"), Path.Combine(tmp.Path, "pack"));
+        using var queue = new RenderQueue();
+        var cache = Cache(tmp, queue);
+
+        var paths = await Task.WhenAll(
+                Task.Run(() => cache.GetOrRenderAsync(Level(), 64, 36, sources)),
+                Task.Run(() => cache.GetOrRenderAsync(Level(), 128, 72, sources)))
+            .WaitAsync(Wait);
+
+        Assert.NotEqual(paths[0], paths[1]);
+        Assert.All(paths, p => Assert.True(File.Exists(p), $"{p} was not written"));
+    }
+
+    [Fact]
     public void Sweep_DeletesOnlyFilesOlderThanThirtyDays()
     {
         using var tmp = new TempDir();
