@@ -216,4 +216,16 @@ public class MapCompositorTests
 
         Assert.Equal(new[] { background, a, snow }, inputs);
     }
+
+    [Fact]
+    public void CollectInputs_ListsNothingForALevelWithNoCameraBounds()
+    {
+        using var tmp = new TempDir();
+        Solid(tmp, @"Backgrounds\BG_Grove.jpg", 0, 0, 255);
+        Solid(tmp, @"Grove\a.png", 255, 0, 0);
+        var level = Level(new CameraBounds(0, 0, 0, 0), "BG_Grove.jpg",
+            Node(0, 0, null, new LevelAsset("a.png", 0, 0, 10, 10)));
+
+        Assert.Empty(MapCompositor.CollectInputs(level, new AssetSources(tmp.Path)));
+    }
 }
