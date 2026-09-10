@@ -471,48 +471,32 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
-    /// <summary>Spec 6: a merge prompt for every pack that already exists, then all of the plans as one long
-    /// operation, one failure summary, and one rescan at the end rather than one per pack.</summary>
+    /// <summary>Spec 6: all of the plans as one long operation, one failure summary, and one rescan at the end
+    /// rather than one per pack. The import window has already asked about any pack these add to, so nothing here
+    /// stops to ask again.</summary>
     protected async Task RunImportAsync(IReadOnlyList<ImportJob> jobs)
     {
-        var packsRoot = PackScanner.PacksRoot(Services.LibraryPath);
-
-        // The import window already keeps a name off a pack that is in the library, so what is left for this is the
-        // pack that appeared after the window opened. Declining one leaves the others to run.
-        var wanted = new List<ImportJob>();
-        foreach (var job in jobs)
-        {
-            if (Directory.Exists(Path.Combine(packsRoot, job.PackName))
-                && !Dialogs.Confirm(
-                    "Pack already exists",
-                    $"A pack named '{job.PackName}' already exists. Merge into it? Files with the same name are overwritten; other files stay."))
-            {
-                continue;
-            }
-
-            wanted.Add(job);
-        }
-
-        if (wanted.Count == 0)
+        if (jobs.Count == 0)
         {
             return;
         }
 
+        var packsRoot = PackScanner.PacksRoot(Services.LibraryPath);
         var failures = new List<FileFailure>();
         var ok = await RunBusyAsync(
-            wanted.Count == 1 ? $"Importing into {wanted[0].PackName}" : "Importing",
+            jobs.Count == 1 ? $"Importing into {jobs[0].PackName}" : "Importing",
             (progress, ct) => Task.Run(
                 () =>
                 {
-                    for (var i = 0; i < wanted.Count; i++)
+                    for (var i = 0; i < jobs.Count; i++)
                     {
-                        var job = wanted[i];
+                        var job = jobs[i];
 
                         // With several packs the line is which pack and how far through the list it is; the per-file
                         // progress would overwrite that, so it is only forwarded when there is one pack to report.
-                        if (wanted.Count > 1)
+                        if (jobs.Count > 1)
                         {
-                            progress.Report($"{job.PackName} ({i + 1} of {wanted.Count})");
+                            progress.Report($"{job.PackName} ({i + 1} of {jobs.Count})");
                         }
 
                         try
@@ -521,7 +505,7 @@ public partial class MainViewModel : ObservableObject
                                 job.Plan,
                                 job.PackName,
                                 Services.LibraryPath,
-                                wanted.Count == 1 ? progress : null,
+                                jobs.Count == 1 ? progress : null,
                                 ct);
                             failures.AddRange(result.Failures);
                         }
@@ -537,7 +521,7 @@ public partial class MainViewModel : ObservableObject
         Dialogs.ShowFailures("Some files could not be imported", failures);
         if (ok)
         {
-            SetLibraryDone(wanted.Count == 1 ? $"Imported {wanted[0].PackName}" : $"Imported {wanted.Count} packs");
+            SetLibraryDone(jobs.Count == 1 ? $"Imported {jobs[0].PackName}" : $"Imported {jobs.Count} packs");
         }
 
         await RescanAsync();

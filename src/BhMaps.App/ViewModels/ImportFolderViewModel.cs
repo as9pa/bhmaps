@@ -31,9 +31,16 @@ public sealed partial class ImportFolderViewModel : ObservableObject
 
     public string NameError => _owner.NameErrorFor(this);
 
+    /// <summary>Shown in place of the error when the name is a pack the library already has.</summary>
+    public string NameNote => _owner.NameNoteFor(this);
+
     /// <summary>Called by the owner when any entry's name changed: a duplicate is an error on both entries, so
     /// renaming one of them clears the other's line too.</summary>
-    public void RefreshNameError() => OnPropertyChanged(nameof(NameError));
+    public void RefreshNameLine()
+    {
+        OnPropertyChanged(nameof(NameError));
+        OnPropertyChanged(nameof(NameNote));
+    }
 
     partial void OnPackNameChanged(string value) => _owner.FolderListChanged();
 }

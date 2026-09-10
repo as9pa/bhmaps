@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:converters="clr-namespace:BhMaps.App.Converters"
-        Title="Import into a pack" Width="1000" Height="720" MinWidth="780" MinHeight="520"
+        Title="Import folders" Width="1000" Height="720" MinWidth="780" MinHeight="520"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
         AllowDrop="True" PreviewDragOver="Window_PreviewDragOver" PreviewDrop="Window_PreviewDrop"
         Background="{StaticResource BgBrush}">
@@ -28,6 +28,19 @@
     <Style x:Key="ErrorText" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
       <Setter Property="FontSize" Value="12" />
       <Setter Property="Foreground" Value="{StaticResource MissingFgBrush}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Style.Triggers>
+        <Trigger Property="Text" Value="">
+          <Setter Property="Visibility" Value="Collapsed" />
+        </Trigger>
+      </Style.Triggers>
+    </Style>
+
+    <!-- The quiet twin of ErrorText, in the same cell: a name a pack in the library already has is allowed, and
+         this says what it will do instead. Only one of the two lines ever has text. -->
+    <Style x:Key="NoteText" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{StaticResource Text3Brush}" />
       <Setter Property="TextWrapping" Value="Wrap" />
       <Style.Triggers>
         <Trigger Property="Text" Value="">
@@ -195,6 +208,12 @@
                              Margin="0,6,0,0"
                              Style="{StaticResource ErrorText}"
                              Text="{Binding NameError}" />
+                  <TextBlock Grid.Row="1"
+                             Grid.Column="1"
+                             Grid.ColumnSpan="2"
+                             Margin="0,6,0,0"
+                             Style="{StaticResource NoteText}"
+                             Text="{Binding NameNote}" />
                 </Grid>
               </DataTemplate>
             </ListBox.ItemTemplate>
