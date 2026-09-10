@@ -37,7 +37,9 @@
 
     <!-- Four short labels in a row, so they size to their content rather than to the theme radio's 120 px form
          column; the WrapPanel takes a second line if the window is narrowed instead of clipping the last one. -->
-    <Style x:Key="FitRadio" TargetType="RadioButton">
+    <!-- BasedOn the implicit style, or these four fall off the Fluent theme (ThemeMode=Dark) onto the legacy
+         template, where the chosen radio draws as a hollow ring and the rest as filled discs. -->
+    <Style x:Key="FitRadio" TargetType="RadioButton" BasedOn="{StaticResource {x:Type RadioButton}}">
       <Setter Property="MinWidth" Value="0" />
       <Setter Property="Margin" Value="0,0,18,6" />
       <Setter Property="GroupName" Value="Fit" />
