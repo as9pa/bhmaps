@@ -37,6 +37,12 @@ public sealed class WpfDialogs : IDialogs
         return ShowDialog(dialog) ? dialog.FolderName : null;
     }
 
+    public IReadOnlyList<string>? PickFolders(string title)
+    {
+        var dialog = new OpenFolderDialog { Title = title, Multiselect = true };
+        return ShowDialog(dialog) ? dialog.FolderNames : null;
+    }
+
     public string? PickImageFile(string title)
     {
         var dialog = new OpenFileDialog { Title = title, Filter = ImageFilter };
