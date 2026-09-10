@@ -313,20 +313,34 @@ public partial class MainViewModel : ObservableObject
     }
 
     /// <summary>Spec 6.4: puts back the files the last game write was about to overwrite or delete. A restore is a
-    /// game write, so it is off while the folder is missing (spec 7.8).</summary>
+    /// game write, so it is off while the folder is missing (spec 7.8), it goes through the same game-running
+    /// policy as any other, and it takes no snapshot of its own: the one it is restoring is the only one there is.</summary>
     [RelayCommand(CanExecute = nameof(CanWrite))]
     private async Task UndoAsync()
     {
-        if (Services.Undo.Latest is not { } session)
+        if (Services.Undo.Latest is not { } session || IsBusy)
         {
             return;
         }
 
         var gamePath = Services.GamePath;
         ApplyResult? result = null;
+        var accepted = true;
         await RunBusyAsync(
             "Undoing",
-            (_, _) => Task.Run(() => { result = Services.Undo.Restore(session, gamePath); }));
+            async (_, _) =>
+            {
+                accepted = await _launcher.RunWriteAsync(
+                    "Undoing",
+                    () => Task.Run(() => { result = Services.Undo.Restore(session, gamePath); }));
+            });
+        if (!accepted)
+        {
+            // The user declined the restart, or the game would not close. Nothing was put back, so the snapshot is
+            // still there to be undone from and the header still says what the last write did.
+            return;
+        }
+
         if (result is not null)
         {
             Dialogs.ShowFailures("Some files could not be restored", result.Failures);
@@ -454,6 +468,9 @@ public partial class MainViewModel : ObservableObject
     /// <summary>"1 map" or "3 maps": the done lines count things and every one of them can be one.</summary>
     private static string Count(int n, string noun) => n == 1 ? $"1 {noun}" : $"{n} {noun}s";
 
+    /// <summary>Spec 5.3: the editor fits a picture and saves it into a pack. That is a library write and its own
+    /// business; the "Apply to game now" it offers is a game write, so the pack file it left is copied into the
+    /// slot here, with the boundary, the snapshot and the running-game policy every other one gets.</summary>
     public async Task OpenBackgroundEditorAsync(string? initialSlot)
     {
         if (Snapshot is null)
@@ -465,10 +482,31 @@ public partial class MainViewModel : ObservableObject
         var packNames = Snapshot.Packs.Select(p => p.Name).ToList();
         var vm = new BackgroundEditorViewModel(Services, Dialogs, slots, packNames, initialSlot);
         var window = new BackgroundEditorWindow { DataContext = vm, Owner = Application.Current.MainWindow };
-        if (window.ShowDialog() == true)
+        if (window.ShowDialog() != true)
         {
-            await RescanAsync();
+            return;
         }
+
+        if (vm.Saved is not { ApplyToGame: true } saved)
+        {
+            // Saved into the pack and no further, so nothing in the game folder moved and there is nothing to undo.
+            await RescanAsync();
+            return;
+        }
+
+        var gamePath = Services.GamePath;
+        var source = saved.PackFile;
+        var slot = saved.Slot;
+        var failures = new List<FileFailure>();
+        await RunGameWriteAsync(
+            $"Applying {slot}",
+            BackgroundApplier.TargetPaths([slot]),
+            (_, ct) => Task.Run(
+                () => failures.AddRange(BackgroundApplier.Apply(source, gamePath, [slot], null, ct).Failures),
+                ct),
+            $"Background applied to {slot}");
+
+        Dialogs.ShowFailures("Some backgrounds could not be applied", failures);
     }
 
     /// <summary>Spec 6: all of the plans as one long operation, one failure summary, and one rescan at the end
@@ -494,9 +532,10 @@ public partial class MainViewModel : ObservableObject
 
                         // With several packs the line is which pack and how far through the list it is; the per-file
                         // progress would overwrite that, so it is only forwarded when there is one pack to report.
+                        // The line is the whole sentence, which is why the label is not prefixed to it below.
                         if (jobs.Count > 1)
                         {
-                            progress.Report($"{job.PackName} ({i + 1} of {jobs.Count})");
+                            progress.Report($"Importing {job.PackName} ({i + 1} of {jobs.Count})");
                         }
 
                         try
@@ -516,7 +555,8 @@ public partial class MainViewModel : ObservableObject
                         }
                     }
                 },
-                ct));
+                ct),
+            prefixProgress: jobs.Count == 1);
 
         Dialogs.ShowFailures("Some files could not be imported", failures);
         if (ok)
@@ -626,8 +666,13 @@ public partial class MainViewModel : ObservableObject
     public Pack? FindPack(string name) =>
         Snapshot?.Packs.FirstOrDefault(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
 
-    /// <summary>Runs one long operation with the busy flag, progress text, and Cancel. False when cancelled or failed.</summary>
-    public async Task<bool> RunBusyAsync(string label, Func<IProgress<string>, CancellationToken, Task> work)
+    /// <summary>Runs one long operation with the busy flag, progress text, and Cancel. False when cancelled or
+    /// failed. A progress message is normally a fragment, so it is shown as "&lt;label&gt;: &lt;message&gt;";
+    /// <paramref name="prefixProgress"/> false is for an operation whose messages already read as the whole line.</summary>
+    public async Task<bool> RunBusyAsync(
+        string label,
+        Func<IProgress<string>, CancellationToken, Task> work,
+        bool prefixProgress = true)
     {
         if (IsBusy)
         {
@@ -637,7 +682,8 @@ public partial class MainViewModel : ObservableObject
         _cts = new CancellationTokenSource();
         IsBusy = true;
         ProgressText = label;
-        var progress = new Progress<string>(message => ProgressText = $"{label}: {message}");
+        var progress = new Progress<string>(
+            message => ProgressText = prefixProgress ? $"{label}: {message}" : message);
         try
         {
             await work(progress, _cts.Token);
@@ -700,29 +746,52 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
+        if (IsBusy)
+        {
+            // Spec 7.1: one operation at a time, and the launcher's confirm and close are part of this one. Taken
+            // here rather than left to RunBusyAsync below, because a refused write must not clear the done line or
+            // start a rescan of its own.
+            return;
+        }
+
         var gamePath = Services.GamePath;
-        await _launcher.RunWriteAsync(
+
+        // False only when the launcher turned the write away: an exception inside the write comes back out through
+        // RunBusyAsync, which never reaches the assignment, so this starts as the value that case wants.
+        var accepted = true;
+        var ok = await RunBusyAsync(
             label,
-            async () =>
+            async (progress, ct) =>
             {
-                // Inside the launcher's callback, so with whileRunning=restart the game is already closed and its
-                // files are the ones being snapshotted. The capture is the first step of the busy operation, not a
-                // step before it: it is file copying, so it belongs off the UI thread, behind a progress line, and
-                // inside the boundary that turns an IO failure into the same dialog any other write failure gets.
-                var ok = await RunBusyAsync(
+                // The launcher runs inside the boundary, so the "Restart and apply" confirm and the wait for the
+                // game to close happen with everything else disabled. Outside it, a second write could start while
+                // the game was closing and be copying files when the launcher's finally relaunched it.
+                accepted = await _launcher.RunWriteAsync(
                     label,
-                    async (progress, ct) =>
+                    async () =>
                     {
+                        // Inside the launcher's callback, so with whileRunning=restart the game is already closed
+                        // and its files are the ones being snapshotted. The capture is the first step of the work,
+                        // not a step before it: it is file copying, so it belongs off the UI thread, behind a
+                        // progress line, and inside the boundary that turns an IO failure into the same dialog any
+                        // other write failure gets.
                         progress.Report("Saving undo");
                         await Task.Run(() => Services.Undo.Begin().Capture(gamePath, undoPaths), ct);
                         await work(progress, ct);
                     });
-
-                // Begin has already replaced the previous snapshot, so a write that was cancelled or failed has to
-                // clear the done line too; leaving it would describe something Undo no longer restores.
-                DoneText = ok ? doneText : "";
-                DoneUndoable = ok;
             });
+
+        if (!accepted)
+        {
+            // The user declined the restart, or the game would not close. Nothing was written and no snapshot was
+            // taken, so the header still describes whatever the write before this one did.
+            return;
+        }
+
+        // Begin has already replaced the previous snapshot, so a write that was cancelled or failed has to clear
+        // the done line too; leaving it would describe something Undo no longer restores.
+        DoneText = ok ? doneText : "";
+        DoneUndoable = ok;
 
         // A restore that fully succeeds discards its snapshot, so what can be undone is always read back from the
         // store rather than remembered.

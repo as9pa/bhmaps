@@ -208,7 +208,10 @@ public partial class ImportViewModel : ObservableObject
     private void Import()
     {
         var existing = Folders.Where(f => _existingPacks.Contains(f.PackName)).Select(f => f.PackName).ToList();
-        if (existing.Count > 0 && !_dialogs.Confirm("Add to existing packs", AddToExistingMessage(existing)))
+        if (existing.Count > 0
+            && !_dialogs.Confirm(
+                existing.Count == 1 ? "Add to existing pack" : "Add to existing packs",
+                AddToExistingMessage(existing)))
         {
             return;
         }

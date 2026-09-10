@@ -62,6 +62,17 @@ public partial class PacksViewModel : PageViewModel
     /// Public because the pack detail page's header offers the same action and there is one implementation of it.</summary>
     public async Task ApplyAllAsync(Pack pack)
     {
+        // Spec 6.3: the maps are named before more than one of them is written. A pack with files for one map, or
+        // with backgrounds and nothing else, writes without asking.
+        var maps = MapsTouched(pack);
+        if (maps.Count > 1
+            && !Shell.Dialogs.Confirm(
+                $"Apply {pack.Name}",
+                $"Apply {pack.Name} to these {maps.Count} maps?\n\n{string.Join(", ", maps)}"))
+        {
+            return;
+        }
+
         var gamePath = Shell.Services.GamePath;
         ApplyResult? result = null;
         await Shell.RunGameWriteAsync(
@@ -74,6 +85,17 @@ public partial class PacksViewModel : PageViewModel
             Shell.Dialogs.ShowFailures("Some files could not be copied", result.Failures);
         }
     }
+
+    /// <summary>Display names of the maps the pack writes into: the catalog maps it has at least one file for,
+    /// the same set its detail page composes. A pack folder that is not a map, such as a theme folder other maps
+    /// borrow from (spec 4), is not one of them, and neither is Backgrounds.</summary>
+    private IReadOnlyList<string> MapsTouched(Pack pack) =>
+        Shell.Snapshot is { } snapshot
+            ? snapshot.Catalog.Maps
+                .Where(map => pack.FindFolder(map.FolderName) is { Files.Count: > 0 })
+                .Select(map => map.DisplayName)
+                .ToList()
+            : Array.Empty<string>();
 
     /// <summary>Copies the game folder into the Default pack. The confirm text and the busy boundary live on the
     /// shell, so this page and Settings ask the same question (spec 6.1).</summary>
