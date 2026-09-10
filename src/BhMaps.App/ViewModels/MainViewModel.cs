@@ -396,6 +396,10 @@ public partial class MainViewModel : ObservableObject
         CanUndo = Services.Undo.Latest is not null;
     }
 
+    /// <summary>Stops the game poll. Called once, when the window closes, so the timer does not keep ticking on
+    /// a dispatcher that is on its way out.</summary>
+    public void Shutdown() => _gameTimer.Stop();
+
     /// <summary>Spec 6: warn when Brawlhalla is running. True means go ahead.</summary>
     public bool ConfirmIfGameRunning() =>
         !GameProcess.IsRunning()

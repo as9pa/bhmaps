@@ -9,6 +9,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         Loaded += OnLoaded;
+        Closed += OnClosed;
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -17,6 +18,16 @@ public partial class MainWindow : Window
         if (DataContext is MainViewModel vm)
         {
             await vm.RescanAsync();
+        }
+    }
+
+    /// <summary>App.xaml.cs adds its own Closed handler to shut the application down; both run.</summary>
+    private void OnClosed(object? sender, EventArgs e)
+    {
+        Closed -= OnClosed;
+        if (DataContext is MainViewModel vm)
+        {
+            vm.Shutdown();
         }
     }
 }
