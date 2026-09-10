@@ -5,7 +5,8 @@ param(
     [string]$Dest = (Join-Path $env:TEMP "bhmaps-dev"),
     [string]$GameRoot = "C:\Program Files (x86)\Steam\steamapps\common\Brawlhalla",
     [string]$Library = "C:\Users\alexa\files\bh",
-    [switch]$RealArt
+    [switch]$RealArt,
+    [switch]$Welcome
 )
 
 $game = Join-Path $GameRoot "mapArt"
@@ -61,6 +62,22 @@ if ($RealArt) {
             Where-Object { $_.Name -ne "Default" } |
             ForEach-Object { Copy-Item $_.FullName (Join-Path $devLib "packs") -Recurse -Force }
     }
+}
+
+# A dev run belongs on the map grid, not on the welcome window, so the tree carries a settings file that says the
+# first run is over. welcomeDone is the flag the app reads; firstRunDone is v1's, kept for compatibility. The two
+# paths are the dev tree's own, so the file agrees with the run command below. Every other setting has a default,
+# so it is left out.
+if ($Welcome) {
+    Write-Host "-Welcome: no settings.json written, so the app opens the welcome window."
+} else {
+    $settings = [ordered]@{
+        gamePath     = $devMapArt
+        libraryPath  = $devLib
+        firstRunDone = $true
+        welcomeDone  = $true
+    }
+    $settings | ConvertTo-Json | Set-Content (Join-Path $devAppData "settings.json") -Encoding UTF8
 }
 
 Write-Host "Dev tree ready at $Dest"
