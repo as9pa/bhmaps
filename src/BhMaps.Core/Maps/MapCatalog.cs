@@ -25,8 +25,9 @@ public sealed class MapCatalog
     public static readonly string[] MiniGameDisplayNames =
         ["Catch Bombs", "Color Platforms", "Demon Island CTF", "Beachbrawl Arena"];
 
-    /// <summary>Theme folders hold seasonal art other maps borrow through "../"; they are never maps themselves.</summary>
-    public static readonly string[] HiddenFolderNames = ["Halloween", "Snow", "Test"];
+    /// <summary>Folders that are never maps: the shared background library, and theme folders holding seasonal
+    /// art other maps borrow through "../". In the fallback nothing else tells them apart from a map.</summary>
+    public static readonly string[] HiddenFolderNames = ["Backgrounds", "Halloween", "Snow", "Test"];
 
     private static readonly string[] SkippedPrefixes = ["Small ", "Big ", "Tutorial"];
 
