@@ -16,3 +16,7 @@ publish/
 TestResults/
 *.trx
 .idea/
+
+# Claude Code agent worktrees and scratch
+.claude/worktrees/
+__pycache__/
