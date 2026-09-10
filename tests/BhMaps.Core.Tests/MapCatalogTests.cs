@@ -167,6 +167,7 @@ public class MapCatalogTests
 
         Assert.False(catalog.HasLevelData);
         Assert.Empty(catalog.UiSetNames);
+        Assert.Null(catalog.ByFolder("Backgrounds"));
         var bloodMoon = catalog.ByFolder("BloodMoon");
         Assert.NotNull(bloodMoon);
         Assert.Equal("BloodMoon", bloodMoon!.DisplayName);
