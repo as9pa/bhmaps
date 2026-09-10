@@ -17,6 +17,9 @@ public interface IDialogs
 
     string? PickFolder(string title);
 
+    /// <summary>Multi-select folder picker. Null when cancelled.</summary>
+    IReadOnlyList<string>? PickFolders(string title);
+
     string? PickImageFile(string title);
 
     /// <summary>Multi-select image picker. Null when cancelled.</summary>
