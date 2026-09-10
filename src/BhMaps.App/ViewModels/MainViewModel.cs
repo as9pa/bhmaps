@@ -122,6 +122,11 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     public partial bool CanUndo { get; set; }
 
+    /// <summary>Folder name of the map most recently opened on Home, or null before any. Home sets it; the
+    /// Platforms page falls back to it when the sidebar has no checked map (spec 7.4).</summary>
+    [ObservableProperty]
+    public partial string? LastOpenedMap { get; set; }
+
     public bool IsNotBusy => !IsBusy;
 
     private bool CanAct() => !IsBusy;
@@ -399,6 +404,34 @@ public partial class MainViewModel : ObservableObject
     /// <summary>Stops the game poll. Called once, when the window closes, so the timer does not keep ticking on
     /// a dispatcher that is on its way out.</summary>
     public void Shutdown() => _gameTimer.Stop();
+
+    /// <summary>Copies the game folder into the Default pack (spec 6.1), asking before replacing one that already
+    /// exists. Shared by the Packs and Settings pages so the confirm text and the busy boundary are the same
+    /// from both. A library-only write: no undo snapshot and no game-running policy.</summary>
+    public async Task CaptureDefaultsAsync()
+    {
+        var library = Services.LibraryPath;
+        if (DefaultPack.Exists(library)
+            && !Dialogs.Confirm(
+                "Replace the Default pack",
+                "A Default pack already exists. Replace it with the game folder as it is now?\n\n"
+                + "To be sure the capture is vanilla, verify the game files through Steam first."))
+        {
+            return;
+        }
+
+        var gamePath = Services.GamePath;
+        ApplyResult? result = null;
+        await RunBusyAsync(
+            "Capturing defaults",
+            (progress, ct) => Task.Run(() => { result = DefaultPack.Capture(gamePath, library, progress, ct); }, ct));
+        if (result is not null)
+        {
+            Dialogs.ShowFailures("Some files could not be captured", result.Failures);
+        }
+
+        await RescanAsync();
+    }
 
     /// <summary>Spec 6: warn when Brawlhalla is running. True means go ahead.</summary>
     public bool ConfirmIfGameRunning() =>
