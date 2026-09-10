@@ -1,4 +1,5 @@
 using System.Windows;
+using BhMaps.App.ViewModels;
 using BhMaps.App.Views;
 using BhMaps.Core.Model;
 using Microsoft.Win32;
@@ -13,14 +14,11 @@ public sealed class WpfDialogs : IDialogs
         Application.Current?.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive)
         ?? Application.Current?.MainWindow;
 
-    public bool Confirm(string title, string message) =>
-        Show(message, title, MessageBoxButton.OKCancel, MessageBoxImage.Question) == MessageBoxResult.OK;
+    public bool Confirm(string title, string message) => Show(DialogKind.Confirm, title, message);
 
-    public void Error(string title, string message) =>
-        Show(message, title, MessageBoxButton.OK, MessageBoxImage.Error);
+    public void Error(string title, string message) => Show(DialogKind.Error, title, message);
 
-    public void Info(string title, string message) =>
-        Show(message, title, MessageBoxButton.OK, MessageBoxImage.Information);
+    public void Info(string title, string message) => Show(DialogKind.Info, title, message);
 
     public void ShowFailures(string title, IReadOnlyList<FileFailure> failures)
     {
@@ -60,8 +58,18 @@ public sealed class WpfDialogs : IDialogs
     private static bool ShowDialog(CommonDialog dialog) =>
         (Owner is { } owner ? dialog.ShowDialog(owner) : dialog.ShowDialog()) == true;
 
-    private static MessageBoxResult Show(string message, string title, MessageBoxButton buttons, MessageBoxImage image) =>
-        Owner is { } owner
-            ? MessageBox.Show(owner, message, title, buttons, image)
-            : MessageBox.Show(message, title, buttons, image);
+    /// <summary>The app's own window in place of MessageBox for the three message kinds. Called on the UI
+    /// thread, as the MessageBox calls it replaces were. True only when the user pressed OK, which is what
+    /// Confirm returns; the one-button kinds have nothing to read.</summary>
+    private static bool Show(DialogKind kind, string title, string message)
+    {
+        var window = new DialogWindow(new DialogViewModel(kind, title, message)) { Owner = Owner };
+        if (window.Owner is null)
+        {
+            // CenterOwner has nothing to centre on before the shell exists, as at a start-up error.
+            window.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+        }
+
+        return window.ShowDialog() == true;
+    }
 }
