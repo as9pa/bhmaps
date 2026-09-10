@@ -235,7 +235,8 @@
         <StackPanel Orientation="Horizontal">
           <TextBlock VerticalAlignment="Center" Style="{StaticResource ResetHintText}" Text="{Binding ResetHint}" />
           <!-- Off while any operation runs and while the game folder is missing, like the tiles' Use. WPF ands
-               this with the command's CanExecute, so the no-Default-pack disable still holds. -->
+               this with the command's CanExecute, so the no-Default-pack disable still holds. Gone entirely on
+               the All maps tab: it resets the one selected map, which that tab does not show. -->
           <Button Margin="8,0,0,0"
                   Command="{Binding ResetCommand}"
                   Content="Reset to default (this map)"
@@ -243,7 +244,8 @@
                   IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}"
                   Style="{StaticResource OutlineButton}"
                   ToolTip="{Binding ResetTooltip}"
-                  ToolTipService.ShowOnDisabled="True" />
+                  ToolTipService.ShowOnDisabled="True"
+                  Visibility="{Binding ShowSelectedMap, Converter={StaticResource BoolToVis}}" />
         </StackPanel>
       </controls:PageHeader.Actions>
     </controls:PageHeader>
