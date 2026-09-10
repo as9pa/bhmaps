@@ -160,11 +160,12 @@
                        VerticalAlignment="Center"
                        Text="{Binding PackName}"
                        TextTrimming="CharacterEllipsis" />
+            <!-- CanWrite rather than IsNotBusy: applying a set writes into the game folder (spec 7.8). -->
             <Button Grid.Column="2"
                     Margin="8,0,0,0"
                     Command="{Binding UseCommand}"
                     Content="Use"
-                    IsEnabled="{Binding DataContext.IsNotBusy, RelativeSource={RelativeSource AncestorType=Window}}"
+                    IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}"
                     Style="{StaticResource TileButton}" />
           </Grid>
         </StackPanel>
@@ -235,12 +236,12 @@
       <controls:PageHeader.Actions>
         <StackPanel Orientation="Horizontal">
           <TextBlock VerticalAlignment="Center" Style="{StaticResource ResetHintText}" Text="{Binding ResetHint}" />
-          <!-- Off while any operation runs, like the tiles' Use. WPF ands this with the command's CanExecute,
-               so the no-Default-pack disable still holds. -->
+          <!-- Off while any operation runs and while the game folder is missing, like the tiles' Use. WPF ands
+               this with the command's CanExecute, so the no-Default-pack disable still holds. -->
           <Button Margin="8,0,0,0"
                   Command="{Binding ResetCommand}"
                   Content="Reset to default (this map)"
-                  IsEnabled="{Binding DataContext.IsNotBusy, RelativeSource={RelativeSource AncestorType=Window}}"
+                  IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}"
                   Style="{StaticResource OutlineButton}"
                   ToolTip="{Binding ResetTooltip}"
                   ToolTipService.ShowOnDisabled="True" />

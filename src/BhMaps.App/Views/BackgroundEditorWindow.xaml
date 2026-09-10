@@ -172,6 +172,7 @@
         <Button Command="{Binding SaveCommand}"
                 Content="Save"
                 FocusVisualStyle="{StaticResource DialogFocusRing}"
+                IsDefault="True"
                 Style="{StaticResource PrimaryButton}" />
       </StackPanel>
     </Grid>
