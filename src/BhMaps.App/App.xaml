@@ -11,6 +11,7 @@
         <ResourceDictionary Source="Assets/BackgroundsTile.xaml" />
         <ResourceDictionary Source="Theme/Fonts.xaml" />
         <ResourceDictionary Source="Theme/Tokens.xaml" />
+        <ResourceDictionary Source="Theme/Icons.xaml" />
         <ResourceDictionary Source="Theme/Controls.xaml" />
       </ResourceDictionary.MergedDictionaries>
       <!-- Home's panel and the Platforms page list the same platform files, so the container style that names a
