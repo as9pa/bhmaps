@@ -64,9 +64,14 @@ public partial class HomeViewModel : PageViewModel
     [ObservableProperty]
     public partial int Zoom { get; set; }
 
-    /// <summary>The card whose right panel is open. Task 25 builds the panel; here the property only changes.</summary>
+    /// <summary>The card whose right panel is open. Null closes the panel.</summary>
     [ObservableProperty]
     public partial MapCardViewModel? Selected { get; set; }
+
+    /// <summary>The right panel for <see cref="Selected"/> (spec 7.2), rebuilt whenever the selection changes and
+    /// after every scan, so the panel always shows the state the last scan measured. Null when nothing is open.</summary>
+    [ObservableProperty]
+    public partial MapPanelViewModel? Panel { get; set; }
 
     /// <summary>Opens one map's right panel. The sidebar's autocomplete calls this when Enter picks a name while
     /// Home is the current page, and a click on a card runs the generated command.</summary>
@@ -163,6 +168,25 @@ public partial class HomeViewModel : PageViewModel
     }
 
     partial void OnSelectedChipChanged(string value) => ApplyFilter();
+
+    /// <summary>A card click, the sidebar's Enter, and the re-selection every scan does all land here, so the panel
+    /// is built in one place. The panel it replaces is cancelled: its composites are for a state that is gone.</summary>
+    partial void OnSelectedChanged(MapCardViewModel? value)
+    {
+        Panel?.Cancel();
+        if (value is null || _snapshot is not { } snapshot)
+        {
+            Panel = null;
+            return;
+        }
+
+        snapshot.MapStatuses.TryGetValue(value.FolderName, out var status);
+        var panel = new MapPanelViewModel(Shell, value.Map, status, snapshot);
+        Panel = panel;
+
+        // Fire and forget: the panel turns its own file failures into fallbacks, so there is nothing to await for.
+        _ = panel.LoadAsync();
+    }
 
     partial void OnZoomChanged(int value)
     {
