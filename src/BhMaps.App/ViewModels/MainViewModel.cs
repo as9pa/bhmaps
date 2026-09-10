@@ -302,14 +302,14 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
-        var vm = new ImportViewModel(Snapshot.Tree, Dialogs);
+        var vm = new ImportViewModel(Snapshot.Tree, Snapshot.Packs.Select(p => p.Name).ToList(), Dialogs);
         var window = new ImportWindow { DataContext = vm, Owner = Application.Current.MainWindow };
-        if (window.ShowDialog() != true || vm.Plan is null)
+        if (window.ShowDialog() != true)
         {
             return;
         }
 
-        await RunImportAsync(vm.Plan, vm.PackName.Trim());
+        await RunImportAsync(vm.Jobs);
     }
 
     /// <summary>Spec 6.4: puts back the files the last game write was about to overwrite or delete. A restore is a
@@ -471,30 +471,73 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
-    /// <summary>Spec 6: merge prompt when the pack exists, then Execute as a long operation, then rescan.</summary>
-    protected async Task RunImportAsync(ImportPlan plan, string packName)
+    /// <summary>Spec 6: a merge prompt for every pack that already exists, then all of the plans as one long
+    /// operation, one failure summary, and one rescan at the end rather than one per pack.</summary>
+    protected async Task RunImportAsync(IReadOnlyList<ImportJob> jobs)
     {
-        var packDir = Path.Combine(PackScanner.PacksRoot(Services.LibraryPath), packName);
-        if (Directory.Exists(packDir)
-            && !Dialogs.Confirm(
-                "Pack already exists",
-                $"A pack named '{packName}' already exists. Merge into it? Files with the same name are overwritten; other files stay."))
+        var packsRoot = PackScanner.PacksRoot(Services.LibraryPath);
+
+        // The import window already keeps a name off a pack that is in the library, so what is left for this is the
+        // pack that appeared after the window opened. Declining one leaves the others to run.
+        var wanted = new List<ImportJob>();
+        foreach (var job in jobs)
+        {
+            if (Directory.Exists(Path.Combine(packsRoot, job.PackName))
+                && !Dialogs.Confirm(
+                    "Pack already exists",
+                    $"A pack named '{job.PackName}' already exists. Merge into it? Files with the same name are overwritten; other files stay."))
+            {
+                continue;
+            }
+
+            wanted.Add(job);
+        }
+
+        if (wanted.Count == 0)
         {
             return;
         }
 
-        ApplyResult? result = null;
+        var failures = new List<FileFailure>();
         var ok = await RunBusyAsync(
-            $"Importing into {packName}",
-            (progress, ct) => Task.Run(() => { result = ImportRouter.Execute(plan, packName, Services.LibraryPath, progress, ct); }, ct));
-        if (result is not null)
-        {
-            Dialogs.ShowFailures("Some files could not be imported", result.Failures);
-        }
+            wanted.Count == 1 ? $"Importing into {wanted[0].PackName}" : "Importing",
+            (progress, ct) => Task.Run(
+                () =>
+                {
+                    for (var i = 0; i < wanted.Count; i++)
+                    {
+                        var job = wanted[i];
 
+                        // With several packs the line is which pack and how far through the list it is; the per-file
+                        // progress would overwrite that, so it is only forwarded when there is one pack to report.
+                        if (wanted.Count > 1)
+                        {
+                            progress.Report($"{job.PackName} ({i + 1} of {wanted.Count})");
+                        }
+
+                        try
+                        {
+                            var result = ImportRouter.Execute(
+                                job.Plan,
+                                job.PackName,
+                                Services.LibraryPath,
+                                wanted.Count == 1 ? progress : null,
+                                ct);
+                            failures.AddRange(result.Failures);
+                        }
+                        catch (Exception ex) when (ex is not OperationCanceledException)
+                        {
+                            // One pack that cannot be written is a line in the summary, not the end of the run.
+                            failures.Add(new FileFailure(Path.Combine(packsRoot, job.PackName), ex.Message));
+                        }
+                    }
+                },
+                ct));
+
+        Dialogs.ShowFailures("Some files could not be imported", failures);
         if (ok)
         {
-            SetLibraryDone($"Imported {packName}");
+            SetLibraryDone(wanted.Count == 1 ? $"Imported {wanted[0].PackName}" : $"Imported {wanted.Count} packs");
         }
 
         await RescanAsync();
