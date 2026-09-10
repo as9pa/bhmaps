@@ -129,7 +129,8 @@ public sealed class UndoStore
         return new UndoSession(path);
     }
 
-    /// <summary>Copies captured files back and deletes the ones recorded as absent. Copied counts both. Never throws per file.</summary>
+    /// <summary>Copies captured files back and deletes the ones recorded as absent. Copied counts both. Never throws per file.
+    /// A restore with no failures discards the snapshot; one with failures keeps it so the user can retry.</summary>
     public ApplyResult Restore(UndoSession session, string gamePath)
     {
         IReadOnlyList<string> captured;
@@ -155,6 +156,13 @@ public sealed class UndoStore
         foreach (var relativePath in absent)
         {
             DeleteBack(Path.Combine(gamePath, relativePath), ref restored, failures);
+        }
+
+        if (failures.Count == 0)
+        {
+            // Clear, not a delete of this one folder: a session an earlier Begin could not remove would otherwise
+            // become the Latest and put a stale snapshot back on offer.
+            Clear();
         }
 
         return new ApplyResult(restored, failures);

@@ -140,6 +140,45 @@ public class UndoStoreTests
     }
 
     [Fact]
+    public void Restore_DiscardsTheSnapshotWhenEveryFileWasRestored()
+    {
+        using var tmp = new TempDir();
+        var (store, game) = Arrange(tmp);
+        var session = store.Begin(Stamp);
+        session.Capture(game, new[] { "Grove\\a.png", "Grove\\gone.png" });
+        File.WriteAllText(Path.Combine(game, "Grove", "a.png"), "y");
+
+        var result = store.Restore(session, game);
+
+        Assert.Empty(result.Failures);
+        Assert.Equal("x", File.ReadAllText(Path.Combine(game, "Grove", "a.png")));
+        Assert.False(Directory.Exists(session.Path));
+        Assert.Null(store.Latest);
+    }
+
+    [Fact]
+    public void Restore_KeepsTheSnapshotWhenAFileFailed()
+    {
+        using var tmp = new TempDir();
+        var (store, game) = Arrange(tmp);
+        var session = store.Begin(Stamp);
+        session.Capture(game, new[] { "Grove\\a.png", "Grove\\b.png" });
+
+        using (new FileStream(Path.Combine(game, "Grove", "a.png"), FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            var result = store.Restore(session, game);
+
+            Assert.Single(result.Failures);
+            Assert.True(Directory.Exists(session.Path));
+
+            var latest = store.Latest;
+
+            Assert.NotNull(latest);
+            Assert.Equal(session.Path, latest.Path);
+        }
+    }
+
+    [Fact]
     public void Latest_ReturnsTheOnlySessionOrNull()
     {
         using var tmp = new TempDir();
