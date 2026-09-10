@@ -27,6 +27,11 @@ public partial class BackgroundTileViewModel : ObservableObject
 
     public bool FromGame { get; }
 
+    /// <summary>What the picture is, as against what it is called: the content hash the scan's cache holds for it,
+    /// filled off the UI thread after every scan. Null until then, and for a file that has gone since; a tile with
+    /// no hash never ticks.</summary>
+    public string? Hash { get; set; }
+
     /// <summary>Null until the thumbnail is ready. Always frozen, because it is decoded off the UI thread.</summary>
     [ObservableProperty]
     public partial ImageSource? Thumbnail { get; set; }

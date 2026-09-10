@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using BhMaps.App.Services;
+using BhMaps.Core.Hashing;
 using BhMaps.Core.LevelData;
 using BhMaps.Core.Maps;
 using BhMaps.Core.Model;
@@ -21,6 +22,10 @@ public partial class BackgroundsViewModel : PageViewModel
 
     /// <summary>Every tile the last scan produced. Tiles is this list under the search box.</summary>
     private readonly List<BackgroundTileViewModel> _all = [];
+
+    /// <summary>The hash of the game file behind each background slot, by its "Folder\file" path. Filled off the
+    /// UI thread after every scan, so ticking a map is set arithmetic rather than file work.</summary>
+    private readonly Dictionary<string, string> _slotHashes = new(StringComparer.OrdinalIgnoreCase);
 
     private ScanSnapshot? _snapshot;
     private CancellationTokenSource? _thumbnails;
@@ -69,15 +74,15 @@ public partial class BackgroundsViewModel : PageViewModel
         _thumbnails = new CancellationTokenSource();
 
         _all.Clear();
+        _slotHashes.Clear();
         foreach (var background in snapshot.Backgrounds)
         {
             _all.Add(new BackgroundTileViewModel(background));
         }
 
         OnPropertyChanged(nameof(IsLibraryEmpty));
-        UpdateTicks();
         ApplyFilter();
-        _ = LoadThumbnailsAsync([.. _all], _thumbnails.Token);
+        _ = LoadAsync([.. _all], snapshot, _thumbnails.Token);
     }
 
     /// <summary>Spec 7.3's one header action, and the empty state's button. Task 27 fills the window in; null means
@@ -205,69 +210,131 @@ public partial class BackgroundsViewModel : PageViewModel
         return SelectedMaps(snapshot).SelectMany(m => m.BackgroundSlots).FirstOrDefault();
     }
 
-    /// <summary>The tick is what the scan already worked out (spec 6.2), never a hash taken here: for every slot of
-    /// every ticked map, the game's own file at that slot plus each pack whose copy of it matched.</summary>
+    /// <summary>In use means the picture, not the name. Applying writes the chosen picture into the map's slot
+    /// under the slot's own name, so the tile that was clicked and the game's copy of that slot are one picture
+    /// under two names; matching on the name alone would tick the wrong tile. The comparison is the content hash
+    /// the scan already holds, taken off the UI thread beforehand.</summary>
     private void UpdateTicks()
     {
         var inUse = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         if (_snapshot is { } snapshot)
         {
-            foreach (var map in SelectedMaps(snapshot))
+            foreach (var slot in SelectedMaps(snapshot).SelectMany(m => m.BackgroundSlots))
             {
-                if (!snapshot.MapStatuses.TryGetValue(map.FolderName, out var status))
+                // A slot with no entry is one the game has no file for: nothing is on screen, so nothing ticks.
+                if (_slotHashes.TryGetValue(AssetPath.Background(slot), out var hash))
                 {
-                    continue;
-                }
-
-                foreach (var slot in map.BackgroundSlots)
-                {
-                    AddInUse(inUse, status, slot);
+                    inUse.Add(hash);
                 }
             }
         }
 
         foreach (var tile in _all)
         {
-            tile.IsInUse = inUse.Contains(Key(tile.PackName, tile.FileName));
+            tile.IsInUse = tile.Hash is { } hash && inUse.Contains(hash);
         }
     }
 
-    private static void AddInUse(HashSet<string> inUse, MapStatus status, string slot)
+    /// <summary>The hashes the ticks compare, taken through the scan's cache so almost every one is a dictionary
+    /// lookup: the scan has just hashed both the packs' pictures and the game files behind the slots. Anything the
+    /// cache has not seen is hashed once here, off the UI thread, and cached for the next scan.</summary>
+    private static (Dictionary<string, string> Pictures, Dictionary<string, string> Slots) ComputeHashes(
+        IReadOnlyList<BackgroundTileViewModel> tiles, ScanSnapshot snapshot, HashCache hashes, CancellationToken ct)
     {
-        var relative = AssetPath.Background(slot);
-
-        // The library is the Backgrounds folder alone, so a slot borrowed from a theme folder through "../" has no
-        // tile to tick.
-        if (!BackgroundsFolder.Equals(AssetPath.FolderOf(relative), StringComparison.OrdinalIgnoreCase))
+        var files = LibraryFiles(snapshot);
+        var pictures = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var tile in tiles)
         {
-            return;
+            ct.ThrowIfCancellationRequested();
+            if (files.TryGetValue(tile.FullPath, out var file) && Hash(hashes, file) is { } hash)
+            {
+                pictures[tile.FullPath] = hash;
+            }
         }
 
-        var file = status.Files.FirstOrDefault(f => f.RelativePath.Equals(relative, StringComparison.OrdinalIgnoreCase));
-        if (file is null || file.State == MapFileState.Missing)
+        var slots = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var slot in snapshot.Catalog.Maps.SelectMany(m => m.BackgroundSlots))
         {
-            return;
+            ct.ThrowIfCancellationRequested();
+
+            // Backgrounds\<slot>, except for a slot borrowed from a theme folder through "../".
+            var relative = AssetPath.Background(slot);
+            if (slots.ContainsKey(relative))
+            {
+                continue;
+            }
+
+            var file = snapshot.Tree
+                .FindFolder(AssetPath.FolderOf(relative))
+                ?.FindFile(Path.GetFileName(relative));
+            if (file is not null && Hash(hashes, file) is { } hash)
+            {
+                slots[relative] = hash;
+            }
         }
 
-        // The game has a file at this slot, so its own tile is the one in use by definition.
-        var name = Path.GetFileName(relative);
-        inUse.Add(Key(BackgroundLibrary.GameSourceName, name));
+        return (pictures, slots);
+    }
 
-        // The detector reports Default as a state rather than as a pack name (spec 6.2), so it is added by hand.
-        if (file.State == MapFileState.Default)
+    /// <summary>The scan's own record for every picture on the grid, by full path, so the hashes are asked for on
+    /// the size and mtime the scan measured and come back without touching the disk.</summary>
+    private static Dictionary<string, GameFile> LibraryFiles(ScanSnapshot snapshot)
+    {
+        var files = new Dictionary<string, GameFile>(StringComparer.OrdinalIgnoreCase);
+        var folders = snapshot.Packs
+            .Select(pack => pack.FindFolder(BackgroundsFolder))
+            .Append(snapshot.Tree.FindFolder(BackgroundsFolder));
+
+        foreach (var file in folders.SelectMany(folder => folder?.Files ?? Array.Empty<GameFile>()))
         {
-            inUse.Add(Key(DefaultPack.Name, name));
+            files[file.FullPath] = file;
         }
 
-        foreach (var packName in file.PackNames)
+        return files;
+    }
+
+    /// <summary>Null for a file that has gone since the scan, which simply never ticks.</summary>
+    private static string? Hash(HashCache hashes, GameFile file)
+    {
+        try
         {
-            inUse.Add(Key(packName, name));
+            return hashes.GetOrCompute(file);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
         }
     }
 
-    /// <summary>A background is identified by pack and file name (spec 6.3), so that pair is what the tick set
-    /// holds.</summary>
-    private static string Key(string packName, string fileName) => packName + "|" + fileName;
+    /// <summary>The two things a tile needs that the snapshot does not carry: the hash behind its tick and the
+    /// picture itself. Hashes first, because they are nearly free and the ticks are the answer to a question the
+    /// user has already asked by ticking a map.</summary>
+    private async Task LoadAsync(
+        IReadOnlyList<BackgroundTileViewModel> tiles, ScanSnapshot snapshot, CancellationToken ct)
+    {
+        var hashes = Shell.Services.HashCache;
+        try
+        {
+            var (pictures, slots) = await Task.Run(() => ComputeHashes(tiles, snapshot, hashes, ct), ct);
+            foreach (var tile in tiles)
+            {
+                tile.Hash = pictures.GetValueOrDefault(tile.FullPath);
+            }
+
+            foreach (var (relative, hash) in slots)
+            {
+                _slotHashes[relative] = hash;
+            }
+
+            UpdateTicks();
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        await LoadThumbnailsAsync(tiles, ct);
+    }
 
     /// <summary>Fills the tiles one at a time, in grid order, so the ones on screen fill first. Fire and forget:
     /// the tile turns its own file failures into a blank picture, so the only thing left to stop for is

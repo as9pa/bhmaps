@@ -62,11 +62,13 @@
                                Minimum="{x:Static pages:BackgroundsViewModel.MinZoom}"
                                Value="{Binding Zoom}" />
 
+          <!-- Outlined, as Settings' Capture defaults is: the page's one solid button belongs to the empty state,
+               which is the only place the action is the whole answer (spec 7.1). -->
           <Button Margin="12,0,0,0"
                   Command="{Binding AddPicturesCommand}"
                   Content="Add pictures"
                   IsEnabled="{Binding DataContext.IsNotBusy, RelativeSource={RelativeSource AncestorType=Window}}"
-                  Style="{StaticResource PrimaryButton}" />
+                  Style="{StaticResource OutlineButton}" />
         </StackPanel>
       </controls:PageHeader.Actions>
     </controls:PageHeader>
