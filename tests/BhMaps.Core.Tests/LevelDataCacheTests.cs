@@ -186,6 +186,7 @@ public class LevelDataCacheTests
         LevelDataCache.Save(path, read.Model!, LevelDataReader.Stamp(root, read.Key));
         var loaded = LevelDataCache.Load(path);
 
+        Assert.DoesNotContain("isThemed", File.ReadAllText(path), StringComparison.OrdinalIgnoreCase);
         var platform = Assert.Single(Assert.Single(loaded!.Value.Model.Levels).Platforms);
         Assert.Equal(2, platform.Scale);
         Assert.Equal("Snow", platform.Theme);
