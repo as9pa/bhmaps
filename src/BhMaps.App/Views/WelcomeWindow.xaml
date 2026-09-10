@@ -1,0 +1,188 @@
+<Window x:Class="BhMaps.App.Views.WelcomeWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Welcome to BhMaps" Width="620" SizeToContent="Height" ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen" ShowInTaskbar="True"
+        Background="{StaticResource BgBrush}"
+        Closing="OnClosing">
+  <Window.Resources>
+    <!-- Geist Mono for the step numerals, in the quietest text colour: they are labels for the eye, not copy. -->
+    <Style x:Key="StepNumber" TargetType="TextBlock" BasedOn="{StaticResource MonoText}">
+      <Setter Property="Foreground" Value="{StaticResource Text3Brush}" />
+      <Setter Property="VerticalAlignment" Value="Top" />
+      <Setter Property="Margin" Value="0,1,0,0" />
+    </Style>
+
+    <Style x:Key="StepTitle" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <Style x:Key="StepText" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+      <Setter Property="Foreground" Value="{StaticResource Text2Brush}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="Margin" Value="0,4,0,0" />
+    </Style>
+
+    <!-- Missing is the app's one coloured state and a rejected path is the same kind of news. The trigger reads
+         the TextBlock's own Text, so an empty error takes its line back rather than leaving a gap in the step. -->
+    <Style x:Key="ErrorText" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{StaticResource MissingFgBrush}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="Margin" Value="0,6,0,0" />
+      <Style.Triggers>
+        <Trigger Property="Text" Value="">
+          <Setter Property="Visibility" Value="Collapsed" />
+        </Trigger>
+      </Style.Triggers>
+    </Style>
+
+    <Style x:Key="StepGrid" TargetType="Grid">
+      <Setter Property="Margin" Value="0,20,0,0" />
+    </Style>
+
+    <!-- The theme's button styles carry no focus ring of their own, and spec 7.8 asks for visible keyboard focus
+         on every button. Drawn as a focus visual, in the adorner layer, so it costs no change to the shared
+         templates: the same 1 px TextBrush ring at the same radius the sidebar rows and the tiles use. -->
+    <Style x:Key="FocusRing">
+      <Setter Property="Control.Template">
+        <Setter.Value>
+          <ControlTemplate>
+            <Border Margin="-3"
+                    BorderBrush="{StaticResource TextBrush}"
+                    BorderThickness="1"
+                    CornerRadius="{StaticResource Radius}"
+                    SnapsToDevicePixels="True" />
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+  </Window.Resources>
+
+  <StackPanel Margin="24">
+    <TextBlock FontSize="20" FontWeight="SemiBold" Text="Welcome to BhMaps" />
+    <TextBlock Style="{StaticResource StepText}"
+               Margin="0,6,0,0"
+               Text="Three things to set up. All of them can be changed later in Settings." />
+
+    <!-- Disabled as a block while step 3 runs, so a capture in progress cannot have its own inputs edited. -->
+    <StackPanel IsEnabled="{Binding IsNotBusy}">
+      <Grid Style="{StaticResource StepGrid}">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="28" />
+          <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+        <TextBlock Style="{StaticResource StepNumber}" Text="1" />
+        <StackPanel Grid.Column="1">
+          <TextBlock Style="{StaticResource StepTitle}" Text="Game folder" />
+          <TextBlock Style="{StaticResource StepText}"
+                     Text="The Brawlhalla mapArt folder. Found through Steam when the game is installed there." />
+          <DockPanel Margin="0,8,0,0">
+            <!-- Two buttons read "Change"; the accessible name says which, so they are told apart by ear too. -->
+            <Button DockPanel.Dock="Right"
+                    Margin="8,0,0,0"
+                    AutomationProperties.Name="Change game folder"
+                    Command="{Binding ChangeGameCommand}"
+                    Content="Change"
+                    FocusVisualStyle="{StaticResource FocusRing}"
+                    Style="{StaticResource OutlineButton}" />
+            <TextBox AutomationProperties.Name="Game folder"
+                     Style="{StaticResource FieldTextBox}"
+                     Text="{Binding GamePath, UpdateSourceTrigger=PropertyChanged}" />
+          </DockPanel>
+          <TextBlock Style="{StaticResource ErrorText}" Text="{Binding GameError}" />
+        </StackPanel>
+      </Grid>
+
+      <Grid Style="{StaticResource StepGrid}">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="28" />
+          <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+        <TextBlock Style="{StaticResource StepNumber}" Text="2" />
+        <StackPanel Grid.Column="1">
+          <TextBlock Style="{StaticResource StepTitle}" Text="Library" />
+          <TextBlock Style="{StaticResource StepText}"
+                     Text="Where packs are kept, in a packs folder inside it. A library that already exists is used as it is; nothing is moved." />
+          <DockPanel Margin="0,8,0,0">
+            <Button DockPanel.Dock="Right"
+                    Margin="8,0,0,0"
+                    AutomationProperties.Name="Change library folder"
+                    Command="{Binding ChangeLibraryCommand}"
+                    Content="Change"
+                    FocusVisualStyle="{StaticResource FocusRing}"
+                    Style="{StaticResource OutlineButton}" />
+            <TextBox AutomationProperties.Name="Library folder"
+                     Style="{StaticResource FieldTextBox}"
+                     Text="{Binding LibraryPath, UpdateSourceTrigger=PropertyChanged}" />
+          </DockPanel>
+          <TextBlock Style="{StaticResource ErrorText}" Text="{Binding LibraryError}" />
+        </StackPanel>
+      </Grid>
+
+      <Grid Style="{StaticResource StepGrid}">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="28" />
+          <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+        <TextBlock Style="{StaticResource StepNumber}" Text="3" />
+        <StackPanel Grid.Column="1">
+          <TextBlock Style="{StaticResource StepTitle}" Text="Capture defaults now?" />
+          <TextBlock Style="{StaticResource StepText}"
+                     Text="This copies the game's art into a pack named Default, which is what Reset to default puts back. To be sure the capture is vanilla, verify the game files through Steam first." />
+          <StackPanel Margin="0,10,0,0" Orientation="Horizontal">
+            <!-- Only Yes carries the binding: the two share a group, so choosing No unchecks Yes and the
+                 two-way binding writes the false. -->
+            <RadioButton Margin="0,0,20,0"
+                         Content="Yes"
+                         FocusVisualStyle="{StaticResource FocusRing}"
+                         GroupName="Capture"
+                         IsChecked="{Binding CaptureNow}" />
+            <RadioButton Content="No" FocusVisualStyle="{StaticResource FocusRing}" GroupName="Capture" />
+          </StackPanel>
+        </StackPanel>
+      </Grid>
+    </StackPanel>
+
+    <Grid Margin="0,28,0,0">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="Auto" />
+      </Grid.ColumnDefinitions>
+
+      <!-- Step 3's progress, the busy state's whole visible half. Its own Text drives the visibility, so an idle
+           window shows nothing here rather than an empty line holding the row open. A long relative path is
+           trimmed rather than wrapped, because a growing line would resize a window sized to its content. -->
+      <TextBlock VerticalAlignment="Center"
+                 Text="{Binding ProgressText}"
+                 TextTrimming="CharacterEllipsis"
+                 TextWrapping="NoWrap">
+        <TextBlock.Style>
+          <Style TargetType="TextBlock" BasedOn="{StaticResource StepText}">
+            <Setter Property="Margin" Value="0,0,16,0" />
+            <Style.Triggers>
+              <Trigger Property="Text" Value="">
+                <Setter Property="Visibility" Value="Collapsed" />
+              </Trigger>
+            </Style.Triggers>
+          </Style>
+        </TextBlock.Style>
+      </TextBlock>
+      <StackPanel Grid.Column="1" Orientation="Horizontal">
+        <!-- No Command: IsCancel closes the dialog with false, which App.xaml.cs shuts down on. Disabled while
+             step 3 runs, so Escape cannot walk out of a capture either. -->
+        <Button Margin="0,0,8,0"
+                Content="Cancel"
+                FocusVisualStyle="{StaticResource FocusRing}"
+                IsCancel="True"
+                IsEnabled="{Binding IsNotBusy}"
+                Style="{StaticResource PlainButton}" />
+        <Button Command="{Binding FinishCommand}"
+                Content="Finish"
+                FocusVisualStyle="{StaticResource FocusRing}"
+                IsDefault="True"
+                Style="{StaticResource PrimaryButton}" />
+      </StackPanel>
+    </Grid>
+  </StackPanel>
+</Window>

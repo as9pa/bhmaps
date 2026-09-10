@@ -33,16 +33,16 @@ public partial class App : Application
         // Spec 5: one sweep a run keeps the preview folder from growing without bound.
         services.Previews.Sweep(DateTimeOffset.UtcNow);
 
-        // Spec 6: no valid game path means Settings first, not a crash and not an empty grid.
-        while (!SettingsStore.ValidateGamePath(services.GamePath, out var error))
+        // Spec 7.7: the welcome window is the first run, and it also stands in for the v1 settings loop, so a
+        // saved game path that has stopped working comes back here rather than to a crash or an empty grid.
+        // Shown at most once: with a command-line override in play, Finish cannot change the path this run uses,
+        // so a loop on the same condition would never end.
+        if (!services.Settings.WelcomeDone || !SettingsStore.ValidateGamePath(services.GamePath, out _))
         {
-            var settings = new SettingsWindow
+            var welcome = new WelcomeWindow { DataContext = new WelcomeViewModel(services, dialogs) };
+            if (welcome.ShowDialog() != true)
             {
-                DataContext = new SettingsViewModel(services, dialogs, $"Set the Brawlhalla mapArt folder to continue. {error}"),
-            };
-            if (settings.ShowDialog() != true)
-            {
-                Shutdown();
+                Shutdown(0);
                 return;
             }
         }
