@@ -46,8 +46,8 @@ public sealed class PreviewCache
     }
 
     /// <summary>The cached JPEG path. Renders on the STA queue on a miss; touches the file on a hit.
-    /// One AssetSources instance serves one call at a time: this reads it on the caller's thread and then
-    /// hands it to the render thread, so the instance is never touched by both at once.</summary>
+    /// One AssetSources instance may be shared by any number of concurrent calls: this reads it on the caller's
+    /// thread and then the render thread reads it again, and AssetSources is safe under both.</summary>
     public async Task<string> GetOrRenderAsync(
         LevelDesc level, int width, int height, AssetSources sources, CancellationToken ct = default)
     {
