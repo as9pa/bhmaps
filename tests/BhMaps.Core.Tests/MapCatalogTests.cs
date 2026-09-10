@@ -158,6 +158,20 @@ public class MapCatalogTests
     }
 
     [Fact]
+    public void Build_CollectsAPlatformFileNamedOnThePlatformElementItself()
+    {
+        var level = LevelDescParser.Parse(LevelXml.Level("Enigma", "Enigma", LevelXml.Camera(0, 0, 100, 50)
+            + "<Background AssetName=\"BG_Steam.jpg\" />"
+            + "<Platform AssetName=\"Platform_Steam1A.png\" W=\"1044.03\" H=\"1227.92\">"
+            + "<Asset AssetName=\"Platform_Steam2B.png\" X=\"0\" Y=\"0\" W=\"1\" H=\"1\" /></Platform>"));
+        var data = Model([level], [Type("Enigma", "Enigma")], []);
+
+        var enigma = MapCatalog.Build(data).ByFolder("Enigma")!;
+
+        Assert.Equal([@"Enigma\Platform_Steam1A.png", @"Enigma\Platform_Steam2B.png"], enigma.PlatformFiles);
+    }
+
+    [Fact]
     public void FromFolders_BuildsAFolderOnlyCatalogWhenLevelDataIsUnavailable()
     {
         using var tmp = new TempDir();
