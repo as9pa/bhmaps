@@ -79,6 +79,75 @@ public class LevelDescParserTests
     }
 
     [Fact]
+    public void Parse_ReadsAnAssetCarriedOnThePlatformElementItself()
+    {
+        var xml = LevelXml.Level("Enigma", "Enigma", LevelXml.Camera(0, 0, 10, 10)
+            + "<Platform InstanceName=\"am_Midground1\" AssetName=\"Platform_Steam1A.png\" H=\"1227.92\" W=\"1044.03\" />"
+            + "<Platform InstanceName=\"am_Midground2\" X=\"5\">"
+            + "<Asset AssetName=\"a.png\" X=\"1\" Y=\"2\" W=\"3\" H=\"4\" /></Platform>"
+            + "<Platform InstanceName=\"am_Midground3\" X=\"9\" />");
+
+        var level = LevelDescParser.Parse(xml);
+
+        var owned = Assert.Single(level.Platforms[0].Assets);
+        Assert.Equal("Platform_Steam1A.png", owned.AssetName);
+        Assert.Equal(0, owned.X);
+        Assert.Equal(0, owned.Y);
+        Assert.Equal(1044.03, owned.W);
+        Assert.Equal(1227.92, owned.H);
+
+        // A node that names no asset of its own owns nothing: its assets are its Asset children, and no more.
+        var child = Assert.Single(level.Platforms[1].Assets);
+        Assert.Equal("a.png", child.AssetName);
+        Assert.Equal(1, child.X);
+        Assert.Empty(level.Platforms[2].Assets);
+    }
+
+    [Fact]
+    public void Parse_PutsAPlatformsOwnAssetBeforeTheOnesNestedInsideIt()
+    {
+        var xml = LevelXml.Level("Enigma", "Enigma", LevelXml.Camera(0, 0, 10, 10)
+            + "<Platform AssetName=\"own.png\" W=\"10\" H=\"20\">"
+            + "<Asset AssetName=\"child.png\" X=\"0\" Y=\"0\" W=\"1\" H=\"1\" /></Platform>");
+
+        var node = Assert.Single(LevelDescParser.Parse(xml).Platforms);
+
+        Assert.Equal(["own.png", "child.png"], node.Assets.Select(a => a.AssetName));
+    }
+
+    [Fact]
+    public void Parse_KeepsTheThemeOfAPlatformThatCarriesItsOwnAsset()
+    {
+        var xml = LevelXml.Level("Enigma", "Enigma", LevelXml.Camera(0, 0, 10, 10)
+            + "<Platform InstanceName=\"am_Holiday\" Theme=\"Halloween,TWDHalloween\""
+            + " AssetName=\"../Halloween/HalloweenJackoLanternPumpkinTall.png\" H=\"246.5\" W=\"132.25\" />");
+
+        var node = Assert.Single(LevelDescParser.Parse(xml).Platforms);
+
+        Assert.Equal("Halloween,TWDHalloween", node.Theme);
+        Assert.True(node.IsThemed);
+        Assert.Equal(
+            "../Halloween/HalloweenJackoLanternPumpkinTall.png",
+            Assert.Single(node.Assets).AssetName);
+    }
+
+    /// <summary>The game names SWF animation symbols the same way it names images, and those carry no size and
+    /// no file. Only a sized name is map art.</summary>
+    [Fact]
+    public void Parse_IgnoresAnUnsizedAssetNameBecauseItNamesAnAnimationSymbolNotAnImage()
+    {
+        var xml = LevelXml.Level("Climb", "Climb", LevelXml.Camera(0, 0, 10, 10)
+            + "<PressurePlateCollision AssetName=\"a__AnimationPressurePlate\" X=\"3\" Y=\"4\" />"
+            + "<Platform AssetName=\"flat.png\" X=\"3\" W=\"10\" H=\"0\" />");
+
+        var level = LevelDescParser.Parse(xml);
+
+        Assert.Empty(level.Platforms[0].Assets);
+        Assert.Equal(3, level.Platforms[0].X);
+        Assert.Empty(level.Platforms[1].Assets);
+    }
+
+    [Fact]
     public void Parse_KeepsNegativeWidthAndHeightAsFlipMarkers()
     {
         var xml = LevelXml.Level("Grove", "Grove", LevelXml.Camera(0, 0, 10, 10)

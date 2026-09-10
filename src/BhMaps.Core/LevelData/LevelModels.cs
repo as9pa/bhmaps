@@ -10,7 +10,8 @@ public sealed record LevelBackground(string AssetName, double? W, double? H);
 /// <summary>One drawn image. A negative W or H means a flip on that axis and is kept verbatim.</summary>
 public sealed record LevelAsset(string AssetName, double X, double Y, double W, double H);
 
-/// <summary>One transform node of a level's platform tree. Absent attributes mean identity.</summary>
+/// <summary>One transform node of a level's platform tree. Absent attributes mean identity. A node that names an
+/// image on itself owns the first entry of <see cref="Assets"/>, at the node's own origin.</summary>
 public sealed record PlatformNode(
     double X, double Y, double Scale, double ScaleX, double ScaleY, double Rotation,
     string? Theme,

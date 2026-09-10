@@ -43,6 +43,18 @@ public static class LevelDescParser
     {
         var assets = new List<LevelAsset>();
         var children = new List<PlatformNode>();
+
+        // A node can name an image on itself instead of in an Asset child. It is drawn at the node's own origin,
+        // sized by the node's own W and H, and before anything nested inside the node. A sized name is the only
+        // one that is map art: the game also names SWF animation symbols this way (a__AnimationPressurePlate,
+        // a_LevelAnim_*), and those carry no W or H and no file.
+        var width = Num(element, "W", 0);
+        var height = Num(element, "H", 0);
+        if (width != 0 && height != 0 && Read(element, "AssetName") is { Length: > 0 } owned)
+        {
+            assets.Add(new LevelAsset(owned, 0, 0, width, height));
+        }
+
         foreach (var child in element.Elements())
         {
             if (child.Name.LocalName == "Asset")

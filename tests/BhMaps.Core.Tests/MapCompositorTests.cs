@@ -63,6 +63,36 @@ public class MapCompositorTests
     }
 
     [Fact]
+    public void Render_DrawsAnAssetOwnedByThePlatformAtTheNodeOrigin()
+    {
+        using var tmp = new TempDir();
+        Solid(tmp, @"Grove\plat.png", 255, 0, 0);
+
+        // Built from markup: the shape under test is an AssetName on the Platform element itself.
+        var level = LevelDescParser.Parse(LevelXml.Level("Grove", "Grove", LevelXml.Camera(0, 0, 100, 100)
+            + "<Platform InstanceName=\"am_Midground1\" AssetName=\"plat.png\" X=\"20\" Y=\"20\" W=\"50\" H=\"50\" />"));
+
+        var bitmap = MapCompositor.Render(level, 100, 100, new AssetSources(tmp.Path));
+
+        AssertColour(SyntheticImage.PixelAt(bitmap, 45, 45), 255, 0, 0);
+        AssertTile(SyntheticImage.PixelAt(bitmap, 15, 15));
+        AssertTile(SyntheticImage.PixelAt(bitmap, 75, 75));
+    }
+
+    [Fact]
+    public void Render_SkipsAThemedPlatformThatCarriesItsOwnAsset()
+    {
+        using var tmp = new TempDir();
+        Solid(tmp, @"Grove\plat.png", 255, 0, 0);
+        var level = LevelDescParser.Parse(LevelXml.Level("Grove", "Grove", LevelXml.Camera(0, 0, 100, 100)
+            + "<Platform Theme=\"Halloween\" AssetName=\"plat.png\" X=\"0\" Y=\"0\" W=\"100\" H=\"100\" />"));
+
+        var bitmap = MapCompositor.Render(level, 100, 100, new AssetSources(tmp.Path));
+
+        AssertTile(SyntheticImage.PixelAt(bitmap, 50, 50));
+    }
+
+    [Fact]
     public void Render_MirrorsAnAssetInPlaceForANegativeWidth()
     {
         using var tmp = new TempDir();
