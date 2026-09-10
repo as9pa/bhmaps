@@ -181,6 +181,27 @@ public class SettingsStoreTests
     }
 
     [Fact]
+    public void SaveThenLoad_ReadsAHandEditedKeyWhateverItsCaseAndWritesOneSpellingBack()
+    {
+        using var tmp = new TempDir();
+        var path = tmp.Sub("settings.json");
+        File.WriteAllText(path, """{"GamePath":"D:\\g","LIBRARYPATH":"D:\\lib","FirstRunDone":true}""");
+
+        var loaded = SettingsStore.Load(path);
+        SettingsStore.Save(path, loaded);
+
+        Assert.Equal(@"D:\g", loaded.GamePath);
+        Assert.Equal(@"D:\lib", loaded.LibraryPath);
+        Assert.True(loaded.FirstRunDone);
+        Assert.Null(loaded.Unknown);
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+        Assert.Equal(@"D:\g", (string)json["gamePath"]!);
+        Assert.Equal(
+            new[] { "gamePath" },
+            json.Select(p => p.Key).Where(k => k.Equals("gamePath", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    [Fact]
     public void Load_ClampsZoomAndNormalisesWhileRunning()
     {
         using var tmp = new TempDir();

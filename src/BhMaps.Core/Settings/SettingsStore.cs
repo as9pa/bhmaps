@@ -8,6 +8,10 @@ public static class SettingsStore
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
+    /// <summary>A hand-edited file may spell a key any way at all, so "GamePath" reads back as gamePath rather
+    /// than as a property this version does not know.</summary>
+    private static readonly JsonNodeOptions NodeOptions = new() { PropertyNameCaseInsensitive = true };
+
     /// <summary>Keys this version writes itself. Everything else in the file is carried in <see cref="AppSettings.Unknown"/>.</summary>
     private static readonly string[] KnownKeys =
         ["gamePath", "libraryPath", "firstRunDone", "homeZoom", "backgroundsZoom", "whileRunning", "welcomeDone"];
@@ -23,7 +27,7 @@ public static class SettingsStore
         {
             try
             {
-                obj = JsonNode.Parse(File.ReadAllText(settingsPath)) as JsonObject;
+                obj = JsonNode.Parse(File.ReadAllText(settingsPath), NodeOptions) as JsonObject;
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
             {
@@ -39,7 +43,9 @@ public static class SettingsStore
         var unknown = new JsonObject();
         foreach (var (key, value) in obj)
         {
-            if (!KnownKeys.Contains(key, StringComparer.Ordinal))
+            // Ignore case, matching the read below: a key Save is about to write itself must not also be carried
+            // over as an unknown one, or the file ends up with both spellings of it.
+            if (!KnownKeys.Contains(key, StringComparer.OrdinalIgnoreCase))
             {
                 unknown[key] = value?.DeepClone();
             }

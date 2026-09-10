@@ -121,8 +121,13 @@ public partial class HomeViewModel : PageViewModel
 
         // The game-running policy belongs to the launcher inside RunGameWriteAsync, so there is no second prompt.
         var gamePath = Shell.Services.GamePath;
+
+        // Everything the reset may write: what the folders hold now, plus the Default pack's own files, because a
+        // file the pack creates where the game has none is only undoable when the snapshot records it as absent.
         var undoPaths = snapshot.Tree.Folders
             .SelectMany(f => f.Files.Select(file => Path.Combine(f.Name, file.Name)))
+            .Concat(defaultPack?.RelativePaths ?? Array.Empty<string>())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
         ResetOutcome? outcome = null;

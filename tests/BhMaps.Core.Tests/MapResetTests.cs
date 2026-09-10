@@ -12,6 +12,11 @@ public class MapResetTests
     private static string PackPath(string libraryPath, params string[] parts) =>
         Path.Combine([PackScanner.PacksRoot(libraryPath), DefaultPack.Name, .. parts]);
 
+    /// <summary>The folder a capture builds in before it becomes the Default pack. Spelled out rather than read
+    /// from DefaultPack, because the point of the tests below is that nothing of it is left on disk.</summary>
+    private static string CapturingPath(string libraryPath) =>
+        Path.Combine(PackScanner.PacksRoot(libraryPath), "Default.capturing");
+
     private static string Read(string root, string folder, string name) => File.ReadAllText(Path.Combine(root, folder, name));
 
     [Fact]
@@ -79,6 +84,46 @@ public class MapResetTests
         Assert.Equal("bm-a01", Read(PackPath(lib), "BloodMoon", "BloodMoon_PlatformA01.png"));
         Assert.Equal("bg-sewer", Read(PackPath(lib), "Backgrounds", "BG_Sewer.jpg"));
         Assert.Equal(13, progress.Count);
+    }
+
+    [Fact]
+    public void Capture_SwapsTheCapturedFolderInAndLeavesNoTemporaryFolderBehind()
+    {
+        using var tmp = new TempDir();
+        var game = Path.Combine(tmp.Path, "game");
+        FakeGameTree.Standard(game);
+        var lib = Path.Combine(tmp.Path, "lib");
+        new FakeGameTree(PackPath(lib)).File("Stale", "old.png", "stale");
+        new FakeGameTree(CapturingPath(lib)).File("Junk", "junk.png", "junk");
+
+        var result = DefaultPack.Capture(game, lib);
+
+        Assert.Equal(13, result.Copied);
+        Assert.Empty(result.Failures);
+        Assert.False(Directory.Exists(PackPath(lib, "Stale")));
+        Assert.False(Directory.Exists(PackPath(lib, "Junk")));
+        Assert.Equal("bm-a01", Read(PackPath(lib), "BloodMoon", "BloodMoon_PlatformA01.png"));
+        Assert.Equal(
+            new[] { DefaultPack.Name },
+            Directory.GetDirectories(PackScanner.PacksRoot(lib)).Select(Path.GetFileName));
+    }
+
+    [Fact]
+    public void Capture_LeavesTheOldDefaultPackUntouchedWhenCancelledPartWay()
+    {
+        using var tmp = new TempDir();
+        var game = Path.Combine(tmp.Path, "game");
+        FakeGameTree.Standard(game);
+        var lib = Path.Combine(tmp.Path, "lib");
+        new FakeGameTree(PackPath(lib)).File("Stale", "old.png", "stale");
+        using var cts = new CancellationTokenSource();
+
+        Assert.Throws<OperationCanceledException>(
+            () => DefaultPack.Capture(game, lib, new CancelsOnFirstReport(cts), cts.Token));
+
+        Assert.Equal(new[] { Path.Combine("Stale", "old.png") }, ScanDefault(lib).RelativePaths);
+        Assert.Equal("stale", Read(PackPath(lib), "Stale", "old.png"));
+        Assert.False(Directory.Exists(CapturingPath(lib)));
     }
 
     [Fact]
@@ -214,5 +259,12 @@ public class MapResetTests
 
         Assert.NotEmpty(fromPack);
         Assert.NotEmpty(fromDelete);
+    }
+
+    /// <summary>A progress sink that cancels the source as the first file is reported, so "cancelled once the copy
+    /// was under way" is a fact of the run rather than a race with a timer.</summary>
+    private sealed class CancelsOnFirstReport(CancellationTokenSource cts) : IProgress<string>
+    {
+        public void Report(string value) => cts.Cancel();
     }
 }
