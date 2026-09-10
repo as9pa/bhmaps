@@ -11,8 +11,8 @@ public enum FitMode
     Stretch,
 }
 
-/// <summary>PanX/PanY are 0..1 and only matter for Cover (0.5 = centered). Darken is 0..1 and multiplies every channel by (1 - Darken).</summary>
-public sealed record FitOptions(FitMode Mode = FitMode.Cover, double PanX = 0.5, double PanY = 0.5, double Darken = 0.0);
+/// <summary>PanX/PanY are 0..1 and only matter for Cover (0.5 = centered). Darken is 0..1 and multiplies every channel by (1 - Darken). NoUpscale only matters for Contain: a source smaller than the canvas stays at 1:1 instead of growing.</summary>
+public sealed record FitOptions(FitMode Mode = FitMode.Cover, double PanX = 0.5, double PanY = 0.5, double Darken = 0.0, bool NoUpscale = false);
 
 /// <summary>Turns any image into a 2048x1151 background. Safe to call from any thread; every bitmap it returns is frozen.</summary>
 public static class BackgroundFitter
@@ -40,6 +40,11 @@ public static class BackgroundFitter
             case FitMode.Contain:
                 {
                     var scale = Math.Min((double)width / srcW, (double)height / srcH);
+                    if (options.NoUpscale)
+                    {
+                        scale = Math.Min(scale, 1.0);
+                    }
+
                     var w = srcW * scale;
                     var h = srcH * scale;
                     return new Rect((width - w) / 2, (height - h) / 2, w, h);
