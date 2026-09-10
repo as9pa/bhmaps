@@ -10,9 +10,14 @@ public sealed record AppSettings(
     bool WelcomeDone = false)
 {
     public const string DefaultGamePath = @"C:\Program Files (x86)\Steam\steamapps\common\Brawlhalla\mapArt";
-    public const string DefaultLibraryPath = @"C:\Users\alexa\files\bh";
     public const string RestartWhileRunning = "restart";
     public const string LiveWhileRunning = "live";
+
+    /// <summary>Spec 7.7: the library defaults to BhMaps inside Documents. Computed rather than a literal, so it
+    /// follows a redirected Documents folder and never names one machine's user. Nothing creates the folder here;
+    /// the first write into it does.</summary>
+    public static string DefaultLibraryPath =>
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "BhMaps");
 
     public static AppSettings Default { get; } = new(DefaultGamePath, DefaultLibraryPath, FirstRunDone: false);
 

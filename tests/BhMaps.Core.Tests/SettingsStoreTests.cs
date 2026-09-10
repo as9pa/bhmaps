@@ -16,7 +16,9 @@ public class SettingsStoreTests
         Assert.Equal(AppSettings.DefaultLibraryPath, settings.LibraryPath);
         Assert.False(settings.FirstRunDone);
         Assert.Equal(@"C:\Program Files (x86)\Steam\steamapps\common\Brawlhalla\mapArt", AppSettings.DefaultGamePath);
-        Assert.Equal(@"C:\Users\alexa\files\bh", AppSettings.DefaultLibraryPath);
+        Assert.Equal(
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "BhMaps"),
+            AppSettings.DefaultLibraryPath);
     }
 
     [Fact]
