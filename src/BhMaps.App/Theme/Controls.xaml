@@ -16,6 +16,25 @@
     <Setter Property="FontSize" Value="13" />
   </Style>
 
+  <!-- The button styles below replace the theme's own, so they lose its focus visual with it, and the stock
+       dashed adorner is close to invisible on this palette. All three wear this instead, and so do a dialog's
+       checkboxes and radios: the same 1 px TextBrush ring at the same radius the tiles and the sidebar rows
+       draw, in the adorner layer, so it costs the shared templates nothing (spec 7.8). Declared first because a
+       StaticResource cannot reach forward inside one dictionary. -->
+  <Style x:Key="DialogFocusRing">
+    <Setter Property="Control.Template">
+      <Setter.Value>
+        <ControlTemplate>
+          <Border Margin="-3"
+                  BorderBrush="{StaticResource TextBrush}"
+                  BorderThickness="1"
+                  CornerRadius="{StaticResource Radius}"
+                  SnapsToDevicePixels="True" />
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
   <!-- The only filled button. One per page, for that page's single primary action. -->
   <Style x:Key="PrimaryButton" TargetType="Button">
     <Setter Property="FontFamily" Value="{StaticResource Sans}" />
@@ -25,6 +44,7 @@
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Padding" Value="14,7" />
     <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="FocusVisualStyle" Value="{StaticResource DialogFocusRing}" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="Button">
@@ -68,6 +88,7 @@
     <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
     <Setter Property="Padding" Value="14,7" />
     <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="FocusVisualStyle" Value="{StaticResource DialogFocusRing}" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="Button">
@@ -111,6 +132,7 @@
     <Setter Property="Foreground" Value="{StaticResource Text2Brush}" />
     <Setter Property="Padding" Value="14,7" />
     <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="FocusVisualStyle" Value="{StaticResource DialogFocusRing}" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="Button">
@@ -186,24 +208,6 @@
               <Setter TargetName="Chrome" Property="Opacity" Value="0.4" />
             </Trigger>
           </ControlTemplate.Triggers>
-        </ControlTemplate>
-      </Setter.Value>
-    </Setter>
-  </Style>
-
-  <!-- The button styles above replace the theme's own, so they lose its focus visual with it, and the stock
-       dashed adorner is close to invisible on this palette. A dialog's buttons, checkboxes and radios wear this
-       instead: the same 1 px TextBrush ring at the same radius the tiles and the sidebar rows draw, in the
-       adorner layer, so it costs the shared templates nothing (spec 7.8). -->
-  <Style x:Key="DialogFocusRing">
-    <Setter Property="Control.Template">
-      <Setter.Value>
-        <ControlTemplate>
-          <Border Margin="-3"
-                  BorderBrush="{StaticResource TextBrush}"
-                  BorderThickness="1"
-                  CornerRadius="{StaticResource Radius}"
-                  SnapsToDevicePixels="True" />
         </ControlTemplate>
       </Setter.Value>
     </Setter>

@@ -1,5 +1,3 @@
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
 using BhMaps.Core.Imaging;
 using BhMaps.Core.Model;
 

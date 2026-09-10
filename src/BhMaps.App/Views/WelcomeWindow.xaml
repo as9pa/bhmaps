@@ -40,23 +40,6 @@
     <Style x:Key="StepGrid" TargetType="Grid">
       <Setter Property="Margin" Value="0,20,0,0" />
     </Style>
-
-    <!-- The theme's button styles carry no focus ring of their own, and spec 7.8 asks for visible keyboard focus
-         on every button. Drawn as a focus visual, in the adorner layer, so it costs no change to the shared
-         templates: the same 1 px TextBrush ring at the same radius the sidebar rows and the tiles use. -->
-    <Style x:Key="FocusRing">
-      <Setter Property="Control.Template">
-        <Setter.Value>
-          <ControlTemplate>
-            <Border Margin="-3"
-                    BorderBrush="{StaticResource TextBrush}"
-                    BorderThickness="1"
-                    CornerRadius="{StaticResource Radius}"
-                    SnapsToDevicePixels="True" />
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
   </Window.Resources>
 
   <StackPanel Margin="24">
@@ -84,7 +67,7 @@
                     AutomationProperties.Name="Change game folder"
                     Command="{Binding ChangeGameCommand}"
                     Content="Change"
-                    FocusVisualStyle="{StaticResource FocusRing}"
+                    FocusVisualStyle="{StaticResource DialogFocusRing}"
                     Style="{StaticResource OutlineButton}" />
             <TextBox AutomationProperties.Name="Game folder"
                      Style="{StaticResource FieldTextBox}"
@@ -110,7 +93,7 @@
                     AutomationProperties.Name="Change library folder"
                     Command="{Binding ChangeLibraryCommand}"
                     Content="Change"
-                    FocusVisualStyle="{StaticResource FocusRing}"
+                    FocusVisualStyle="{StaticResource DialogFocusRing}"
                     Style="{StaticResource OutlineButton}" />
             <TextBox AutomationProperties.Name="Library folder"
                      Style="{StaticResource FieldTextBox}"
@@ -135,10 +118,10 @@
                  two-way binding writes the false. -->
             <RadioButton Margin="0,0,20,0"
                          Content="Yes"
-                         FocusVisualStyle="{StaticResource FocusRing}"
+                         FocusVisualStyle="{StaticResource DialogFocusRing}"
                          GroupName="Capture"
                          IsChecked="{Binding CaptureNow}" />
-            <RadioButton Content="No" FocusVisualStyle="{StaticResource FocusRing}" GroupName="Capture" />
+            <RadioButton Content="No" FocusVisualStyle="{StaticResource DialogFocusRing}" GroupName="Capture" />
           </StackPanel>
         </StackPanel>
       </Grid>
@@ -173,13 +156,13 @@
              step 3 runs, so Escape cannot walk out of a capture either. -->
         <Button Margin="0,0,8,0"
                 Content="Cancel"
-                FocusVisualStyle="{StaticResource FocusRing}"
+                FocusVisualStyle="{StaticResource DialogFocusRing}"
                 IsCancel="True"
                 IsEnabled="{Binding IsNotBusy}"
                 Style="{StaticResource PlainButton}" />
         <Button Command="{Binding FinishCommand}"
                 Content="Finish"
-                FocusVisualStyle="{StaticResource FocusRing}"
+                FocusVisualStyle="{StaticResource DialogFocusRing}"
                 IsDefault="True"
                 Style="{StaticResource PrimaryButton}" />
       </StackPanel>

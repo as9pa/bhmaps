@@ -3,35 +3,6 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:controls="clr-namespace:BhMaps.App.Views.Controls">
   <UserControl.Resources>
-    <!-- The theme's buttons keep WPF's own focus visual, which is a dark dotted rectangle and invisible on this
-         ground; measured in the app, a focused Export button showed nothing at all. Spec 7.8 wants keyboard focus
-         visible on every action, so the page's buttons wear the same 60% ring the rows and tiles draw. -->
-    <Style x:Key="ActionFocusVisual">
-      <Setter Property="Control.Template">
-        <Setter.Value>
-          <ControlTemplate>
-            <Border BorderBrush="{StaticResource TextBrush}"
-                    BorderThickness="1"
-                    CornerRadius="{StaticResource Radius}"
-                    Opacity="0.6"
-                    SnapsToDevicePixels="True" />
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-
-    <Style x:Key="ActionPrimaryButton" TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
-      <Setter Property="FocusVisualStyle" Value="{StaticResource ActionFocusVisual}" />
-    </Style>
-
-    <Style x:Key="ActionOutlineButton" TargetType="Button" BasedOn="{StaticResource OutlineButton}">
-      <Setter Property="FocusVisualStyle" Value="{StaticResource ActionFocusVisual}" />
-    </Style>
-
-    <Style x:Key="ActionPlainButton" TargetType="Button" BasedOn="{StaticResource PlainButton}">
-      <Setter Property="FocusVisualStyle" Value="{StaticResource ActionFocusVisual}" />
-    </Style>
-
     <!-- The clickable body of a row: everything left of the actions, so a click on the name or the counts opens
          the pack and a click on an action does only that action. Page-only, like the sidebar's own row styles.
          Keyboard focus draws the same 60% ring the tiles wear, because focus has to be visible here too
@@ -81,15 +52,15 @@
         <!-- Disabled while the shell is busy, the same hop past the page to the window's MainViewModel the header
              itself makes (decision D11), so a second operation cannot be started from a live-looking button. -->
         <StackPanel IsEnabled="{Binding DataContext.IsNotBusy, RelativeSource={RelativeSource AncestorType=Window}}" Orientation="Horizontal">
-          <Button Command="{Binding ImportCommand}" Content="Import folder" Style="{StaticResource ActionOutlineButton}" />
+          <Button Command="{Binding ImportCommand}" Content="Import folder" Style="{StaticResource OutlineButton}" />
           <Button Margin="8,0,0,0"
                   Command="{Binding CaptureDefaultsCommand}"
                   Content="Capture defaults"
-                  Style="{StaticResource ActionOutlineButton}" />
+                  Style="{StaticResource OutlineButton}" />
           <Button Margin="8,0,0,0"
                   Command="{Binding OpenLibraryCommand}"
                   Content="Open library"
-                  Style="{StaticResource ActionPlainButton}" />
+                  Style="{StaticResource PlainButton}" />
         </StackPanel>
       </controls:PageHeader.Actions>
     </controls:PageHeader>
@@ -133,22 +104,22 @@
                     <Button Command="{Binding DataContext.ApplyAllCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                             CommandParameter="{Binding}"
                             Content="Apply all"
-                            Style="{StaticResource ActionOutlineButton}" />
+                            Style="{StaticResource OutlineButton}" />
                     <Button Margin="6,0,0,0"
                             Command="{Binding DataContext.RemoveCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                             CommandParameter="{Binding}"
                             Content="Remove"
-                            Style="{StaticResource ActionPlainButton}" />
+                            Style="{StaticResource PlainButton}" />
                     <Button Margin="6,0,0,0"
                             Command="{Binding DataContext.ExportCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                             CommandParameter="{Binding}"
                             Content="Export"
-                            Style="{StaticResource ActionPlainButton}" />
+                            Style="{StaticResource PlainButton}" />
                     <Button Margin="6,0,0,0"
                             Command="{Binding DataContext.OpenFolderCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                             CommandParameter="{Binding}"
                             Content="Open folder"
-                            Style="{StaticResource ActionPlainButton}" />
+                            Style="{StaticResource PlainButton}" />
                   </StackPanel>
                 </Grid>
               </Border>
@@ -172,11 +143,11 @@
         </StackPanel.Style>
         <TextBlock HorizontalAlignment="Center" Foreground="{StaticResource Text2Brush}" Text="No packs yet." />
         <StackPanel Margin="0,14,0,0" HorizontalAlignment="Center" Orientation="Horizontal">
-          <Button Command="{Binding CaptureDefaultsCommand}" Content="Capture defaults" Style="{StaticResource ActionPrimaryButton}" />
+          <Button Command="{Binding CaptureDefaultsCommand}" Content="Capture defaults" Style="{StaticResource PrimaryButton}" />
           <Button Margin="8,0,0,0"
                   Command="{Binding ImportCommand}"
                   Content="Import folder"
-                  Style="{StaticResource ActionOutlineButton}" />
+                  Style="{StaticResource OutlineButton}" />
         </StackPanel>
       </StackPanel>
     </Grid>
