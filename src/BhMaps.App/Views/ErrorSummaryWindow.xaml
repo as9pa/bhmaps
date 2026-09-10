@@ -1,0 +1,63 @@
+<Window x:Class="BhMaps.App.Views.ErrorSummaryWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Width="760" Height="440" MinWidth="500" MinHeight="300"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        Background="{StaticResource BgBrush}">
+  <!-- Title and DataContext are set by the code-behind. -->
+  <!-- Rows rather than docking, so the order the eye reads is the order Tab walks. -->
+  <Grid Margin="24">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+
+    <TextBlock Grid.Row="0"
+               Margin="0,0,0,14"
+               Foreground="{StaticResource Text2Brush}"
+               Text="{Binding Message}"
+               TextWrapping="Wrap" />
+    <Border Grid.Row="1" Style="{StaticResource CardBorder}">
+      <!-- A list of two-line rows rather than a grid of columns: a failure is a path and a sentence, and the
+           sentence has to wrap. The rows stay selectable so the keyboard can walk them and the tile ring shows
+           where it is; the path is Geist Mono because it is a value, not copy. -->
+      <ListBox Margin="6"
+               AutomationProperties.Name="Files that failed"
+               ItemsSource="{Binding Failures}"
+               Style="{StaticResource TileListBox}">
+        <ListBox.ItemContainerStyle>
+          <!-- Without this a screen reader reads the FileFailure record's ToString. -->
+          <Style TargetType="ListBoxItem" BasedOn="{StaticResource TileListBoxItem}">
+            <Setter Property="AutomationProperties.Name" Value="{Binding Path}" />
+          </Style>
+        </ListBox.ItemContainerStyle>
+        <ListBox.ItemTemplate>
+          <DataTemplate>
+            <StackPanel Margin="8,6">
+              <TextBlock Foreground="{StaticResource TextBrush}"
+                         Style="{StaticResource MonoText}"
+                         Text="{Binding Path}"
+                         TextTrimming="CharacterEllipsis"
+                         ToolTip="{Binding Path}" />
+              <TextBlock Margin="0,3,0,0"
+                         FontSize="12"
+                         Foreground="{StaticResource MissingFgBrush}"
+                         Text="{Binding Error}"
+                         TextWrapping="Wrap" />
+            </StackPanel>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+    </Border>
+
+    <Button Grid.Row="2"
+            Margin="0,16,0,0"
+            HorizontalAlignment="Right"
+            Content="Close"
+            FocusVisualStyle="{StaticResource DialogFocusRing}"
+            IsCancel="True"
+            IsDefault="True"
+            Style="{StaticResource PrimaryButton}" />
+  </Grid>
+</Window>

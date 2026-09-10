@@ -285,7 +285,7 @@ Initial scan, Apply All, Reset All, Import execute, and Save Current run on a ba
 
 ```
 C:\Users\alexa\projects\bhmaps\
-  BhMaps.sln
+  BhMaps.slnx
   .gitignore
   docs\superpowers\specs\2026-09-08-bhmaps-design.md
   src\BhMaps.Core\        class library

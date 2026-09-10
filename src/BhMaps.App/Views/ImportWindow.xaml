@@ -1,0 +1,365 @@
+<Window x:Class="BhMaps.App.Views.ImportWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:converters="clr-namespace:BhMaps.App.Converters"
+        Title="Import folders" Width="1000" Height="720" MinWidth="780" MinHeight="520"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        AllowDrop="True" PreviewDragOver="Window_PreviewDragOver" PreviewDrop="Window_PreviewDrop"
+        Background="{StaticResource BgBrush}">
+  <Window.Resources>
+    <BooleanToVisibilityConverter x:Key="BoolToVis" />
+    <converters:PathTailConverter x:Key="PathTail" />
+
+    <!-- The table's columns, declared once so the header and the row template cannot drift apart. Only the
+         source path is elastic, because it is the one cell that can be trimmed without losing a decision. -->
+    <GridLength x:Key="IncludeColumn">58</GridLength>
+    <GridLength x:Key="FileColumn">200</GridLength>
+    <GridLength x:Key="RouteColumn">130</GridLength>
+    <GridLength x:Key="TargetColumn">180</GridLength>
+    <GridLength x:Key="CandidatesColumn">130</GridLength>
+
+    <Style x:Key="FieldLabel" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+      <Setter Property="Foreground" Value="{StaticResource Text2Brush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- The pack name error only exists while the name is bad, and its own Text drives that, so a valid name
+         takes the line back instead of leaving a gap above the table. -->
+    <Style x:Key="ErrorText" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{StaticResource MissingFgBrush}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Style.Triggers>
+        <Trigger Property="Text" Value="">
+          <Setter Property="Visibility" Value="Collapsed" />
+        </Trigger>
+      </Style.Triggers>
+    </Style>
+
+    <!-- The quiet twin of ErrorText, in the same cell: a name a pack in the library already has is allowed, and
+         this says what it will do instead. Only one of the two lines ever has text. -->
+    <Style x:Key="NoteText" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{StaticResource Text3Brush}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Style.Triggers>
+        <Trigger Property="Text" Value="">
+          <Setter Property="Visibility" Value="Collapsed" />
+        </Trigger>
+      </Style.Triggers>
+    </Style>
+
+    <Style x:Key="ColumnHeader" TargetType="TextBlock" BasedOn="{StaticResource SectionHeaderText}">
+      <Setter Property="Margin" Value="0,0,12,0" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+
+    <Style x:Key="RowText" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+      <Setter Property="Margin" Value="0,0,12,0" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- A folder row is a choice: it says which folder's plan the table below shows. The container still leaves the
+         tab order, because Tab belongs on the name field and the Remove button inside it; the row is selected by
+         FolderRow_MouseDown when it is clicked and by FolderRow_GotFocus when it is tabbed into. -->
+    <Style x:Key="FolderRowItem" TargetType="ListBoxItem" BasedOn="{StaticResource TileListBoxItem}">
+      <Setter Property="Focusable" Value="False" />
+      <Setter Property="Padding" Value="8,6" />
+      <!-- Without this a screen reader reads the row's view model type name. -->
+      <Setter Property="AutomationProperties.Name" Value="{Binding PackName}" />
+    </Style>
+
+    <!-- A row is data with two controls in it, not a choice, so the container leaves the tab order and Tab
+         lands on the checkbox and the folder picker instead. A conflict tints the row: two rows cannot write
+         the same target, and Missing is the app's one coloured state (D8). -->
+    <Style x:Key="ImportRowItem" TargetType="ListBoxItem" BasedOn="{StaticResource TileListBoxItem}">
+      <Setter Property="Focusable" Value="False" />
+      <Setter Property="Padding" Value="8,5" />
+      <!-- Without this a screen reader reads the row's view model type name. -->
+      <Setter Property="AutomationProperties.Name" Value="{Binding FileName}" />
+      <Style.Triggers>
+        <DataTrigger Binding="{Binding Conflict}" Value="True">
+          <Setter Property="Background" Value="{StaticResource MissingBgBrush}" />
+        </DataTrigger>
+      </Style.Triggers>
+    </Style>
+  </Window.Resources>
+
+  <!-- Rows rather than docking, so the order the eye reads is the order Tab walks: a DockPanel would have to
+       declare the bottom button row before the table it acts on. -->
+  <Grid Margin="24">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+
+    <Grid Grid.Row="0">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="Auto" MinWidth="96" />
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="Auto" />
+      </Grid.ColumnDefinitions>
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+      </Grid.RowDefinitions>
+
+      <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,0,12,0" Style="{StaticResource FieldLabel}" Text="Source folder" />
+      <TextBox Grid.Row="0"
+               Grid.Column="1"
+               AutomationProperties.Name="Source folder"
+               Style="{StaticResource FieldTextBox}"
+               Text="{Binding SourcePath, UpdateSourceTrigger=PropertyChanged}" />
+      <StackPanel Grid.Row="0" Grid.Column="2" Margin="8,0,0,0" Orientation="Horizontal">
+        <Button Command="{Binding BrowseCommand}"
+                Content="Browse"
+                FocusVisualStyle="{StaticResource DialogFocusRing}"
+                Style="{StaticResource OutlineButton}" />
+        <Button Margin="8,0,0,0"
+                Command="{Binding ScanCommand}"
+                Content="Scan"
+                FocusVisualStyle="{StaticResource DialogFocusRing}"
+                Style="{StaticResource OutlineButton}" />
+      </StackPanel>
+
+      <!-- The scan runs off the UI thread (spec 5.5), so the window stays live and says so here. -->
+      <TextBlock Grid.Row="1"
+                 Grid.Column="0"
+                 Margin="0,16,12,0"
+                 VerticalAlignment="Top"
+                 Foreground="{StaticResource Text3Brush}"
+                 Text="Scanning"
+                 Visibility="{Binding IsScanning, Converter={StaticResource BoolToVis}}" />
+      <TextBlock Grid.Row="1"
+                 Grid.Column="1"
+                 Grid.ColumnSpan="2"
+                 Margin="0,16,0,0"
+                 Foreground="{StaticResource Text2Brush}"
+                 Text="{Binding Summary}"
+                 TextWrapping="Wrap" />
+    </Grid>
+
+    <!-- One entry per picked folder, each with the pack it becomes: the name lives here rather than in a field of
+         its own above, because with several folders there is no single pack name to put there. -->
+    <Border Grid.Row="1" Margin="0,18,0,0" Style="{StaticResource CardBorder}">
+      <DockPanel>
+        <TextBlock DockPanel.Dock="Top"
+                   Margin="14,10,14,8"
+                   Style="{StaticResource SectionHeaderText}"
+                   Text="{Binding Folders.Count, StringFormat='Folders, {0}'}" />
+        <Border DockPanel.Dock="Top" Height="1" Background="{StaticResource LineBrush}" />
+
+        <Grid>
+          <!-- Capped rather than elastic: the plan table under it is the part worth the window's height. The cap is
+               three rows and an error line under one of them, which is what the window is 60 px taller for; past
+               that the list scrolls instead of taking the table's room. -->
+          <ListBox MaxHeight="208"
+                   Margin="6"
+                   AutomationProperties.Name="Folders to import"
+                   Focusable="False"
+                   ItemContainerStyle="{StaticResource FolderRowItem}"
+                   ItemsSource="{Binding Folders}"
+                   KeyboardNavigation.TabNavigation="Continue"
+                   ScrollViewer.VerticalScrollBarVisibility="Auto"
+                   SelectedItem="{Binding Selected}"
+                   Style="{StaticResource TileListBox}">
+            <ListBox.ItemTemplate>
+              <DataTemplate>
+                <Grid GotFocus="FolderRow_GotFocus" PreviewMouseLeftButtonDown="FolderRow_MouseDown">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="220" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                  </Grid.RowDefinitions>
+
+                  <!-- Shortened from the left, as the table's Source column is: the folder's own name is the end of
+                       the path, and it is what tells two picked folders apart. The whole path is the ToolTip. -->
+                  <TextBlock Grid.Row="0"
+                             Grid.Column="0"
+                             Style="{StaticResource RowText}"
+                             Foreground="{StaticResource Text2Brush}"
+                             Text="{Binding SourcePath, Converter={StaticResource PathTail}, ConverterParameter=26}"
+                             ToolTip="{Binding SourcePath}" />
+                  <TextBox Grid.Row="0"
+                           Grid.Column="1"
+                           AutomationProperties.Name="Pack name"
+                           Style="{StaticResource FieldTextBox}"
+                           Text="{Binding PackName, UpdateSourceTrigger=PropertyChanged}" />
+                  <!-- Named after its pack, so one Remove is told from the one above it by ear too. -->
+                  <Button Grid.Row="0"
+                          Grid.Column="2"
+                          Margin="8,0,0,0"
+                          AutomationProperties.Name="{Binding PackName, StringFormat='Remove {0}'}"
+                          Command="{Binding DataContext.RemoveCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                          CommandParameter="{Binding}"
+                          Content="Remove"
+                          FocusVisualStyle="{StaticResource DialogFocusRing}"
+                          Style="{StaticResource PlainButton}" />
+                  <TextBlock Grid.Row="1"
+                             Grid.Column="1"
+                             Grid.ColumnSpan="2"
+                             Margin="0,6,0,0"
+                             Style="{StaticResource ErrorText}"
+                             Text="{Binding NameError}" />
+                  <TextBlock Grid.Row="1"
+                             Grid.Column="1"
+                             Grid.ColumnSpan="2"
+                             Margin="0,6,0,0"
+                             Style="{StaticResource NoteText}"
+                             Text="{Binding NameNote}" />
+                </Grid>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+
+          <!-- Empty is its own state (spec 7.8); the list has no other way to say nothing has been picked yet. -->
+          <TextBlock Margin="14,14,14,0"
+                     VerticalAlignment="Top"
+                     Foreground="{StaticResource Text3Brush}"
+                     Text="No folders yet. Browse for them or drop them anywhere on this window."
+                     TextWrapping="Wrap">
+            <TextBlock.Style>
+              <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                <Setter Property="Visibility" Value="Collapsed" />
+                <Style.Triggers>
+                  <DataTrigger Binding="{Binding Folders.Count}" Value="0">
+                    <Setter Property="Visibility" Value="Visible" />
+                  </DataTrigger>
+                </Style.Triggers>
+              </Style>
+            </TextBlock.Style>
+          </TextBlock>
+        </Grid>
+      </DockPanel>
+    </Border>
+
+    <Border Grid.Row="2" Margin="0,18,0,0" Style="{StaticResource CardBorder}">
+      <DockPanel>
+        <Grid DockPanel.Dock="Top" Margin="14,10,14,8">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="{StaticResource IncludeColumn}" />
+            <ColumnDefinition Width="{StaticResource FileColumn}" />
+            <ColumnDefinition Width="{StaticResource RouteColumn}" />
+            <ColumnDefinition Width="{StaticResource TargetColumn}" />
+            <ColumnDefinition Width="{StaticResource CandidatesColumn}" />
+            <ColumnDefinition Width="*" />
+          </Grid.ColumnDefinitions>
+          <!-- The narrowest column holds the longest header, so this one keeps its own gutter. -->
+          <TextBlock Grid.Column="0" Margin="0,0,4,0" Style="{StaticResource ColumnHeader}" Text="Include" />
+          <TextBlock Grid.Column="1" Style="{StaticResource ColumnHeader}" Text="File" />
+          <TextBlock Grid.Column="2" Style="{StaticResource ColumnHeader}" Text="Route" />
+          <TextBlock Grid.Column="3" Style="{StaticResource ColumnHeader}" Text="Target folder" />
+          <TextBlock Grid.Column="4" Style="{StaticResource ColumnHeader}" Text="Candidates" />
+          <TextBlock Grid.Column="5" Style="{StaticResource ColumnHeader}" Text="Source" />
+        </Grid>
+        <Border DockPanel.Dock="Top" Height="1" Background="{StaticResource LineBrush}" />
+
+        <Grid>
+          <!-- Focusable="False" plus Continue: the list itself is never an invisible tab stop, and Tab walks
+               straight through the controls inside the realized rows. -->
+          <ListBox Margin="6"
+                   AutomationProperties.Name="Images found"
+                   Focusable="False"
+                   ItemContainerStyle="{StaticResource ImportRowItem}"
+                   ItemsSource="{Binding Rows}"
+                   KeyboardNavigation.TabNavigation="Continue"
+                   Style="{StaticResource TileListBox}">
+            <ListBox.ItemTemplate>
+              <DataTemplate>
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="{StaticResource IncludeColumn}" />
+                    <ColumnDefinition Width="{StaticResource FileColumn}" />
+                    <ColumnDefinition Width="{StaticResource RouteColumn}" />
+                    <ColumnDefinition Width="{StaticResource TargetColumn}" />
+                    <ColumnDefinition Width="{StaticResource CandidatesColumn}" />
+                    <ColumnDefinition Width="*" />
+                  </Grid.ColumnDefinitions>
+
+                  <!-- Named after the file, so the row's checkbox is told from the one above it by ear too. -->
+                  <CheckBox Grid.Column="0"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Center"
+                            AutomationProperties.Name="{Binding FileName}"
+                            FocusVisualStyle="{StaticResource DialogFocusRing}"
+                            IsChecked="{Binding Include, UpdateSourceTrigger=PropertyChanged}"
+                            IsEnabled="{Binding IsRouted}" />
+                  <TextBlock Grid.Column="1"
+                             Style="{StaticResource RowText}"
+                             Text="{Binding FileName}"
+                             ToolTip="{Binding FileName}" />
+                  <StackPanel Grid.Column="2" Margin="0,0,12,0" VerticalAlignment="Center" Orientation="Horizontal">
+                    <Border Style="{StaticResource StateTagBorder}">
+                      <TextBlock Text="{Binding RouteText}" />
+                    </Border>
+                    <Border Margin="6,0,0,0"
+                            Style="{StaticResource MissingTagBorder}"
+                            Visibility="{Binding Conflict, Converter={StaticResource BoolToVis}}">
+                      <TextBlock Text="Conflict" />
+                    </Border>
+                  </StackPanel>
+                  <ComboBox Grid.Column="3"
+                            Margin="0,0,12,0"
+                            VerticalAlignment="Center"
+                            AutomationProperties.Name="Target folder"
+                            ItemsSource="{Binding DataContext.AllFolders, RelativeSource={RelativeSource AncestorType=Window}}"
+                            SelectedItem="{Binding TargetFolder, UpdateSourceTrigger=PropertyChanged}" />
+                  <TextBlock Grid.Column="4"
+                             Style="{StaticResource RowText}"
+                             Foreground="{StaticResource Text2Brush}"
+                             Text="{Binding CandidatesText}"
+                             ToolTip="{Binding CandidatesText}" />
+                  <!-- Shortened from the left: trimming alone cuts the end, which is the file and the folder it
+                       came out of, and those are what tell two source paths apart. The whole path is the ToolTip. -->
+                  <TextBlock Grid.Column="5"
+                             Style="{StaticResource RowText}"
+                             Foreground="{StaticResource Text3Brush}"
+                             Text="{Binding SourcePath, Converter={StaticResource PathTail}, ConverterParameter=26}"
+                             ToolTip="{Binding SourcePath}" />
+                </Grid>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+
+          <!-- Empty, and empty after a scan that found nothing, are the same sentence: there is nothing to
+               include either way, and the summary line above already says which of the two it is. -->
+          <TextBlock Margin="14,14,14,0" VerticalAlignment="Top" Foreground="{StaticResource Text3Brush}" TextWrapping="Wrap">
+            <TextBlock.Style>
+              <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                <Setter Property="Text" Value="No images here yet. Choose a source folder and scan it." />
+                <Setter Property="Visibility" Value="Collapsed" />
+                <Style.Triggers>
+                  <DataTrigger Binding="{Binding Rows.Count}" Value="0">
+                    <Setter Property="Visibility" Value="Visible" />
+                  </DataTrigger>
+                </Style.Triggers>
+              </Style>
+            </TextBlock.Style>
+          </TextBlock>
+        </Grid>
+      </DockPanel>
+    </Border>
+
+    <StackPanel Grid.Row="3" Margin="0,18,0,0" HorizontalAlignment="Right" Orientation="Horizontal">
+      <!-- No command: IsCancel closes with false, and the caller drops the plan. Escape does the same. -->
+      <Button Margin="0,0,8,0"
+              Content="Cancel"
+              FocusVisualStyle="{StaticResource DialogFocusRing}"
+              IsCancel="True"
+              Style="{StaticResource PlainButton}" />
+      <!-- The label carries the pack count, so how many packs this writes is on the button that writes them. -->
+      <Button Command="{Binding ImportCommand}"
+              Content="{Binding ImportButtonText}"
+              FocusVisualStyle="{StaticResource DialogFocusRing}"
+              IsDefault="True"
+              Style="{StaticResource PrimaryButton}" />
+    </StackPanel>
+  </Grid>
+</Window>
