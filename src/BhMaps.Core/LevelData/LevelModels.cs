@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace BhMaps.Core.LevelData;
 
 public sealed record CameraBounds(double X, double Y, double W, double H);
@@ -16,10 +18,13 @@ public sealed record PlatformNode(
     IReadOnlyList<PlatformNode> Children)
 {
     /// <summary>A themed node is seasonal, and the compositor skips it.</summary>
+    [JsonIgnore]
     public bool IsThemed => !string.IsNullOrEmpty(Theme);
 
+    [JsonIgnore]
     public double EffectiveScaleX => Scale * ScaleX;
 
+    [JsonIgnore]
     public double EffectiveScaleY => Scale * ScaleY;
 }
 
@@ -32,6 +37,7 @@ public sealed record LevelDesc(
 
 public sealed record LevelType(string LevelName, string DisplayName, bool DevOnly, bool TestLevel)
 {
+    [JsonIgnore]
     public bool Included => !DevOnly && !TestLevel;
 }
 
