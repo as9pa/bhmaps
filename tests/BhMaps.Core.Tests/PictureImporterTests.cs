@@ -209,4 +209,20 @@ public class PictureImporterTests
         Assert.True(File.Exists(PackFile(tmp, "shots", "photo.jpg")));
         Assert.True(File.Exists(PackFile(tmp, "shots", "photo (2).jpg")));
     }
+
+    [Fact]
+    public void Import_ReportsTheNamesItWroteWithTheSuffixEachOneTook()
+    {
+        using var tmp = new TempDir();
+        var one = SyntheticImage.SaveQuadrants(tmp.Sub("a", "photo.png"), 100, 60);
+        var notes = tmp.Sub("a", "notes.txt");
+        File.WriteAllText(notes, "not an image");
+        var two = SyntheticImage.SaveQuadrants(tmp.Sub("b", "photo.jpg"), 60, 100);
+
+        var result = PictureImporter.Import([one, notes, two], Lib(tmp), "shots", PictureFit.Fill);
+
+        // Source order, the collision suffix the second one actually took, and no entry for the source that failed.
+        Assert.Equal(new[] { "photo.jpg", "photo (2).jpg" }, result.Written);
+        Assert.Single(result.Failures);
+    }
 }
