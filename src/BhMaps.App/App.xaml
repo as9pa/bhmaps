@@ -13,11 +13,6 @@
         <ResourceDictionary Source="Theme/Tokens.xaml" />
         <ResourceDictionary Source="Theme/Controls.xaml" />
       </ResourceDictionary.MergedDictionaries>
-      <!-- Shared by the folder cards and the detail rows: a context menu used as a dropdown inherits its button's row. -->
-      <Style x:Key="ApplyFromMenu" TargetType="ContextMenu">
-        <Setter Property="DataContext" Value="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}" />
-      </Style>
-
       <!-- One implicit template per page, so the shell's ContentControl picks the view from CurrentPage's type
            (decision D10) and each page task owns its own files. -->
       <DataTemplate DataType="{x:Type pages:HomeViewModel}">
