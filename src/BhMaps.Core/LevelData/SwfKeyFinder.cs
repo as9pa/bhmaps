@@ -8,7 +8,7 @@ namespace BhMaps.Core.LevelData;
 public sealed record KeySearchResult(uint? Key, int CandidatesScanned, string? Error);
 
 /// <summary>Recovers the SWZ decryption key from BrawlhallaAir.swf, which carries it as one uint
-/// among thousands in an ABC constant pool. Port of docs/superpowers/reference/swz.py.</summary>
+/// among thousands in an ABC constant pool. Ported from a Python reference implementation.</summary>
 public static class SwfKeyFinder
 {
     public const int DoAbcRawTag = 72;

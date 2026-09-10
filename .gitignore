@@ -3,6 +3,7 @@ bin/
 obj/
 publish/
 *.publish/
+dist/
 
 # IDE
 .vs/
@@ -16,7 +17,10 @@ publish/
 TestResults/
 *.trx
 .idea/
+*.log
 
 # Claude Code agent worktrees and scratch
-.claude/worktrees/
+.claude/
+.superpowers/
+.worktrees/
 __pycache__/

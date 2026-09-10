@@ -1,0 +1,2 @@
+# Windows-only WPF app: .editorconfig requires CRLF, so check out CRLF everywhere.
+* text=auto eol=crlf

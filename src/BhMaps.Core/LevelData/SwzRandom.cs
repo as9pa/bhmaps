@@ -1,7 +1,7 @@
 namespace BhMaps.Core.LevelData;
 
 /// <summary>WELL512-style PRNG the SWZ container is keyed with.
-/// Port of docs/superpowers/reference/swz.py.</summary>
+/// Ported from a Python reference implementation.</summary>
 public sealed class SwzRandom
 {
     private readonly uint[] _state = new uint[16];
