@@ -129,4 +129,66 @@ public class SettingsStoreTests
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "BhMaps"),
             SettingsStore.DefaultAppDataDir);
     }
+
+    [Fact]
+    public void Load_MissingV2Fields_UsesDefaults()
+    {
+        using var tmp = new TempDir();
+        var path = tmp.Sub("settings.json");
+        File.WriteAllText(path, """{"gamePath":"C:\\g","libraryPath":"C:\\l","firstRunDone":true}""");
+
+        var loaded = SettingsStore.Load(path);
+
+        Assert.Equal(3, loaded.HomeZoom);
+        Assert.Equal(4, loaded.BackgroundsZoom);
+        Assert.Equal(AppSettings.RestartWhileRunning, loaded.WhileRunning);
+        Assert.False(loaded.WelcomeDone);
+    }
+
+    [Fact]
+    public void SaveThenLoad_RoundTripsEveryV2Field()
+    {
+        using var tmp = new TempDir();
+        var path = tmp.Sub("settings.json");
+        var settings = new AppSettings(@"C:\g", @"C:\l", true, HomeZoom: 5, BackgroundsZoom: 6,
+            WhileRunning: AppSettings.LiveWhileRunning, WelcomeDone: true);
+
+        SettingsStore.Save(path, settings);
+        var loaded = SettingsStore.Load(path);
+
+        Assert.Equal(5, loaded.HomeZoom);
+        Assert.Equal(6, loaded.BackgroundsZoom);
+        Assert.Equal(AppSettings.LiveWhileRunning, loaded.WhileRunning);
+        Assert.True(loaded.WelcomeDone);
+    }
+
+    [Fact]
+    public void Save_PreservesUnknownFieldsFromTheExistingFile()
+    {
+        using var tmp = new TempDir();
+        var path = tmp.Sub("settings.json");
+        File.WriteAllText(path, """{"gamePath":"C:\\g","futureThing":{"a":1},"favourites":["Grove"]}""");
+
+        var loaded = SettingsStore.Load(path);
+        SettingsStore.Save(path, loaded with { HomeZoom = 2 });
+
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+        Assert.Equal(2, (int)json["homeZoom"]!);
+        Assert.Equal(1, (int)json["futureThing"]!["a"]!);
+        Assert.Equal("Grove", (string)json["favourites"]![0]!);
+    }
+
+    [Fact]
+    public void Load_ClampsZoomAndNormalisesWhileRunning()
+    {
+        using var tmp = new TempDir();
+        var path = tmp.Sub("settings.json");
+        File.WriteAllText(path, """{"homeZoom":99,"backgroundsZoom":0,"whileRunning":"nonsense"}""");
+
+        var loaded = SettingsStore.Load(path);
+
+        Assert.Equal(5, loaded.HomeZoom);
+        Assert.Equal(3, loaded.BackgroundsZoom);
+        Assert.Equal(AppSettings.RestartWhileRunning, loaded.WhileRunning);
+    }
 }
