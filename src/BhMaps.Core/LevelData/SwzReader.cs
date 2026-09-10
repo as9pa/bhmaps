@@ -9,7 +9,7 @@ namespace BhMaps.Core.LevelData;
 public sealed record SwzEntry(string RootElement, string Xml);
 
 /// <summary>Turns an encrypted .swz container into its XML entries.
-/// Port of read_swz in docs/superpowers/reference/swz.py.</summary>
+/// Ported from the read_swz routine of a Python reference implementation.</summary>
 public static class SwzReader
 {
     private const int HeaderSize = 8;
