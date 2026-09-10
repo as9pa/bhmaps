@@ -54,17 +54,15 @@ public partial class PacksViewModel : PageViewModel
         Shell.NavigateToPack(row.Pack);
     }
 
-    /// <summary>Spec 6.5: every folder and every background the pack has, in one write. Only the slots the pack
-    /// holds are touched, so packs stack. The launcher inside RunGameWriteAsync owns the game-running policy.</summary>
     [RelayCommand]
-    private async Task ApplyAllAsync(PackRowViewModel? row)
-    {
-        if (row is null)
-        {
-            return;
-        }
+    private Task ApplyAllAsync(PackRowViewModel? row) =>
+        row is null ? Task.CompletedTask : ApplyAllAsync(row.Pack);
 
-        var pack = row.Pack;
+    /// <summary>Spec 6.5: every folder and every background the pack has, in one write. Only the slots the pack
+    /// holds are touched, so packs stack. The launcher inside RunGameWriteAsync owns the game-running policy.
+    /// Public because the pack detail page's header offers the same action and there is one implementation of it.</summary>
+    public async Task ApplyAllAsync(Pack pack)
+    {
         var gamePath = Shell.Services.GamePath;
         ApplyResult? result = null;
         await Shell.RunGameWriteAsync(
