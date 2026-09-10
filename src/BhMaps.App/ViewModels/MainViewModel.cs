@@ -1,4 +1,8 @@
+using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Windows;
+using System.Windows.Data;
+using System.Windows.Threading;
 using BhMaps.App.Services;
 using BhMaps.App.ViewModels.Pages;
 using BhMaps.App.Views;
@@ -15,8 +19,17 @@ namespace BhMaps.App.ViewModels;
 /// them, and the undo of the last game write.</summary>
 public partial class MainViewModel : ObservableObject
 {
+    private const int MaxSuggestions = 8;
+
+    private static readonly TimeSpan GamePollInterval = TimeSpan.FromSeconds(3);
+
     private readonly GameLauncher _launcher;
     private readonly IReadOnlyList<PageViewModel> _pages;
+
+    /// <summary>The view the sidebar list binds through, so the search filters without a second collection.</summary>
+    private readonly ICollectionView _mapListView;
+
+    private readonly DispatcherTimer _gameTimer;
     private CancellationTokenSource? _cts;
 
     public MainViewModel(AppServices services, IDialogs dialogs)
@@ -25,6 +38,13 @@ public partial class MainViewModel : ObservableObject
         Dialogs = dialogs;
         ProgressText = "";
         DoneText = "";
+        MapList = [];
+        Suggestions = [];
+        _mapListView = CollectionViewSource.GetDefaultView(MapList);
+        _mapListView.Filter = MatchesSearch;
+
+        // After the list and its view, because setting it runs the change hook that filters them.
+        SearchText = "";
         _launcher = new GameLauncher(services, dialogs);
         Home = new HomeViewModel(this);
         Backgrounds = new BackgroundsViewModel(this);
@@ -34,6 +54,12 @@ public partial class MainViewModel : ObservableObject
         SettingsPage = new SettingsPageViewModel(this);
         _pages = [Home, Backgrounds, Platforms, Packs, PackDetail, SettingsPage];
         CurrentPage = Home;
+
+        // Nothing tells the app when Brawlhalla starts or stops, so the sidebar's game block asks every 3 seconds.
+        GameRunning = GameProcess.IsRunning();
+        _gameTimer = new DispatcherTimer { Interval = GamePollInterval };
+        _gameTimer.Tick += (_, _) => GameRunning = GameProcess.IsRunning();
+        _gameTimer.Start();
     }
 
     public AppServices Services { get; }
@@ -54,6 +80,25 @@ public partial class MainViewModel : ObservableObject
     public PackDetailViewModel PackDetail { get; }
 
     public SettingsPageViewModel SettingsPage { get; }
+
+    /// <summary>Every map the scan found, in display-name order. The sidebar lists this collection's default view,
+    /// filtered live by <see cref="SearchText"/>, so there is no second copy to keep in step.</summary>
+    public ObservableCollection<MapListItemViewModel> MapList { get; }
+
+    /// <summary>The search box's autocomplete list: at most eight display names, empty when the box is empty.</summary>
+    public ObservableCollection<string> Suggestions { get; }
+
+    /// <summary>The ticked maps, in list order. A page's multi-map action reads this and its count.</summary>
+    public IReadOnlyList<MapListItemViewModel> SelectedMaps => MapList.Where(m => m.IsSelected).ToList();
+
+    public int SelectedMapCount => SelectedMaps.Count;
+
+    [ObservableProperty]
+    public partial string SearchText { get; set; }
+
+    /// <summary>Whether Brawlhalla is running, as of the last poll. The sidebar's game block shows it.</summary>
+    [ObservableProperty]
+    public partial bool GameRunning { get; set; }
 
     [ObservableProperty]
     public partial PageViewModel? CurrentPage { get; set; }
@@ -101,6 +146,107 @@ public partial class MainViewModel : ObservableObject
     {
         PackDetail.Pack = pack;
         CurrentPage = PackDetail;
+    }
+
+    /// <summary>Enter on a suggestion, or a click on one: the box takes the whole name, and on Home the map that
+    /// name belongs to opens. On any other page choosing only narrows the list.</summary>
+    [RelayCommand]
+    private void ChooseSuggestion(string? displayName)
+    {
+        if (string.IsNullOrEmpty(displayName))
+        {
+            return;
+        }
+
+        SearchText = displayName;
+        var map = MapList.FirstOrDefault(m => m.DisplayName.Equals(displayName, StringComparison.OrdinalIgnoreCase));
+        if (map is not null && CurrentPage == Home)
+        {
+            Home.OpenMap(map.FolderName);
+        }
+    }
+
+    /// <summary>Unticks every map. The pages' multi-map bars offer it as "Clear".</summary>
+    [RelayCommand]
+    private void ClearSelection()
+    {
+        foreach (var map in MapList)
+        {
+            map.IsSelected = false;
+        }
+    }
+
+    /// <summary>Every keystroke re-filters the list and rebuilds the suggestions.</summary>
+    partial void OnSearchTextChanged(string value)
+    {
+        _mapListView.Refresh();
+        Suggestions.Clear();
+        foreach (var name in Suggest(value))
+        {
+            Suggestions.Add(name);
+        }
+    }
+
+    /// <summary>Names that start with what was typed first, then names that merely contain it, capped at eight.</summary>
+    private IEnumerable<string> Suggest(string search)
+    {
+        if (search.Length == 0)
+        {
+            return [];
+        }
+
+        var names = MapList.Select(m => m.DisplayName).ToList();
+        return names
+            .Where(n => n.StartsWith(search, StringComparison.OrdinalIgnoreCase))
+            .Concat(names.Where(n => n.Contains(search, StringComparison.OrdinalIgnoreCase)))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(MaxSuggestions);
+    }
+
+    private bool MatchesSearch(object item) =>
+        item is MapListItemViewModel map
+        && (SearchText.Length == 0 || map.DisplayName.Contains(SearchText, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Rebuilds the sidebar list from a scan, keeping the maps that were ticked ticked, matched by folder
+    /// name because a game update can rename a map.</summary>
+    private void PopulateMapList(ScanSnapshot snapshot)
+    {
+        var ticked = MapList
+            .Where(m => m.IsSelected)
+            .Select(m => m.FolderName)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var old in MapList)
+        {
+            old.PropertyChanged -= OnMapItemChanged;
+        }
+
+        MapList.Clear();
+        foreach (var map in snapshot.Catalog.Maps)
+        {
+            snapshot.MapStatuses.TryGetValue(map.FolderName, out var status);
+
+            // Ticked before subscribing, so restoring the selection is not mistaken for the user changing it.
+            var item = new MapListItemViewModel(map, status) { IsSelected = ticked.Contains(map.FolderName) };
+            item.PropertyChanged += OnMapItemChanged;
+            MapList.Add(item);
+        }
+
+        NotifySelectionChanged();
+    }
+
+    private void OnMapItemChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(MapListItemViewModel.IsSelected))
+        {
+            NotifySelectionChanged();
+        }
+    }
+
+    /// <summary>SelectedMaps is computed, so the pages bound to it are told by hand when it changes.</summary>
+    private void NotifySelectionChanged()
+    {
+        OnPropertyChanged(nameof(SelectedMaps));
+        OnPropertyChanged(nameof(SelectedMapCount));
     }
 
     [RelayCommand(CanExecute = nameof(CanAct))]
@@ -239,6 +385,9 @@ public partial class MainViewModel : ObservableObject
         }
 
         Snapshot = snapshot;
+
+        // Before the pages, because a page's Refresh may read the sidebar's selection.
+        PopulateMapList(snapshot);
         foreach (var page in _pages)
         {
             page.Refresh(snapshot);
@@ -246,6 +395,10 @@ public partial class MainViewModel : ObservableObject
 
         CanUndo = Services.Undo.Latest is not null;
     }
+
+    /// <summary>Stops the game poll. Called once, when the window closes, so the timer does not keep ticking on
+    /// a dispatcher that is on its way out.</summary>
+    public void Shutdown() => _gameTimer.Stop();
 
     /// <summary>Spec 6: warn when Brawlhalla is running. True means go ahead.</summary>
     public bool ConfirmIfGameRunning() =>

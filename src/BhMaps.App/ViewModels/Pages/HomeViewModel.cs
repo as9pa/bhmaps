@@ -12,6 +12,12 @@ public partial class HomeViewModel : PageViewModel
 
     public override string Title => "Home";
 
+    /// <summary>Opens one map's right panel. Empty until Task 24 fills the Home page in; the sidebar's
+    /// autocomplete already calls it when Enter picks a name while Home is the current page.</summary>
+    public void OpenMap(string folderName)
+    {
+    }
+
     public override void Refresh(ScanSnapshot snapshot)
     {
     }
