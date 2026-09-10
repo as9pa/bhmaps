@@ -34,14 +34,20 @@
       <controls:PageHeader.Actions>
         <StackPanel Orientation="Horizontal">
           <!-- Spec 7.1: one search string for the sidebar list and the current page, so this box is the shell's,
-               reached the same way the header's busy line reaches it (decision D11). -->
-          <Grid Width="200">
-            <TextBox AutomationProperties.Name="Search backgrounds"
+               reached the same way the header's busy line reaches it (decision D11). Centred at the action height,
+               or the StackPanel stretches box and button to the taller of the two and the box reads as two lines. -->
+          <Grid Width="200" Height="{StaticResource ActionHeight}" VerticalAlignment="Center">
+            <!-- Its own padding, not the style's: a TextBox reserves the whole of Geist's line box, which at this
+                 size is taller than an action, and the style's 6 top and bottom would clip the text out of a box
+                 this high. 3 and 0 leave the line box room and put the glyphs on the button's own rows. -->
+            <TextBox Padding="10,3,10,0"
+                     AutomationProperties.Name="Search backgrounds"
                      Style="{StaticResource FieldTextBox}"
                      Text="{Binding DataContext.SearchText, RelativeSource={RelativeSource AncestorType=Window}, UpdateSourceTrigger=PropertyChanged}" />
 
-            <!-- Hit test off, so the placeholder never swallows the click that focuses the box. -->
-            <TextBlock Margin="11,7" IsHitTestVisible="False" Text="Search backgrounds">
+            <!-- Hit test off, so the placeholder never swallows the click that focuses the box. Centred, so it sits
+                 on the same rows the box draws its own text on and nothing shifts when typing starts. -->
+            <TextBlock Margin="11,0" VerticalAlignment="Center" IsHitTestVisible="False" Text="Search backgrounds">
               <TextBlock.Style>
                 <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
                   <Setter Property="Foreground" Value="{StaticResource Text3Brush}" />
@@ -142,10 +148,12 @@
                                     VerticalAlignment="Bottom"
                                     Orientation="Horizontal"
                                     Visibility="Collapsed">
+                          <!-- CanWrite, not IsNotBusy: this writes into the game folder, so it is also off while
+                               that folder is missing (spec 7.8). Edit beside it is library-only and is not. -->
                           <Button Command="{Binding DataContext.ApplyCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                   CommandParameter="{Binding}"
                                   Content="Apply"
-                                  IsEnabled="{Binding DataContext.IsNotBusy, RelativeSource={RelativeSource AncestorType=Window}}"
+                                  IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}"
                                   Style="{StaticResource TileAction}" />
                           <Button Command="{Binding DataContext.EditCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                   CommandParameter="{Binding}"

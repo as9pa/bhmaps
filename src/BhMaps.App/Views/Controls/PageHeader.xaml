@@ -71,11 +71,15 @@
           </Style>
         </StackPanel.Style>
         <TextBlock VerticalAlignment="Center" Foreground="{StaticResource Text2Brush}" Text="{Binding DoneText}" />
+
+        <!-- Only beside a line a game write left: a library-only line has no snapshot behind it, and Undo there
+             would put back an older write the line says nothing about. -->
         <Button Margin="8,0,0,0"
                 Command="{Binding UndoCommand}"
                 Content="Undo"
                 IsEnabled="{Binding CanUndo}"
-                Style="{StaticResource PlainButton}" />
+                Style="{StaticResource PlainButton}"
+                Visibility="{Binding DoneUndoable, Converter={StaticResource BoolToVis}}" />
       </StackPanel>
     </Grid>
 

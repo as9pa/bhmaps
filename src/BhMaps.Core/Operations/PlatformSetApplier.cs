@@ -28,12 +28,24 @@ public static class PlatformSetApplier
     }
 
     /// <summary>Files in the pack that are fully transparent PNGs, as "Folder\file.png",
-    /// so the UI can mark them "changes nothing".</summary>
-    public static IReadOnlyList<string> TransparentFiles(Pack pack) =>
-        pack.Folders
-            .SelectMany(folder => folder.Files.Select(file => (Folder: folder, File: file)))
-            .Where(x => Path.GetExtension(x.File.Name).Equals(".png", StringComparison.OrdinalIgnoreCase)
-                && TransparentPng.IsFullyTransparent(x.File.FullPath))
-            .Select(x => Path.Combine(x.Folder.Name, x.File.Name))
-            .ToList();
+    /// so the UI can mark them "changes nothing". Decoding a pack's worth of PNGs is slow, so the token is
+    /// checked before each one rather than once at the start.</summary>
+    public static IReadOnlyList<string> TransparentFiles(Pack pack, CancellationToken ct = default)
+    {
+        var transparent = new List<string>();
+        foreach (var folder in pack.Folders)
+        {
+            foreach (var file in folder.Files)
+            {
+                ct.ThrowIfCancellationRequested();
+                if (Path.GetExtension(file.Name).Equals(".png", StringComparison.OrdinalIgnoreCase)
+                    && TransparentPng.IsFullyTransparent(file.FullPath))
+                {
+                    transparent.Add(Path.Combine(folder.Name, file.Name));
+                }
+            }
+        }
+
+        return transparent;
+    }
 }

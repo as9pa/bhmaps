@@ -1,3 +1,4 @@
+using System.Collections;
 using BhMaps.Core.Model;
 using BhMaps.Core.Operations;
 using BhMaps.Core.Scanning;
@@ -105,6 +106,24 @@ public class PlatformSetApplierTests
         Assert.Equal(new[] { Path.Combine("Grove", "clear.png") }, transparent);
     }
 
+    /// <summary>Decoding a pack's PNGs is slow enough that the token has to be looked at between them, not once at
+    /// the start. The pack's file list cancels the source as the walk leaves its first file, so the second file is
+    /// what the check has to catch; a check only at the top of the method would see a live token and finish.</summary>
+    [Fact]
+    public void TransparentFiles_HonorsCancellationBetweenFiles()
+    {
+        using var tmp = new TempDir();
+        var lib = Path.Combine(tmp.Path, "lib");
+        var packRoot = Path.Combine(PackScanner.PacksRoot(lib), "dark");
+        SyntheticImage.SavePng(Path.Combine(packRoot, "Grove", "a-clear.png"), 8, 8, (_, _) => (255, 0, 0, 0));
+        SyntheticImage.SavePng(Path.Combine(packRoot, "Grove", "b-clear.png"), 8, 8, (_, _) => (255, 0, 0, 0));
+        using var cts = new CancellationTokenSource();
+        var folder = Scan(lib, "dark").Folders[0];
+        var pack = new Pack("dark", packRoot, [folder with { Files = new CancelsAfterFirst(folder.Files, cts) }]);
+
+        Assert.Throws<OperationCanceledException>(() => PlatformSetApplier.TransparentFiles(pack, cts.Token));
+    }
+
     [Fact]
     public void ApplyAll_StacksSoAnEarlierPacksFilesSurviveWhereTheLaterPackHasNone()
     {
@@ -200,5 +219,30 @@ public class PlatformSetApplierTests
 
         Assert.Equal("flower-b", Read(Path.Combine(destination, "flower"), "Grove", "b.png"));
         Assert.Equal("stale", File.ReadAllText(lockedPath));
+    }
+
+    /// <summary>A file list that cancels the source as the walk leaves its first item, so "cancelled after the
+    /// first file" is a fact of the enumeration rather than a race with a timer.</summary>
+    private sealed class CancelsAfterFirst(IReadOnlyList<GameFile> files, CancellationTokenSource cts)
+        : IReadOnlyList<GameFile>
+    {
+        public int Count => files.Count;
+
+        public GameFile this[int index] => files[index];
+
+        public IEnumerator<GameFile> GetEnumerator()
+        {
+            for (var i = 0; i < files.Count; i++)
+            {
+                if (i == 1)
+                {
+                    cts.Cancel();
+                }
+
+                yield return files[i];
+            }
+        }
+
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }
 }

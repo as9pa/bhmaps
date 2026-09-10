@@ -1,11 +1,13 @@
 <Window x:Class="BhMaps.App.Views.ImportWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:converters="clr-namespace:BhMaps.App.Converters"
         Title="Import into a pack" Width="1000" Height="660" MinWidth="780" MinHeight="440"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
         Background="{StaticResource BgBrush}">
   <Window.Resources>
     <BooleanToVisibilityConverter x:Key="BoolToVis" />
+    <converters:PathTailConverter x:Key="PathTail" />
 
     <!-- The table's columns, declared once so the header and the row template cannot drift apart. Only the
          source path is elastic, because it is the one cell that can be trimmed without losing a decision. -->
@@ -208,10 +210,12 @@
                              Foreground="{StaticResource Text2Brush}"
                              Text="{Binding CandidatesText}"
                              ToolTip="{Binding CandidatesText}" />
+                  <!-- Shortened from the left: trimming alone cuts the end, which is the file and the folder it
+                       came out of, and those are what tell two source paths apart. The whole path is the ToolTip. -->
                   <TextBlock Grid.Column="5"
                              Style="{StaticResource RowText}"
                              Foreground="{StaticResource Text3Brush}"
-                             Text="{Binding SourcePath}"
+                             Text="{Binding SourcePath, Converter={StaticResource PathTail}, ConverterParameter=26}"
                              ToolTip="{Binding SourcePath}" />
                 </Grid>
               </DataTemplate>
