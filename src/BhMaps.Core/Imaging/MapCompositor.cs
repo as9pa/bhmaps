@@ -89,6 +89,15 @@ public static class MapCompositor
     public static IReadOnlyList<string> CollectInputs(LevelDesc level, AssetSources sources)
     {
         var inputs = new List<string>();
+
+        // The same gate Render draws behind: a level with missing or degenerate CameraBounds has nowhere to draw,
+        // so it reads nothing, and listing its assets anyway would churn the preview cache key for no bitmap.
+        var camera = level.Camera;
+        if (camera.W <= 0 || camera.H <= 0)
+        {
+            return inputs;
+        }
+
         if (level.Backgrounds.Count > 0)
         {
             var background = sources.ResolveBackground(level.Backgrounds[0].AssetName);
