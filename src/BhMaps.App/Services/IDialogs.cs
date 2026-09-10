@@ -19,6 +19,9 @@ public interface IDialogs
 
     string? PickImageFile(string title);
 
+    /// <summary>Multi-select image picker. Null when cancelled.</summary>
+    IReadOnlyList<string>? PickImageFiles(string title);
+
     /// <summary>Single-line text prompt. Null when cancelled.</summary>
     string? PromptText(string title, string message, string initial);
 }
