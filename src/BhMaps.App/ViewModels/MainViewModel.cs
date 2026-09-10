@@ -1,8 +1,6 @@
-using System.Collections.ObjectModel;
-using System.Diagnostics;
 using System.Windows;
-using System.Windows.Media;
 using BhMaps.App.Services;
+using BhMaps.App.ViewModels.Pages;
 using BhMaps.App.Views;
 using BhMaps.Core.Game;
 using BhMaps.Core.Model;
@@ -13,35 +11,52 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace BhMaps.App.ViewModels;
 
+/// <summary>The shell (decision D13): the busy boundary, navigation between the six pages, the scan that feeds
+/// them, and the undo of the last game write.</summary>
 public partial class MainViewModel : ObservableObject
 {
-    private readonly AppServices _services;
-    private readonly IDialogs _dialogs;
+    private readonly GameLauncher _launcher;
+    private readonly IReadOnlyList<PageViewModel> _pages;
     private CancellationTokenSource? _cts;
-    private bool _firstRunOffered;
 
     public MainViewModel(AppServices services, IDialogs dialogs)
     {
-        _services = services;
-        _dialogs = dialogs;
+        Services = services;
+        Dialogs = dialogs;
         ProgressText = "";
-        StatusText = services.GamePath;
+        DoneText = "";
+        _launcher = new GameLauncher(services, dialogs);
+        Home = new HomeViewModel(this);
+        Backgrounds = new BackgroundsViewModel(this);
+        Platforms = new PlatformsViewModel(this);
+        Packs = new PacksViewModel(this);
+        PackDetail = new PackDetailViewModel(this);
+        SettingsPage = new SettingsPageViewModel(this);
+        _pages = [Home, Backgrounds, Platforms, Packs, PackDetail, SettingsPage];
+        CurrentPage = Home;
     }
 
-    public ObservableCollection<PackItemViewModel> Packs { get; } = new();
+    public AppServices Services { get; }
 
-    public ObservableCollection<FolderCardViewModel> Folders { get; } = new();
+    public IDialogs Dialogs { get; }
 
     /// <summary>Result of the last successful scan. Null until the first scan completes.</summary>
-    protected ScanSnapshot? Snapshot { get; private set; }
+    public ScanSnapshot? Snapshot { get; private set; }
 
-    /// <summary>Non-null while the folder detail panel replaces the grid (spec 5.2).</summary>
-    [ObservableProperty]
-    public partial FolderDetailViewModel? Detail { get; set; }
+    public HomeViewModel Home { get; }
+
+    public BackgroundsViewModel Backgrounds { get; }
+
+    public PlatformsViewModel Platforms { get; }
+
+    public PacksViewModel Packs { get; }
+
+    public PackDetailViewModel PackDetail { get; }
+
+    public SettingsPageViewModel SettingsPage { get; }
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(ApplyAllCommand), nameof(OpenPackFolderCommand), nameof(DeletePackCommand))]
-    public partial PackItemViewModel? SelectedPack { get; set; }
+    public partial PageViewModel? CurrentPage { get; set; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsNotBusy))]
@@ -49,26 +64,44 @@ public partial class MainViewModel : ObservableObject
         nameof(RefreshCommand),
         nameof(ResetAllCommand),
         nameof(LaunchGameCommand),
-        nameof(ApplyAllCommand),
-        nameof(OpenPackFolderCommand),
-        nameof(ImportCommand),
-        nameof(SaveCurrentCommand),
-        nameof(NewBackgroundCommand),
-        nameof(OpenSettingsCommand),
-        nameof(DeletePackCommand))]
+        nameof(ImportCommand))]
     public partial bool IsBusy { get; set; }
 
     [ObservableProperty]
     public partial string ProgressText { get; set; }
 
+    /// <summary>What the last write did, shown in the page header beside Undo. Empty when there is nothing to show.</summary>
     [ObservableProperty]
-    public partial string StatusText { get; set; }
+    public partial string DoneText { get; set; }
+
+    [ObservableProperty]
+    public partial bool CanUndo { get; set; }
 
     public bool IsNotBusy => !IsBusy;
 
     private bool CanAct() => !IsBusy;
 
-    private bool HasSelectedPack() => !IsBusy && SelectedPack is not null;
+    [RelayCommand]
+    private void NavigateHome() => CurrentPage = Home;
+
+    [RelayCommand]
+    private void NavigateBackgrounds() => CurrentPage = Backgrounds;
+
+    [RelayCommand]
+    private void NavigatePlatforms() => CurrentPage = Platforms;
+
+    [RelayCommand]
+    private void NavigatePacks() => CurrentPage = Packs;
+
+    [RelayCommand]
+    private void NavigateSettings() => CurrentPage = SettingsPage;
+
+    /// <summary>Opens the pack detail page on one pack (spec 7.5).</summary>
+    public void NavigateToPack(Pack pack)
+    {
+        PackDetail.Pack = pack;
+        CurrentPage = PackDetail;
+    }
 
     [RelayCommand(CanExecute = nameof(CanAct))]
     private Task RefreshAsync() => RescanAsync();
@@ -80,23 +113,6 @@ public partial class MainViewModel : ObservableObject
     private void LaunchGame() => GameProcess.Launch();
 
     [RelayCommand(CanExecute = nameof(CanAct))]
-    private async Task OpenSettingsAsync()
-    {
-        var window = new SettingsWindow
-        {
-            DataContext = new SettingsViewModel(_services, _dialogs, null),
-            Owner = Application.Current.MainWindow,
-        };
-        if (window.ShowDialog() != true)
-        {
-            return;
-        }
-
-        StatusText = _services.GamePath;
-        await RescanAsync();
-    }
-
-    [RelayCommand(CanExecute = nameof(CanAct))]
     private async Task ResetAllAsync()
     {
         if (Snapshot is null)
@@ -105,7 +121,7 @@ public partial class MainViewModel : ObservableObject
         }
 
         var count = Snapshot.Tree.Folders.Count;
-        if (!_dialogs.Confirm("Reset all", $"Delete the map art in all {count} folders? Brawlhalla regenerates the defaults on its next launch."))
+        if (!Dialogs.Confirm("Reset all", $"Delete the map art in all {count} folders? Brawlhalla regenerates the defaults on its next launch."))
         {
             return;
         }
@@ -118,114 +134,13 @@ public partial class MainViewModel : ObservableObject
         ResetResult? result = null;
         await RunBusyAsync(
             "Resetting",
-            (progress, ct) => Task.Run(() => { result = GameResetter.ResetAll(_services.GamePath, progress, ct); }, ct));
+            (progress, ct) => Task.Run(() => { result = GameResetter.ResetAll(Services.GamePath, progress, ct); }, ct));
         if (result is not null)
         {
-            _dialogs.ShowFailures("Some files could not be deleted", result.Failures);
+            Dialogs.ShowFailures("Some files could not be deleted", result.Failures);
         }
 
         await RescanAsync();
-    }
-
-    [RelayCommand(CanExecute = nameof(HasSelectedPack))]
-    private async Task ApplyAllAsync()
-    {
-        var pack = SelectedPack?.Pack;
-        if (pack is null || !ConfirmIfGameRunning())
-        {
-            return;
-        }
-
-        ApplyResult? result = null;
-        await RunBusyAsync(
-            $"Applying {pack.Name}",
-            (progress, ct) => Task.Run(() => { result = PackApplier.ApplyPack(pack, _services.GamePath, progress, ct); }, ct));
-        if (result is not null)
-        {
-            _dialogs.ShowFailures("Some files could not be copied", result.Failures);
-        }
-
-        await RescanAsync();
-    }
-
-    [RelayCommand(CanExecute = nameof(HasSelectedPack))]
-    private void OpenPackFolder()
-    {
-        var pack = SelectedPack?.Pack;
-        if (pack is null)
-        {
-            return;
-        }
-
-        Process.Start(new ProcessStartInfo("explorer.exe", $"\"{pack.FullPath}\"") { UseShellExecute = true })?.Dispose();
-    }
-
-    [RelayCommand(CanExecute = nameof(HasSelectedPack))]
-    private async Task DeletePackAsync()
-    {
-        var pack = SelectedPack?.Pack;
-        if (pack is null)
-        {
-            return;
-        }
-
-        if (!_dialogs.Confirm("Delete pack", $"Delete pack '{pack.Name}' and all {pack.FileCount} files in it? This cannot be undone."))
-        {
-            return;
-        }
-
-        // Inside RunBusyAsync so the pack stays selected but Apply All, Open Folder, Import and
-        // Save Current cannot run against a folder that is being deleted underneath them.
-        var libraryPath = _services.LibraryPath;
-        string? error = null;
-        await RunBusyAsync(
-            $"Deleting pack {pack.Name}",
-            (_, _) => Task.Run(() => { error = PackDeleter.Delete(libraryPath, pack.Name); }));
-        if (error is not null)
-        {
-            _dialogs.Error("Could not delete pack", error);
-        }
-
-        await RescanAsync();
-    }
-
-    /// <summary>Spec 3 first run: offer one snapshot of the current game folder, then never ask again.</summary>
-    private async Task OfferFirstRunBackupAsync()
-    {
-        if (_firstRunOffered || _services.Settings.FirstRunDone || Snapshot is null)
-        {
-            return;
-        }
-
-        _firstRunOffered = true;
-        var name = $"backup-{DateTime.Now:yyyy-MM-dd}";
-        var yes = _dialogs.Confirm(
-            "Back up current map art?",
-            $"This is the first run. Save the current contents of the game folder as pack '{name}' so it can be restored later?");
-        try
-        {
-            _services.UpdateSettings(_services.Settings with { FirstRunDone = true });
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            // The choice still applies to this run; only remembering it failed.
-            _dialogs.Error("Settings not saved", ex.Message);
-        }
-
-        if (!yes)
-        {
-            return;
-        }
-
-        var tree = Snapshot.Tree;
-        var plan = await Task.Run(() => ImportRouter.Plan(tree.RootPath, tree));
-        if (plan.IncludedCount == 0)
-        {
-            _dialogs.Info("Nothing to save", "The game folder has no image files to save as a pack.");
-            return;
-        }
-
-        await RunImportAsync(plan, name);
     }
 
     [RelayCommand(CanExecute = nameof(CanAct))]
@@ -236,7 +151,7 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
-        var vm = new ImportViewModel(Snapshot.Tree, _dialogs);
+        var vm = new ImportViewModel(Snapshot.Tree, Dialogs);
         var window = new ImportWindow { DataContext = vm, Owner = Application.Current.MainWindow };
         if (window.ShowDialog() != true || vm.Plan is null)
         {
@@ -246,40 +161,29 @@ public partial class MainViewModel : ObservableObject
         await RunImportAsync(vm.Plan, vm.PackName.Trim());
     }
 
-    [RelayCommand(CanExecute = nameof(CanAct))]
-    private async Task SaveCurrentAsync()
+    /// <summary>Spec 6.4: puts back the files the last game write was about to overwrite or delete.</summary>
+    [RelayCommand]
+    private async Task UndoAsync()
     {
-        if (Snapshot is null)
+        if (Services.Undo.Latest is not { } session)
         {
             return;
         }
 
-        var name = _dialogs.PromptText("Save current map art as a pack", "Pack name:", $"backup-{DateTime.Now:yyyy-MM-dd}");
-        if (name is null)
+        var gamePath = Services.GamePath;
+        ApplyResult? result = null;
+        await RunBusyAsync(
+            "Undoing",
+            (_, _) => Task.Run(() => { result = Services.Undo.Restore(session, gamePath); }));
+        if (result is not null)
         {
-            return;
+            Dialogs.ShowFailures("Some files could not be restored", result.Failures);
         }
 
-        name = name.Trim();
-        if (!PackNameValidator.IsValid(name, out var error))
-        {
-            _dialogs.Error("Invalid pack name", error);
-            return;
-        }
-
-        var tree = Snapshot.Tree;
-        var plan = await Task.Run(() => ImportRouter.Plan(tree.RootPath, tree));
-        if (plan.IncludedCount == 0)
-        {
-            _dialogs.Info("Nothing to save", "The game folder has no image files to save as a pack.");
-            return;
-        }
-
-        await RunImportAsync(plan, name);
+        DoneText = "";
+        CanUndo = Services.Undo.Latest is not null;
+        await RescanAsync();
     }
-
-    [RelayCommand(CanExecute = nameof(CanAct))]
-    private Task NewBackgroundAsync() => OpenBackgroundEditorAsync(null);
 
     public async Task OpenBackgroundEditorAsync(string? initialSlot)
     {
@@ -290,7 +194,7 @@ public partial class MainViewModel : ObservableObject
 
         var slots = Snapshot.Tree.FindFolder("Backgrounds")?.Files.Select(f => f.Name).ToList() ?? new List<string>();
         var packNames = Snapshot.Packs.Select(p => p.Name).ToList();
-        var vm = new BackgroundEditorViewModel(_services, _dialogs, slots, packNames, initialSlot);
+        var vm = new BackgroundEditorViewModel(Services, Dialogs, slots, packNames, initialSlot);
         var window = new BackgroundEditorWindow { DataContext = vm, Owner = Application.Current.MainWindow };
         if (window.ShowDialog() == true)
         {
@@ -298,12 +202,12 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
-    /// <summary>Spec 6: merge prompt when the pack exists, then Execute as a long operation, rescan, and select the pack.</summary>
+    /// <summary>Spec 6: merge prompt when the pack exists, then Execute as a long operation, then rescan.</summary>
     protected async Task RunImportAsync(ImportPlan plan, string packName)
     {
-        var packDir = Path.Combine(PackScanner.PacksRoot(_services.LibraryPath), packName);
+        var packDir = Path.Combine(PackScanner.PacksRoot(Services.LibraryPath), packName);
         if (Directory.Exists(packDir)
-            && !_dialogs.Confirm(
+            && !Dialogs.Confirm(
                 "Pack already exists",
                 $"A pack named '{packName}' already exists. Merge into it? Files with the same name are overwritten; other files stay."))
         {
@@ -313,144 +217,48 @@ public partial class MainViewModel : ObservableObject
         ApplyResult? result = null;
         await RunBusyAsync(
             $"Importing into {packName}",
-            (progress, ct) => Task.Run(() => { result = ImportRouter.Execute(plan, packName, _services.LibraryPath, progress, ct); }, ct));
+            (progress, ct) => Task.Run(() => { result = ImportRouter.Execute(plan, packName, Services.LibraryPath, progress, ct); }, ct));
         if (result is not null)
         {
-            _dialogs.ShowFailures("Some files could not be imported", result.Failures);
-        }
-
-        await RescanAsync();
-        SelectedPack = Packs.FirstOrDefault(p => p.Name.Equals(packName, StringComparison.OrdinalIgnoreCase));
-    }
-
-    public async Task ApplyFolderFromPackAsync(string folderName, string packName)
-    {
-        var pack = FindPack(packName);
-        if (pack is null || !ConfirmIfGameRunning())
-        {
-            return;
-        }
-
-        ApplyResult? result = null;
-        await RunBusyAsync(
-            $"Applying {folderName} from {packName}",
-            (progress, ct) => Task.Run(() => { result = PackApplier.ApplyFolder(pack, folderName, _services.GamePath, progress, ct); }, ct));
-        if (result is not null)
-        {
-            _dialogs.ShowFailures("Some files could not be copied", result.Failures);
+            Dialogs.ShowFailures("Some files could not be imported", result.Failures);
         }
 
         await RescanAsync();
     }
 
-    public async Task ResetFolderAsync(string folderName)
-    {
-        if (!_dialogs.Confirm("Reset folder", $"Delete the map art in {folderName}? Brawlhalla regenerates the defaults on its next launch."))
-        {
-            return;
-        }
-
-        if (!ConfirmIfGameRunning())
-        {
-            return;
-        }
-
-        ResetResult? result = null;
-        await RunBusyAsync(
-            $"Resetting {folderName}",
-            (_, _) => Task.Run(() => { result = GameResetter.ResetFolder(_services.GamePath, folderName); }));
-        if (result is not null)
-        {
-            _dialogs.ShowFailures("Some files could not be deleted", result.Failures);
-        }
-
-        await RescanAsync();
-    }
-
-    public void OpenDetail(string folderName)
-    {
-        if (Snapshot is null)
-        {
-            return;
-        }
-
-        Detail = new FolderDetailViewModel(this, Snapshot, folderName, _services.Thumbnails);
-    }
-
-    public void CloseDetail() => Detail = null;
-
-    public async Task ApplyFileFromPackAsync(string folderName, string fileName, string packName)
-    {
-        var pack = FindPack(packName);
-        if (pack is null || !ConfirmIfGameRunning())
-        {
-            return;
-        }
-
-        ApplyResult? result = null;
-        await RunBusyAsync(
-            $"Applying {folderName}\\{fileName} from {packName}",
-            (_, _) => Task.Run(() => { result = PackApplier.ApplyFile(pack, folderName, fileName, _services.GamePath); }));
-        if (result is not null)
-        {
-            _dialogs.ShowFailures("The file could not be copied", result.Failures);
-        }
-
-        await RescanAsync();
-    }
-
-    public async Task ResetFileAsync(string folderName, string fileName)
-    {
-        if (!_dialogs.Confirm("Reset file", $"Delete {folderName}\\{fileName}? Brawlhalla regenerates the default on its next launch."))
-        {
-            return;
-        }
-
-        if (!ConfirmIfGameRunning())
-        {
-            return;
-        }
-
-        ResetResult? result = null;
-        await RunBusyAsync(
-            $"Resetting {folderName}\\{fileName}",
-            (_, _) => Task.Run(() => { result = GameResetter.ResetFile(_services.GamePath, folderName, fileName); }));
-        if (result is not null)
-        {
-            _dialogs.ShowFailures("The file could not be deleted", result.Failures);
-        }
-
-        await RescanAsync();
-    }
-
+    /// <summary>Scans, then refreshes every page, not just the current one, so switching pages never shows stale data.</summary>
     public async Task RescanAsync()
     {
         ScanSnapshot? snapshot = null;
         var ok = await RunBusyAsync(
             "Scanning",
-            (progress, ct) => Task.Run(() => { snapshot = _services.Scan(progress, ct); }, ct));
+            (progress, ct) => Task.Run(() => { snapshot = Services.Scan(progress, ct); }, ct));
         if (!ok || snapshot is null)
         {
             return;
         }
 
         Snapshot = snapshot;
-        Populate(snapshot);
-        await OfferFirstRunBackupAsync();
+        foreach (var page in _pages)
+        {
+            page.Refresh(snapshot);
+        }
+
+        CanUndo = Services.Undo.Latest is not null;
     }
 
     /// <summary>Spec 6: warn when Brawlhalla is running. True means go ahead.</summary>
-    protected bool ConfirmIfGameRunning() =>
+    public bool ConfirmIfGameRunning() =>
         !GameProcess.IsRunning()
-        || _dialogs.Confirm(
+        || Dialogs.Confirm(
             "Brawlhalla is running",
             "Brawlhalla is running. Changes will not show until it restarts, and some files may be locked. Continue?");
 
-    protected Pack? FindPack(string name) =>
+    public Pack? FindPack(string name) =>
         Snapshot?.Packs.FirstOrDefault(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>Runs one long operation with the busy flag, progress text, and Cancel. False when cancelled or failed.</summary>
-    protected async Task<bool> RunBusyAsync(string label, Func<IProgress<string>, CancellationToken, Task> work)
+    public async Task<bool> RunBusyAsync(string label, Func<IProgress<string>, CancellationToken, Task> work)
     {
         if (IsBusy)
         {
@@ -472,7 +280,7 @@ public partial class MainViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            _dialogs.Error("Something went wrong", ex.Message);
+            Dialogs.Error("Something went wrong", ex.Message);
             return false;
         }
         finally
@@ -484,31 +292,40 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
-    private void Populate(ScanSnapshot snapshot)
+    /// <summary>One write into the game folder: the while-the-game-runs policy around it, an undo snapshot of the
+    /// paths it is about to touch, the busy boundary, a done line, and a rescan.</summary>
+    public async Task RunGameWriteAsync(
+        string label,
+        IReadOnlyList<string> undoPaths,
+        Func<IProgress<string>, CancellationToken, Task> work,
+        string doneText)
     {
-        var selectedName = SelectedPack?.Name;
-        Packs.Clear();
-        foreach (var pack in snapshot.Packs)
-        {
-            Packs.Add(new PackItemViewModel(pack));
-        }
+        var gamePath = Services.GamePath;
+        await _launcher.RunWriteAsync(
+            label,
+            async () =>
+            {
+                // Inside the launcher's callback, so with whileRunning=restart the game is already closed and its
+                // files are the ones being snapshotted. The capture is the first step of the busy operation, not a
+                // step before it: it is file copying, so it belongs off the UI thread, behind a progress line, and
+                // inside the boundary that turns an IO failure into the same dialog any other write failure gets.
+                var ok = await RunBusyAsync(
+                    label,
+                    async (progress, ct) =>
+                    {
+                        progress.Report("Saving undo");
+                        await Task.Run(() => Services.Undo.Begin().Capture(gamePath, undoPaths), ct);
+                        await work(progress, ct);
+                    });
 
-        SelectedPack = Packs.FirstOrDefault(p => p.Name == selectedName);
+                // Begin has already replaced the previous snapshot, so a write that was cancelled or failed has to
+                // clear the done line too; leaving it would describe something Undo no longer restores.
+                DoneText = ok ? doneText : "";
+            });
 
-        Folders.Clear();
-        var tile = Application.Current.TryFindResource("BackgroundsTile") as ImageSource;
-        foreach (var folder in snapshot.Tree.Folders)
-        {
-            var card = new FolderCardViewModel(this, folder, snapshot.Status.ForFolder(folder.Name), snapshot.Packs);
-            Folders.Add(card);
-            _ = card.LoadThumbnailAsync(_services.Thumbnails, tile);
-        }
-
-        StatusText = $"{_services.GamePath}   |   {snapshot.Tree.Folders.Count} folders, {snapshot.Packs.Count} packs";
-
-        if (Detail is { } open)
-        {
-            Detail = new FolderDetailViewModel(this, snapshot, open.FolderName, _services.Thumbnails);
-        }
+        // A restore that fully succeeds discards its snapshot, so what can be undone is always read back from the
+        // store rather than remembered.
+        CanUndo = Services.Undo.Latest is not null;
+        await RescanAsync();
     }
 }
