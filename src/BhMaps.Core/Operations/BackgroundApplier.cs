@@ -1,4 +1,3 @@
-using System.Windows;
 using BhMaps.Core.Imaging;
 using BhMaps.Core.Model;
 
