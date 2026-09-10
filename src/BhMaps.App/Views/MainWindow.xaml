@@ -97,6 +97,11 @@
     </Style>
   </Window.Resources>
 
+  <!-- Nothing on a page triggers a rescan, so the keyboard does. -->
+  <Window.InputBindings>
+    <KeyBinding Key="F5" Command="{Binding RefreshCommand}" />
+  </Window.InputBindings>
+
   <Grid>
     <Grid.ColumnDefinitions>
       <!-- Auto, not a fixed width: ColumnDefinition.Width is a GridLength and SidebarWidth is a Double, so the
