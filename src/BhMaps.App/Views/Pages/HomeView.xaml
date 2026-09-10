@@ -3,6 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:controls="clr-namespace:BhMaps.App.Views.Controls"
              xmlns:converters="clr-namespace:BhMaps.App.Converters"
+             xmlns:imaging="clr-namespace:BhMaps.Core.Imaging;assembly=BhMaps.Core"
              xmlns:pages="clr-namespace:BhMaps.App.ViewModels.Pages"
              xmlns:primitives="clr-namespace:System.Windows.Controls.Primitives;assembly=PresentationFramework">
   <UserControl.Resources>
@@ -225,15 +226,13 @@
       <Setter Property="AutomationProperties.Name" Value="{Binding PackName}" />
     </Style>
 
-    <Style x:Key="FileContainer" TargetType="ContentPresenter">
-      <Setter Property="AutomationProperties.Name" Value="{Binding RelativePath}" />
-    </Style>
-
-    <!-- One background the map can be given. The whole tile is the button: one map's slots need no confirm. -->
+    <!-- One background the map can be given. The whole tile is the button: one map's slots need no confirm.
+         CanWrite, not IsNotBusy: it writes into the game folder, so it is also off while that folder is
+         missing (spec 7.8). -->
     <DataTemplate x:Key="BackgroundChoice">
       <Button AutomationProperties.Name="{Binding Label}"
               Command="{Binding ApplyCommand}"
-              IsEnabled="{Binding DataContext.IsNotBusy, RelativeSource={RelativeSource AncestorType=Window}}"
+              IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}"
               Style="{StaticResource PanelTileButton}"
               ToolTip="{Binding Label}">
         <StackPanel Width="96">
@@ -312,13 +311,14 @@
                     StrokeThickness="1.6" />
             </Border>
 
+            <!-- CanWrite, not IsNotBusy: applying a set writes into the game folder (spec 7.8). -->
             <Button x:Name="Use"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
                     AutomationProperties.Name="Use"
                     Command="{Binding UseCommand}"
                     Content="Use"
-                    IsEnabled="{Binding DataContext.IsNotBusy, RelativeSource={RelativeSource AncestorType=Window}}"
+                    IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}"
                     Style="{StaticResource UseButton}" />
           </Grid>
 
@@ -387,14 +387,20 @@
       <controls:PageHeader.Actions>
         <StackPanel Orientation="Horizontal">
           <!-- Spec 7.1: one search string for the sidebar list and the current page, so this box is the shell's,
-               reached the same way the header's busy line reaches it (decision D11). -->
-          <Grid Width="200">
-            <TextBox AutomationProperties.Name="Search maps"
+               reached the same way the header's busy line reaches it (decision D11). Centred at the action height,
+               or the StackPanel stretches box and button to the taller of the two and the box reads as two lines. -->
+          <Grid Width="200" Height="{StaticResource ActionHeight}" VerticalAlignment="Center">
+            <!-- Its own padding, not the style's: a TextBox reserves the whole of Geist's line box, which at this
+                 size is taller than an action, and the style's 6 top and bottom would clip the text out of a box
+                 this high. 3 and 0 leave the line box room and put the glyphs on the button's own rows. -->
+            <TextBox Padding="10,3,10,0"
+                     AutomationProperties.Name="Search maps"
                      Style="{StaticResource FieldTextBox}"
                      Text="{Binding DataContext.SearchText, RelativeSource={RelativeSource AncestorType=Window}, UpdateSourceTrigger=PropertyChanged}" />
 
-            <!-- Hit test off, so the placeholder never swallows the click that focuses the box. -->
-            <TextBlock Margin="11,7" IsHitTestVisible="False" Text="Search maps">
+            <!-- Hit test off, so the placeholder never swallows the click that focuses the box. Centred, so it sits
+                 on the same rows the box draws its own text on and nothing shifts when typing starts. -->
+            <TextBlock Margin="11,0" VerticalAlignment="Center" IsHitTestVisible="False" Text="Search maps">
               <TextBlock.Style>
                 <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
                   <Setter Property="Foreground" Value="{StaticResource Text3Brush}" />
@@ -450,7 +456,9 @@
 
       <Grid>
         <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
-          <ItemsControl ItemsSource="{Binding Cards}">
+          <!-- Top aligned, or a UniformGrid handed the whole viewport stretches its rows and a short list comes
+               out with enormous cards (the Backgrounds grid's lesson from Task 26). -->
+          <ItemsControl VerticalAlignment="Top" ItemsSource="{Binding Cards}">
             <ItemsControl.ItemContainerStyle>
               <!-- Without it the container a card sits in announces the view model's type name. -->
               <Style TargetType="ContentPresenter">
@@ -469,10 +477,15 @@
                         CommandParameter="{Binding FolderName}"
                         Style="{StaticResource MapCard}">
                   <StackPanel>
-                    <!-- The Viewbox holds the 640x360 source's shape at any column width, so a card that has not
-                         drawn its preview yet is the same size as one that has and nothing jumps. -->
+                    <!-- The Viewbox holds the card source's shape at any column width, so a card that has not
+                         drawn its preview yet is the same size as one that has and nothing jumps. The size comes
+                         from the compositor that renders it, so the two cannot drift apart. Through a OneTime
+                         Binding rather than a bare x:Static: the constants are pixel counts and so int, and
+                         setting a Double property from an int markup extension throws at load. -->
                     <Viewbox Stretch="Uniform">
-                      <Grid Width="640" Height="360" Background="{StaticResource TileBrush}">
+                      <Grid Width="{Binding Source={x:Static imaging:MapCompositor.CardWidth}, Mode=OneTime}"
+                            Height="{Binding Source={x:Static imaging:MapCompositor.CardHeight}, Mode=OneTime}"
+                            Background="{StaticResource TileBrush}">
                         <Image RenderOptions.BitmapScalingMode="HighQuality"
                                Source="{Binding Preview}"
                                Stretch="UniformToFill" />
@@ -695,9 +708,10 @@
             </TextBlock>
 
             <StackPanel Orientation="Horizontal">
+              <!-- CanWrite, not IsNotBusy: a reset writes into the game folder (spec 7.8). -->
               <Button Command="{Binding ResetCommand}"
                       Content="Reset to default (this map)"
-                      IsEnabled="{Binding DataContext.IsNotBusy, RelativeSource={RelativeSource AncestorType=Window}}"
+                      IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}"
                       Style="{StaticResource OutlineButton}" />
 
               <Button Margin="8,0,0,0"

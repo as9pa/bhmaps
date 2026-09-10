@@ -70,10 +70,12 @@ public sealed class AppServices : IDisposable
     /// on the saved path is trimmed first, so "...\mapArt\" resolves to the same root as "...\mapArt".</summary>
     public string GameRoot => Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(GamePath)) ?? GamePath;
 
+    /// <summary>Disk first, memory second: a write that throws leaves this run using the settings the file still
+    /// holds, so what the app is looking at and what it would load next start are never out of step.</summary>
     public void UpdateSettings(AppSettings settings)
     {
-        Settings = settings;
         SettingsStore.Save(SettingsPath, settings);
+        Settings = settings;
     }
 
     /// <summary>Scans game and packs, hashes through the cache, saves the cache. Call from a thread pool thread.</summary>

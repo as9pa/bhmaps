@@ -1,6 +1,4 @@
 using System.Collections.ObjectModel;
-using System.ComponentModel;
-using System.Diagnostics;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using BhMaps.App.Services;
@@ -96,7 +94,8 @@ public partial class MapPanelViewModel : ObservableObject
         }
 
         // Built with no thumbnail and no transparency verdict: both are file work, and both arrive from LoadAsync.
-        foreach (var relativePath in map.PlatformFiles)
+        // Sorted the way the Platforms page sorts the same list, so one map reads the same on both pages.
+        foreach (var relativePath in map.PlatformFiles.OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
         {
             _platformFiles.Add(new PlatformFileViewModel(
                 relativePath, SourceOf(relativePath, status), ChangesNothing: false, Thumbnail: null));
@@ -186,22 +185,9 @@ public partial class MapPanelViewModel : ObservableObject
     private void OpenFolder()
     {
         var path = Path.Combine(_shell.Services.GamePath, _map.FolderName);
-
-        // Explorer opens the user's Documents folder when handed a path that is not there, which looks like the
-        // button doing nothing, so a missing folder is caught first.
-        if (!Directory.Exists(path))
+        if (ExplorerLauncher.Open(path) is { } error)
         {
-            _shell.Dialogs.Error("Could not open the folder", $"Folder does not exist: {path}");
-            return;
-        }
-
-        try
-        {
-            Process.Start(new ProcessStartInfo("explorer.exe", $"\"{path}\"") { UseShellExecute = true })?.Dispose();
-        }
-        catch (Exception ex) when (ex is Win32Exception or InvalidOperationException)
-        {
-            _shell.Dialogs.Error("Could not open the folder", ex.Message);
+            _shell.Dialogs.Error("Could not open the folder", error);
         }
     }
 

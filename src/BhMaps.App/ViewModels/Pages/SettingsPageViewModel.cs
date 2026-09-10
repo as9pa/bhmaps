@@ -1,5 +1,3 @@
-using System.ComponentModel;
-using System.Diagnostics;
 using System.Reflection;
 using BhMaps.App.Services;
 using BhMaps.Core.Settings;
@@ -132,11 +130,12 @@ public partial class SettingsPageViewModel : PageViewModel
         await Shell.RescanAsync();
     }
 
+    // This page has a line under each path to put the reason in, so it shows it there rather than in a dialog.
     [RelayCommand]
-    private void OpenGame() => GameError = OpenFolder(Services.GamePath) ?? "";
+    private void OpenGame() => GameError = ExplorerLauncher.Open(Services.GamePath) ?? "";
 
     [RelayCommand]
-    private void OpenLibrary() => LibraryError = OpenFolder(Services.LibraryPath) ?? "";
+    private void OpenLibrary() => LibraryError = ExplorerLauncher.Open(Services.LibraryPath) ?? "";
 
     /// <summary>Spec 3.5: force a re-read of the game's four files, then rescan so the catalog, the sidebar and
     /// every page pick up the new names.</summary>
@@ -181,26 +180,6 @@ public partial class SettingsPageViewModel : PageViewModel
         {
             Shell.Dialogs.Error("Settings not saved", ex.Message);
             return false;
-        }
-    }
-
-    /// <summary>Explorer opens the user's Documents folder when handed a path that is not there, which looks like
-    /// the button doing nothing, so a missing folder is caught first. Returns the row's error, or null on success.</summary>
-    private static string? OpenFolder(string path)
-    {
-        if (!Directory.Exists(path))
-        {
-            return $"Folder does not exist: {path}";
-        }
-
-        try
-        {
-            Process.Start(new ProcessStartInfo("explorer.exe", $"\"{path}\"") { UseShellExecute = true })?.Dispose();
-            return null;
-        }
-        catch (Exception ex) when (ex is Win32Exception or InvalidOperationException)
-        {
-            return ex.Message;
         }
     }
 

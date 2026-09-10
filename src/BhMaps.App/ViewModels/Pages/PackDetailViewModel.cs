@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using System.Diagnostics;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using BhMaps.App.Services;
@@ -40,6 +39,9 @@ public partial class PackDetailViewModel : PageViewModel
 
     /// <summary>The folder a pack keeps its background images in. Every other folder is a map.</summary>
     private const string BackgroundsFolder = "Backgrounds";
+
+    /// <summary>What a background is: the game ships every one of its background slots as a JPEG.</summary>
+    private const string BackgroundExtension = ".jpg";
 
     private ScanSnapshot? _snapshot;
 
@@ -154,12 +156,17 @@ public partial class PackDetailViewModel : PageViewModel
 
         var root = pack.FullPath;
         var failures = new List<FileFailure>();
-        await Shell.RunBusyAsync(
+        var ok = await Shell.RunBusyAsync(
             "Removing transparent files",
             (progress, ct) => Task.Run(() => Delete(root, files, failures, progress, ct), ct));
         if (failures.Count > 0)
         {
             Shell.Dialogs.ShowFailures("Some files could not be removed", failures);
+        }
+
+        if (ok)
+        {
+            Shell.SetLibraryDone($"Removed {PackRowViewModel.Plural(files.Count - failures.Count, "file")}");
         }
 
         await Shell.RescanAsync();
@@ -231,9 +238,14 @@ public partial class PackDetailViewModel : PageViewModel
             Platforms.Add(new PackMapTileViewModel(map, PlatformWidth, PlatformHeight, dropBackground: true));
         }
 
+        // .jpg only: the game's backgrounds are all JPEGs, so a PNG that found its way into the folder fills no
+        // slot and belongs in the transparent-files line below rather than in this grid.
         foreach (var file in pack.FindFolder(BackgroundsFolder)?.Files ?? Array.Empty<GameFile>())
         {
-            Backgrounds.Add(new PackBackgroundTileViewModel(file));
+            if (Path.GetExtension(file.Name).Equals(BackgroundExtension, StringComparison.OrdinalIgnoreCase))
+            {
+                Backgrounds.Add(new PackBackgroundTileViewModel(file));
+            }
         }
 
         Load([.. PutTogether], [.. Backgrounds], [.. Platforms], pack, _cts.Token);
@@ -287,7 +299,7 @@ public partial class PackDetailViewModel : PageViewModel
     {
         try
         {
-            var files = await Task.Run(() => PlatformSetApplier.TransparentFiles(pack), ct);
+            var files = await Task.Run(() => PlatformSetApplier.TransparentFiles(pack, ct), ct);
             ct.ThrowIfCancellationRequested();
             _transparentFiles = files;
             TransparentText = TransparentLine(files.Count);
@@ -369,17 +381,12 @@ public partial class PackDetailViewModel : PageViewModel
         }
     }
 
-    /// <summary>The v1 idiom for showing a folder, as the Packs page uses it. A missing one is reported rather
-    /// than handed to explorer, which would quietly open somewhere else instead.</summary>
     private void OpenInExplorer(string path)
     {
-        if (!Directory.Exists(path))
+        if (ExplorerLauncher.Open(path) is { } error)
         {
-            Shell.Dialogs.Error("Folder not found", path);
-            return;
+            Shell.Dialogs.Error("Could not open the folder", error);
         }
-
-        Process.Start(new ProcessStartInfo("explorer.exe", $"\"{path}\"") { UseShellExecute = true })?.Dispose();
     }
 }
 

@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using System.Diagnostics;
 using BhMaps.App.Services;
 using BhMaps.Core.Model;
 using BhMaps.Core.Operations;
@@ -101,12 +100,16 @@ public partial class PacksViewModel : PageViewModel
 
         var libraryPath = Shell.Services.LibraryPath;
         string? error = null;
-        await Shell.RunBusyAsync(
+        var ok = await Shell.RunBusyAsync(
             $"Removing {pack.Name}",
             (_, _) => Task.Run(() => { error = PackDeleter.Delete(libraryPath, pack.Name); }));
         if (error is not null)
         {
             Shell.Dialogs.Error("Could not remove pack", error);
+        }
+        else if (ok)
+        {
+            Shell.SetLibraryDone($"Removed {pack.Name}");
         }
 
         await Shell.RescanAsync();
@@ -129,12 +132,17 @@ public partial class PacksViewModel : PageViewModel
         }
 
         ApplyResult? result = null;
-        await Shell.RunBusyAsync(
+        var ok = await Shell.RunBusyAsync(
             $"Exporting {pack.Name}",
             (progress, ct) => Task.Run(() => { result = PackExporter.Export(pack, destination, progress, ct); }, ct));
         if (result is not null)
         {
             Shell.Dialogs.ShowFailures("Some files could not be exported", result.Failures);
+        }
+
+        if (ok)
+        {
+            Shell.SetLibraryDone($"Exported {pack.Name}");
         }
     }
 
@@ -152,16 +160,11 @@ public partial class PacksViewModel : PageViewModel
     [RelayCommand]
     private void OpenLibrary() => OpenInExplorer(Shell.Services.LibraryPath);
 
-    /// <summary>The v1 idiom for showing a folder. A missing one is reported rather than handed to explorer, which
-    /// would quietly open somewhere else instead.</summary>
     private void OpenInExplorer(string path)
     {
-        if (!Directory.Exists(path))
+        if (ExplorerLauncher.Open(path) is { } error)
         {
-            Shell.Dialogs.Error("Folder not found", path);
-            return;
+            Shell.Dialogs.Error("Could not open the folder", error);
         }
-
-        Process.Start(new ProcessStartInfo("explorer.exe", $"\"{path}\"") { UseShellExecute = true })?.Dispose();
     }
 }

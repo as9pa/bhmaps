@@ -136,6 +136,12 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     public partial string DoneText { get; set; }
 
+    /// <summary>Whether the line in <see cref="DoneText" /> describes a game write, which is the only kind of write
+    /// there is a snapshot to put back. False for a library-only line, and the header hides Undo beside it rather
+    /// than offering to undo something else.</summary>
+    [ObservableProperty]
+    public partial bool DoneUndoable { get; set; }
+
     [ObservableProperty]
     public partial bool CanUndo { get; set; }
 
@@ -387,9 +393,9 @@ public partial class MainViewModel : ObservableObject
 
         if (ok)
         {
-            DoneText = result?.Copied == 1
+            SetLibraryDone(result?.Copied == 1
                 ? $"Imported 1 picture into {packName}"
-                : $"Imported {result?.Copied ?? 0} pictures into {packName}";
+                : $"Imported {result?.Copied ?? 0} pictures into {packName}");
         }
 
         await RescanAsync();
@@ -478,12 +484,17 @@ public partial class MainViewModel : ObservableObject
         }
 
         ApplyResult? result = null;
-        await RunBusyAsync(
+        var ok = await RunBusyAsync(
             $"Importing into {packName}",
             (progress, ct) => Task.Run(() => { result = ImportRouter.Execute(plan, packName, Services.LibraryPath, progress, ct); }, ct));
         if (result is not null)
         {
             Dialogs.ShowFailures("Some files could not be imported", result.Failures);
+        }
+
+        if (ok)
+        {
+            SetLibraryDone($"Imported {packName}");
         }
 
         await RescanAsync();
@@ -562,12 +573,17 @@ public partial class MainViewModel : ObservableObject
 
         var gamePath = Services.GamePath;
         ApplyResult? result = null;
-        await RunBusyAsync(
+        var ok = await RunBusyAsync(
             "Capturing defaults",
             (progress, ct) => Task.Run(() => { result = DefaultPack.Capture(gamePath, library, progress, ct); }, ct));
         if (result is not null)
         {
             Dialogs.ShowFailures("Some files could not be captured", result.Failures);
+        }
+
+        if (ok)
+        {
+            SetLibraryDone("Captured defaults");
         }
 
         await RescanAsync();
@@ -634,6 +650,14 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
+    /// <summary>The header line a library-only operation leaves: the same line a game write leaves, without the
+    /// Undo button, because nothing in the game folder moved and the snapshot Undo holds is an older write's.</summary>
+    public void SetLibraryDone(string doneText)
+    {
+        DoneText = doneText;
+        DoneUndoable = false;
+    }
+
     /// <summary>One write into the game folder: the while-the-game-runs policy around it, an undo snapshot of the
     /// paths it is about to touch, the busy boundary, a done line, and a rescan.</summary>
     public async Task RunGameWriteAsync(
@@ -670,6 +694,7 @@ public partial class MainViewModel : ObservableObject
                 // Begin has already replaced the previous snapshot, so a write that was cancelled or failed has to
                 // clear the done line too; leaving it would describe something Undo no longer restores.
                 DoneText = ok ? doneText : "";
+                DoneUndoable = ok;
             });
 
         // A restore that fully succeeds discards its snapshot, so what can be undone is always read back from the
