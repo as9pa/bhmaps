@@ -27,7 +27,11 @@ public partial class App : Application
         }
 
         var services = new AppServices(parsed.AppData ?? SettingsStore.DefaultAppDataDir, parsed.Game, parsed.Library);
+        Exit += (_, _) => services.Dispose();
         var dialogs = new WpfDialogs();
+
+        // Spec 5: one sweep a run keeps the preview folder from growing without bound.
+        services.Previews.Sweep(DateTimeOffset.UtcNow);
 
         // Spec 6: no valid game path means Settings first, not a crash and not an empty grid.
         while (!SettingsStore.ValidateGamePath(services.GamePath, out var error))
@@ -41,6 +45,12 @@ public partial class App : Application
                 Shutdown();
                 return;
             }
+        }
+
+        // Spec 3.5: an unchanged game starts from the cache; anything else re-reads while the window opens.
+        if (!services.LevelData.LoadCached())
+        {
+            _ = services.LevelData.RefreshAsync();
         }
 
         var window = new MainWindow { DataContext = new MainViewModel(services, dialogs) };
