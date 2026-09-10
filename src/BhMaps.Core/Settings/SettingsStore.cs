@@ -1,59 +1,87 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
+using System.Text.Json.Nodes;
 using BhMaps.Core.Storage;
 
 namespace BhMaps.Core.Settings;
 
 public static class SettingsStore
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        PropertyNameCaseInsensitive = true,
-        WriteIndented = true,
-    };
+    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+
+    /// <summary>Keys this version writes itself. Everything else in the file is carried in <see cref="AppSettings.Unknown"/>.</summary>
+    private static readonly string[] KnownKeys =
+        ["gamePath", "libraryPath", "firstRunDone", "homeZoom", "backgroundsZoom", "whileRunning", "welcomeDone"];
 
     public static string DefaultAppDataDir =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "BhMaps");
 
-    /// <summary>Missing file, unreadable file, corrupt file, or missing fields all fall back to defaults.</summary>
+    /// <summary>Missing file, unreadable file, corrupt file, or missing fields all fall back to defaults. Zooms are clamped and any whileRunning value other than "live" loads as "restart".</summary>
     public static AppSettings Load(string settingsPath)
     {
-        if (!File.Exists(settingsPath))
+        JsonObject? obj = null;
+        if (File.Exists(settingsPath))
+        {
+            try
+            {
+                obj = JsonNode.Parse(File.ReadAllText(settingsPath)) as JsonObject;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+            {
+                obj = null;
+            }
+        }
+
+        if (obj is null)
         {
             return AppSettings.Default;
         }
 
-        SettingsFile? file;
-        try
+        var unknown = new JsonObject();
+        foreach (var (key, value) in obj)
         {
-            file = JsonSerializer.Deserialize<SettingsFile>(File.ReadAllText(settingsPath), JsonOptions);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
-        {
-            file = null;
-        }
-
-        if (file is null)
-        {
-            return AppSettings.Default;
+            if (!KnownKeys.Contains(key, StringComparer.Ordinal))
+            {
+                unknown[key] = value?.DeepClone();
+            }
         }
 
         return new AppSettings(
-            string.IsNullOrWhiteSpace(file.GamePath) ? AppSettings.DefaultGamePath : file.GamePath,
-            string.IsNullOrWhiteSpace(file.LibraryPath) ? AppSettings.DefaultLibraryPath : file.LibraryPath,
-            file.FirstRunDone);
+            Str(obj, "gamePath") is { Length: > 0 } g ? g : AppSettings.DefaultGamePath,
+            Str(obj, "libraryPath") is { Length: > 0 } l ? l : AppSettings.DefaultLibraryPath,
+            Bool(obj, "firstRunDone"),
+            Math.Clamp(Int(obj, "homeZoom", 3), 2, 5),
+            Math.Clamp(Int(obj, "backgroundsZoom", 4), 3, 8),
+            Str(obj, "whileRunning") == AppSettings.LiveWhileRunning
+                ? AppSettings.LiveWhileRunning
+                : AppSettings.RestartWhileRunning,
+            Bool(obj, "welcomeDone"))
+        {
+            Unknown = unknown.Count == 0 ? null : unknown,
+        };
     }
 
+    /// <summary>Writes the known keys in a fixed order, then any properties a future version added back untouched.</summary>
     public static void Save(string settingsPath, AppSettings settings)
     {
-        var file = new SettingsFile
+        var obj = new JsonObject
         {
-            GamePath = settings.GamePath,
-            LibraryPath = settings.LibraryPath,
-            FirstRunDone = settings.FirstRunDone,
+            ["gamePath"] = settings.GamePath,
+            ["libraryPath"] = settings.LibraryPath,
+            ["firstRunDone"] = settings.FirstRunDone,
+            ["homeZoom"] = settings.HomeZoom,
+            ["backgroundsZoom"] = settings.BackgroundsZoom,
+            ["whileRunning"] = settings.WhileRunning,
+            ["welcomeDone"] = settings.WelcomeDone,
         };
-        AtomicFile.WriteAllText(settingsPath, JsonSerializer.Serialize(file, JsonOptions));
+        if (settings.Unknown is { } extra)
+        {
+            foreach (var (key, value) in extra)
+            {
+                obj[key] = value?.DeepClone();
+            }
+        }
+
+        AtomicFile.WriteAllText(settingsPath, obj.ToJsonString(JsonOptions));
     }
 
     /// <summary>The game path must exist, be readable, and contain at least one subfolder.</summary>
@@ -128,16 +156,15 @@ public static class SettingsStore
         return true;
     }
 
-    /// <summary>On-disk shape. Nullable so a hand-edited file with missing keys still loads.</summary>
-    private sealed class SettingsFile
-    {
-        [JsonPropertyName("gamePath")]
-        public string? GamePath { get; set; }
+    /// <summary>Null when the key is absent or holds anything other than a JSON string, so a hand-edited file never throws.</summary>
+    private static string? Str(JsonObject obj, string key) =>
+        obj[key] is JsonValue value && value.TryGetValue<string>(out var s) ? s : null;
 
-        [JsonPropertyName("libraryPath")]
-        public string? LibraryPath { get; set; }
+    /// <summary>False when the key is absent or holds anything other than a JSON boolean.</summary>
+    private static bool Bool(JsonObject obj, string key) =>
+        obj[key] is JsonValue value && value.TryGetValue<bool>(out var b) && b;
 
-        [JsonPropertyName("firstRunDone")]
-        public bool FirstRunDone { get; set; }
-    }
+    /// <summary><paramref name="fallback"/> when the key is absent or holds anything other than a JSON integer.</summary>
+    private static int Int(JsonObject obj, string key, int fallback) =>
+        obj[key] is JsonValue value && value.TryGetValue<int>(out var i) ? i : fallback;
 }
