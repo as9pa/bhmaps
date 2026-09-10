@@ -1,0 +1,6 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <!-- The families after the # are the typographic family names inside the TTF name tables. -->
+  <FontFamily x:Key="Sans">pack://application:,,,/Theme/Fonts/#Geist</FontFamily>
+  <FontFamily x:Key="Mono">pack://application:,,,/Theme/Fonts/#Geist Mono</FontFamily>
+</ResourceDictionary>
