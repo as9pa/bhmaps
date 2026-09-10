@@ -304,6 +304,11 @@ public partial class MainViewModel : ObservableObject
         await RescanAsync();
     }
 
+    /// <summary>Opens the Add pictures window (spec 6.8). <paramref name="mapFolder"/> is the one map the
+    /// pictures should also be applied to, from the Home panel; null means the sidebar's selection decides.
+    /// Empty until Task 27 builds the window; the Home panel and the Backgrounds page already call it.</summary>
+    public Task OpenAddPicturesAsync(string? mapFolder) => Task.CompletedTask;
+
     public async Task OpenBackgroundEditorAsync(string? initialSlot)
     {
         if (Snapshot is null)
