@@ -66,8 +66,9 @@ public sealed class AppServices : IDisposable
 
     public string LibraryPath => LibraryOverride ?? Settings.LibraryPath;
 
-    /// <summary>The folder holding the game's four data files, which is the parent of mapArt.</summary>
-    public string GameRoot => Path.GetDirectoryName(GamePath) ?? GamePath;
+    /// <summary>The folder holding the game's four data files, which is the parent of mapArt. A trailing separator
+    /// on the saved path is trimmed first, so "...\mapArt\" resolves to the same root as "...\mapArt".</summary>
+    public string GameRoot => Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(GamePath)) ?? GamePath;
 
     public void UpdateSettings(AppSettings settings)
     {
