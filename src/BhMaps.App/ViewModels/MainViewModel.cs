@@ -532,9 +532,10 @@ public partial class MainViewModel : ObservableObject
 
                         // With several packs the line is which pack and how far through the list it is; the per-file
                         // progress would overwrite that, so it is only forwarded when there is one pack to report.
+                        // The line is the whole sentence, which is why the label is not prefixed to it below.
                         if (jobs.Count > 1)
                         {
-                            progress.Report($"{job.PackName} ({i + 1} of {jobs.Count})");
+                            progress.Report($"Importing {job.PackName} ({i + 1} of {jobs.Count})");
                         }
 
                         try
@@ -554,7 +555,8 @@ public partial class MainViewModel : ObservableObject
                         }
                     }
                 },
-                ct));
+                ct),
+            prefixProgress: jobs.Count == 1);
 
         Dialogs.ShowFailures("Some files could not be imported", failures);
         if (ok)
@@ -664,8 +666,13 @@ public partial class MainViewModel : ObservableObject
     public Pack? FindPack(string name) =>
         Snapshot?.Packs.FirstOrDefault(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
 
-    /// <summary>Runs one long operation with the busy flag, progress text, and Cancel. False when cancelled or failed.</summary>
-    public async Task<bool> RunBusyAsync(string label, Func<IProgress<string>, CancellationToken, Task> work)
+    /// <summary>Runs one long operation with the busy flag, progress text, and Cancel. False when cancelled or
+    /// failed. A progress message is normally a fragment, so it is shown as "&lt;label&gt;: &lt;message&gt;";
+    /// <paramref name="prefixProgress"/> false is for an operation whose messages already read as the whole line.</summary>
+    public async Task<bool> RunBusyAsync(
+        string label,
+        Func<IProgress<string>, CancellationToken, Task> work,
+        bool prefixProgress = true)
     {
         if (IsBusy)
         {
@@ -675,7 +682,8 @@ public partial class MainViewModel : ObservableObject
         _cts = new CancellationTokenSource();
         IsBusy = true;
         ProgressText = label;
-        var progress = new Progress<string>(message => ProgressText = $"{label}: {message}");
+        var progress = new Progress<string>(
+            message => ProgressText = prefixProgress ? $"{label}: {message}" : message);
         try
         {
             await work(progress, _cts.Token);
