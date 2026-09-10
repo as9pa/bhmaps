@@ -31,15 +31,24 @@ public partial class AddPicturesViewModel : ObservableObject
     private readonly IDialogs _dialogs;
     private readonly Debouncer _preview = new();
 
-    public AddPicturesViewModel(IDialogs dialogs, IReadOnlyList<string> packNames, int targetMapCount)
+    /// <summary>True when the caller named one map rather than leaving it to the sidebar's ticks, which is the
+    /// Home panel's Add picture. It changes the checkbox's words and whether it starts on.</summary>
+    private readonly bool _oneNamedMap;
+
+    public AddPicturesViewModel(IDialogs dialogs, IReadOnlyList<string> packNames, int targetMapCount, bool oneNamedMap)
     {
         _dialogs = dialogs;
+        _oneNamedMap = oneNamedMap;
         Files = [];
         Files.CollectionChanged += OnFilesChanged;
         PackChoices = packNames.Concat([NewPackChoice]).ToList();
         TargetMapCount = targetMapCount;
         Fit = PictureFit.Fill;
         Error = "";
+
+        // Adding a picture from one map's panel is about that map, so the apply starts on; from the Backgrounds
+        // header the dialog is a library import that can also write to the game, so there it is opt-in.
+        ApplyToMaps = oneNamedMap && CanApplyToMaps;
 
         // The same default the background editor picks, and the same reason: a pack of one's own rather than
         // Default, which is the baseline Reset puts back (spec 6.1).
@@ -83,11 +92,13 @@ public partial class AddPicturesViewModel : ObservableObject
     [ObservableProperty]
     public partial string Error { get; set; }
 
-    /// <summary>The checkbox's line, with the count of maps it would write to (spec 6.8).</summary>
-    public string ApplyToMapsLabel => TargetMapCount switch
+    /// <summary>The checkbox's line (spec 6.8). One named map is called what it is; otherwise the line carries the
+    /// count of ticked maps it would write to.</summary>
+    public string ApplyToMapsLabel => (_oneNamedMap, TargetMapCount) switch
     {
-        0 => "Also apply to the selected maps",
-        1 => "Also apply to the selected maps (1 map)",
+        (true, _) => "Also apply to this map",
+        (_, 0) => "Also apply to the selected maps",
+        (_, 1) => "Also apply to the selected maps (1 map)",
         _ => $"Also apply to the selected maps ({TargetMapCount} maps)",
     };
 

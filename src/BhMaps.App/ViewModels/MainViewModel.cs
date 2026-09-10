@@ -316,7 +316,8 @@ public partial class MainViewModel : ObservableObject
         }
 
         var maps = AddPicturesTargets(snapshot, mapFolder);
-        var vm = new AddPicturesViewModel(Dialogs, snapshot.Packs.Select(p => p.Name).ToList(), maps.Count);
+        var vm = new AddPicturesViewModel(
+            Dialogs, snapshot.Packs.Select(p => p.Name).ToList(), maps.Count, mapFolder is not null);
         var window = new AddPicturesWindow { DataContext = vm, Owner = Application.Current.MainWindow };
         if (window.ShowDialog() != true)
         {
@@ -327,19 +328,19 @@ public partial class MainViewModel : ObservableObject
         var packName = vm.EffectivePackName;
         var apply = vm.ApplyToMaps && maps.Count > 0;
 
-        // Spec 6.3: the maps are named before more than one of them is written. The confirm comes before the
-        // import rather than between the two writes, so that saying no here imports nothing either.
+        // Spec 6.3: the maps are named before more than one of them is written. Declining leaves the import to
+        // run on its own, so the work of choosing the pictures is not thrown away with the apply.
         if (apply
             && maps.Count > 1
             && !Dialogs.Confirm(
                 "Apply pictures",
                 $"Apply these pictures to these {maps.Count} maps?\n\n{string.Join(", ", maps.Select(m => m.DisplayName))}"))
         {
-            return;
+            apply = false;
         }
 
         // A library write: no undo snapshot and no game-running policy, so RunBusyAsync rather than a game write.
-        ApplyResult? result = null;
+        PictureImportResult? result = null;
         var ok = await RunBusyAsync(
             $"Importing into {packName}",
             (progress, ct) => Task.Run(
@@ -350,10 +351,11 @@ public partial class MainViewModel : ObservableObject
             Dialogs.ShowFailures("Some pictures could not be imported", result.Failures);
         }
 
-        if (ok && apply)
+        // Nothing landing in the pack leaves nothing to apply, however the checkbox was left.
+        if (ok && apply && result is { Written.Count: > 0 })
         {
             // The apply rescans on its way out, and its done line is the one that ends up in the header.
-            await ApplyPicturesAsync(maps, packName, sources);
+            await ApplyPicturesAsync(maps, packName, result.Written);
             return;
         }
 
@@ -383,14 +385,11 @@ public partial class MainViewModel : ObservableObject
     /// <summary>Spec 6.8's optional half, as one game write: the imported pictures go to the maps in order,
     /// starting again from the first picture when there are more maps than pictures, and a picture past the last
     /// map is imported only.</summary>
-    private async Task ApplyPicturesAsync(IReadOnlyList<MapEntry> maps, string packName, IReadOnlyList<string> sources)
+    private async Task ApplyPicturesAsync(IReadOnlyList<MapEntry> maps, string packName, IReadOnlyList<string> written)
     {
-        // The importer's target name for each source, which is the file the import just wrote into the pack. A
-        // second source mapping to the same name took the silent " (2)" suffix, so it is the first source's
-        // picture that both of those maps get; the importer does not report the names it chose.
         var backgrounds = Path.Combine(
             PackScanner.PacksRoot(Services.LibraryPath), packName, PictureImporter.BackgroundsFolder);
-        var pictures = sources.Select(s => Path.Combine(backgrounds, PictureImporter.TargetFileName(s))).ToList();
+        var pictures = written.Select(name => Path.Combine(backgrounds, name)).ToList();
 
         var gamePath = Services.GamePath;
         var undoPaths = maps
