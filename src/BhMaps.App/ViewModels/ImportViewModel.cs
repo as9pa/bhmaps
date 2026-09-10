@@ -79,8 +79,8 @@ public partial class ImportViewModel : ObservableObject
         && Folders.All(f => f.Plan is not null && f.NameError.Length == 0)
         && Folders.Sum(f => f.Plan!.IncludedCount) > 0;
 
-    /// <summary>The line under one entry's name field: the folder-name rules first, then the two collisions a pack
-    /// cannot survive, because both would write into a folder something else owns.</summary>
+    /// <summary>The line under one entry's name field: the folder-name rules, then the one collision a pack cannot
+    /// survive, which is two folders in this list writing into the same new pack.</summary>
     internal string NameErrorFor(ImportFolderViewModel entry)
     {
         if (!PackNameValidator.IsValid(entry.PackName, out var error))
@@ -88,23 +88,24 @@ public partial class ImportViewModel : ObservableObject
             return error;
         }
 
-        if (_existingPacks.Contains(entry.PackName))
-        {
-            return "A pack with this name already exists";
-        }
-
         return Folders.Any(f => f != entry && f.PackName.Equals(entry.PackName, StringComparison.OrdinalIgnoreCase))
             ? "Another folder already uses this name"
             : "";
     }
 
-    /// <summary>An entry was added, removed, or renamed: every entry's error line is stale, and so are the Import
-    /// button's label and its enabled state.</summary>
+    /// <summary>The quiet line under a name a pack in the library already has: that import adds to the pack rather
+    /// than making one, which is allowed and is what the confirm on Import asks about. Never shown beside an
+    /// error, because the error is the line that has to be read.</summary>
+    internal string NameNoteFor(ImportFolderViewModel entry) =>
+        entry.NameError.Length == 0 && _existingPacks.Contains(entry.PackName) ? "Adds to the existing pack" : "";
+
+    /// <summary>An entry was added, removed, or renamed: every entry's line under the name field is stale, and so
+    /// are the Import button's label and its enabled state.</summary>
     internal void FolderListChanged()
     {
         foreach (var entry in Folders)
         {
-            entry.RefreshNameError();
+            entry.RefreshNameLine();
         }
 
         OnPropertyChanged(nameof(ImportButtonText));
@@ -201,8 +202,26 @@ public partial class ImportViewModel : ObservableObject
         FolderListChanged();
     }
 
+    /// <summary>Spec 6: a folder can be imported into a pack that is already there, but not silently. The question
+    /// is asked here rather than in the shell so that declining comes back to this window with the list intact.</summary>
     [RelayCommand(CanExecute = nameof(CanImport))]
-    private void Import() => CloseRequested?.Invoke(true);
+    private void Import()
+    {
+        var existing = Folders.Where(f => _existingPacks.Contains(f.PackName)).Select(f => f.PackName).ToList();
+        if (existing.Count > 0 && !_dialogs.Confirm("Add to existing packs", AddToExistingMessage(existing)))
+        {
+            return;
+        }
+
+        CloseRequested?.Invoke(true);
+    }
+
+    private static string AddToExistingMessage(IReadOnlyList<string> packs) =>
+        (packs.Count == 1
+            ? "This pack already exists. Add to it? Files with the same name are overwritten; other files stay."
+            : $"These {packs.Count} packs already exist. Add to them? Files with the same name are overwritten; other files stay.")
+        + "\n\n"
+        + string.Join("\n", packs);
 
     /// <summary>Adds one entry per folder and scans them in turn. A folder already listed is skipped, so dropping
     /// the same folder twice does not ask for the same pack twice.</summary>
