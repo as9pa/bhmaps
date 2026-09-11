@@ -13,7 +13,7 @@ using CommunityToolkit.Mvvm.Input;
 namespace BhMaps.App.ViewModels.Pages;
 
 /// <summary>Spec 7.3: the whole background library on one grid, the header on one line, and a bottom bar while the
-/// sidebar has maps ticked. There is no New background action; the editor opens from a tile.</summary>
+/// ticked set is not empty. There is no New background action; the editor opens from a tile.</summary>
 public partial class BackgroundsViewModel : PageViewModel
 {
     public const int MinZoom = AppSettings.MinZoom;
@@ -36,11 +36,14 @@ public partial class BackgroundsViewModel : PageViewModel
     {
         Tiles = [];
 
+        // Before the first ApplyFilter, because setting it runs the change hook that filters the tiles.
+        SearchText = "";
+
         // A stored zoom from another version, or a hand-edited one, is clamped rather than trusted.
         Zoom = Math.Clamp(shell.Services.Settings.BackgroundsZoom, MinZoom, MaxZoom);
 
-        // The header's search box is the shell's one string (spec 7.1) and the bottom bar follows the sidebar's
-        // ticks. The page lives as long as the shell, so there is nothing to unsubscribe from.
+        // The bottom bar follows the ticked maps, which are the shell's. The page lives as long as the shell, so
+        // there is nothing to unsubscribe from.
         shell.PropertyChanged += OnShellChanged;
     }
 
@@ -49,12 +52,16 @@ public partial class BackgroundsViewModel : PageViewModel
     /// <summary>The tiles the search box leaves visible, sorted by pack then file name as the library is.</summary>
     public ObservableCollection<BackgroundTileViewModel> Tiles { get; }
 
+    /// <summary>The header's search box. The page's own string now; the shell has no search box left.</summary>
+    [ObservableProperty]
+    public partial string SearchText { get; set; }
+
     /// <summary>Columns in the grid, MinZoom to MaxZoom, persisted as backgroundsZoom.</summary>
     [ObservableProperty]
     public partial int Zoom { get; set; }
 
-    /// <summary>True while at least one map is ticked in the sidebar, which is when the bottom bar shows and a
-    /// tile's Apply has somewhere to write.</summary>
+    /// <summary>True while at least one map is ticked, which is when the bottom bar shows and a tile's Apply has
+    /// somewhere to write.</summary>
     public bool HasSelection => Shell.SelectedMapCount > 0;
 
     /// <summary>The bottom bar's line: "Apply to 1 map" or "Apply to N maps".</summary>
@@ -87,7 +94,7 @@ public partial class BackgroundsViewModel : PageViewModel
     }
 
     /// <summary>Spec 7.3's one header action, and the empty state's button. Task 27 fills the window in; null means
-    /// the sidebar's ticks decide which maps the pictures also go to.</summary>
+    /// the ticked maps decide which maps the pictures also go to.</summary>
     [RelayCommand]
     private Task AddPicturesAsync() => Shell.OpenAddPicturesAsync(null);
 
@@ -158,7 +165,9 @@ public partial class BackgroundsViewModel : PageViewModel
 
     /// <summary>The no-results state's way back (spec 7.8).</summary>
     [RelayCommand]
-    private void ClearSearch() => Shell.SearchText = "";
+    private void ClearSearch() => SearchText = "";
+
+    partial void OnSearchTextChanged(string value) => ApplyFilter();
 
     partial void OnZoomChanged(int value)
     {
@@ -172,11 +181,6 @@ public partial class BackgroundsViewModel : PageViewModel
 
     private void OnShellChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(MainViewModel.SearchText))
-        {
-            ApplyFilter();
-        }
-
         // SelectedMaps is raised alongside this one; reacting to the count alone does the work once.
         if (e.PropertyName == nameof(MainViewModel.SelectedMapCount))
         {
@@ -187,8 +191,8 @@ public partial class BackgroundsViewModel : PageViewModel
         }
     }
 
-    /// <summary>The ticked sidebar rows as catalog entries. A row whose folder the catalog does not know is left
-    /// out rather than guessed at.</summary>
+    /// <summary>The shell's ticked maps as this snapshot's catalog entries. One whose folder the catalog does
+    /// not know is left out rather than guessed at.</summary>
     private IEnumerable<MapEntry> SelectedMaps(ScanSnapshot snapshot) =>
         Shell.SelectedMaps
             .Select(m => snapshot.Catalog.ByFolder(m.FolderName))
@@ -372,7 +376,7 @@ public partial class BackgroundsViewModel : PageViewModel
     /// <summary>The header search box, on the file name or the pack it came from.</summary>
     private bool Matches(BackgroundTileViewModel tile)
     {
-        var search = Shell.SearchText;
+        var search = SearchText;
         return search.Length == 0
             || tile.FileName.Contains(search, StringComparison.OrdinalIgnoreCase)
             || tile.PackName.Contains(search, StringComparison.OrdinalIgnoreCase);

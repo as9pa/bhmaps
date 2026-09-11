@@ -1,7 +1,4 @@
-using System.Collections.ObjectModel;
-using System.ComponentModel;
 using System.Windows;
-using System.Windows.Data;
 using System.Windows.Threading;
 using BhMaps.App.Services;
 using BhMaps.App.ViewModels.Pages;
@@ -16,19 +13,14 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace BhMaps.App.ViewModels;
 
-/// <summary>The shell (decision D13): the busy boundary, navigation between the six pages, the scan that feeds
+/// <summary>The shell (decision D13): the busy boundary, navigation between the five pages, the scan that feeds
 /// them, and the undo of the last game write.</summary>
 public partial class MainViewModel : ObservableObject
 {
-    private const int MaxSuggestions = 8;
-
     private static readonly TimeSpan GamePollInterval = TimeSpan.FromSeconds(3);
 
     private readonly GameLauncher _launcher;
     private readonly IReadOnlyList<PageViewModel> _pages;
-
-    /// <summary>The view the sidebar list binds through, so the search filters without a second collection.</summary>
-    private readonly ICollectionView _mapListView;
 
     private readonly DispatcherTimer _gameTimer;
     private CancellationTokenSource? _cts;
@@ -43,21 +35,13 @@ public partial class MainViewModel : ObservableObject
         Dialogs = dialogs;
         ProgressText = "";
         DoneText = "";
-        MapList = [];
-        Suggestions = [];
-        _mapListView = CollectionViewSource.GetDefaultView(MapList);
-        _mapListView.Filter = MatchesSearch;
-
-        // After the list and its view, because setting it runs the change hook that filters them.
-        SearchText = "";
         _launcher = new GameLauncher();
         Maps = new MapsViewModel(this);
         Backgrounds = new BackgroundsViewModel(this);
-        Platforms = new PlatformsViewModel(this);
         Packs = new PacksViewModel(this);
         PackDetail = new PackDetailViewModel(this);
         SettingsPage = new SettingsPageViewModel(this);
-        _pages = [Maps, Backgrounds, Platforms, Packs, PackDetail, SettingsPage];
+        _pages = [Maps, Backgrounds, Packs, PackDetail, SettingsPage];
         CurrentPage = Maps;
 
         // The startup read usually lands after the first scan, and the catalog that scan built came from the cache
@@ -65,7 +49,7 @@ public partial class MainViewModel : ObservableObject
         // of the app: the shell outlives the service.
         services.LevelData.Changed += OnLevelDataChanged;
 
-        // Nothing tells the app when Brawlhalla starts or stops, so the sidebar's game block asks every 3 seconds.
+        // Nothing tells the app when Brawlhalla starts or stops, so the top bar's game line asks every 3 seconds.
         GameRunning = GameProcess.IsRunning();
         _gameTimer = new DispatcherTimer { Interval = GamePollInterval };
         _gameTimer.Tick += (_, _) => GameRunning = GameProcess.IsRunning();
@@ -83,30 +67,20 @@ public partial class MainViewModel : ObservableObject
 
     public BackgroundsViewModel Backgrounds { get; }
 
-    public PlatformsViewModel Platforms { get; }
-
     public PacksViewModel Packs { get; }
 
     public PackDetailViewModel PackDetail { get; }
 
     public SettingsPageViewModel SettingsPage { get; }
 
-    /// <summary>Every map the scan found, in display-name order. The sidebar lists this collection's default view,
-    /// filtered live by <see cref="SearchText"/>, so there is no second copy to keep in step.</summary>
-    public ObservableCollection<MapListItemViewModel> MapList { get; }
-
-    /// <summary>The search box's autocomplete list: at most eight display names, empty when the box is empty.</summary>
-    public ObservableCollection<string> Suggestions { get; }
-
-    /// <summary>The ticked maps, in list order. A page's multi-map action reads this and its count.</summary>
-    public IReadOnlyList<MapListItemViewModel> SelectedMaps => MapList.Where(m => m.IsSelected).ToList();
+    /// <summary>The ticked maps, in display order (spec 3.3). One list for the whole app: a tile on any page
+    /// aims at these. Read from the Maps page's unfiltered cards, not its visible ones, so a search does not
+    /// silently shrink what a write is about to touch (plan decision A-D1).</summary>
+    public IReadOnlyList<MapEntry> SelectedMaps => Maps.TickedMaps;
 
     public int SelectedMapCount => SelectedMaps.Count;
 
-    [ObservableProperty]
-    public partial string SearchText { get; set; }
-
-    /// <summary>Whether Brawlhalla is running, as of the last poll. The sidebar's game block shows it.</summary>
+    /// <summary>Whether Brawlhalla is running, as of the last poll. The top bar's game line shows it.</summary>
     [ObservableProperty]
     public partial bool GameRunning { get; set; }
 
@@ -145,8 +119,8 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     public partial bool CanUndo { get; set; }
 
-    /// <summary>Folder name of the map most recently opened on Maps, or null before any. Maps sets it; the
-    /// Platforms page falls back to it when the sidebar has no checked map (spec 7.4).</summary>
+    /// <summary>Folder name of the map most recently opened on Maps, or null before any. Maps sets it; part B's
+    /// panel reads it back.</summary>
     [ObservableProperty]
     public partial string? LastOpenedMap { get; set; }
 
@@ -169,9 +143,6 @@ public partial class MainViewModel : ObservableObject
     private void NavigateBackgrounds() => CurrentPage = Backgrounds;
 
     [RelayCommand]
-    private void NavigatePlatforms() => CurrentPage = Platforms;
-
-    [RelayCommand]
     private void NavigatePacks() => CurrentPage = Packs;
 
     [RelayCommand]
@@ -184,105 +155,22 @@ public partial class MainViewModel : ObservableObject
         CurrentPage = PackDetail;
     }
 
-    /// <summary>Enter on a suggestion, or a click on one: the box takes the whole name, and on Maps the map that
-    /// name belongs to opens. On any other page choosing only narrows the list.</summary>
-    [RelayCommand]
-    private void ChooseSuggestion(string? displayName)
-    {
-        if (string.IsNullOrEmpty(displayName))
-        {
-            return;
-        }
-
-        SearchText = displayName;
-        var map = MapList.FirstOrDefault(m => m.DisplayName.Equals(displayName, StringComparison.OrdinalIgnoreCase));
-        if (map is not null && CurrentPage == Maps)
-        {
-            Maps.OpenMap(map.FolderName);
-        }
-    }
-
-    /// <summary>Unticks every map. The pages' multi-map bars offer it as "Clear".</summary>
-    [RelayCommand]
-    private void ClearSelection()
-    {
-        foreach (var map in MapList)
-        {
-            map.IsSelected = false;
-        }
-    }
-
-    /// <summary>Every keystroke re-filters the list and rebuilds the suggestions.</summary>
-    partial void OnSearchTextChanged(string value)
-    {
-        _mapListView.Refresh();
-        Suggestions.Clear();
-        foreach (var name in Suggest(value))
-        {
-            Suggestions.Add(name);
-        }
-    }
-
-    /// <summary>Names that start with what was typed first, then names that merely contain it, capped at eight.</summary>
-    private IEnumerable<string> Suggest(string search)
-    {
-        if (search.Length == 0)
-        {
-            return [];
-        }
-
-        var names = MapList.Select(m => m.DisplayName).ToList();
-        return names
-            .Where(n => n.StartsWith(search, StringComparison.OrdinalIgnoreCase))
-            .Concat(names.Where(n => n.Contains(search, StringComparison.OrdinalIgnoreCase)))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Take(MaxSuggestions);
-    }
-
-    private bool MatchesSearch(object item) =>
-        item is MapListItemViewModel map
-        && (SearchText.Length == 0 || map.DisplayName.Contains(SearchText, StringComparison.OrdinalIgnoreCase));
-
-    /// <summary>Rebuilds the sidebar list from a scan, keeping the maps that were ticked ticked, matched by folder
-    /// name because a game update can rename a map.</summary>
-    private void PopulateMapList(ScanSnapshot snapshot)
-    {
-        var ticked = MapList
-            .Where(m => m.IsSelected)
-            .Select(m => m.FolderName)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        foreach (var old in MapList)
-        {
-            old.PropertyChanged -= OnMapItemChanged;
-        }
-
-        MapList.Clear();
-        foreach (var map in snapshot.Catalog.Maps)
-        {
-            snapshot.MapStatuses.TryGetValue(map.FolderName, out var status);
-
-            // Ticked before subscribing, so restoring the selection is not mistaken for the user changing it.
-            var item = new MapListItemViewModel(map, status) { IsSelected = ticked.Contains(map.FolderName) };
-            item.PropertyChanged += OnMapItemChanged;
-            MapList.Add(item);
-        }
-
-        NotifySelectionChanged();
-    }
-
-    private void OnMapItemChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName == nameof(MapListItemViewModel.IsSelected))
-        {
-            NotifySelectionChanged();
-        }
-    }
-
-    /// <summary>SelectedMaps is computed, so the pages bound to it are told by hand when it changes.</summary>
-    private void NotifySelectionChanged()
+    /// <summary>SelectedMaps is computed, so the pages bound to it are told by hand when it changes. Public:
+    /// the Maps page raises it when a card is ticked.</summary>
+    public void NotifySelectionChanged()
     {
         OnPropertyChanged(nameof(SelectedMaps));
         OnPropertyChanged(nameof(SelectedMapCount));
+    }
+
+    /// <summary>Unticks every map. The selection bar offers it as "Clear".</summary>
+    [RelayCommand]
+    private void ClearSelection()
+    {
+        foreach (var card in Maps.AllCards)
+        {
+            card.IsSelected = false;
+        }
     }
 
     [RelayCommand(CanExecute = nameof(CanAct))]
@@ -341,7 +229,7 @@ public partial class MainViewModel : ObservableObject
 
     /// <summary>Opens the Add pictures window (spec 6.8), then imports what it collected and, when it asked for
     /// it, applies those pictures to the maps. <paramref name="mapFolder"/> is the one map the pictures should
-    /// also go to, from the Home panel; null means the sidebar's ticked maps decide.</summary>
+    /// also go to, from the Maps panel; null means the ticked maps decide.</summary>
     public async Task OpenAddPicturesAsync(string? mapFolder)
     {
         if (Snapshot is not { } snapshot)
@@ -403,18 +291,15 @@ public partial class MainViewModel : ObservableObject
         await RescanAsync();
     }
 
-    /// <summary>The maps the Add pictures dialog would write to: the one map the Home panel named, or the
-    /// sidebar's ticked maps. A map with no background slots is left out, because without level data there is
-    /// nothing to write into (spec 3.6).</summary>
-    private IReadOnlyList<MapEntry> AddPicturesTargets(ScanSnapshot snapshot, string? mapFolder)
-    {
-        IEnumerable<string> folders = mapFolder is null ? SelectedMaps.Select(m => m.FolderName) : [mapFolder];
-        return folders
-            .Select(snapshot.Catalog.ByFolder)
-            .OfType<MapEntry>()
-            .Where(m => m.BackgroundSlots.Count > 0)
-            .ToList();
-    }
+    /// <summary>The maps the Add pictures dialog would write to: the one map the Maps panel named, or the ticked
+    /// maps. A map with no background slots is left out, because without level data there is nothing to write
+    /// into (spec 3.6).</summary>
+    private IReadOnlyList<MapEntry> AddPicturesTargets(ScanSnapshot snapshot, string? mapFolder) =>
+        (mapFolder is null
+            ? SelectedMaps
+            : [.. new[] { snapshot.Catalog.ByFolder(mapFolder) }.OfType<MapEntry>()])
+        .Where(m => m.BackgroundSlots.Count > 0)
+        .ToList();
 
     /// <summary>Spec 6.8's optional half, as one game write: the imported pictures go to the maps in order,
     /// starting again from the first picture when there are more maps than pictures, and a picture past the last
@@ -573,8 +458,7 @@ public partial class MainViewModel : ObservableObject
 
         Snapshot = snapshot;
 
-        // Before the pages, because a page's Refresh may read the sidebar's selection.
-        PopulateMapList(snapshot);
+        // Maps rebuilds its cards first, because SelectedMaps reads them and a page's Refresh may ask for it.
         foreach (var page in _pages)
         {
             page.Refresh(snapshot);

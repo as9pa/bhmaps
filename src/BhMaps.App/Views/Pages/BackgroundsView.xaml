@@ -33,9 +33,9 @@
     <controls:PageHeader DockPanel.Dock="Top" Title="Backgrounds">
       <controls:PageHeader.Actions>
         <StackPanel Orientation="Horizontal">
-          <!-- Spec 7.1: one search string for the sidebar list and the current page, so this box is the shell's,
-               reached the same way the header's busy line reaches it (decision D11). Centred at the action height,
-               or the StackPanel stretches box and button to the taller of the two and the box reads as two lines. -->
+          <!-- Spec 7.3: the page's own search string, bound straight to the page view model. Centred at the
+               action height, or the StackPanel stretches box and button to the taller of the two and the box
+               reads as two lines. -->
           <Grid Width="200" Height="{StaticResource ActionHeight}" VerticalAlignment="Center">
             <!-- Its own padding, not the style's: a TextBox reserves the whole of Geist's line box, which at this
                  size is taller than an action, and the style's 6 top and bottom would clip the text out of a box
@@ -44,7 +44,7 @@
             <TextBox Padding="33,6,10,0"
                      AutomationProperties.Name="Search backgrounds"
                      Style="{StaticResource FieldTextBox}"
-                     Text="{Binding DataContext.SearchText, RelativeSource={RelativeSource AncestorType=Window}, UpdateSourceTrigger=PropertyChanged}" />
+                     Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
 
             <!-- Text3, the placeholder's own colour: nothing about a search box hovers or disables. -->
             <controls:Icon Margin="11,0,0,0"
@@ -62,7 +62,7 @@
                   <Setter Property="Foreground" Value="{StaticResource Text3Brush}" />
                   <Setter Property="Visibility" Value="Collapsed" />
                   <Style.Triggers>
-                    <DataTrigger Binding="{Binding DataContext.SearchText, RelativeSource={RelativeSource AncestorType=Window}}" Value="">
+                    <DataTrigger Binding="{Binding SearchText}" Value="">
                       <Setter Property="Visibility" Value="Visible" />
                     </DataTrigger>
                   </Style.Triggers>

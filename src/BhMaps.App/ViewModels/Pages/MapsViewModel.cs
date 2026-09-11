@@ -37,14 +37,15 @@ public partial class MapsViewModel : PageViewModel
         _chips.Add(AllChip);
         _chips.Add(ChangedChip);
 
-        // After the collections, because setting it runs the change hook that filters them.
+        // After the collections, because setting them runs the change hooks that filter them.
+        SearchText = "";
         SelectedChip = AllChip;
 
         // A stored zoom from another version, or a hand-edited one, is clamped rather than trusted.
         Zoom = Math.Clamp(shell.Services.Settings.MapsZoom, MinZoom, MaxZoom);
 
-        // The header's search box and the sidebar's are one string, so the grid filters with the list. The page
-        // lives as long as the shell, so there is nothing to unsubscribe from.
+        // The ticked count is the shell's, and this page's own cards are what it counts. The page lives as long
+        // as the shell, so there is nothing to unsubscribe from.
         shell.PropertyChanged += OnShellChanged;
     }
 
@@ -52,6 +53,16 @@ public partial class MapsViewModel : PageViewModel
 
     /// <summary>The cards the chip and the search leave visible, in display-name order.</summary>
     public ObservableCollection<MapCardViewModel> Cards { get; }
+
+    /// <summary>Every card the last scan produced, filtered or not. The shell's ticked set reads this.</summary>
+    public IReadOnlyList<MapCardViewModel> AllCards => _all;
+
+    /// <summary>The ticked maps as catalog entries, in display order.</summary>
+    public IReadOnlyList<MapEntry> TickedMaps => _all.Where(c => c.IsSelected).Select(c => c.Map).ToList();
+
+    /// <summary>The header's search box (spec 3.1). The page's own string now; the shell has no search box left.</summary>
+    [ObservableProperty]
+    public partial string SearchText { get; set; }
 
     /// <summary>"All", the UI set labels, then "Changed". Without level data the set chips are gone entirely and
     /// only the two remain (spec 3.6). An ObservableCollection behind the read-only surface, because the row
@@ -74,8 +85,7 @@ public partial class MapsViewModel : PageViewModel
     [ObservableProperty]
     public partial MapPanelViewModel? Panel { get; set; }
 
-    /// <summary>Opens one map's right panel. The sidebar's autocomplete calls this when Enter picks a name while
-    /// Home is the current page, and a click on a card runs the generated command.</summary>
+    /// <summary>Opens one map's right panel. A click on a card runs the generated command.</summary>
     [RelayCommand]
     public void OpenMap(string? folderName)
     {
@@ -96,7 +106,7 @@ public partial class MapsViewModel : PageViewModel
     [RelayCommand]
     private void ShowAll()
     {
-        Shell.SearchText = "";
+        SearchText = "";
         SelectedChip = AllChip;
     }
 
@@ -154,11 +164,21 @@ public partial class MapsViewModel : PageViewModel
         _previews = new CancellationTokenSource();
 
         var opened = Selected?.FolderName;
+        var ticked = _all.Where(c => c.IsSelected).Select(c => c.FolderName).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var old in _all)
+        {
+            old.PropertyChanged -= OnCardChanged;
+        }
+
         _all.Clear();
         foreach (var map in snapshot.Catalog.Maps)
         {
             snapshot.MapStatuses.TryGetValue(map.FolderName, out var status);
-            _all.Add(new MapCardViewModel(map, status));
+
+            // Ticked before subscribing, so restoring the set is not mistaken for the user changing it.
+            var card = new MapCardViewModel(map, status) { IsSelected = ticked.Contains(map.FolderName) };
+            card.PropertyChanged += OnCardChanged;
+            _all.Add(card);
         }
 
         RebuildChips(snapshot.Catalog);
@@ -171,12 +191,17 @@ public partial class MapsViewModel : PageViewModel
             : _all.FirstOrDefault(c => c.FolderName.Equals(opened, StringComparison.OrdinalIgnoreCase));
 
         _ = LoadPreviewsAsync([.. _all], snapshot.Catalog.HasLevelData, _previews.Token);
+
+        // Last, because a map that has gone from the catalog has just left the ticked set.
+        Shell.NotifySelectionChanged();
     }
 
     partial void OnSelectedChipChanged(string value) => ApplyFilter();
 
-    /// <summary>A card click, the sidebar's Enter, and the re-selection every scan does all land here, so the panel
-    /// is built in one place. The panel it replaces is cancelled: its composites are for a state that is gone.</summary>
+    partial void OnSearchTextChanged(string value) => ApplyFilter();
+
+    /// <summary>A card click and the re-selection every scan does both land here, so the panel is built in one
+    /// place. The panel it replaces is cancelled: its composites are for a state that is gone.</summary>
     partial void OnSelectedChanged(MapCardViewModel? value)
     {
         Panel?.Cancel();
@@ -204,9 +229,18 @@ public partial class MapsViewModel : PageViewModel
 
     private void OnShellChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(MainViewModel.SearchText))
+        // SelectedMaps is raised alongside this one; reacting to the count alone does the work once. The branch
+        // is deliberately empty here: A7 hangs the chip row rebuild on it and A10 the selection bar's lines.
+        if (e.PropertyName == nameof(MainViewModel.SelectedMapCount))
         {
-            ApplyFilter();
+        }
+    }
+
+    private void OnCardChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(MapCardViewModel.IsSelected))
+        {
+            Shell.NotifySelectionChanged();
         }
     }
 
@@ -259,17 +293,31 @@ public partial class MapsViewModel : PageViewModel
 
     private void ApplyFilter()
     {
+        var ticked = _all.Where(c => c.IsSelected).Select(c => c.FolderName).ToHashSet(StringComparer.OrdinalIgnoreCase);
         Cards.Clear();
         foreach (var card in _all.Where(Matches))
         {
             Cards.Add(card);
+        }
+
+        // A card the filter just removed loses its container, and a released ListBoxItem clears its own
+        // IsSelected, which the two-way binding would write back as an untick. The set is restored by name.
+        // Only the cards whose value actually changed are written: this runs on every keystroke, and each write
+        // raises PropertyChanged twice and rebuilds the chip row through A7's hook.
+        foreach (var card in _all)
+        {
+            var wanted = ticked.Contains(card.FolderName);
+            if (card.IsSelected != wanted)
+            {
+                card.IsSelected = wanted;
+            }
         }
     }
 
     /// <summary>The chip filter, then the header search box on top of it.</summary>
     private bool Matches(MapCardViewModel card)
     {
-        var search = Shell.SearchText;
+        var search = SearchText;
         if (search.Length > 0 && !card.DisplayName.Contains(search, StringComparison.OrdinalIgnoreCase))
         {
             return false;

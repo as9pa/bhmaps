@@ -40,6 +40,12 @@ public partial class MapCardViewModel : ObservableObject
     [ObservableProperty]
     public partial ImageSource? Preview { get; set; }
 
+    /// <summary>Spec 3.3: whether this map is in the ticked set. The grid's ListBoxItem binds its own IsSelected
+    /// to it two ways, so a click, a Ctrl click, a shift range, Space and the tick box all say the same thing.
+    /// MapsViewModel watches it and tells the shell.</summary>
+    [ObservableProperty]
+    public partial bool IsSelected { get; set; }
+
     /// <summary>Composes the card preview, falling back to the v1 single-file thumbnail without level data or when
     /// the composite could not be drawn (spec 3.6). Called on the UI thread; every file touch happens off it.</summary>
     public async Task LoadPreviewAsync(AppServices services, bool hasLevelData, CancellationToken ct)

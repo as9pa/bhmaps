@@ -4,7 +4,8 @@ using System.Windows.Controls;
 namespace BhMaps.App.Views.Controls;
 
 /// <summary>The 56 px header every page docks at its top (spec 7.1): the page title on the left, the page's own
-/// actions on the right, and the shell's progress line or done line with Undo between them.</summary>
+/// actions on the right, and the shell's progress line or done line with Undo between them. The missing-folder
+/// notice is the top bar's (spec 2.1).</summary>
 public partial class PageHeader : UserControl
 {
     public static readonly DependencyProperty TitleProperty =

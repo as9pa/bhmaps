@@ -14,24 +14,17 @@
 
     <TextBlock Grid.Column="0"
                VerticalAlignment="Center"
-               FontSize="20"
+               FontSize="22"
                FontWeight="SemiBold"
                Text="{Binding Title, ElementName=Root}" />
 
-    <!-- The busy line, the done line and the missing-folder notice belong to the shell, not to the page, so this
-         one cell binds past the page view model to the window's MainViewModel (decision D11). Only one of the
-         three is ever visible. -->
+    <!-- The busy line and the done line belong to the shell, not to the page, so this one cell binds past the
+         page view model to the window's MainViewModel (decision D11). Only one of the two is ever visible. -->
     <Grid Grid.Column="1"
           Margin="16,0"
           HorizontalAlignment="Right"
           VerticalAlignment="Center"
           DataContext="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}">
-      <!-- Spec 7.8, and it outranks the other two: with the folder gone, a progress line describes work that
-           cannot happen and a done line describes files that are not there. -->
-      <TextBlock VerticalAlignment="Center"
-                 Foreground="{StaticResource MissingFgBrush}"
-                 Text="Game folder not found. Check Settings."
-                 Visibility="{Binding GameFolderMissing, Converter={StaticResource BoolToVis}}" />
       <StackPanel Orientation="Horizontal">
         <StackPanel.Style>
           <Style TargetType="StackPanel">
