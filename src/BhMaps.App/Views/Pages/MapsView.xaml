@@ -683,7 +683,7 @@
               <Button.ContextMenu>
                 <ContextMenu ItemsSource="{Binding PackChoices}" Style="{StaticResource TileContextMenu}">
                   <ContextMenu.ItemContainerStyle>
-                    <!-- The fourth setter for the same reason as ChoiceContainer above: TileMenuItem names a
+                    <!-- The fourth setter for the same reason as PanelTileContainer above: TileMenuItem names a
                          row from Text, which a pack row has not got, so without this every row fails that
                          binding and falls back to its header. -->
                     <Style TargetType="MenuItem" BasedOn="{StaticResource TileMenuItem}">
@@ -837,7 +837,58 @@
                 </ItemsControl.ItemsPanel>
               </ItemsControl>
 
-              <!-- B5 inserts the custom pictures strip here, between the two ItemsControls. -->
+              <!-- Spec 4: the library's own pictures, under the packs. The header is dropped when there are none,
+                   because a count of zero says nothing the Add Custom Image button beside it does not. -->
+              <Grid Margin="0,4,0,0" Visibility="{Binding ShowBackground, Converter={StaticResource BoolToVis}}">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <primitives:ToggleButton Content="{Binding CustomHeader}"
+                                         IsChecked="{Binding CustomExpanded}"
+                                         Style="{StaticResource SectionHeaderRow}"
+                                         Visibility="{Binding HasCustomPictures, Converter={StaticResource BoolToVis}}" />
+
+                <!-- IsNotBusy, not CanWrite: adding a picture is a library write, and the window it opens is the
+                     one thing offered while the game folder is missing (spec 7.1). -->
+                <Button Grid.Column="1"
+                        VerticalAlignment="Center"
+                        Command="{Binding AddPictureCommand}"
+                        Content="Add Custom Image"
+                        controls:Icon.Glyph="{StaticResource Icon.Plus}"
+                        IsEnabled="{Binding DataContext.IsNotBusy, RelativeSource={RelativeSource AncestorType=Window}}"
+                        Style="{StaticResource PlainButton}" />
+              </Grid>
+
+              <!-- The same tiles the packs above use, so the -8 right margin and the container's automation name
+                   are the same too. It belongs to the Background segment, so both conditions have to hold: the
+                   strip left open must not follow the user over to Platforms. -->
+              <ItemsControl Margin="0,4,-8,0"
+                            Focusable="False"
+                            ItemContainerStyle="{StaticResource PanelTileContainer}"
+                            ItemTemplate="{StaticResource PanelPictureTile}"
+                            ItemsSource="{Binding CustomTiles}">
+                <ItemsControl.Style>
+                  <Style TargetType="ItemsControl">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                      <MultiDataTrigger>
+                        <MultiDataTrigger.Conditions>
+                          <Condition Binding="{Binding ShowBackground}" Value="True" />
+                          <Condition Binding="{Binding CustomExpanded}" Value="True" />
+                        </MultiDataTrigger.Conditions>
+                        <Setter Property="Visibility" Value="Visible" />
+                      </MultiDataTrigger>
+                    </Style.Triggers>
+                  </Style>
+                </ItemsControl.Style>
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <WrapPanel />
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+              </ItemsControl>
 
               <ItemsControl Margin="0,12,-8,0"
                             Focusable="False"

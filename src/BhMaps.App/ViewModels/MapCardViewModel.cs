@@ -2,7 +2,9 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using BhMaps.App.Services;
 using BhMaps.Core.Imaging;
+using BhMaps.Core.LevelData;
 using BhMaps.Core.Maps;
+using BhMaps.Core.Operations;
 using BhMaps.Core.Scanning;
 using CommunityToolkit.Mvvm.ComponentModel;
 
@@ -11,10 +13,10 @@ namespace BhMaps.App.ViewModels;
 /// <summary>One card on the Maps grid (spec 7.2): the composed preview, the map's name and its state tag.</summary>
 public partial class MapCardViewModel : ObservableObject
 {
-    /// <summary>The longest a custom picture's file name is drawn at (spec 3.1).</summary>
+    /// <summary>The longest a custom picture's name is drawn at (spec 3.1).</summary>
     public const int TagMaxLength = 16;
 
-    public MapCardViewModel(MapEntry map, MapStatus? status)
+    public MapCardViewModel(MapEntry map, MapStatus? status, IReadOnlyList<CustomPicture> customPictures)
     {
         Map = map;
         FolderName = map.FolderName;
@@ -26,7 +28,7 @@ public partial class MapCardViewModel : ObservableObject
         {
             MapState.Missing => "Missing",
             MapState.Packs => status.Text,
-            MapState.Custom => Ellipsise(CustomName(map)),
+            MapState.Custom => Ellipsise(CustomName(map, customPictures)),
             _ => "",
         };
         ToolTipText = TagText.Length == 0 ? DisplayName : $"{DisplayName} ({TagText})";
@@ -40,7 +42,7 @@ public partial class MapCardViewModel : ObservableObject
     public bool IsMissing { get; }
 
     /// <summary>Spec 3.1's tag, drawn only when it says which art is on the map: the pack names, the custom
-    /// picture's file name ellipsised at <see cref="TagMaxLength"/>, or "Missing". Default draws no tag, and
+    /// picture's name ellipsised at <see cref="TagMaxLength"/>, or "Missing". Default draws no tag, and
     /// neither does a map the scan produced no status for.</summary>
     public string TagText { get; }
 
@@ -121,10 +123,22 @@ public partial class MapCardViewModel : ObservableObject
         }
     }
 
-    /// <summary>Which picture is on the map. Part A can only name the slot the game holds; part B replaces this
-    /// one expression with CustomPictureLibrary's display name (plan decision A-D5).</summary>
-    private static string CustomName(MapEntry map) =>
-        map.BackgroundSlots.Count > 0 ? map.BackgroundSlots[0] : "Custom";
+    /// <summary>Spec 3.1: the picture's own name when the library knows it, the slot's file name when it does not.
+    /// Read the way MapPanelViewModel.CustomPictureName reads it, so a card and its panel can never name the same
+    /// picture differently (plan decision A-D5).</summary>
+    private static string CustomName(MapEntry map, IReadOnlyList<CustomPicture> customPictures)
+    {
+        if (map.BackgroundSlots.Count == 0)
+        {
+            return "Custom";
+        }
+
+        var fileName = Path.GetFileName(AssetPath.Background(map.BackgroundSlots[0]));
+        return customPictures
+                   .FirstOrDefault(p => p.InGameSlots.Contains(fileName, StringComparer.OrdinalIgnoreCase))
+                   ?.DisplayName
+               ?? fileName;
+    }
 
     private static string Ellipsise(string name) =>
         name.Length <= TagMaxLength ? name : name[..(TagMaxLength - 1)] + "\u2026";

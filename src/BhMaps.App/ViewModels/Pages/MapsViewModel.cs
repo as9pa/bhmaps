@@ -144,10 +144,12 @@ public partial class MapsViewModel : PageViewModel
 
     public bool ShowClearSearch => SearchText.Length > 0;
 
-    /// <summary>Spec 3.1's first-run line: nothing in the library but the Default pack. Part B ands in the
-    /// custom-picture half (plan decision A-D6).</summary>
+    /// <summary>Spec 3.1's first-run line: nothing in the library but the Default pack, and no custom picture
+    /// either (plan decision A-D6, settled here).</summary>
     public bool ShowFirstRunLine =>
-        _snapshot is { } s && !s.Packs.Any(p => !p.Name.Equals(DefaultPack.Name, StringComparison.OrdinalIgnoreCase));
+        _snapshot is { } s
+        && !s.Packs.Any(p => !p.Name.Equals(DefaultPack.Name, StringComparison.OrdinalIgnoreCase))
+        && s.CustomPictures.Count == 0;
 
     /// <summary>Spec 11: "3 of 67 maps ticked". The second number is every map, not the shown ones.</summary>
     public string SelectionText => $"{Shell.SelectedMapCount} of {_all.Count} maps ticked";
@@ -374,7 +376,10 @@ public partial class MapsViewModel : PageViewModel
             snapshot.MapStatuses.TryGetValue(map.FolderName, out var status);
 
             // Ticked before subscribing, so restoring the set is not mistaken for the user changing it.
-            var card = new MapCardViewModel(map, status) { IsSelected = ticked.Contains(map.FolderName) };
+            var card = new MapCardViewModel(map, status, snapshot.CustomPictures)
+            {
+                IsSelected = ticked.Contains(map.FolderName),
+            };
             card.PropertyChanged += OnCardChanged;
             _all.Add(card);
         }
