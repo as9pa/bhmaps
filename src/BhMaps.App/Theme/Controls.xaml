@@ -305,8 +305,11 @@
                   BorderBrush="{TemplateBinding BorderBrush}"
                   BorderThickness="{TemplateBinding BorderThickness}"
                   CornerRadius="{StaticResource Radius}">
+            <!-- No Margin binding here on purpose: TextBoxBase puts the TextBox's Padding onto PART_ContentHost
+                 itself when it attaches the render scope, so binding Padding to Margin as well applied the inset
+                 twice and started typed text 33 px past this field's left padding (spec 9). The stock templates
+                 leave this alone for the same reason. -->
             <ScrollViewer x:Name="PART_ContentHost"
-                          Margin="{TemplateBinding Padding}"
                           Focusable="False"
                           HorizontalScrollBarVisibility="Hidden"
                           VerticalScrollBarVisibility="Hidden" />

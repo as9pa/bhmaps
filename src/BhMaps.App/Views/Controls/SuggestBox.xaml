@@ -6,9 +6,10 @@
              PreviewKeyDown="OnPreviewKeyDown">
   <Grid>
     <!-- The left padding is the canvas's: 10 to the icon, 15 of icon, 8 to the text, so what is typed starts
-         clear of the icon instead of running under it. The other three are the style's own. -->
+         clear of the icon instead of running under it. The right is the style's own; 12 top and bottom, twice the
+         style's, keep the sidebar box the height it has always drawn at. -->
     <TextBox x:Name="Input"
-             Padding="33,6,10,6"
+             Padding="33,12,10,12"
              Style="{StaticResource FieldTextBox}"
              Text="{Binding Text, ElementName=Root, UpdateSourceTrigger=PropertyChanged}" />
 

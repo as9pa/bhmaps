@@ -396,9 +396,9 @@
           <Grid Width="200" Height="{StaticResource ActionHeight}" VerticalAlignment="Center">
             <!-- Its own padding, not the style's: a TextBox reserves the whole of Geist's line box, which at this
                  size is taller than an action, and the style's 6 top and bottom would clip the text out of a box
-                 this high. 3 and 0 leave the line box room and put the glyphs on the button's own rows. The left
+                 this high. 6 and 0 leave the line box room and put the glyphs on the button's own rows. The left
                  padding is the canvas's: 10 to the icon, 15 of icon, 8 to the text. -->
-            <TextBox Padding="33,3,10,0"
+            <TextBox Padding="33,6,10,0"
                      AutomationProperties.Name="Search maps"
                      Style="{StaticResource FieldTextBox}"
                      Text="{Binding DataContext.SearchText, RelativeSource={RelativeSource AncestorType=Window}, UpdateSourceTrigger=PropertyChanged}" />
