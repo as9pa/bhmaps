@@ -14,7 +14,7 @@ namespace BhMaps.App.ViewModels;
 public partial class MapCardViewModel : ObservableObject
 {
     /// <summary>The longest a custom picture's name is drawn at (spec 3.1).</summary>
-    public const int TagMaxLength = 16;
+    public const int TagMaxLength = 12;
 
     public MapCardViewModel(MapEntry map, MapStatus? status, IReadOnlyList<CustomPicture> customPictures)
     {
