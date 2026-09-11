@@ -19,7 +19,7 @@ public static class ImageDimensions
             var frame = decoder.Frames[0];
             return (frame.PixelWidth, frame.PixelHeight);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or FileFormatException or ArgumentException or OverflowException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or FileFormatException or ArgumentException or OverflowException or System.Runtime.InteropServices.COMException)
         {
             return null;
         }
