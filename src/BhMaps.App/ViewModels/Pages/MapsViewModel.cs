@@ -291,7 +291,17 @@ public partial class MapsViewModel : PageViewModel
             return;
         }
 
-        await Shell.ApplyPictureAsync(picture.LibraryPaths[0], Shell.SelectedMaps, clearTicks: true);
+        // A custom picture need not be in a pack: one the user put in the game folder by hand has no library copy
+        // at all, so the file is resolved by the rule a tile's own menu uses rather than by indexing the packs.
+        if (CustomPictureTileViewModel.SourcePath(picture, Shell.Services.GamePath) is not { } source)
+        {
+            Shell.Dialogs.Info(
+                "Nothing to apply",
+                $"{picture.DisplayName} has no file in the library or in the game folder.");
+            return;
+        }
+
+        await Shell.ApplyPictureAsync(source, Shell.SelectedMaps, clearTicks: true);
     }
 
     /// <summary>Spec 3.3: the ticked maps back to the Default pack, the same reset one map's panel offers.</summary>

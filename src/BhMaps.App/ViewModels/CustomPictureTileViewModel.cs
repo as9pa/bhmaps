@@ -1,4 +1,5 @@
 using BhMaps.App.Services;
+using BhMaps.Core.LevelData;
 using BhMaps.Core.Model;
 using BhMaps.Core.Operations;
 using BhMaps.Core.Scanning;
@@ -18,14 +19,26 @@ public sealed partial class CustomPictureTileViewModel : PictureTileViewModel
             shell,
             picture.DisplayName,
             subtitle,
-            picture.LibraryPaths.Count > 0
-                ? picture.LibraryPaths[0]
-                : Path.Combine(shell.Services.GamePath, "Backgrounds", picture.DisplayName),
+            // Empty only for the picture SourcePath calls impossible, and then every action on the tile reports a
+            // file that is not there rather than throwing on a path nobody could resolve.
+            SourcePath(picture, shell.Services.GamePath) ?? "",
             picture.PackName,
             picture.InGameSlots.Count > 0)
     {
         _picture = picture;
     }
+
+    /// <summary>The file a custom picture is: its first copy in the library, or the game's own copy of the first
+    /// slot it fills when the library has none. A slot resolves through <see cref="AssetPath" />, because a slot
+    /// borrowed from a theme folder through "../" is not under Backgrounds at all. Null when the picture names
+    /// neither, which a scan should not produce and which a write refuses rather than guessing at a path. Shared
+    /// with the Maps page's Apply picture menu, so a tile and that menu cannot apply different files.</summary>
+    public static string? SourcePath(CustomPicture picture, string gamePath) =>
+        picture.LibraryPaths.Count > 0
+            ? picture.LibraryPaths[0]
+            : picture.InGameSlots.Count > 0
+                ? Path.Combine(gamePath, AssetPath.Background(picture.InGameSlots[0]))
+                : null;
 
     public override string ApplyText => "Apply to...";
 
