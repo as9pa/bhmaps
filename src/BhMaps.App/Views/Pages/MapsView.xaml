@@ -92,6 +92,72 @@
       </Style.Triggers>
     </Style>
 
+    <!-- Owner change O6: the card's state tag, written once here because the card draws it in one of two
+         places (the name's row, or the picture's corner).
+         Two tags, because Missing is a style of its own rather than a colour on the ordinary one. Each sits in
+         a wrapper that carries the visibility, so neither theme style is derived from, and a card with no tag
+         asks for no room at all.
+         MaxWidth is what makes the trimming below fire: an Auto column hands a pill whatever it asks for, so
+         without a ceiling a long pack name would take the name's room and still run off the card. 106 px is the
+         measured 97 px of a 16 character tag in the theme's 11 px font, padding included, with room for wider
+         glyphs at that length; a picture's name is ellipsised at 16 characters already, so this is where a pack
+         name meets the same edge. -->
+    <DataTemplate x:Key="CardTagPill">
+      <Grid MaxWidth="106">
+        <Grid>
+          <Grid.Style>
+            <Style TargetType="Grid">
+              <Style.Triggers>
+                <DataTrigger Binding="{Binding IsMissing}" Value="True">
+                  <Setter Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding ShowTag}" Value="False">
+                  <Setter Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+              </Style.Triggers>
+            </Style>
+          </Grid.Style>
+          <Border Style="{StaticResource StateTagBorder}">
+            <TextBlock Text="{Binding TagText}" TextTrimming="CharacterEllipsis" />
+          </Border>
+        </Grid>
+        <Grid>
+          <Grid.Style>
+            <Style TargetType="Grid">
+              <Setter Property="Visibility" Value="Collapsed" />
+              <Style.Triggers>
+                <DataTrigger Binding="{Binding IsMissing}" Value="True">
+                  <Setter Property="Visibility" Value="Visible" />
+                </DataTrigger>
+              </Style.Triggers>
+            </Style>
+          </Grid.Style>
+          <Border Style="{StaticResource MissingTagBorder}">
+            <TextBlock Text="{Binding TagText}" TextTrimming="CharacterEllipsis" />
+          </Border>
+        </Grid>
+      </Grid>
+    </DataTemplate>
+
+    <!-- The same pill where it is drawn over the picture: map art is any colour, so the pill is given a ground
+         there, and only there, which leaves the name row's pill on the two theme backgrounds it has always had.
+         Collapsed on a card with no tag, or the ground would draw as a small empty square in the corner. -->
+    <DataTemplate x:Key="CardTagPillOnPicture">
+      <Border Background="{StaticResource ScrimBrush}" CornerRadius="6" Padding="2">
+        <Border.Style>
+          <Style TargetType="Border">
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+              <DataTrigger Binding="{Binding ShowTag}" Value="True">
+                <Setter Property="Visibility" Value="Visible" />
+              </DataTrigger>
+            </Style.Triggers>
+          </Style>
+        </Border.Style>
+        <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource CardTagPill}" />
+      </Border>
+    </DataTemplate>
+
     <!-- Everything clickable in the panel that is a picture rather than a label: no chrome of its own, the tiles'
          60% focus ring, and the same Surface2 hover the cards use. -->
     <Style x:Key="PanelTileButton" TargetType="Button">
@@ -605,92 +671,64 @@
                         </Style>
                       </Border.Style>
                     </Border>
+
+                    <!-- Owner change O6: where a card too narrow to hold the pill on its name row draws it
+                         instead, over the picture's bottom-left corner. Over the Viewbox rather than inside it,
+                         for the reason the Tick and the Missing mark are. The wrapper is what the zoom hides, so
+                         the presenter's own Visibility is left to the template trigger below and the two never
+                         argue over it. -->
+                    <Grid Visibility="{Binding DataContext.ShowTagRow, RelativeSource={RelativeSource AncestorType=ListBox}, Converter={StaticResource BoolToVis}}">
+                      <ContentPresenter x:Name="PictureTag"
+                                        Margin="6"
+                                        HorizontalAlignment="Left"
+                                        VerticalAlignment="Bottom"
+                                        Content="{Binding}"
+                                        ContentTemplate="{StaticResource CardTagPillOnPicture}"
+                                        Visibility="Visible" />
+                    </Grid>
                   </Grid>
 
-                  <!-- Owner change O1: the name and the tag share one row where the card is wide enough to hold
-                       both, and the tag drops to a row of its own where it is not. Row 1 is Auto, so on the wide
-                       card it costs nothing. The trigger that moves the pill is on the template. -->
+                  <!-- Owner change O1, as O6 amends it: the name and the tag share the card's one row where the
+                       card is wide enough to hold both. There is no second row: a card never grows for its tag,
+                       and the pill it cannot fit here is drawn over the picture instead. -->
                   <Grid Margin="2,8,2,0"
                         Visibility="{Binding DataContext.ShowName, RelativeSource={RelativeSource AncestorType=ListBox}, Converter={StaticResource BoolToVis}}">
                     <Grid.ColumnDefinitions>
                       <ColumnDefinition Width="*" />
                       <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions>
-                      <RowDefinition Height="Auto" />
-                      <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
 
                     <TextBlock VerticalAlignment="Center"
                                FontSize="{Binding DataContext.NameFontSize, RelativeSource={RelativeSource AncestorType=ListBox}}"
                                Text="{Binding DisplayName}"
                                TextTrimming="CharacterEllipsis" />
 
-                    <!-- Two tags, because Missing is a style of its own rather than a colour on the ordinary one.
-                         Each sits in a wrapper that carries the visibility, so neither theme style is derived from.
-                         Under the name is where the pill sits until the card is wide enough to take it up onto the
-                         name's row, which is the safe way round: a card measures 0 wide before its first layout.
-                         At 7 and above there are no tags at all.
-                         MaxWidth is what makes the trimming below fire: an Auto column hands a pill whatever it
-                         asks for, so without a ceiling a long pack name would take the name's room and still run
-                         off the card. 106 px is the measured 97 px of a 16 character tag in the theme's 11 px
-                         font, padding included, with room for wider glyphs at that length; a picture's name is
-                         ellipsised at 16 characters already, so this is where a pack name meets the same edge. -->
-                    <Grid x:Name="Tag"
-                          Grid.Row="1"
-                          MaxWidth="106"
-                          Margin="0,6,0,0"
-                          HorizontalAlignment="Left"
-                          VerticalAlignment="Center"
+                    <!-- The wrapper is what the zoom hides (at 7 and above there are no tags anywhere), so the
+                         presenter's own Visibility is left to the template trigger below. -->
+                    <Grid Grid.Column="1"
                           Visibility="{Binding DataContext.ShowTagRow, RelativeSource={RelativeSource AncestorType=ListBox}, Converter={StaticResource BoolToVis}}">
-                      <Grid>
-                        <Grid.Style>
-                          <Style TargetType="Grid">
-                            <Style.Triggers>
-                              <DataTrigger Binding="{Binding IsMissing}" Value="True">
-                                <Setter Property="Visibility" Value="Collapsed" />
-                              </DataTrigger>
-                              <DataTrigger Binding="{Binding ShowTag}" Value="False">
-                                <Setter Property="Visibility" Value="Collapsed" />
-                              </DataTrigger>
-                            </Style.Triggers>
-                          </Style>
-                        </Grid.Style>
-                        <Border Style="{StaticResource StateTagBorder}">
-                          <TextBlock Text="{Binding TagText}" TextTrimming="CharacterEllipsis" />
-                        </Border>
-                      </Grid>
-                      <Grid>
-                        <Grid.Style>
-                          <Style TargetType="Grid">
-                            <Setter Property="Visibility" Value="Collapsed" />
-                            <Style.Triggers>
-                              <DataTrigger Binding="{Binding IsMissing}" Value="True">
-                                <Setter Property="Visibility" Value="Visible" />
-                              </DataTrigger>
-                            </Style.Triggers>
-                          </Style>
-                        </Grid.Style>
-                        <Border Style="{StaticResource MissingTagBorder}">
-                          <TextBlock Text="{Binding TagText}" TextTrimming="CharacterEllipsis" />
-                        </Border>
-                      </Grid>
+                      <ContentPresenter x:Name="NameRowTag"
+                                        Margin="8,0,0,0"
+                                        VerticalAlignment="Center"
+                                        Content="{Binding}"
+                                        ContentTemplate="{StaticResource CardTagPill}"
+                                        Visibility="Collapsed" />
                     </Grid>
                   </Grid>
                 </StackPanel>
               </Border>
               <DataTemplate.Triggers>
-                <!-- Owner change O1: the pill goes up onto the name's row once the card can hold both, which is
-                     the card's own width rather than the zoom step, because the window can be any width. 200 px
-                     is a 16 character pill (the ellipsis ceiling on a picture's name) plus the 8 px gap plus a
-                     14 character name at 13 px, plus the card's padding and border. A pack name longer than that
-                     takes the width from the name, and ellipsises in its own pill rather than running off the
-                     card. -->
+                <!-- Owner changes O1 and O6: a wide card carries the pill on the name's row; a narrow one
+                     carries it over the picture's bottom-left corner, so no card ever grows for its tag and the
+                     UniformGrid never equalises an empty line into every card. The card's own width decides,
+                     rather than the zoom step, because the window can be any width and the panel takes 376 px
+                     of it. 200 px is a 16 character pill (the ellipsis ceiling on a picture's name) plus the
+                     8 px gap plus a 14 character name at 13 px, plus the card's padding and border. A pack name
+                     longer than that takes the width from the name, and ellipsises in its own pill rather than
+                     running off the card. -->
                 <DataTrigger Binding="{Binding ActualWidth, ElementName=Chrome, Converter={StaticResource WidthAtLeast}, ConverterParameter=200}" Value="True">
-                  <Setter TargetName="Tag" Property="Grid.Row" Value="0" />
-                  <Setter TargetName="Tag" Property="Grid.Column" Value="1" />
-                  <Setter TargetName="Tag" Property="Margin" Value="8,0,0,0" />
-                  <Setter TargetName="Tag" Property="HorizontalAlignment" Value="Right" />
+                  <Setter TargetName="NameRowTag" Property="Visibility" Value="Visible" />
+                  <Setter TargetName="PictureTag" Property="Visibility" Value="Collapsed" />
                 </DataTrigger>
 
                 <DataTrigger Binding="{Binding IsSelected}" Value="True">

@@ -13,6 +13,9 @@
   <SolidColorBrush x:Key="TileBrush" Color="#2F2D2B" />
   <SolidColorBrush x:Key="MissingBgBrush" Color="#3A1A1C" />
   <SolidColorBrush x:Key="MissingFgBrush" Color="#E57A7A" />
+  <!-- The ground a label needs when it is drawn over map art rather than over a surface: the page's own
+       near-black at 85 percent, so the art it covers is still felt through it. -->
+  <SolidColorBrush x:Key="ScrimBrush" Color="#D9161514" />
   <!-- The one restrained accent: the Text colour used as a fill for a page's single primary action. -->
   <SolidColorBrush x:Key="AccentBrush" Color="#F1EFEA" />
 
