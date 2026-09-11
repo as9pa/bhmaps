@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using BhMaps.App.ViewModels;
@@ -64,6 +65,79 @@ public partial class MapsView : UserControl
             // user is standing on is the one they just opened.
             page.OpenMapCommand.Execute(card.FolderName);
             e.Handled = true;
+            return;
+        }
+
+        // Shift keeps the control's range meaning, and Ctrl already navigates without selecting.
+        if (Keyboard.Modifiers == ModifierKeys.None && MoveFocusTo(item, e.Key))
+        {
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>Spec 3.1: the navigation keys move focus between cards and leave the ticks alone. Extended
+    /// selection makes every bare one of them replace the whole ticked set with the card focus lands on, which is
+    /// ten ticks gone on one keystroke, so the page moves focus itself before the ListBox sees the key. The
+    /// arrows move the way Ctrl+arrow already does. False for any other key, which the ListBox then handles as
+    /// usual.</summary>
+    private static bool MoveFocusTo(ListBoxItem item, Key key)
+    {
+        FocusNavigationDirection? direction = key switch
+        {
+            Key.Left => FocusNavigationDirection.Left,
+            Key.Right => FocusNavigationDirection.Right,
+            Key.Up => FocusNavigationDirection.Up,
+            Key.Down => FocusNavigationDirection.Down,
+            _ => null,
+        };
+
+        if ((direction is null && key is not (Key.Home or Key.End or Key.PageUp or Key.PageDown))
+            || ItemsControl.ItemsControlFromItemContainer(item) is not ListBox list)
+        {
+            return false;
+        }
+
+        // Moving the focus is not enough on its own: while the keyboard is the most recent input device, an
+        // Extended ListBox makes whichever card takes focus the whole selection, so the ticks would go anyway.
+        // Multiple is the one mode where focus is only focus, and it is on for the length of the move, so Shift
+        // keeps the control's range and Ctrl+A still ticks the grid. Both modes select many, so the set itself
+        // survives the round trip.
+        var mode = list.SelectionMode;
+        list.SelectionMode = SelectionMode.Multiple;
+        try
+        {
+            // Geometric and contained by the grid, so a card at an edge keeps the focus rather than wrapping.
+            if (direction is { } d)
+            {
+                item.MoveFocus(new TraversalRequest(d));
+                return true;
+            }
+
+            // A page is the rows the viewport holds, and the columns are the items panel's own, so neither number
+            // is a second copy of the zoom.
+            var row = item.ActualHeight + item.Margin.Top + item.Margin.Bottom;
+            var columns = VisualTreeHelper.GetParent(item) is UniformGrid grid && grid.Columns > 0 ? grid.Columns : 1;
+            var page = columns * Math.Max(1, (int)(row > 0 ? list.ActualHeight / row : 1));
+            var index = list.ItemContainerGenerator.IndexFromContainer(item);
+            var target = key switch
+            {
+                Key.Home => 0,
+                Key.End => list.Items.Count - 1,
+                Key.PageUp => index - page,
+                _ => index + page,
+            };
+
+            if (list.ItemContainerGenerator.ContainerFromIndex(Math.Clamp(target, 0, list.Items.Count - 1)) is ListBoxItem next)
+            {
+                next.Focus();
+                next.BringIntoView();
+            }
+
+            return true;
+        }
+        finally
+        {
+            list.SelectionMode = mode;
         }
     }
 
