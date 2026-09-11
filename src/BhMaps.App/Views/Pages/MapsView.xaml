@@ -11,6 +11,11 @@
        the typed text's first; OnPageKeyDown handles that one before this binding can see it. -->
   <UserControl.InputBindings>
     <KeyBinding Key="Escape" Command="{Binding EscapeCommand}" />
+
+    <!-- Owner change O5: Ctrl+A ticks every shown map from anywhere on the page. A KeyBinding here catches the
+         ones the focused control did not want: the grid's own Ctrl+A and the search box's both run first and mark
+         the key handled, so neither loses its meaning. -->
+    <KeyBinding Key="A" Modifiers="Control" Command="{Binding SelectAllShownCommand}" />
   </UserControl.InputBindings>
 
   <UserControl.Resources>
@@ -625,9 +630,15 @@
                          Each sits in a wrapper that carries the visibility, so neither theme style is derived from.
                          Under the name is where the pill sits until the card is wide enough to take it up onto the
                          name's row, which is the safe way round: a card measures 0 wide before its first layout.
-                         At 7 and above there are no tags at all. -->
+                         At 7 and above there are no tags at all.
+                         MaxWidth is what makes the trimming below fire: an Auto column hands a pill whatever it
+                         asks for, so without a ceiling a long pack name would take the name's room and still run
+                         off the card. 106 px is the measured 97 px of a 16 character tag in the theme's 11 px
+                         font, padding included, with room for wider glyphs at that length; a picture's name is
+                         ellipsised at 16 characters already, so this is where a pack name meets the same edge. -->
                     <Grid x:Name="Tag"
                           Grid.Row="1"
+                          MaxWidth="106"
                           Margin="0,6,0,0"
                           HorizontalAlignment="Left"
                           VerticalAlignment="Center"

@@ -195,17 +195,19 @@ public partial class MapsViewModel : PageViewModel
     [RelayCommand]
     private void ClearSearch() => SearchText = "";
 
-    /// <summary>Spec 3.2's order: Escape closes the panel first, and a second Escape clears the ticks.</summary>
+    /// <summary>Owner change O4, which turns spec 3.2's order around: Escape cancels the selection first, because
+    /// someone mid-selection who reaches for Escape means the ticks, and closes the panel once nothing is ticked.
+    /// The search box takes Escape before either of them, in MapsView.OnPageKeyDown.</summary>
     [RelayCommand]
     private void Escape()
     {
-        if (Panel is not null)
+        if (HasTicks)
         {
-            Selected = null;
+            Shell.ClearSelectionCommand.Execute(null);
             return;
         }
 
-        Shell.ClearSelectionCommand.Execute(null);
+        Selected = null;
     }
 
     /// <summary>Spec 7.2's one page action: every folder in the game tree back to the Default pack, or deleted for
