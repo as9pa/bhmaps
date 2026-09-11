@@ -52,15 +52,18 @@
                       StrokeThickness="1.6" />
               </Border>
 
-              <!-- Revealed by the pointer or by keyboard focus, so both ways of reaching a tile reach its
-                   actions (spec 7.8). Which of the three shows is the tile's own answer: a picture with one map
-                   applies in a click, and a custom picture has to be asked where to go. -->
+              <!-- Revealed by the pointer, by keyboard focus, or by the tile's own menu being open, so both ways
+                   of reaching a tile reach its actions (spec 7.8) and the button that opened the menu is still
+                   drawn under it. Opacity rather than Visibility, the map panel's lesson: a collapsed button
+                   cannot be tabbed to, so it would be mouse-only. Which of the three shows is the tile's own
+                   answer: a picture with one map applies in a click, and a custom picture has to be asked where
+                   to go. -->
               <StackPanel x:Name="Actions"
                           Margin="6"
                           HorizontalAlignment="Right"
                           VerticalAlignment="Bottom"
-                          Orientation="Horizontal"
-                          Visibility="Collapsed">
+                          Opacity="0"
+                          Orientation="Horizontal">
                 <!-- CanWrite, not IsNotBusy: this writes into the game folder, so it is also off while that
                      folder is missing (spec 7.8). -->
                 <Button x:Name="Apply"
@@ -107,11 +110,18 @@
           <Setter TargetName="ApplyTo" Property="Visibility" Value="Visible" />
         </DataTrigger>
         <Trigger SourceName="Tile" Property="IsMouseOver" Value="True">
-          <Setter TargetName="Actions" Property="Visibility" Value="Visible" />
+          <Setter TargetName="Actions" Property="Opacity" Value="1" />
         </Trigger>
         <Trigger SourceName="Tile" Property="IsKeyboardFocusWithin" Value="True">
-          <Setter TargetName="Actions" Property="Visibility" Value="Visible" />
+          <Setter TargetName="Actions" Property="Opacity" Value="1" />
         </Trigger>
+
+        <!-- An open menu takes the mouse, so the tile stops being hovered and the button that opened the menu
+             would vanish while its own menu is still on screen. The menu is the tile's own instance, because
+             TileMenu is x:Shared="False". -->
+        <DataTrigger Binding="{Binding ContextMenu.IsOpen, ElementName=Tile}" Value="True">
+          <Setter TargetName="Actions" Property="Opacity" Value="1" />
+        </DataTrigger>
         <Trigger SourceName="Tile" Property="IsKeyboardFocused" Value="True">
           <Setter TargetName="Ring" Property="Opacity" Value="0.6" />
         </Trigger>
