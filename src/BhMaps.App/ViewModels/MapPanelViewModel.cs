@@ -150,7 +150,7 @@ public partial class MapPanelViewModel : ObservableObject
 
     /// <summary>Spec 6.8. The window is Task 27's; the panel only says which map the pictures are for.</summary>
     [RelayCommand]
-    private Task AddPictureAsync() => _shell.OpenAddPicturesAsync(_map.FolderName);
+    private Task AddPictureAsync() => _shell.OpenAddPicturesAsync(new AddPicturesTarget(AddPicturesTargetKind.Map, _map, null));
 
     /// <summary>Spec 6.1, for this map alone: the Default pack's files for the folder and its copies of the map's
     /// background slots.</summary>

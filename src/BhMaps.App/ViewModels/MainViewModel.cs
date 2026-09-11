@@ -227,16 +227,18 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
-    /// <summary>Opens the Add pictures window (spec 6.8), then imports what it collected and, when it asked for
-    /// it, applies those pictures to the maps. <paramref name="mapFolder"/> is the one map the pictures should
-    /// also go to, from the Maps panel; null means the ticked maps decide.</summary>
-    public async Task OpenAddPicturesAsync(string? mapFolder)
+    /// <summary>Opens the Add Custom Image window (spec 7.1), then imports what it collected and, when it asked
+    /// for it, applies those pictures to the maps. <paramref name="target"/> is the caller's aim: one named map,
+    /// the ticked set, every map, or the library alone. B8 gives the window the four radios; until then a named
+    /// map is the only kind that changes what is written.</summary>
+    public async Task OpenAddPicturesAsync(AddPicturesTarget target)
     {
         if (Snapshot is not { } snapshot)
         {
             return;
         }
 
+        var mapFolder = target.Kind == AddPicturesTargetKind.Map ? target.Map?.FolderName : null;
         var maps = AddPicturesTargets(snapshot, mapFolder);
         var vm = new AddPicturesViewModel(
             Dialogs, snapshot.Packs.Select(p => p.Name).ToList(), maps.Count, mapFolder is not null);
@@ -338,13 +340,112 @@ public partial class MainViewModel : ObservableObject
         Dialogs.ShowFailures("Some pictures could not be applied", failures);
     }
 
+    /// <summary>Spec 3.2 and 4: one picture into the background slots of every map given, as one game write.
+    /// More than one map confirms with the count first (spec 3.3) and clears the ticks on success.</summary>
+    public async Task ApplyPictureAsync(string sourcePath, IReadOnlyList<MapEntry> maps, bool clearTicks)
+    {
+        // Without level data a map has no background slots at all, so there is nowhere to write (spec 3.6).
+        var targets = maps.Where(m => m.BackgroundSlots.Count > 0).ToList();
+        var name = Path.GetFileName(sourcePath);
+        if (targets.Count == 0)
+        {
+            Dialogs.Info(
+                "Nothing to apply",
+                "These maps have no background slots. Slots come from the game's own level data.");
+            return;
+        }
+
+        if (targets.Count > 1
+            && !Dialogs.Confirm(
+                "Apply picture",
+                $"Apply {name} to these {targets.Count} maps?\n\n{string.Join(", ", targets.Select(m => m.DisplayName))}"))
+        {
+            return;
+        }
+
+        var gamePath = Services.GamePath;
+        var undoPaths = targets
+            .SelectMany(m => BackgroundApplier.TargetPaths(m.BackgroundSlots))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var failures = new List<FileFailure>();
+        await RunGameWriteAsync(
+            $"Applying {name}",
+            undoPaths,
+            (progress, ct) => Task.Run(
+                () =>
+                {
+                    foreach (var map in targets)
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        progress.Report(map.DisplayName);
+                        failures.AddRange(
+                            BackgroundApplier.Apply(sourcePath, gamePath, map.BackgroundSlots, null, ct).Failures);
+                    }
+                },
+                ct),
+            targets.Count == 1
+                ? $"{name} applied to {targets[0].DisplayName}"
+                : $"{name} applied to {targets.Count} maps",
+            clearTicks);
+
+        Dialogs.ShowFailures("Some backgrounds could not be applied", failures);
+    }
+
+    /// <summary>Spec 3.2: one pack's platform art onto every map given, each map getting its own set from the
+    /// same pack. A map the pack has nothing for is left out rather than cleared.</summary>
+    public async Task ApplySetAsync(Pack pack, IReadOnlyList<MapEntry> maps, bool clearTicks)
+    {
+        var targets = maps.Where(m => pack.FindFolder(m.FolderName) is { Files.Count: > 0 }).ToList();
+        if (targets.Count == 0)
+        {
+            Dialogs.Info("Nothing to apply", $"{pack.Name} has no platform art for these maps.");
+            return;
+        }
+
+        if (targets.Count > 1
+            && !Dialogs.Confirm(
+                "Apply platform set",
+                $"Apply {pack.Name} to these {targets.Count} maps?\n\n{string.Join(", ", targets.Select(m => m.DisplayName))}"))
+        {
+            return;
+        }
+
+        var gamePath = Services.GamePath;
+        var undoPaths = targets
+            .SelectMany(m => PlatformSetApplier.TargetPaths(pack, m.FolderName))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var failures = new List<FileFailure>();
+        await RunGameWriteAsync(
+            $"Applying {pack.Name}",
+            undoPaths,
+            (progress, ct) => Task.Run(
+                () =>
+                {
+                    foreach (var map in targets)
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        progress.Report(map.DisplayName);
+                        failures.AddRange(PlatformSetApplier.Apply(pack, map.FolderName, gamePath, null, ct).Failures);
+                    }
+                },
+                ct),
+            targets.Count == 1
+                ? $"{pack.Name} applied to {targets[0].DisplayName}"
+                : $"{pack.Name} applied to {targets.Count} maps",
+            clearTicks);
+
+        Dialogs.ShowFailures("Some files could not be applied", failures);
+    }
+
     /// <summary>"1 map" or "3 maps": the done lines count things and every one of them can be one.</summary>
     public static string Count(int n, string noun) => n == 1 ? $"1 {noun}" : $"{n} {noun}s";
 
     /// <summary>Spec 5.3: the editor fits a picture and saves it into a pack. That is a library write and its own
     /// business; the "Apply to game now" it offers is a game write, so the pack file it left is copied into the
     /// slot here, with the boundary, the snapshot and the running-game policy every other one gets.</summary>
-    public async Task OpenBackgroundEditorAsync(string? initialSlot)
+    public async Task OpenBackgroundEditorAsync(BackgroundEditorRequest request)
     {
         if (Snapshot is null)
         {
@@ -353,7 +454,7 @@ public partial class MainViewModel : ObservableObject
 
         var slots = Snapshot.Tree.FindFolder("Backgrounds")?.Files.Select(f => f.Name).ToList() ?? new List<string>();
         var packNames = Snapshot.Packs.Select(p => p.Name).ToList();
-        var vm = new BackgroundEditorViewModel(Services, Dialogs, slots, packNames, initialSlot);
+        var vm = new BackgroundEditorViewModel(Services, Dialogs, slots, packNames, request.Slot);
         var window = new BackgroundEditorWindow { DataContext = vm, Owner = Application.Current.MainWindow };
         if (window.ShowDialog() != true)
         {

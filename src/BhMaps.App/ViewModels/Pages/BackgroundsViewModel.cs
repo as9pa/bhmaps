@@ -93,10 +93,10 @@ public partial class BackgroundsViewModel : PageViewModel
         _ = LoadAsync([.. _all], snapshot, _thumbnails.Token);
     }
 
-    /// <summary>Spec 7.3's one header action, and the empty state's button. Task 27 fills the window in; null means
-    /// the ticked maps decide which maps the pictures also go to.</summary>
+    /// <summary>Spec 7.3's one header action, and the empty state's button. The page's button adds to the library
+    /// and names no maps, which is what the None kind says (spec 7.1).</summary>
     [RelayCommand]
-    private Task AddPicturesAsync() => Shell.OpenAddPicturesAsync(null);
+    private Task AddPicturesAsync() => Shell.OpenAddPicturesAsync(new AddPicturesTarget(AddPicturesTargetKind.None, null, null));
 
     /// <summary>Spec 6.3: one write covering every ticked map, with a confirm that names them when there is more
     /// than one. The game-running policy belongs to the launcher inside RunGameWriteAsync, so there is no second
@@ -156,12 +156,14 @@ public partial class BackgroundsViewModel : PageViewModel
         Shell.Dialogs.ShowFailures("Some backgrounds could not be applied", failures);
     }
 
-    /// <summary>Spec 7.3's second tile action. The editor works on a game background slot rather than on a library
-    /// file: it fits a picture the user picks and saves it into a pack under the slot's name, optionally writing it
-    /// straight into the game. What it is handed is therefore a slot name.</summary>
+    /// <summary>Spec 7.3's second tile action. The editor now wants the picture that was clicked as well as the
+    /// slot it should open on, and a file in the game folder belongs to no pack.</summary>
     [RelayCommand]
     private Task EditAsync(BackgroundTileViewModel? tile) =>
-        tile is null ? Task.CompletedTask : Shell.OpenBackgroundEditorAsync(EditSlot(tile));
+        tile is null
+            ? Task.CompletedTask
+            : Shell.OpenBackgroundEditorAsync(
+                new BackgroundEditorRequest(tile.FullPath, tile.FromGame ? null : tile.PackName, EditSlot(tile)));
 
     /// <summary>The no-results state's way back (spec 7.8).</summary>
     [RelayCommand]
