@@ -28,9 +28,6 @@
       <DataTemplate DataType="{x:Type pages:BackgroundsViewModel}">
         <pageviews:BackgroundsView />
       </DataTemplate>
-      <DataTemplate DataType="{x:Type pages:PlatformsViewModel}">
-        <pageviews:PlatformsView />
-      </DataTemplate>
       <DataTemplate DataType="{x:Type pages:PacksViewModel}">
         <pageviews:PacksView />
       </DataTemplate>
