@@ -345,14 +345,14 @@ public partial class MainViewModel : ObservableObject
     /// displayName is the name the user chose the picture by, which is the pack on a panel tile and the picture's
     /// own name in the custom library: spec 2.2 words the done line "flowermap applied to Brawlhaven", never the
     /// file name inside the pack, which the user never picked. Null for a caller with no such name, and then the
-    /// file name is the best there is.</summary>
+    /// file name is the best there is. Whichever it is, the confirm, the busy title and the done line all use the
+    /// one name, so the user reads the same word from the first prompt to the last line.</summary>
     public async Task ApplyPictureAsync(
         string sourcePath, IReadOnlyList<MapEntry> maps, bool clearTicks, string? displayName = null)
     {
         // Without level data a map has no background slots at all, so there is nowhere to write (spec 3.6).
         var targets = maps.Where(m => m.BackgroundSlots.Count > 0).ToList();
-        var name = Path.GetFileName(sourcePath);
-        var shown = displayName ?? name;
+        var name = displayName ?? Path.GetFileName(sourcePath);
         if (targets.Count == 0)
         {
             Dialogs.Info(
@@ -391,8 +391,8 @@ public partial class MainViewModel : ObservableObject
                 },
                 ct),
             targets.Count == 1
-                ? $"{shown} applied to {targets[0].DisplayName}"
-                : $"{shown} applied to {targets.Count} maps",
+                ? $"{name} applied to {targets[0].DisplayName}"
+                : $"{name} applied to {targets.Count} maps",
             clearTicks);
 
         Dialogs.ShowFailures("Some backgrounds could not be applied", failures);
