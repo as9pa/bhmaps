@@ -453,7 +453,7 @@ public partial class MapsViewModel : PageViewModel
     private void OnShellChanged(object? sender, PropertyChangedEventArgs e)
     {
         // SelectedMaps is raised alongside this one; reacting to the count alone does the work once. The first
-        // tick is what puts the Ticked chip in the row, and the last untick takes it away again. A10 hangs the
+        // tick is what puts the Selected chip in the row, and the last untick takes it away again. A10 hangs the
         // selection bar's lines on the same branch.
         if (e.PropertyName == nameof(MainViewModel.SelectedMapCount))
         {
@@ -510,7 +510,7 @@ public partial class MapsViewModel : PageViewModel
             return;
         }
 
-        // Spec 3.1: All, the set chips, Changed, and Ticked once anything is ticked.
+        // Spec 3.1: All, the set chips, Changed, and Selected once anything is ticked.
         List<string> wanted = [AllChip, .. catalog.UiSets.Select(s => s.Label), ChangedChip];
         if (Shell.SelectedMapCount > 0)
         {
@@ -526,7 +526,7 @@ public partial class MapsViewModel : PageViewModel
         _uiSets.AddRange(catalog.UiSets);
         var chosen = SelectedChip;
 
-        // Synced in place rather than cleared and refilled. The first tick is what adds the Ticked chip, and a
+        // Synced in place rather than cleared and refilled. The first tick is what adds the Selected chip, and a
         // Ctrl+A ticks the whole grid from inside the ListBox's own loop: clearing the row there pushes a null
         // SelectedChip through the two-way binding, and the ApplyFilter answering it empties and refills Cards
         // under that loop, which leaves one card ticked out of the set. Adding one chip at the end disturbs
