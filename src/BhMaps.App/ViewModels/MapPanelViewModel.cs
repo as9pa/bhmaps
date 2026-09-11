@@ -48,10 +48,15 @@ public partial class MapPanelViewModel : ObservableObject
     /// <summary>ObservableCollections behind the read-only surfaces: the tiles fill their own pictures in as the
     /// loads arrive, and a file row is an immutable record that a load replaces rather than mutates.</summary>
     private readonly ObservableCollection<MapPictureTileViewModel> _backgroundTiles = [];
+    private readonly ObservableCollection<MapPictureTileViewModel> _customTiles = [];
     private readonly ObservableCollection<PlatformSetTileViewModel> _platformTiles = [];
     private readonly ObservableCollection<PlatformFileViewModel> _platformFiles = [];
 
     private readonly CancellationTokenSource _loads = new();
+
+    /// <summary>True once the strip's thumbnails have been asked for, so opening and closing it reads the files
+    /// once rather than once a click.</summary>
+    private bool _customThumbnailsStarted;
 
     public MapPanelViewModel(MainViewModel shell, MapsViewModel page, MapEntry map, MapStatus? status, ScanSnapshot snapshot)
     {
@@ -70,6 +75,24 @@ public partial class MapPanelViewModel : ObservableObject
         foreach (var tile in BuildBackgroundTiles())
         {
             _backgroundTiles.Add(tile);
+        }
+
+        // Spec 4: every picture in the custom library, offered for this map the way a pack's is. A map with no
+        // background slot has nowhere to put one, so it gets no strip at all.
+        if (map.BackgroundSlots.Count > 0)
+        {
+            var slot = map.BackgroundSlots[0];
+            var fileName = Path.GetFileName(AssetPath.Background(slot));
+            foreach (var picture in snapshot.CustomPictures)
+            {
+                // Resolved by the rule a custom tile's own menu uses, so the panel and the Backgrounds page apply
+                // the same file. Empty only for the picture SourcePath calls impossible, and then every action on
+                // the tile reports a file that is not there rather than throwing on a path nobody could resolve.
+                var source = CustomPictureTileViewModel.SourcePath(picture, shell.Services.GamePath) ?? "";
+                _customTiles.Add(new MapPictureTileViewModel(
+                    shell, map, slot, picture.DisplayName, "", source, picture.PackName,
+                    picture.InGameSlots.Contains(fileName, StringComparer.OrdinalIgnoreCase)));
+            }
         }
 
         foreach (var pack in PlatformSetApplier.SetsFor(map.FolderName, snapshot.Packs))
@@ -99,6 +122,9 @@ public partial class MapPanelViewModel : ObservableObject
 
     /// <summary>Default first, then every pack with a picture for this map's first background slot.</summary>
     public IReadOnlyList<MapPictureTileViewModel> BackgroundTiles => _backgroundTiles;
+
+    /// <summary>Spec 4: the custom library, under the packs, for this map's first background slot.</summary>
+    public IReadOnlyList<MapPictureTileViewModel> CustomTiles => _customTiles;
 
     public IReadOnlyList<PlatformSetTileViewModel> PlatformTiles => _platformTiles;
 
@@ -142,6 +168,17 @@ public partial class MapPanelViewModel : ObservableObject
         }
     }
 
+    /// <summary>Whether the custom pictures strip is open. Closed on every new panel: the pictures under it are
+    /// read only once it is asked for.</summary>
+    [ObservableProperty]
+    public partial bool CustomExpanded { get; set; }
+
+    public string CustomHeader => $"Custom pictures ({_customTiles.Count})";
+
+    /// <summary>False hides the header altogether, so a library with no custom picture shows nothing but the
+    /// Add Custom Image button.</summary>
+    public bool HasCustomPictures => _customTiles.Count > 0;
+
     [ObservableProperty]
     public partial bool FilesExpanded { get; set; }
 
@@ -157,6 +194,11 @@ public partial class MapPanelViewModel : ObservableObject
     public void RebuildMenus(int tickedCount)
     {
         foreach (var tile in _backgroundTiles)
+        {
+            tile.RebuildMenu(tickedCount);
+        }
+
+        foreach (var tile in _customTiles)
         {
             tile.RebuildMenu(tickedCount);
         }
@@ -177,6 +219,13 @@ public partial class MapPanelViewModel : ObservableObject
         {
             await LoadPreviewAsync(ct);
             await LoadTileThumbnailsAsync(_backgroundTiles, ct);
+
+            // Only when the strip is already open, which it is not on a panel nobody has expanded yet.
+            if (CustomExpanded)
+            {
+                await LoadCustomThumbnailsAsync(ct);
+            }
+
             await LoadPlatformPreviewsAsync(ct);
             await LoadPlatformFilesAsync(ct);
         }
@@ -230,7 +279,22 @@ public partial class MapPanelViewModel : ObservableObject
     [RelayCommand]
     private void Close() => _shell.Maps.Selected = null;
 
+    /// <summary>Spec 7.1: the window opens with this map as its target, so "Add and apply to Brawlhaven" is the
+    /// radio that starts on.</summary>
+    [RelayCommand]
+    private Task AddPictureAsync() =>
+        _shell.OpenAddPicturesAsync(new AddPicturesTarget(AddPicturesTargetKind.Map, _map, null));
+
     partial void OnShowPlatformsChanged(bool value) => _page.PanelShowsPlatforms = value;
+
+    /// <summary>The strip's thumbnails are a file each, so they wait for the first time it is opened.</summary>
+    partial void OnCustomExpandedChanged(bool value)
+    {
+        if (value)
+        {
+            _ = LoadCustomThumbnailsAsync(_loads.Token);
+        }
+    }
 
     /// <summary>Default first, then every pack with a picture for this map's first slot (spec 3.2).</summary>
     private IEnumerable<MapPictureTileViewModel> BuildBackgroundTiles()
@@ -320,6 +384,27 @@ public partial class MapPanelViewModel : ObservableObject
         if (image is not null && !ct.IsCancellationRequested)
         {
             Preview = image;
+        }
+    }
+
+    /// <summary>The strip's pictures, once: a library of two hundred of them costs nothing until it is opened,
+    /// and opening it a second time costs nothing again. Started from the expander as well as from LoadAsync, so
+    /// it catches the cancellation LoadAsync catches for its own loads.</summary>
+    private async Task LoadCustomThumbnailsAsync(CancellationToken ct)
+    {
+        if (_customThumbnailsStarted)
+        {
+            return;
+        }
+
+        _customThumbnailsStarted = true;
+        try
+        {
+            await LoadTileThumbnailsAsync(_customTiles, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            // The panel was replaced, so what was still loading is for a map nothing shows any more.
         }
     }
 
