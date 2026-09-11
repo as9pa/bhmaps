@@ -3,12 +3,16 @@ using System.ComponentModel;
 using System.Windows;
 using BhMaps.App.Services;
 using BhMaps.Core.Maps;
+using BhMaps.Core.Model;
 using BhMaps.Core.Operations;
 using BhMaps.Core.Settings;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
 namespace BhMaps.App.ViewModels.Pages;
+
+/// <summary>One row of the Apply picture menu. A null Picture is the "Add Custom Image..." row.</summary>
+public sealed record PictureMenuItem(string Header, CustomPicture? Picture);
 
 /// <summary>Spec 3.1: the chip row with "Select all shown" at its right end, and the grid of composed map cards.
 /// No summary bar and no composition bars; the header carries the search box, the zoom and Reset all to
@@ -142,6 +146,18 @@ public partial class MapsViewModel : PageViewModel
     public bool ShowFirstRunLine =>
         _snapshot is { } s && !s.Packs.Any(p => !p.Name.Equals(DefaultPack.Name, StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>Spec 11: "3 of 67 maps ticked". The second number is every map, not the shown ones.</summary>
+    public string SelectionText => $"{Shell.SelectedMapCount} of {_all.Count} maps ticked";
+
+    public bool HasTicks => Shell.SelectedMapCount > 0;
+
+    /// <summary>The packs the Apply pack menu offers, in library order.</summary>
+    public IReadOnlyList<Pack> PackChoices => _snapshot?.Packs ?? [];
+
+    /// <summary>The Apply picture menu: the library's custom pictures, then "Add Custom Image..." (spec 3.3).
+    /// Part A leaves the list empty; part B fills it from CustomPictureLibrary and changes nothing else here.</summary>
+    public IReadOnlyList<PictureMenuItem> PictureChoices { get; private set; } = [];
+
     /// <summary>Opens one map's right panel. A click on a card runs the generated command.</summary>
     [RelayCommand]
     public void OpenMap(string? folderName)
@@ -231,6 +247,132 @@ public partial class MapsViewModel : PageViewModel
         }
     }
 
+    /// <summary>Spec 3.3: the pack, on the ticked maps only.</summary>
+    [RelayCommand]
+    private async Task ApplyPackToTickedAsync(Pack? pack)
+    {
+        var maps = Shell.SelectedMaps;
+        if (pack is null || maps.Count == 0 || !Confirm($"Apply {pack.Name}", $"Apply {pack.Name}", maps))
+        {
+            return;
+        }
+
+        var gamePath = Shell.Services.GamePath;
+        ApplyResult? result = null;
+        await Shell.RunGameWriteAsync(
+            $"Applying {pack.Name}",
+            PackApplier.ApplyToMapsPaths(pack, maps),
+            (progress, ct) => Task.Run(
+                () => { result = PackApplier.ApplyToMaps(pack, maps, gamePath, progress, ct); }, ct),
+            $"{pack.Name} applied to {MainViewModel.Count(maps.Count, "map")}",
+            clearTicks: true);
+
+        if (result is not null)
+        {
+            Shell.Dialogs.ShowFailures("Some files could not be applied", result.Failures);
+        }
+    }
+
+    /// <summary>Spec 3.3: one picture into every ticked map's own slots. The last menu row has no picture: it
+    /// opens Add Custom Image with the ticked maps as its target (spec 7.1), which is the shell's flow.</summary>
+    [RelayCommand]
+    private async Task ApplyPictureToTickedAsync(PictureMenuItem? item)
+    {
+        if (item is null)
+        {
+            return;
+        }
+
+        if (item.Picture is not { } picture)
+        {
+            await Shell.OpenAddPicturesAsync(null);
+            return;
+        }
+
+        var maps = Shell.SelectedMaps.Where(m => m.BackgroundSlots.Count > 0).ToList();
+        if (maps.Count == 0)
+        {
+            // Without level data a map has no slots at all (spec 3.6), so there is nowhere to write.
+            Shell.Dialogs.Info(
+                "Nothing to apply to",
+                "The ticked maps have no background slots. Slots come from the game's own level data.");
+            return;
+        }
+
+        if (!Confirm("Apply picture", $"Apply {picture.DisplayName}", maps))
+        {
+            return;
+        }
+
+        var gamePath = Shell.Services.GamePath;
+        var source = picture.LibraryPaths[0];
+        var failures = new List<FileFailure>();
+        await Shell.RunGameWriteAsync(
+            $"Applying {picture.DisplayName}",
+            maps.SelectMany(m => BackgroundApplier.TargetPaths(m.BackgroundSlots))
+                .Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
+            (progress, ct) => Task.Run(
+                () =>
+                {
+                    foreach (var map in maps)
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        progress.Report(map.DisplayName);
+                        failures.AddRange(
+                            BackgroundApplier.Apply(source, gamePath, map.BackgroundSlots, null, ct).Failures);
+                    }
+                },
+                ct),
+            $"{picture.DisplayName} applied to {MainViewModel.Count(maps.Count, "map")}",
+            clearTicks: true);
+
+        Shell.Dialogs.ShowFailures("Some pictures could not be applied", failures);
+    }
+
+    /// <summary>Spec 3.3: the ticked maps back to the Default pack, the same reset one map's panel offers.</summary>
+    [RelayCommand(CanExecute = nameof(CanResetTicked))]
+    private async Task ResetTickedAsync()
+    {
+        var maps = Shell.SelectedMaps;
+        if (_snapshot is not { } snapshot || snapshot.DefaultPack is not { } defaultPack || maps.Count == 0
+            || !Confirm("Reset to default", "Reset", maps))
+        {
+            return;
+        }
+
+        var gamePath = Shell.Services.GamePath;
+        var failures = new List<FileFailure>();
+        await Shell.RunGameWriteAsync(
+            "Resetting",
+            maps.SelectMany(m => PackApplier.ResetMapPaths(snapshot.Tree, m, defaultPack))
+                .Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
+            (progress, ct) => Task.Run(
+                () =>
+                {
+                    foreach (var map in maps)
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        progress.Report(map.DisplayName);
+                        failures.AddRange(
+                            MapReset.ResetMap(gamePath, map.FolderName, map.BackgroundSlots, defaultPack).Failures);
+                    }
+                },
+                ct),
+            $"Reset {MainViewModel.Count(maps.Count, "map")} to default",
+            clearTicks: true);
+
+        Shell.Dialogs.ShowFailures("Some files could not be reset", failures);
+    }
+
+    private bool CanResetTicked() => _snapshot?.DefaultPack is not null;
+
+    /// <summary>Spec 3.3: a write to more than one map names the count and the maps first; one map is one click.</summary>
+    private bool Confirm(string title, string verb, IReadOnlyList<MapEntry> maps) =>
+        maps.Count <= 1
+        || Shell.Dialogs.Confirm(
+            title,
+            $"{verb} to these {maps.Count} maps?\n\n{string.Join(", ", maps.Select(m => m.DisplayName))}");
+
     public override void Refresh(ScanSnapshot snapshot)
     {
         _snapshot = snapshot;
@@ -269,6 +411,19 @@ public partial class MapsViewModel : PageViewModel
             : _all.FirstOrDefault(c => c.FolderName.Equals(opened, StringComparison.OrdinalIgnoreCase));
 
         _ = LoadPreviewsAsync([.. _all], snapshot.Catalog.HasLevelData, _previews.Token);
+
+        // Spec 3.3: the two menus the selection bar opens, rebuilt from the scan they describe. The Add Custom
+        // Image row is last and is always there, so the menu is never empty.
+        PictureChoices =
+        [
+            .. CustomPictures().Select(p => new PictureMenuItem(p.DisplayName, p)),
+            new PictureMenuItem("Add Custom Image...", null),
+        ];
+        OnPropertyChanged(nameof(PackChoices));
+        OnPropertyChanged(nameof(PictureChoices));
+
+        // The reset is off until a scan finds a Default pack, and this is the only thing that changes that answer.
+        ResetTickedCommand.NotifyCanExecuteChanged();
 
         // Last, because a map that has gone from the catalog has just left the ticked set.
         Shell.NotifySelectionChanged();
@@ -322,6 +477,8 @@ public partial class MapsViewModel : PageViewModel
         {
             RebuildChips(_snapshot?.Catalog);
             OnPropertyChanged(nameof(SelectAllShownText));
+            OnPropertyChanged(nameof(SelectionText));
+            OnPropertyChanged(nameof(HasTicks));
         }
     }
 
@@ -332,6 +489,10 @@ public partial class MapsViewModel : PageViewModel
             Shell.NotifySelectionChanged();
         }
     }
+
+    /// <summary>The custom pictures the Apply picture menu offers. Empty in part A: part B replaces this with the
+    /// snapshot's own CustomPictureLibrary list and changes nothing else on this page (spec 4).</summary>
+    private static IReadOnlyList<CustomPicture> CustomPictures() => [];
 
     /// <summary>Fills the cards one at a time. The render queue serialises the composites anyway, and going in
     /// display order means the cards the grid shows first are the ones that fill first. Fire and forget: the card
