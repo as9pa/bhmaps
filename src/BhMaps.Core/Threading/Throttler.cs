@@ -33,8 +33,10 @@ public sealed class Throttler
     /// DispatcherUnhandledException handler instead of being swallowed as an unobserved task.</summary>
     public async void Run(Func<CancellationToken, Task> work) => await RunAsync(work);
 
-    /// <summary>Completes when the queue this call joined has drained. Cancellation is swallowed; anything else
-    /// the work throws comes back out to the caller, and the throttle is left usable.</summary>
+    /// <summary>What the returned task means depends on which call this is: the one that starts the loop completes
+    /// when the loop has drained, while a call that arrives with one already in flight completes at once, as soon
+    /// as its work is queued, that work running on the loop owner's next turn. Cancellation is swallowed; anything
+    /// else the work throws comes back out to the caller, and the throttle is left usable.</summary>
     public async Task RunAsync(Func<CancellationToken, Task> work)
     {
         _pending = work;
