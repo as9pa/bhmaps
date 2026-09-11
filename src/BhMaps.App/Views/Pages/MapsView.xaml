@@ -674,10 +674,14 @@
               <Button.ContextMenu>
                 <ContextMenu ItemsSource="{Binding PackChoices}" Style="{StaticResource TileContextMenu}">
                   <ContextMenu.ItemContainerStyle>
+                    <!-- The fourth setter for the same reason as ChoiceContainer above: TileMenuItem names a
+                         row from Text, which a pack row has not got, so without this every row fails that
+                         binding and falls back to its header. -->
                     <Style TargetType="MenuItem" BasedOn="{StaticResource TileMenuItem}">
                       <Setter Property="Header" Value="{Binding Name}" />
                       <Setter Property="Command" Value="{Binding DataContext.ApplyPackToTickedCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                       <Setter Property="CommandParameter" Value="{Binding}" />
+                      <Setter Property="AutomationProperties.Name" Value="{Binding Name}" />
                     </Style>
                   </ContextMenu.ItemContainerStyle>
                 </ContextMenu>
@@ -688,10 +692,13 @@
               <Button.ContextMenu>
                 <ContextMenu ItemsSource="{Binding PictureChoices}" Style="{StaticResource TileContextMenu}">
                   <ContextMenu.ItemContainerStyle>
+                    <!-- Header rather than Name here: a picture row carries no Name, and TileMenuItem's own
+                         Text binding would fail on it exactly as it does on a pack row. -->
                     <Style TargetType="MenuItem" BasedOn="{StaticResource TileMenuItem}">
                       <Setter Property="Header" Value="{Binding Header}" />
                       <Setter Property="Command" Value="{Binding DataContext.ApplyPictureToTickedCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                       <Setter Property="CommandParameter" Value="{Binding}" />
+                      <Setter Property="AutomationProperties.Name" Value="{Binding Header}" />
                     </Style>
                   </ContextMenu.ItemContainerStyle>
                 </ContextMenu>
