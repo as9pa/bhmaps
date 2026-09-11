@@ -227,10 +227,8 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
-    /// <summary>Opens the Add Custom Image window (spec 7.1), then imports what it collected and, when it asked
-    /// for it, applies those pictures to the maps. <paramref name="target"/> is the caller's aim: one named map,
-    /// the ticked set, every map, or the library alone. B8 gives the window the four radios; until then a named
-    /// map is the only kind that changes what is written.</summary>
+    /// <summary>Spec 7.1: the window collects pictures, a pack and one of four outcomes. The import and any apply
+    /// belong here, because both belong to the busy boundary.</summary>
     public async Task OpenAddPicturesAsync(AddPicturesTarget target)
     {
         if (Snapshot is not { } snapshot)
@@ -238,10 +236,14 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
-        var mapFolder = target.Kind == AddPicturesTargetKind.Map ? target.Map?.FolderName : null;
-        var maps = AddPicturesTargets(snapshot, mapFolder);
+        var mapName = target.Map?.DisplayName;
         var vm = new AddPicturesViewModel(
-            Dialogs, snapshot.Packs.Select(p => p.Name).ToList(), maps.Count, mapFolder is not null);
+            Dialogs,
+            snapshot.Packs.Select(p => p.Name).ToList(),
+            target.Kind,
+            mapName,
+            SelectedMapCount,
+            snapshot.Catalog.Maps.Count);
         var window = new AddPicturesWindow { DataContext = vm, Owner = Application.Current.MainWindow };
         if (window.ShowDialog() != true)
         {
@@ -250,18 +252,6 @@ public partial class MainViewModel : ObservableObject
 
         var sources = vm.Files.Select(f => f.FullPath).ToList();
         var packName = vm.EffectivePackName;
-        var apply = vm.ApplyToMaps && maps.Count > 0;
-
-        // Spec 6.3: the maps are named before more than one of them is written. Declining leaves the import to
-        // run on its own, so the work of choosing the pictures is not thrown away with the apply.
-        if (apply
-            && maps.Count > 1
-            && !Dialogs.Confirm(
-                "Apply pictures",
-                $"Apply these pictures to these {maps.Count} maps?\n\n{string.Join(", ", maps.Select(m => m.DisplayName))}"))
-        {
-            apply = false;
-        }
 
         // A library write: no undo snapshot and no game-running policy, so RunBusyAsync rather than a game write.
         PictureImportResult? result = null;
@@ -275,11 +265,11 @@ public partial class MainViewModel : ObservableObject
             Dialogs.ShowFailures("Some pictures could not be imported", result.Failures);
         }
 
-        // Nothing landing in the pack leaves nothing to apply, however the checkbox was left.
-        if (ok && apply && result is { Written.Count: > 0 })
+        var maps = ThenMaps(vm.Then, target, snapshot);
+        if (ok && maps.Count > 0 && result is { Written.Count: > 0 })
         {
             // The apply rescans on its way out, and its done line is the one that ends up in the header.
-            await ApplyPicturesAsync(maps, packName, result.Written);
+            await ApplyPicturesAsync(maps, packName, result.Written, vm.Then == AddPicturesThen.Ticked);
             return;
         }
 
@@ -293,21 +283,39 @@ public partial class MainViewModel : ObservableObject
         await RescanAsync();
     }
 
-    /// <summary>The maps the Add pictures dialog would write to: the one map the Maps panel named, or the ticked
-    /// maps. A map with no background slots is left out, because without level data there is nothing to write
-    /// into (spec 3.6).</summary>
-    private IReadOnlyList<MapEntry> AddPicturesTargets(ScanSnapshot snapshot, string? mapFolder) =>
-        (mapFolder is null
-            ? SelectedMaps
-            : [.. new[] { snapshot.Catalog.ByFolder(mapFolder) }.OfType<MapEntry>()])
-        .Where(m => m.BackgroundSlots.Count > 0)
-        .ToList();
+    /// <summary>The maps the chosen radio names. A map with no background slots is left out: without level data
+    /// there is nothing to write into (spec 3.6).</summary>
+    private IReadOnlyList<MapEntry> ThenMaps(AddPicturesThen then, AddPicturesTarget target, ScanSnapshot snapshot)
+    {
+        IEnumerable<MapEntry> maps = then switch
+        {
+            AddPicturesThen.Map => target.Map is null ? [] : [target.Map],
+            AddPicturesThen.Ticked => SelectedMaps,
+            AddPicturesThen.All => snapshot.Catalog.Maps,
+            _ => [],
+        };
+
+        return maps.Where(m => m.BackgroundSlots.Count > 0).ToList();
+    }
 
     /// <summary>Spec 6.8's optional half, as one game write: the imported pictures go to the maps in order,
     /// starting again from the first picture when there are more maps than pictures, and a picture past the last
     /// map is imported only.</summary>
-    private async Task ApplyPicturesAsync(IReadOnlyList<MapEntry> maps, string packName, IReadOnlyList<string> written)
+    private async Task ApplyPicturesAsync(
+        IReadOnlyList<MapEntry> maps, string packName, IReadOnlyList<string> written, bool clearTicks)
     {
+        // Spec 6.3: the maps are named before more than one of them is written. The import has already run, so
+        // declining still rescans: the library has changed even though nothing was applied. Nothing reached the
+        // game folder, so the ticks stay as they are.
+        if (maps.Count > 1
+            && !Dialogs.Confirm(
+                "Apply pictures",
+                $"Apply these pictures to these {maps.Count} maps?\n\n{string.Join(", ", maps.Select(m => m.DisplayName))}"))
+        {
+            await RescanAsync();
+            return;
+        }
+
         var backgrounds = Path.Combine(
             PackScanner.PacksRoot(Services.LibraryPath), packName, PictureImporter.BackgroundsFolder);
         var pictures = written.Select(name => Path.Combine(backgrounds, name)).ToList();
@@ -335,7 +343,8 @@ public partial class MainViewModel : ObservableObject
                     }
                 },
                 ct),
-            $"{Count(used, "picture")} applied to {Count(maps.Count, "map")}");
+            $"{Count(used, "picture")} applied to {Count(maps.Count, "map")}",
+            clearTicks);
 
         Dialogs.ShowFailures("Some pictures could not be applied", failures);
     }

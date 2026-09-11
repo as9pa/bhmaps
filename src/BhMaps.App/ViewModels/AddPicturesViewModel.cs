@@ -15,9 +15,19 @@ public sealed record PictureFileViewModel(string FullPath)
     public string FileName { get; } = Path.GetFileName(FullPath);
 }
 
-/// <summary>Spec 6.8: any number of dropped or picked pictures, one fit mode for the batch, a target pack, and
-/// optionally an apply to the maps the caller named. The dialog only collects the answers; the shell runs the
-/// import and the apply, because both belong to its busy boundary.</summary>
+/// <summary>Spec 7.1: what the window does once the pictures are in the library. The library alone is always on
+/// offer; the other three are there only when the caller's target can name maps to write to.</summary>
+public enum AddPicturesThen
+{
+    Library,
+    Map,
+    Ticked,
+    All,
+}
+
+/// <summary>Spec 7.1: any number of dropped or picked pictures, one fit mode for the batch, a target pack, and one
+/// of four outcomes: the library alone, or an apply to the named map, the ticked maps or every map. The dialog only
+/// collects the answers; the shell runs the import and the apply, because both belong to its busy boundary.</summary>
 public partial class AddPicturesViewModel : ObservableObject
 {
     public const int PreviewWidth = 320;
@@ -31,24 +41,35 @@ public partial class AddPicturesViewModel : ObservableObject
     private readonly IDialogs _dialogs;
     private readonly Debouncer _preview = new();
 
-    /// <summary>True when the caller named one map rather than leaving it to the sidebar's ticks, which is the
-    /// Home panel's Add picture. It changes the checkbox's words and whether it starts on.</summary>
-    private readonly bool _oneNamedMap;
+    /// <summary>What the caller's target leaves the window to work with: the named map's name, how many maps are
+    /// ticked and how many there are in all. They decide which radios there are and the words on them.</summary>
+    private readonly string? _mapName;
+    private readonly int _tickedCount;
+    private readonly int _allCount;
 
-    public AddPicturesViewModel(IDialogs dialogs, IReadOnlyList<string> packNames, int targetMapCount, bool oneNamedMap)
+    public AddPicturesViewModel(
+        IDialogs dialogs, IReadOnlyList<string> packNames, AddPicturesTargetKind kind, string? mapName,
+        int tickedCount, int allCount)
     {
         _dialogs = dialogs;
-        _oneNamedMap = oneNamedMap;
+        _mapName = mapName;
+        _tickedCount = tickedCount;
+        _allCount = allCount;
         Files = [];
         Files.CollectionChanged += OnFilesChanged;
         PackChoices = packNames.Concat([NewPackChoice]).ToList();
-        TargetMapCount = targetMapCount;
         Fit = PictureFit.Fill;
         Error = "";
 
-        // Adding a picture from one map's panel is about that map, so the apply starts on; from the Backgrounds
-        // header the dialog is a library import that can also write to the game, so there it is opt-in.
-        ApplyToMaps = oneNamedMap && CanApplyToMaps;
+        // Spec 7.1: the caller's target is the radio that starts on, and a target the window cannot offer falls
+        // back to the library, which is the only outcome that is always available.
+        Then = kind switch
+        {
+            AddPicturesTargetKind.Map when mapName is not null => AddPicturesThen.Map,
+            AddPicturesTargetKind.Ticked when tickedCount > 0 => AddPicturesThen.Ticked,
+            AddPicturesTargetKind.All when allCount > 0 => AddPicturesThen.All,
+            _ => AddPicturesThen.Library,
+        };
 
         // The same default the background editor picks, and the same reason: a pack of one's own rather than
         // Default, which is the baseline Reset puts back (spec 6.1).
@@ -66,9 +87,6 @@ public partial class AddPicturesViewModel : ObservableObject
     /// <summary>The pictures to import, in the order they were dropped or picked.</summary>
     public ObservableCollection<PictureFileViewModel> Files { get; }
 
-    /// <summary>How many maps the "Also apply to" checkbox would write to. Zero disables it.</summary>
-    public int TargetMapCount { get; }
-
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(FitStretch), nameof(FitCenter), nameof(FitFill), nameof(FitFit))]
     public partial PictureFit Fit { get; set; }
@@ -84,7 +102,8 @@ public partial class AddPicturesViewModel : ObservableObject
     public partial string NewPackName { get; set; }
 
     [ObservableProperty]
-    public partial bool ApplyToMaps { get; set; }
+    [NotifyPropertyChangedFor(nameof(ThenLibrary), nameof(ThenMap), nameof(ThenTicked), nameof(ThenAll))]
+    public partial AddPicturesThen Then { get; set; }
 
     [ObservableProperty]
     public partial ImageSource? Preview { get; set; }
@@ -92,17 +111,20 @@ public partial class AddPicturesViewModel : ObservableObject
     [ObservableProperty]
     public partial string Error { get; set; }
 
-    /// <summary>The checkbox's line (spec 6.8). One named map is called what it is; otherwise the line carries the
-    /// count of ticked maps it would write to.</summary>
-    public string ApplyToMapsLabel => (_oneNamedMap, TargetMapCount) switch
-    {
-        (true, _) => "Also apply to this map",
-        (_, 0) => "Also apply to the selected maps",
-        (_, 1) => "Also apply to the selected maps (1 map)",
-        _ => $"Also apply to the selected maps ({TargetMapCount} maps)",
-    };
+    /// <summary>The two radios that are not always there: a map the caller named, and a ticked set with maps in
+    /// it. A radio for nothing would be a choice that cannot be made (spec 7.1).</summary>
+    public bool ShowMapChoice => _mapName is not null;
 
-    public bool CanApplyToMaps => TargetMapCount > 0;
+    public bool ShowTickedChoice => _tickedCount > 0;
+
+    /// <summary>Each radio says what it does, in the words of the thing it would write to.</summary>
+    public string MapChoiceText => $"Add and apply to {_mapName}";
+
+    public string TickedChoiceText => _tickedCount == 1
+        ? "Add and apply to the 1 ticked map"
+        : $"Add and apply to the {_tickedCount} ticked maps";
+
+    public string AllChoiceText => $"Add and apply to all {_allCount} maps";
 
     public bool IsNewPack => TargetPack == NewPackChoice;
 
@@ -158,6 +180,54 @@ public partial class AddPicturesViewModel : ObservableObject
             if (value)
             {
                 Fit = PictureFit.Fit;
+            }
+        }
+    }
+
+    public bool ThenLibrary
+    {
+        get => Then == AddPicturesThen.Library;
+        set
+        {
+            if (value)
+            {
+                Then = AddPicturesThen.Library;
+            }
+        }
+    }
+
+    public bool ThenMap
+    {
+        get => Then == AddPicturesThen.Map;
+        set
+        {
+            if (value)
+            {
+                Then = AddPicturesThen.Map;
+            }
+        }
+    }
+
+    public bool ThenTicked
+    {
+        get => Then == AddPicturesThen.Ticked;
+        set
+        {
+            if (value)
+            {
+                Then = AddPicturesThen.Ticked;
+            }
+        }
+    }
+
+    public bool ThenAll
+    {
+        get => Then == AddPicturesThen.All;
+        set
+        {
+            if (value)
+            {
+                Then = AddPicturesThen.All;
             }
         }
     }
