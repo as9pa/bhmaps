@@ -721,10 +721,20 @@ public partial class MainViewModel : ObservableObject
     /// <summary>The line an undo leaves. Spec 11 names no string for it, so this is the plan's (A-D7).</summary>
     public const string UndoDoneText = "Last change undone.";
 
+    /// <summary>The whole done line: the page's fragment, then the shared sentence, with exactly one period
+    /// between them however the fragment was punctuated. The wrapper settles the period for the same reason it
+    /// settles the sentence: a page cannot get it wrong if a page does not decide it. An empty fragment leaves
+    /// the sentence standing alone rather than a line that opens with a stop.</summary>
+    private static string DoneLine(string doneText, bool gameRunning)
+    {
+        var fragment = doneText.TrimEnd('.');
+        return fragment.Length == 0 ? DoneSentence(gameRunning) : $"{fragment}. {DoneSentence(gameRunning)}";
+    }
+
     /// <summary>One write into the game folder (spec 8): the busy boundary, an undo snapshot of the paths it is
-    /// about to touch, a done line ending in the shared sentence, the ticks cleared when the write was aimed at
-    /// them, and a rescan. False when the folder was missing, another operation held the boundary, or the write
-    /// was cancelled or failed.</summary>
+    /// about to touch, a done line the wrapper finishes with the period and the shared sentence, the ticks
+    /// cleared when the write was aimed at them, and a rescan. False when the folder was missing, another
+    /// operation held the boundary, or the write was cancelled or failed.</summary>
     public Task<bool> RunGameWriteAsync(
         string label,
         IReadOnlyList<string> undoPaths,
@@ -775,7 +785,7 @@ public partial class MainViewModel : ObservableObject
 
         // Begin has already replaced the previous snapshot, so a write that was cancelled or failed has to clear
         // the done line too; leaving it would describe something Undo no longer restores.
-        DoneText = ok ? $"{doneText} {DoneSentence(GameRunning)}" : "";
+        DoneText = ok ? DoneLine(doneText, GameRunning) : "";
         DoneUndoable = ok && undoable;
 
         // A restore that fully succeeds discards its snapshot, so what can be undone is always read back from the
