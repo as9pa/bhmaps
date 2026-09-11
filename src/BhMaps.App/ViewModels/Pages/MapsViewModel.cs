@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Windows;
 using BhMaps.App.Services;
 using BhMaps.Core.Maps;
 using BhMaps.Core.Operations;
@@ -9,8 +10,9 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace BhMaps.App.ViewModels.Pages;
 
-/// <summary>Spec 3.1: the chip row with the zoom slider at its right end, and the grid of composed map cards.
-/// No summary bar and no composition bars; the header carries the search box and Reset all to default.</summary>
+/// <summary>Spec 3.1: the chip row with "Select all shown" at its right end, and the grid of composed map cards.
+/// No summary bar and no composition bars; the header carries the search box, the zoom and Reset all to
+/// default, so nothing the chips do can move the slider.</summary>
 public partial class MapsViewModel : PageViewModel
 {
     public const int MinZoom = AppSettings.MinZoom;
@@ -18,6 +20,7 @@ public partial class MapsViewModel : PageViewModel
 
     private const string AllChip = "All";
     private const string ChangedChip = "Changed";
+    private const string TickedChip = "Ticked";
 
     /// <summary>Every card the last scan produced. Cards is this list under the chip and the search.</summary>
     private readonly List<MapCardViewModel> _all = [];
@@ -64,9 +67,9 @@ public partial class MapsViewModel : PageViewModel
     [ObservableProperty]
     public partial string SearchText { get; set; }
 
-    /// <summary>"All", the UI set labels, then "Changed". Without level data the set chips are gone entirely and
-    /// only the two remain (spec 3.6). An ObservableCollection behind the read-only surface, because the row
-    /// changes when the level data does.</summary>
+    /// <summary>"All", the UI set labels, "Changed", and "Ticked" once anything is ticked. Without level data the
+    /// set chips are gone entirely (spec 3.6). An ObservableCollection behind the read-only surface, because the
+    /// row changes when the level data does and when the first map is ticked.</summary>
     public IReadOnlyList<string> Chips => _chips;
 
     [ObservableProperty]
@@ -85,6 +88,56 @@ public partial class MapsViewModel : PageViewModel
     [ObservableProperty]
     public partial MapPanelViewModel? Panel { get; set; }
 
+    /// <summary>Spec 3.1's density steps. At 7 and 8 the name shrinks and the tag goes; at 9 and 10 the name row
+    /// goes with it, the card tightens to 4 px padding and 8 px gaps, and Missing becomes a mark on the picture.
+    /// ShowTagRow is the zoom's answer for every card; MapCardViewModel.ShowTag is one card's own answer about
+    /// whether it has a tag at all. Both have to be true for a tag to be drawn, so they keep different names.</summary>
+    public bool ShowName => Zoom <= 8;
+
+    public bool ShowTagRow => Zoom <= 6;
+
+    public bool ShowMissingMark => Zoom >= 9;
+
+    public double NameFontSize => Zoom <= 6 ? 13 : 12;
+
+    public Thickness CardPadding => Zoom <= 8 ? new Thickness(8) : new Thickness(4);
+
+    public Thickness CardMargin => Zoom <= 8 ? new Thickness(0, 0, 12, 12) : new Thickness(0, 0, 8, 8);
+
+    /// <summary>Spec 3.1: the chip row's teaching button. It names the count whenever the grid is filtered.</summary>
+    public string SelectAllShownText =>
+        Cards.Count == _all.Count ? "Select all shown" : $"Select all {Cards.Count} shown";
+
+    /// <summary>Spec 3.1: why the grid is empty, in one line.</summary>
+    public string EmptyText
+    {
+        get
+        {
+            var what = SelectedChip switch
+            {
+                AllChip => "map",
+                ChangedChip => "changed map",
+                TickedChip => "ticked map",
+                _ => $"{SelectedChip.ToLowerInvariant()} map",
+            };
+            if (SearchText.Length > 0)
+            {
+                return $"No {what} named '{SearchText}'";
+            }
+
+            return SelectedChip == ChangedChip
+                ? "No map is changed. Every map matches the Default pack."
+                : $"No {what} to show.";
+        }
+    }
+
+    public bool ShowClearSearch => SearchText.Length > 0;
+
+    /// <summary>Spec 3.1's first-run line: nothing in the library but the Default pack. Part B ands in the
+    /// custom-picture half (plan decision A-D6).</summary>
+    public bool ShowFirstRunLine =>
+        _snapshot is { } s && !s.Packs.Any(p => !p.Name.Equals(DefaultPack.Name, StringComparison.OrdinalIgnoreCase));
+
     /// <summary>Opens one map's right panel. A click on a card runs the generated command.</summary>
     [RelayCommand]
     public void OpenMap(string? folderName)
@@ -102,13 +155,20 @@ public partial class MapsViewModel : PageViewModel
         Shell.LastOpenedMap = folderName;
     }
 
-    /// <summary>The no-results state's way back (spec 7.8): the All chip and an empty search box.</summary>
+    /// <summary>Spec 3.1: ticks every map the chips and the search currently show, which is what makes a preset
+    /// two clicks: a chip, then this.</summary>
     [RelayCommand]
-    private void ShowAll()
+    private void SelectAllShown()
     {
-        SearchText = "";
-        SelectedChip = AllChip;
+        foreach (var card in Cards.ToList())
+        {
+            card.IsSelected = true;
+        }
     }
+
+    /// <summary>The no-results state's way back when a search caused it (spec 3.1).</summary>
+    [RelayCommand]
+    private void ClearSearch() => SearchText = "";
 
     /// <summary>Spec 7.2's one page action: every folder in the game tree back to the Default pack, or deleted for
     /// the game to regenerate when there is no Default pack.</summary>
@@ -183,6 +243,7 @@ public partial class MapsViewModel : PageViewModel
 
         RebuildChips(snapshot.Catalog);
         ApplyFilter();
+        OnPropertyChanged(nameof(ShowFirstRunLine));
 
         // The card the panel was on is a new object now, so it is found again by folder name rather than left
         // pointing at one nothing draws.
@@ -225,14 +286,25 @@ public partial class MapsViewModel : PageViewModel
         {
             Shell.Services.UpdateSettings(Shell.Services.Settings with { MapsZoom = value });
         }
+
+        // The card template reads these numbers rather than carrying a pile of triggers of its own.
+        OnPropertyChanged(nameof(ShowName));
+        OnPropertyChanged(nameof(ShowTagRow));
+        OnPropertyChanged(nameof(ShowMissingMark));
+        OnPropertyChanged(nameof(NameFontSize));
+        OnPropertyChanged(nameof(CardPadding));
+        OnPropertyChanged(nameof(CardMargin));
     }
 
     private void OnShellChanged(object? sender, PropertyChangedEventArgs e)
     {
-        // SelectedMaps is raised alongside this one; reacting to the count alone does the work once. The branch
-        // is deliberately empty here: A7 hangs the chip row rebuild on it and A10 the selection bar's lines.
+        // SelectedMaps is raised alongside this one; reacting to the count alone does the work once. The first
+        // tick is what puts the Ticked chip in the row, and the last untick takes it away again. A10 hangs the
+        // selection bar's lines on the same branch.
         if (e.PropertyName == nameof(MainViewModel.SelectedMapCount))
         {
+            RebuildChips(_snapshot?.Catalog);
+            OnPropertyChanged(nameof(SelectAllShownText));
         }
     }
 
@@ -268,10 +340,22 @@ public partial class MapsViewModel : PageViewModel
     }
 
     /// <summary>Rebuilt only when the row actually changes, because replacing the items would clear the chip
-    /// ListBox's selection and push a null back through it.</summary>
-    private void RebuildChips(MapCatalog catalog)
+    /// ListBox's selection and push a null back through it. The catalog is nullable because the tick hook can
+    /// reach this before the first scan, and there is no row to build then.</summary>
+    private void RebuildChips(MapCatalog? catalog)
     {
+        if (catalog is null)
+        {
+            return;
+        }
+
+        // Spec 3.1: All, the set chips, Changed, and Ticked once anything is ticked.
         List<string> wanted = [AllChip, .. catalog.UiSets.Select(s => s.Label), ChangedChip];
+        if (Shell.SelectedMapCount > 0)
+        {
+            wanted.Add(TickedChip);
+        }
+
         if (_chips.SequenceEqual(wanted))
         {
             return;
@@ -312,6 +396,10 @@ public partial class MapsViewModel : PageViewModel
                 card.IsSelected = wanted;
             }
         }
+
+        OnPropertyChanged(nameof(SelectAllShownText));
+        OnPropertyChanged(nameof(EmptyText));
+        OnPropertyChanged(nameof(ShowClearSearch));
     }
 
     /// <summary>The chip filter, then the header search box on top of it.</summary>
@@ -327,14 +415,15 @@ public partial class MapsViewModel : PageViewModel
         {
             AllChip => true,
             ChangedChip => IsChanged(card),
+            TickedChip => card.IsSelected,
             _ => _uiSets.FirstOrDefault(s => s.Label == SelectedChip) is { } set
                 && card.Map.Sets.Contains(set.Name, StringComparer.OrdinalIgnoreCase),
         };
     }
 
-    /// <summary>Anything the scan did not summarise as Default: a pack, a custom file, or a missing one.</summary>
+    /// <summary>Everything that has a tag other than Missing (spec 3.1): a pack's art or a custom picture.</summary>
     private bool IsChanged(MapCardViewModel card) =>
         _snapshot is { } snapshot
         && snapshot.MapStatuses.TryGetValue(card.FolderName, out var status)
-        && status.State != MapState.Default;
+        && status.State is MapState.Packs or MapState.Custom;
 }

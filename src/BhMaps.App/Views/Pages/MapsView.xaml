@@ -51,18 +51,21 @@
     </Style>
 
     <!-- A card is a Button, so a click and Space or Enter on a focused card open the same map, and the focus ring
-         is the one the tiles wear. -->
+         is the one the tiles wear. The gap and the padding are the zoom's (spec 3.1), read off the page rather
+         than set here, so the two tightest steps can tighten both. -->
     <Style x:Key="MapCard" TargetType="Button">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="Cursor" Value="Hand" />
       <Setter Property="FocusVisualStyle" Value="{x:Null}" />
       <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-      <Setter Property="Margin" Value="0,0,12,12" />
+      <Setter Property="Margin" Value="{Binding DataContext.CardMargin, RelativeSource={RelativeSource AncestorType=ItemsControl}}" />
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="Button">
             <Grid>
-              <Border x:Name="Chrome" Padding="8" Style="{StaticResource CardBorder}">
+              <Border x:Name="Chrome"
+                      Padding="{Binding DataContext.CardPadding, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                      Style="{StaticResource CardBorder}">
                 <ContentPresenter />
               </Border>
               <Border x:Name="Ring"
@@ -395,9 +398,9 @@
                reads as two lines. -->
           <Grid Width="200" Height="{StaticResource ActionHeight}" VerticalAlignment="Center">
             <!-- Its own padding, not the style's: a TextBox reserves the whole of Geist's line box, which at this
-                 size is taller than an action, and the style's 6 top and bottom would clip the text out of a box
-                 this high. 6 and 0 leave the line box room and put the glyphs on the button's own rows. The left
-                 padding is the canvas's: 10 to the icon, 15 of icon, 8 to the text. -->
+                 size is taller than an action, so the box keeps 6 at the top and 0 at the bottom to put its
+                 glyphs on the buttons' own rows inside the header's 33 px. The left padding is the canvas's:
+                 10 to the icon, 15 of icon, 8 to the text. -->
             <!-- Tagged, not named: an element inside the PageHeader's content cannot take an x:Name, because
                  the user control owns a name scope of its own. Ctrl+K finds the box by this marker. -->
             <TextBox Padding="33,6,10,0"
@@ -431,6 +434,13 @@
             </TextBlock>
           </Grid>
 
+          <!-- Spec 3.1: the zoom belongs to the header row, where nothing the chip row does can move it. -->
+          <controls:ZoomSlider Margin="16,0,0,0"
+                               VerticalAlignment="Center"
+                               Maximum="{x:Static pages:MapsViewModel.MaxZoom}"
+                               Minimum="{x:Static pages:MapsViewModel.MinZoom}"
+                               Value="{Binding Zoom}" />
+
           <!-- CanWrite, not IsNotBusy: this writes into the game folder, so it is also off while that folder is
                missing and its confirm cannot be reached from a live-looking button (spec 7.8). -->
           <Button Margin="8,0,0,0"
@@ -443,7 +453,7 @@
       </controls:PageHeader.Actions>
     </controls:PageHeader>
 
-    <Grid DockPanel.Dock="Top" Margin="0,4,0,16">
+    <Grid DockPanel.Dock="Top" Margin="0,4,0,8">
       <ListBox HorizontalAlignment="Left"
                ItemContainerStyle="{StaticResource ChipRow}"
                ItemsSource="{Binding Chips}"
@@ -456,12 +466,23 @@
         </ListBox.ItemsPanel>
       </ListBox>
 
-      <controls:ZoomSlider HorizontalAlignment="Right"
-                           VerticalAlignment="Center"
-                           Maximum="{x:Static pages:MapsViewModel.MaxZoom}"
-                           Minimum="{x:Static pages:MapsViewModel.MinZoom}"
-                           Value="{Binding Zoom}" />
+      <!-- Spec 3.1: the row's teaching button, always present, because it is what says maps can be ticked. -->
+      <Button HorizontalAlignment="Right"
+              VerticalAlignment="Center"
+              Command="{Binding SelectAllShownCommand}"
+              Content="{Binding SelectAllShownText}"
+              controls:Icon.Glyph="{StaticResource Icon.Check}"
+              Style="{StaticResource PlainButton}" />
     </Grid>
+
+    <!-- Spec 3.1: the only line a first-timer needs, and it goes when a pack arrives. -->
+    <TextBlock DockPanel.Dock="Top"
+               Margin="0,0,0,12"
+               Foreground="{StaticResource Text2Brush}"
+               TextWrapping="Wrap"
+               Visibility="{Binding ShowFirstRunLine, Converter={StaticResource BoolToVis}}">
+      <Run Text="No packs yet. Import a folder of map art on the " /><Hyperlink Command="{Binding DataContext.NavigatePacksCommand, RelativeSource={RelativeSource AncestorType=Window}}" Foreground="{StaticResource TextBrush}"><Run Text="Packs" /></Hyperlink><Run Text=" page, or add a custom image on " /><Hyperlink Command="{Binding DataContext.NavigateBackgroundsCommand, RelativeSource={RelativeSource AncestorType=Window}}" Foreground="{StaticResource TextBrush}"><Run Text="Backgrounds" /></Hyperlink><Run Text="." />
+    </TextBlock>
 
     <!-- The grid first and the panel second, because WPF tabs in declaration order: a DockPanel would have to
          declare the docked panel before the fill child and Tab would reach it before the cards. -->
@@ -489,31 +510,69 @@
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
               <DataTemplate>
+                <!-- The tooltip is the name and the tag, which is the only place they are at the two tightest
+                     zoom steps (spec 3.1), and a longer name than the card can draw at any step. -->
                 <Button AutomationProperties.Name="{Binding DisplayName}"
                         Command="{Binding DataContext.OpenMapCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                         CommandParameter="{Binding FolderName}"
-                        Style="{StaticResource MapCard}">
+                        Style="{StaticResource MapCard}"
+                        ToolTip="{Binding ToolTipText}">
                   <StackPanel>
                     <!-- The Viewbox holds the card source's shape at any column width, so a card that has not
                          drawn its preview yet is the same size as one that has and nothing jumps. The size comes
                          from the compositor that renders it, so the two cannot drift apart. Through a OneTime
                          Binding rather than a bare x:Static: the constants are pixel counts and so int, and
                          setting a Double property from an int markup extension throws at load. -->
-                    <Viewbox Stretch="Uniform">
-                      <Grid Width="{Binding Source={x:Static imaging:MapCompositor.CardWidth}, Mode=OneTime}"
-                            Height="{Binding Source={x:Static imaging:MapCompositor.CardHeight}, Mode=OneTime}"
-                            Background="{StaticResource TileBrush}">
-                        <Image RenderOptions.BitmapScalingMode="HighQuality"
-                               Source="{Binding Preview}"
-                               Stretch="UniformToFill" />
-                      </Grid>
-                    </Viewbox>
+                    <Grid>
+                      <Viewbox Stretch="Uniform">
+                        <Grid Width="{Binding Source={x:Static imaging:MapCompositor.CardWidth}, Mode=OneTime}"
+                              Height="{Binding Source={x:Static imaging:MapCompositor.CardHeight}, Mode=OneTime}"
+                              Background="{StaticResource TileBrush}">
+                          <Image RenderOptions.BitmapScalingMode="HighQuality"
+                                 Source="{Binding Preview}"
+                                 Stretch="UniformToFill" />
+                        </Grid>
+                      </Viewbox>
 
-                    <TextBlock Margin="2,8,2,0" Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" />
+                      <!-- Spec 3.1: with the tag row gone at 9 and 10, Missing is a mark on the picture. Over the
+                           Viewbox rather than inside it: the Viewbox scales the compositor's 640 px down to the
+                           card, which at 10 columns would draw these 10 px as 2. -->
+                      <Border Width="10"
+                              Height="10"
+                              Margin="4"
+                              HorizontalAlignment="Right"
+                              VerticalAlignment="Top"
+                              Background="{StaticResource MissingFgBrush}"
+                              CornerRadius="5">
+                        <Border.Style>
+                          <Style TargetType="Border">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                              <MultiDataTrigger>
+                                <MultiDataTrigger.Conditions>
+                                  <Condition Binding="{Binding IsMissing}" Value="True" />
+                                  <Condition Binding="{Binding DataContext.ShowMissingMark, RelativeSource={RelativeSource AncestorType=ItemsControl}}" Value="True" />
+                                </MultiDataTrigger.Conditions>
+                                <Setter Property="Visibility" Value="Visible" />
+                              </MultiDataTrigger>
+                            </Style.Triggers>
+                          </Style>
+                        </Border.Style>
+                      </Border>
+                    </Grid>
+
+                    <TextBlock Margin="2,8,2,0"
+                               FontSize="{Binding DataContext.NameFontSize, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                               Text="{Binding DisplayName}"
+                               TextTrimming="CharacterEllipsis"
+                               Visibility="{Binding DataContext.ShowName, RelativeSource={RelativeSource AncestorType=ItemsControl}, Converter={StaticResource BoolToVis}}" />
 
                     <!-- Two tags, because Missing is a style of its own rather than a colour on the ordinary one.
-                         Each sits in a wrapper that carries the visibility, so neither theme style is derived from. -->
-                    <Grid Margin="2,6,2,0" HorizontalAlignment="Left">
+                         Each sits in a wrapper that carries the visibility, so neither theme style is derived from.
+                         The row itself is the zoom's: at 7 and above there are no tags at all. -->
+                    <Grid Margin="2,6,2,0"
+                          HorizontalAlignment="Left"
+                          Visibility="{Binding DataContext.ShowTagRow, RelativeSource={RelativeSource AncestorType=ItemsControl}, Converter={StaticResource BoolToVis}}">
                       <Grid>
                         <Grid.Style>
                           <Style TargetType="Grid">
@@ -521,14 +580,14 @@
                               <DataTrigger Binding="{Binding IsMissing}" Value="True">
                                 <Setter Property="Visibility" Value="Collapsed" />
                               </DataTrigger>
-                              <DataTrigger Binding="{Binding StateText}" Value="">
+                              <DataTrigger Binding="{Binding TagText}" Value="">
                                 <Setter Property="Visibility" Value="Collapsed" />
                               </DataTrigger>
                             </Style.Triggers>
                           </Style>
                         </Grid.Style>
                         <Border Style="{StaticResource StateTagBorder}">
-                          <TextBlock Text="{Binding StateText}" />
+                          <TextBlock Text="{Binding TagText}" />
                         </Border>
                       </Grid>
                       <Grid>
@@ -543,7 +602,7 @@
                           </Style>
                         </Grid.Style>
                         <Border Style="{StaticResource MissingTagBorder}">
-                          <TextBlock Text="{Binding StateText}" />
+                          <TextBlock Text="{Binding TagText}" />
                         </Border>
                       </Grid>
                     </Grid>
@@ -554,7 +613,7 @@
           </ItemsControl>
         </ScrollViewer>
 
-        <!-- Spec 7.8: no results for a chip or a search says so, and offers the way back. -->
+        <!-- Spec 3.1: an empty grid says why in one line, and offers the way back when a search caused it. -->
         <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
           <StackPanel.Style>
             <Style TargetType="StackPanel">
@@ -568,12 +627,14 @@
           </StackPanel.Style>
           <TextBlock HorizontalAlignment="Center"
                      Foreground="{StaticResource Text2Brush}"
-                     Text="No maps match this filter." />
+                     Text="{Binding EmptyText}"
+                     TextWrapping="Wrap" />
           <Button Margin="0,8,0,0"
                   HorizontalAlignment="Center"
-                  Command="{Binding ShowAllCommand}"
-                  Content="Show all"
-                  Style="{StaticResource PlainButton}" />
+                  Command="{Binding ClearSearchCommand}"
+                  Content="Clear search"
+                  Style="{StaticResource PlainButton}"
+                  Visibility="{Binding ShowClearSearch, Converter={StaticResource BoolToVis}}" />
         </StackPanel>
       </Grid>
 

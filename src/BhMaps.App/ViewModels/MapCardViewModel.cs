@@ -8,9 +8,12 @@ using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace BhMaps.App.ViewModels;
 
-/// <summary>One card on the Home grid (spec 7.2): the composed preview, the map's name and its state tag.</summary>
+/// <summary>One card on the Maps grid (spec 7.2): the composed preview, the map's name and its state tag.</summary>
 public partial class MapCardViewModel : ObservableObject
 {
+    /// <summary>The longest a custom picture's file name is drawn at (spec 3.1).</summary>
+    public const int TagMaxLength = 16;
+
     public MapCardViewModel(MapEntry map, MapStatus? status)
     {
         Map = map;
@@ -19,7 +22,15 @@ public partial class MapCardViewModel : ObservableObject
         StateText = status?.Text ?? "";
 
         // Missing is the only coloured state (D8), which is exactly when the card wears the coloured tag.
-        IsMissing = status?.IsColoured ?? false;
+        IsMissing = status?.State == MapState.Missing;
+        TagText = status?.State switch
+        {
+            MapState.Missing => "Missing",
+            MapState.Packs => status.Text,
+            MapState.Custom => Ellipsise(CustomName(map)),
+            _ => "",
+        };
+        ToolTipText = TagText.Length == 0 ? DisplayName : $"{DisplayName} ({TagText})";
     }
 
     public string FolderName { get; }
@@ -27,11 +38,22 @@ public partial class MapCardViewModel : ObservableObject
     /// <summary>The map's in-game name, or its folder name in the no-level-data fallback (spec 3.6).</summary>
     public string DisplayName { get; }
 
-    /// <summary>The tag's text: "Default", the pack names, "Custom" or "Missing". Empty when the scan produced
-    /// no status for this map, and then no tag is drawn.</summary>
+    /// <summary>The scan's own summary: "Default", the pack names, "Custom" or "Missing". Empty when the scan
+    /// produced no status for this map.</summary>
     public string StateText { get; }
 
     public bool IsMissing { get; }
+
+    /// <summary>Spec 3.1's tag, drawn only when it says which art is on the map: the pack names, the custom
+    /// picture's file name ellipsised at <see cref="TagMaxLength"/>, or "Missing". Default draws no tag, and
+    /// neither does a map the scan produced no status for.</summary>
+    public string TagText { get; }
+
+    /// <summary>The name and the tag in one line, for the two tightest zoom steps where the card draws neither
+    /// (spec 3.1).</summary>
+    public string ToolTipText { get; }
+
+    public bool ShowTag => TagText.Length > 0;
 
     /// <summary>The catalog entry behind the card, so a page can filter on its sets without a second lookup.</summary>
     public MapEntry Map { get; }
@@ -103,6 +125,14 @@ public partial class MapCardViewModel : ObservableObject
             return null;
         }
     }
+
+    /// <summary>Which picture is on the map. Part A can only name the slot the game holds; part B replaces this
+    /// one expression with CustomPictureLibrary's display name (plan decision A-D5).</summary>
+    private static string CustomName(MapEntry map) =>
+        map.BackgroundSlots.Count > 0 ? map.BackgroundSlots[0] : "Custom";
+
+    private static string Ellipsise(string name) =>
+        name.Length <= TagMaxLength ? name : name[..(TagMaxLength - 1)] + "\u2026";
 
     /// <summary>Decoded whole and frozen off the UI thread, so nothing is read from disk while the card draws.</summary>
     private static BitmapImage Load(string path)
