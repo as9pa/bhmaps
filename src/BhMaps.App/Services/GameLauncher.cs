@@ -9,8 +9,8 @@ public sealed class GameLauncher
 {
     public bool IsRunning => GameProcess.IsRunning();
 
-    /// <summary>Runs the write. Always true: nothing turns a write away any more. The shape is kept so
-    /// MainViewModel.RunGameWriteAsync reads as it did and the one call site did not have to be rebuilt.</summary>
+    /// <summary>Runs the write. Always true: nothing turns a write away any more. The shape is kept so the one
+    /// call site, MainViewModel's game-write core, reads as it did.</summary>
     public async Task<bool> RunWriteAsync(string actionLabel, Func<Task> write)
     {
         _ = actionLabel;
