@@ -155,7 +155,7 @@ public partial class MapsViewModel : PageViewModel
     public IReadOnlyList<Pack> PackChoices => _snapshot?.Packs ?? [];
 
     /// <summary>The Apply picture menu: the library's custom pictures, then "Add Custom Image..." (spec 3.3).
-    /// Part A leaves the list empty; part B fills it from CustomPictureLibrary and changes nothing else here.</summary>
+    /// Rebuilt by every scan, so a picture that has just been imported is on the menu the next time it opens.</summary>
     public IReadOnlyList<PictureMenuItem> PictureChoices { get; private set; } = [];
 
     /// <summary>Opens one map's right panel. A click on a card runs the generated command.</summary>
@@ -273,8 +273,9 @@ public partial class MapsViewModel : PageViewModel
         }
     }
 
-    /// <summary>Spec 3.3: one picture into every ticked map's own slots. The last menu row has no picture: it
-    /// opens Add Custom Image with the ticked maps as its target (spec 7.1), which is the shell's flow.</summary>
+    /// <summary>Spec 3.3: one picture into every ticked map's own slots, through the shell's shared write, so the
+    /// confirm, the undo list and the done line are the same ones a tile menu produces. The last menu row has no
+    /// picture: it opens Add Custom Image with the ticked maps as its target (spec 7.1).</summary>
     [RelayCommand]
     private async Task ApplyPictureToTickedAsync(PictureMenuItem? item)
     {
@@ -285,48 +286,12 @@ public partial class MapsViewModel : PageViewModel
 
         if (item.Picture is not { } picture)
         {
-            await Shell.OpenAddPicturesAsync(null);
+            await Shell.OpenAddPicturesAsync(
+                new AddPicturesTarget(AddPicturesTargetKind.Ticked, null, Shell.SelectedMaps));
             return;
         }
 
-        var maps = Shell.SelectedMaps.Where(m => m.BackgroundSlots.Count > 0).ToList();
-        if (maps.Count == 0)
-        {
-            // Without level data a map has no slots at all (spec 3.6), so there is nowhere to write.
-            Shell.Dialogs.Info(
-                "Nothing to apply to",
-                "The ticked maps have no background slots. Slots come from the game's own level data.");
-            return;
-        }
-
-        if (!Confirm("Apply picture", $"Apply {picture.DisplayName}", maps))
-        {
-            return;
-        }
-
-        var gamePath = Shell.Services.GamePath;
-        var source = picture.LibraryPaths[0];
-        var failures = new List<FileFailure>();
-        await Shell.RunGameWriteAsync(
-            $"Applying {picture.DisplayName}",
-            maps.SelectMany(m => BackgroundApplier.TargetPaths(m.BackgroundSlots))
-                .Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
-            (progress, ct) => Task.Run(
-                () =>
-                {
-                    foreach (var map in maps)
-                    {
-                        ct.ThrowIfCancellationRequested();
-                        progress.Report(map.DisplayName);
-                        failures.AddRange(
-                            BackgroundApplier.Apply(source, gamePath, map.BackgroundSlots, null, ct).Failures);
-                    }
-                },
-                ct),
-            $"{picture.DisplayName} applied to {MainViewModel.Count(maps.Count, "map")}",
-            clearTicks: true);
-
-        Shell.Dialogs.ShowFailures("Some pictures could not be applied", failures);
+        await Shell.ApplyPictureAsync(picture.LibraryPaths[0], Shell.SelectedMaps, clearTicks: true);
     }
 
     /// <summary>Spec 3.3: the ticked maps back to the Default pack, the same reset one map's panel offers.</summary>
@@ -490,9 +455,8 @@ public partial class MapsViewModel : PageViewModel
         }
     }
 
-    /// <summary>The custom pictures the Apply picture menu offers. Empty in part A: part B replaces this with the
-    /// snapshot's own CustomPictureLibrary list and changes nothing else on this page (spec 4).</summary>
-    private static IReadOnlyList<CustomPicture> CustomPictures() => [];
+    /// <summary>The library's custom pictures, as the last scan built them (spec 4). Empty before the first scan.</summary>
+    private IReadOnlyList<CustomPicture> CustomPictures() => _snapshot?.CustomPictures ?? [];
 
     /// <summary>Fills the cards one at a time. The render queue serialises the composites anyway, and going in
     /// display order means the cards the grid shows first are the ones that fill first. Fire and forget: the card
