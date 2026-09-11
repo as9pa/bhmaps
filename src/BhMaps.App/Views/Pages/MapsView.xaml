@@ -276,6 +276,13 @@
           <Setter TargetName="Actions" Property="Opacity" Value="1" />
           <Setter TargetName="Tile" Property="Background" Value="{StaticResource Surface2Brush}" />
         </Trigger>
+
+        <!-- An open menu takes the mouse, so the tile stops being hovered and the button that opened the menu
+             would vanish while its own menu is still on screen. The menu is the tile's own instance, because
+             TileMenu is x:Shared="False". -->
+        <DataTrigger Binding="{Binding ContextMenu.IsOpen, ElementName=Tile}" Value="True">
+          <Setter TargetName="Actions" Property="Opacity" Value="1" />
+        </DataTrigger>
       </DataTemplate.Triggers>
     </DataTemplate>
 
@@ -347,6 +354,13 @@
           <Setter TargetName="Actions" Property="Opacity" Value="1" />
           <Setter TargetName="Tile" Property="Background" Value="{StaticResource Surface2Brush}" />
         </Trigger>
+
+        <!-- An open menu takes the mouse, so the tile stops being hovered and the button that opened the menu
+             would vanish while its own menu is still on screen. The menu is the tile's own instance, because
+             TileMenu is x:Shared="False". -->
+        <DataTrigger Binding="{Binding ContextMenu.IsOpen, ElementName=Tile}" Value="True">
+          <Setter TargetName="Actions" Property="Opacity" Value="1" />
+        </DataTrigger>
       </DataTemplate.Triggers>
     </DataTemplate>
 
@@ -583,49 +597,59 @@
                     </Border>
                   </Grid>
 
-                  <TextBlock Margin="2,8,2,0"
-                             FontSize="{Binding DataContext.NameFontSize, RelativeSource={RelativeSource AncestorType=ListBox}}"
-                             Text="{Binding DisplayName}"
-                             TextTrimming="CharacterEllipsis"
-                             Visibility="{Binding DataContext.ShowName, RelativeSource={RelativeSource AncestorType=ListBox}, Converter={StaticResource BoolToVis}}" />
+                  <Grid Margin="2,8,2,0"
+                        Visibility="{Binding DataContext.ShowName, RelativeSource={RelativeSource AncestorType=ListBox}, Converter={StaticResource BoolToVis}}">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
 
-                  <!-- Two tags, because Missing is a style of its own rather than a colour on the ordinary one.
-                       Each sits in a wrapper that carries the visibility, so neither theme style is derived from.
-                       The row itself is the zoom's: at 7 and above there are no tags at all. -->
-                  <Grid Margin="2,6,2,0"
-                        HorizontalAlignment="Left"
-                        Visibility="{Binding DataContext.ShowTagRow, RelativeSource={RelativeSource AncestorType=ListBox}, Converter={StaticResource BoolToVis}}">
-                    <Grid>
-                      <Grid.Style>
-                        <Style TargetType="Grid">
-                          <Style.Triggers>
-                            <DataTrigger Binding="{Binding IsMissing}" Value="True">
-                              <Setter Property="Visibility" Value="Collapsed" />
-                            </DataTrigger>
-                            <DataTrigger Binding="{Binding ShowTag}" Value="False">
-                              <Setter Property="Visibility" Value="Collapsed" />
-                            </DataTrigger>
-                          </Style.Triggers>
-                        </Style>
-                      </Grid.Style>
-                      <Border Style="{StaticResource StateTagBorder}">
-                        <TextBlock Text="{Binding TagText}" />
-                      </Border>
-                    </Grid>
-                    <Grid>
-                      <Grid.Style>
-                        <Style TargetType="Grid">
-                          <Setter Property="Visibility" Value="Collapsed" />
-                          <Style.Triggers>
-                            <DataTrigger Binding="{Binding IsMissing}" Value="True">
-                              <Setter Property="Visibility" Value="Visible" />
-                            </DataTrigger>
-                          </Style.Triggers>
-                        </Style>
-                      </Grid.Style>
-                      <Border Style="{StaticResource MissingTagBorder}">
-                        <TextBlock Text="{Binding TagText}" />
-                      </Border>
+                    <TextBlock VerticalAlignment="Center"
+                               FontSize="{Binding DataContext.NameFontSize, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                               Text="{Binding DisplayName}"
+                               TextTrimming="CharacterEllipsis" />
+
+                    <!-- Two tags, because Missing is a style of its own rather than a colour on the ordinary one.
+                         Each sits in a wrapper that carries the visibility, so neither theme style is derived from.
+                         The pill shares the name's row and takes only the width it needs, so the row it used to
+                         have is a row no card spends any more; at 7 and above there are no tags at all. -->
+                    <Grid Grid.Column="1"
+                          Margin="8,0,0,0"
+                          HorizontalAlignment="Right"
+                          VerticalAlignment="Center"
+                          Visibility="{Binding DataContext.ShowTagRow, RelativeSource={RelativeSource AncestorType=ListBox}, Converter={StaticResource BoolToVis}}">
+                      <Grid>
+                        <Grid.Style>
+                          <Style TargetType="Grid">
+                            <Style.Triggers>
+                              <DataTrigger Binding="{Binding IsMissing}" Value="True">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                              </DataTrigger>
+                              <DataTrigger Binding="{Binding ShowTag}" Value="False">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                              </DataTrigger>
+                            </Style.Triggers>
+                          </Style>
+                        </Grid.Style>
+                        <Border Style="{StaticResource StateTagBorder}">
+                          <TextBlock Text="{Binding TagText}" />
+                        </Border>
+                      </Grid>
+                      <Grid>
+                        <Grid.Style>
+                          <Style TargetType="Grid">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                              <DataTrigger Binding="{Binding IsMissing}" Value="True">
+                                <Setter Property="Visibility" Value="Visible" />
+                              </DataTrigger>
+                            </Style.Triggers>
+                          </Style>
+                        </Grid.Style>
+                        <Border Style="{StaticResource MissingTagBorder}">
+                          <TextBlock Text="{Binding TagText}" />
+                        </Border>
+                      </Grid>
                     </Grid>
                   </Grid>
                 </StackPanel>
