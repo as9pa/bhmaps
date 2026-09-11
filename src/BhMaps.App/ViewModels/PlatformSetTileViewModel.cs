@@ -57,7 +57,7 @@ public sealed partial class PlatformSetTileViewModel : ObservableObject
         if (tickedCount > 0)
         {
             items.Add(new TileMenuCommand(
-                tickedCount == 1 ? "Apply to the 1 ticked map" : $"Apply to the {tickedCount} ticked maps",
+                tickedCount == 1 ? "Apply to the 1 selected map" : $"Apply to the {tickedCount} selected maps",
                 ApplyToTickedCommand));
         }
 

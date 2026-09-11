@@ -24,7 +24,7 @@ public partial class MapsViewModel : PageViewModel
 
     private const string AllChip = "All";
     private const string ChangedChip = "Changed";
-    private const string TickedChip = "Ticked";
+    private const string TickedChip = "Selected";
 
     /// <summary>Every card the last scan produced. Cards is this list under the chip and the search.</summary>
     private readonly List<MapCardViewModel> _all = [];
@@ -71,7 +71,7 @@ public partial class MapsViewModel : PageViewModel
     [ObservableProperty]
     public partial string SearchText { get; set; }
 
-    /// <summary>"All", the UI set labels, "Changed", and "Ticked" once anything is ticked. Without level data the
+    /// <summary>"All", the UI set labels, "Changed", and "Selected" once anything is ticked. Without level data the
     /// set chips are gone entirely (spec 3.6). An ObservableCollection behind the read-only surface, because the
     /// row changes when the level data does and when the first map is ticked.</summary>
     public IReadOnlyList<string> Chips => _chips;
@@ -120,7 +120,7 @@ public partial class MapsViewModel : PageViewModel
             {
                 AllChip => "map",
                 ChangedChip => "changed map",
-                TickedChip => "ticked map",
+                TickedChip => "selected map",
 
                 // RebuildChips clears the chip ListBox's items, and the ListBox pushes its lost selection back
                 // through this two-way binding, so the getter can run between the null and the chip put back.
@@ -147,8 +147,8 @@ public partial class MapsViewModel : PageViewModel
         && !s.Packs.Any(p => !p.Name.Equals(DefaultPack.Name, StringComparison.OrdinalIgnoreCase))
         && s.CustomPictures.Count == 0;
 
-    /// <summary>Spec 11: "3 of 67 maps ticked". The second number is every map, not the shown ones.</summary>
-    public string SelectionText => $"{Shell.SelectedMapCount} of {_all.Count} maps ticked";
+    /// <summary>Spec 11: "3 of 67 maps selected". The second number is every map, not the shown ones.</summary>
+    public string SelectionText => $"{Shell.SelectedMapCount} of {_all.Count} maps selected";
 
     public bool HasTicks => Shell.SelectedMapCount > 0;
 
