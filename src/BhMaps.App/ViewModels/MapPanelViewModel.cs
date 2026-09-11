@@ -337,7 +337,7 @@ public partial class MapPanelViewModel : ObservableObject
         var file = slot is null ? null : InGameMatch.File(_status, AssetPath.Background(slot));
         if (file is { State: MapFileState.Custom })
         {
-            return $"Custom picture: {CustomPictureName(slot!)}";
+            return $"Custom picture: {CustomPictureLibrary.NameFor(_snapshot.CustomPictures, slot!)}";
         }
 
         var background = file is { State: MapFileState.Pack, PackNames.Count: > 0 }
@@ -347,16 +347,6 @@ public partial class MapPanelViewModel : ObservableObject
         return background == DefaultPack.Name && platforms == DefaultPack.Name
             ? "Default"
             : $"In game: {background} background, {platforms} platforms";
-    }
-
-    /// <summary>The name the user knows the picture by, from the custom library, or the slot's own file name.</summary>
-    private string CustomPictureName(string slot)
-    {
-        var fileName = Path.GetFileName(AssetPath.Background(slot));
-        return _snapshot.CustomPictures
-                   .FirstOrDefault(p => p.InGameSlots.Contains(fileName, StringComparer.OrdinalIgnoreCase))
-                   ?.DisplayName
-               ?? fileName;
     }
 
     /// <summary>Custom beats a pack beats Default, over this map's own folder only.</summary>
