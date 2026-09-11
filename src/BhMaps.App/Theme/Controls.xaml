@@ -253,6 +253,52 @@
     </Setter>
   </Style>
 
+  <!-- The tick box on a map card (spec 3.1): an 18 px box over the preview, filled in Text with a Bg tick when
+       the map is ticked. No focus visual of its own, because the box is Focusable="False" and the card behind it
+       is the tab stop. -->
+  <Style x:Key="CardTick" TargetType="CheckBox">
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="CheckBox">
+          <Border x:Name="Box"
+                  Width="18"
+                  Height="18"
+                  Background="{StaticResource BgBrush}"
+                  BorderBrush="{StaticResource Line2Brush}"
+                  BorderThickness="1"
+                  CornerRadius="4"
+                  Opacity="0.95">
+            <Path x:Name="Tick"
+                  Width="10"
+                  Height="7"
+                  HorizontalAlignment="Center"
+                  VerticalAlignment="Center"
+                  Data="M0,3.4 L2.8,6.2 L8,0.6"
+                  Stretch="Uniform"
+                  Stroke="{StaticResource BgBrush}"
+                  StrokeEndLineCap="Round"
+                  StrokeLineJoin="Round"
+                  StrokeStartLineCap="Round"
+                  StrokeThickness="1.6"
+                  Visibility="Collapsed" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsChecked" Value="True">
+              <Setter TargetName="Box" Property="Background" Value="{StaticResource TextBrush}" />
+              <Setter TargetName="Box" Property="BorderBrush" Value="{StaticResource TextBrush}" />
+              <Setter TargetName="Tick" Property="Visibility" Value="Visible" />
+            </Trigger>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="Box" Property="BorderBrush" Value="{StaticResource TextBrush}" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
   <converters:IsCurrentPageConverter x:Key="IsCurrentPage" />
 
   <!-- One of the top bar's four destinations (spec 2.1). A Button, not a ToggleButton: the open page is a

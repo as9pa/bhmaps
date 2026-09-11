@@ -174,6 +174,19 @@ public partial class MapsViewModel : PageViewModel
     [RelayCommand]
     private void ClearSearch() => SearchText = "";
 
+    /// <summary>Spec 3.2's order: Escape closes the panel first, and a second Escape clears the ticks.</summary>
+    [RelayCommand]
+    private void Escape()
+    {
+        if (Panel is not null)
+        {
+            Selected = null;
+            return;
+        }
+
+        Shell.ClearSelectionCommand.Execute(null);
+    }
+
     /// <summary>Spec 7.2's one page action: every folder in the game tree back to the Default pack, or deleted for
     /// the game to regenerate when there is no Default pack.</summary>
     [RelayCommand]
@@ -368,10 +381,26 @@ public partial class MapsViewModel : PageViewModel
         _uiSets.Clear();
         _uiSets.AddRange(catalog.UiSets);
         var chosen = SelectedChip;
-        _chips.Clear();
-        foreach (var chip in wanted)
+
+        // Synced in place rather than cleared and refilled. The first tick is what adds the Ticked chip, and a
+        // Ctrl+A ticks the whole grid from inside the ListBox's own loop: clearing the row there pushes a null
+        // SelectedChip through the two-way binding, and the ApplyFilter answering it empties and refills Cards
+        // under that loop, which leaves one card ticked out of the set. Adding one chip at the end disturbs
+        // neither the chip ListBox's selection nor Cards.
+        for (var i = _chips.Count - 1; i >= 0; i--)
         {
-            _chips.Add(chip);
+            if (!wanted.Contains(_chips[i]))
+            {
+                _chips.RemoveAt(i);
+            }
+        }
+
+        for (var i = 0; i < wanted.Count; i++)
+        {
+            if (i >= _chips.Count || _chips[i] != wanted[i])
+            {
+                _chips.Insert(i, wanted[i]);
+            }
         }
 
         // A set chip that has just gone, because the level data went with it, would otherwise leave the grid
