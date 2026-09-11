@@ -304,7 +304,8 @@ public partial class MapsViewModel : PageViewModel
             return;
         }
 
-        await Shell.ApplyPictureAsync(source, Shell.SelectedMaps, clearTicks: true);
+        // The name the menu row was labelled with, so the done line reports the row that was clicked (spec 2.2).
+        await Shell.ApplyPictureAsync(source, Shell.SelectedMaps, clearTicks: true, picture.DisplayName);
     }
 
     /// <summary>Spec 3.3: the ticked maps back to the Default pack, the same reset one map's panel offers.</summary>

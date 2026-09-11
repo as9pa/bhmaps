@@ -341,12 +341,18 @@ public partial class MainViewModel : ObservableObject
     }
 
     /// <summary>Spec 3.2 and 4: one picture into the background slots of every map given, as one game write.
-    /// More than one map confirms with the count first (spec 3.3) and clears the ticks on success.</summary>
-    public async Task ApplyPictureAsync(string sourcePath, IReadOnlyList<MapEntry> maps, bool clearTicks)
+    /// More than one map confirms with the count first (spec 3.3) and clears the ticks on success.
+    /// displayName is the name the user chose the picture by, which is the pack on a panel tile and the picture's
+    /// own name in the custom library: spec 2.2 words the done line "flowermap applied to Brawlhaven", never the
+    /// file name inside the pack, which the user never picked. Null for a caller with no such name, and then the
+    /// file name is the best there is.</summary>
+    public async Task ApplyPictureAsync(
+        string sourcePath, IReadOnlyList<MapEntry> maps, bool clearTicks, string? displayName = null)
     {
         // Without level data a map has no background slots at all, so there is nowhere to write (spec 3.6).
         var targets = maps.Where(m => m.BackgroundSlots.Count > 0).ToList();
         var name = Path.GetFileName(sourcePath);
+        var shown = displayName ?? name;
         if (targets.Count == 0)
         {
             Dialogs.Info(
@@ -385,8 +391,8 @@ public partial class MainViewModel : ObservableObject
                 },
                 ct),
             targets.Count == 1
-                ? $"{name} applied to {targets[0].DisplayName}"
-                : $"{name} applied to {targets.Count} maps",
+                ? $"{shown} applied to {targets[0].DisplayName}"
+                : $"{shown} applied to {targets.Count} maps",
             clearTicks);
 
         Dialogs.ShowFailures("Some backgrounds could not be applied", failures);
