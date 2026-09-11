@@ -148,11 +148,11 @@
                    Text="BhMaps" />
 
         <StackPanel Grid.Row="1" Margin="8,0">
-          <Button Command="{Binding NavigateHomeCommand}"
-                  Content="Home"
+          <Button Command="{Binding NavigateMapsCommand}"
+                  Content="Maps"
                   controls:Icon.Glyph="{StaticResource Icon.Home}"
                   Style="{StaticResource NavRow}"
-                  Tag="{Binding Home}" />
+                  Tag="{Binding Maps}" />
           <Button Command="{Binding NavigateBackgroundsCommand}"
                   Content="Backgrounds"
                   controls:Icon.Glyph="{StaticResource Icon.Image}"
