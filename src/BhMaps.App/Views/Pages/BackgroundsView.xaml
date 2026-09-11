@@ -14,18 +14,6 @@
       <Setter Property="Padding" Value="8,3" />
       <Setter Property="Margin" Value="4,0,0,0" />
     </Style>
-
-    <!-- The bottom selection bar (spec 7.3). It exists only while the sidebar has maps ticked. -->
-    <Style x:Key="SelectionBar" TargetType="Border" BasedOn="{StaticResource CardBorder}">
-      <Setter Property="Margin" Value="0,12,0,0" />
-      <Setter Property="Padding" Value="12,6" />
-      <Setter Property="Visibility" Value="Collapsed" />
-      <Style.Triggers>
-        <DataTrigger Binding="{Binding HasSelection}" Value="True">
-          <Setter Property="Visibility" Value="Visible" />
-        </DataTrigger>
-      </Style.Triggers>
-    </Style>
   </UserControl.Resources>
 
   <DockPanel Margin="24,16,24,24">
@@ -257,7 +245,11 @@
         </StackPanel>
       </Grid>
 
-      <Border Grid.Row="1" Style="{StaticResource SelectionBar}">
+      <!-- The bottom selection bar (spec 7.3). It exists only while the sidebar has maps ticked. -->
+      <Border Grid.Row="1"
+              Margin="0,12,0,0"
+              Style="{StaticResource SelectionBar}"
+              Visibility="{Binding HasSelection, Converter={StaticResource BoolToVis}}">
         <DockPanel>
           <Button DockPanel.Dock="Right"
                   Command="{Binding DataContext.ClearSelectionCommand, RelativeSource={RelativeSource AncestorType=Window}}"

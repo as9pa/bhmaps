@@ -165,6 +165,19 @@ public partial class MapsView : UserControl
         }
     }
 
+    /// <summary>Opens a bar button's menu on a left click, above the bar. The menu lives outside the visual
+    /// tree, so it is given the button's DataContext: its items bind the page through it.</summary>
+    private void OnOpenMenu(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { ContextMenu: { } menu } button)
+        {
+            menu.DataContext = button.DataContext;
+            menu.PlacementTarget = button;
+            menu.Placement = PlacementMode.Top;
+            menu.IsOpen = true;
+        }
+    }
+
     /// <summary>Whether the click landed on the card's tick box. The walk stops at the card, because that is as
     /// far as a tick box can be from what was clicked.</summary>
     private static bool IsInsideTick(object? source, ListBoxItem item)
