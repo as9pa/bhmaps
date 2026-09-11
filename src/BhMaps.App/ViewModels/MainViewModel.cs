@@ -50,7 +50,7 @@ public partial class MainViewModel : ObservableObject
 
         // After the list and its view, because setting it runs the change hook that filters them.
         SearchText = "";
-        _launcher = new GameLauncher(services, dialogs);
+        _launcher = new GameLauncher();
         Home = new HomeViewModel(this);
         Backgrounds = new BackgroundsViewModel(this);
         Platforms = new PlatformsViewModel(this);
@@ -656,13 +656,6 @@ public partial class MainViewModel : ObservableObject
         await RescanAsync();
     }
 
-    /// <summary>Spec 6: warn when Brawlhalla is running. True means go ahead.</summary>
-    public bool ConfirmIfGameRunning() =>
-        !GameProcess.IsRunning()
-        || Dialogs.Confirm(
-            "Brawlhalla is running",
-            "Brawlhalla is running. Changes will not show until it restarts, and some files may be locked. Continue?");
-
     public Pack? FindPack(string name) =>
         Snapshot?.Packs.FirstOrDefault(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
 
@@ -763,18 +756,15 @@ public partial class MainViewModel : ObservableObject
             label,
             async (progress, ct) =>
             {
-                // The launcher runs inside the boundary, so the "Restart and apply" confirm and the wait for the
-                // game to close happen with everything else disabled. Outside it, a second write could start while
-                // the game was closing and be copying files when the launcher's finally relaunched it.
+                // The launcher runs inside the boundary, so the write and the snapshot in front of it are one
+                // operation with everything else disabled (spec 8).
                 accepted = await _launcher.RunWriteAsync(
                     label,
                     async () =>
                     {
-                        // Inside the launcher's callback, so with whileRunning=restart the game is already closed
-                        // and its files are the ones being snapshotted. The capture is the first step of the work,
-                        // not a step before it: it is file copying, so it belongs off the UI thread, behind a
-                        // progress line, and inside the boundary that turns an IO failure into the same dialog any
-                        // other write failure gets.
+                        // The capture is the first step of the work, not a step before it: it is file copying, so
+                        // it belongs off the UI thread, behind a progress line, and inside the boundary that turns
+                        // an IO failure into the same dialog any other write failure gets.
                         progress.Report("Saving undo");
                         await Task.Run(() => Services.Undo.Begin().Capture(gamePath, undoPaths), ct);
                         await work(progress, ct);

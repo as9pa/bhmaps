@@ -133,7 +133,7 @@ public class SettingsStoreTests
     }
 
     [Fact]
-    public void Load_MissingV2Fields_UsesDefaults()
+    public void Load_MissingV21Fields_UsesDefaults()
     {
         using var tmp = new TempDir();
         var path = tmp.Sub("settings.json");
@@ -141,27 +141,30 @@ public class SettingsStoreTests
 
         var loaded = SettingsStore.Load(path);
 
-        Assert.Equal(3, loaded.HomeZoom);
-        Assert.Equal(4, loaded.BackgroundsZoom);
-        Assert.Equal(AppSettings.RestartWhileRunning, loaded.WhileRunning);
+        Assert.Equal(6, loaded.MapsZoom);
+        Assert.Equal(6, loaded.BackgroundsZoom);
+        Assert.Equal(5, loaded.PackZoom);
         Assert.False(loaded.WelcomeDone);
     }
 
     [Fact]
-    public void SaveThenLoad_RoundTripsEveryV2Field()
+    public void SaveThenLoad_RoundTripsEveryV21Field()
     {
         using var tmp = new TempDir();
         var path = tmp.Sub("settings.json");
-        var settings = new AppSettings(@"C:\g", @"C:\l", true, HomeZoom: 5, BackgroundsZoom: 6,
-            WhileRunning: AppSettings.LiveWhileRunning, WelcomeDone: true);
+        var settings = new AppSettings(@"C:\g", @"C:\l", true, MapsZoom: 9, BackgroundsZoom: 3, PackZoom: 7,
+            WelcomeDone: true);
 
         SettingsStore.Save(path, settings);
         var loaded = SettingsStore.Load(path);
 
-        Assert.Equal(5, loaded.HomeZoom);
-        Assert.Equal(6, loaded.BackgroundsZoom);
-        Assert.Equal(AppSettings.LiveWhileRunning, loaded.WhileRunning);
+        Assert.Equal(9, loaded.MapsZoom);
+        Assert.Equal(3, loaded.BackgroundsZoom);
+        Assert.Equal(7, loaded.PackZoom);
         Assert.True(loaded.WelcomeDone);
+        var json = File.ReadAllText(path);
+        Assert.Contains("\"mapsZoom\": 9", json);
+        Assert.Contains("\"packZoom\": 7", json);
     }
 
     [Fact]
@@ -172,10 +175,10 @@ public class SettingsStoreTests
         File.WriteAllText(path, """{"gamePath":"C:\\g","futureThing":{"a":1},"favourites":["Grove"]}""");
 
         var loaded = SettingsStore.Load(path);
-        SettingsStore.Save(path, loaded with { HomeZoom = 2 });
+        SettingsStore.Save(path, loaded with { MapsZoom = 2 });
 
         var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(path))!.AsObject();
-        Assert.Equal(2, (int)json["homeZoom"]!);
+        Assert.Equal(2, (int)json["mapsZoom"]!);
         Assert.Equal(1, (int)json["futureThing"]!["a"]!);
         Assert.Equal("Grove", (string)json["favourites"]![0]!);
     }
@@ -202,16 +205,46 @@ public class SettingsStoreTests
     }
 
     [Fact]
-    public void Load_ClampsZoomAndNormalisesWhileRunning()
+    public void Load_ClampsEveryZoomToTwoThroughTen()
     {
         using var tmp = new TempDir();
         var path = tmp.Sub("settings.json");
-        File.WriteAllText(path, """{"homeZoom":99,"backgroundsZoom":0,"whileRunning":"nonsense"}""");
+        File.WriteAllText(path, """{"mapsZoom":99,"backgroundsZoom":0,"packZoom":-4}""");
 
         var loaded = SettingsStore.Load(path);
 
-        Assert.Equal(5, loaded.HomeZoom);
-        Assert.Equal(3, loaded.BackgroundsZoom);
-        Assert.Equal(AppSettings.RestartWhileRunning, loaded.WhileRunning);
+        Assert.Equal(10, loaded.MapsZoom);
+        Assert.Equal(2, loaded.BackgroundsZoom);
+        Assert.Equal(2, loaded.PackZoom);
+    }
+
+    [Fact]
+    public void Load_MigratesAHomeZoomIntoMapsZoomAndPrefersMapsZoomWhenBothArePresent()
+    {
+        using var tmp = new TempDir();
+        var legacy = tmp.Sub("legacy.json");
+        File.WriteAllText(legacy, """{"homeZoom":4}""");
+        var both = tmp.Sub("both.json");
+        File.WriteAllText(both, """{"homeZoom":4,"mapsZoom":8}""");
+
+        Assert.Equal(4, SettingsStore.Load(legacy).MapsZoom);
+        Assert.Equal(8, SettingsStore.Load(both).MapsZoom);
+    }
+
+    [Fact]
+    public void SaveThenLoad_DropsTheOldWhileRunningAndHomeZoomKeys()
+    {
+        using var tmp = new TempDir();
+        var path = tmp.Sub("settings.json");
+        File.WriteAllText(path, """{"gamePath":"C:\\g","whileRunning":"restart","homeZoom":4,"keepMe":1}""");
+
+        var loaded = SettingsStore.Load(path);
+        SettingsStore.Save(path, loaded);
+
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+        Assert.DoesNotContain(json, p => p.Key.Equals("whileRunning", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(json, p => p.Key.Equals("homeZoom", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(4, (int)json["mapsZoom"]!);
+        Assert.Equal(1, (int)json["keepMe"]!);
     }
 }

@@ -6,6 +6,7 @@ using BhMaps.Core.LevelData;
 using BhMaps.Core.Maps;
 using BhMaps.Core.Model;
 using BhMaps.Core.Operations;
+using BhMaps.Core.Settings;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -15,8 +16,8 @@ namespace BhMaps.App.ViewModels.Pages;
 /// sidebar has maps ticked. There is no New background action; the editor opens from a tile.</summary>
 public partial class BackgroundsViewModel : PageViewModel
 {
-    public const int MinZoom = 3;
-    public const int MaxZoom = 8;
+    public const int MinZoom = AppSettings.MinZoom;
+    public const int MaxZoom = AppSettings.MaxZoom;
 
     private const string BackgroundsFolder = "Backgrounds";
 
