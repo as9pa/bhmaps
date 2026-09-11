@@ -65,13 +65,15 @@ public sealed partial class CustomPictureTileViewModel : PictureTileViewModel
         MenuItems = items;
     }
 
+    // The picture's own name, not the file it happens to be stored as, is what the done line reports (spec 2.2).
     [RelayCommand]
-    private Task ApplyToTickedAsync() => Shell.ApplyPictureAsync(FullPath, Shell.SelectedMaps, clearTicks: true);
+    private Task ApplyToTickedAsync() =>
+        Shell.ApplyPictureAsync(FullPath, Shell.SelectedMaps, clearTicks: true, _picture.DisplayName);
 
     [RelayCommand]
     private Task ApplyToAllAsync() =>
         Shell.Snapshot is { } snapshot
-            ? Shell.ApplyPictureAsync(FullPath, snapshot.Catalog.Maps, clearTicks: false)
+            ? Shell.ApplyPictureAsync(FullPath, snapshot.Catalog.Maps, clearTicks: false, _picture.DisplayName)
             : Task.CompletedTask;
 
     [RelayCommand]
