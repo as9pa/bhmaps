@@ -118,6 +118,10 @@ public partial class MapsViewModel : PageViewModel
                 AllChip => "map",
                 ChangedChip => "changed map",
                 TickedChip => "ticked map",
+
+                // RebuildChips clears the chip ListBox's items, and the ListBox pushes its lost selection back
+                // through this two-way binding, so the getter can run between the null and the chip put back.
+                null or "" => "map",
                 _ => $"{SelectedChip.ToLowerInvariant()} map",
             };
             if (SearchText.Length > 0)
