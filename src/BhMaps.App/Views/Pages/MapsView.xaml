@@ -6,6 +6,11 @@
              xmlns:imaging="clr-namespace:BhMaps.Core.Imaging;assembly=BhMaps.Core"
              xmlns:pages="clr-namespace:BhMaps.App.ViewModels.Pages"
              xmlns:primitives="clr-namespace:System.Windows.Controls.Primitives;assembly=PresentationFramework">
+  <!-- Spec 3.2: Escape closes the panel first, and a second Escape clears the ticks. -->
+  <UserControl.InputBindings>
+    <KeyBinding Key="Escape" Command="{Binding EscapeCommand}" />
+  </UserControl.InputBindings>
+
   <UserControl.Resources>
     <BooleanToVisibilityConverter x:Key="BoolToVis" />
     <converters:NullToVisibilityConverter x:Key="NullToVis" />
@@ -50,42 +55,17 @@
       </Setter>
     </Style>
 
-    <!-- A card is a Button, so a click and Space or Enter on a focused card open the same map, and the focus ring
-         is the one the tiles wear. The gap and the padding are the zoom's (spec 3.1), read off the page rather
-         than set here, so the two tightest steps can tighten both. -->
-    <Style x:Key="MapCard" TargetType="Button">
-      <Setter Property="Background" Value="Transparent" />
+    <!-- The card is a ListBoxItem, so Ctrl and Shift clicks, Space, the arrow keys and Ctrl+A are the control's
+         (spec 3.1). A plain click is the page's: it opens the panel and leaves the ticks alone. The gap is the
+         zoom's (spec 3.1), read off the page rather than set here, so the two tightest steps can tighten it. -->
+    <Style x:Key="MapCardItem" TargetType="ListBoxItem" BasedOn="{StaticResource TileListBoxItem}">
+      <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
+      <Setter Property="Margin" Value="{Binding DataContext.CardMargin, RelativeSource={RelativeSource AncestorType=ListBox}}" />
       <Setter Property="Cursor" Value="Hand" />
-      <Setter Property="FocusVisualStyle" Value="{x:Null}" />
-      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-      <Setter Property="Margin" Value="{Binding DataContext.CardMargin, RelativeSource={RelativeSource AncestorType=ItemsControl}}" />
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="Button">
-            <Grid>
-              <Border x:Name="Chrome"
-                      Padding="{Binding DataContext.CardPadding, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                      Style="{StaticResource CardBorder}">
-                <ContentPresenter />
-              </Border>
-              <Border x:Name="Ring"
-                      BorderBrush="{StaticResource TextBrush}"
-                      BorderThickness="1"
-                      CornerRadius="{StaticResource Radius}"
-                      IsHitTestVisible="False"
-                      Opacity="0" />
-            </Grid>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="Chrome" Property="Background" Value="{StaticResource Surface2Brush}" />
-              </Trigger>
-              <Trigger Property="IsKeyboardFocused" Value="True">
-                <Setter TargetName="Ring" Property="Opacity" Value="0.6" />
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
+      <Setter Property="AutomationProperties.Name" Value="{Binding DisplayName}" />
+      <Setter Property="ToolTip" Value="{Binding ToolTipText}" />
+      <EventSetter Event="PreviewMouseLeftButtonDown" Handler="OnCardMouseDown" />
+      <EventSetter Event="PreviewKeyDown" Handler="OnCardKeyDown" />
     </Style>
 
     <!-- Everything clickable in the panel that is a picture rather than a label: no chrome of its own, the tiles'
@@ -493,125 +473,151 @@
       </Grid.ColumnDefinitions>
 
       <Grid>
-        <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
-          <!-- Top aligned, or a UniformGrid handed the whole viewport stretches its rows and a short list comes
-               out with enormous cards (the Backgrounds grid's lesson from Task 26). -->
-          <ItemsControl VerticalAlignment="Top" ItemsSource="{Binding Cards}">
-            <ItemsControl.ItemContainerStyle>
-              <!-- Without it the container a card sits in announces the view model's type name. -->
-              <Style TargetType="ContentPresenter">
-                <Setter Property="AutomationProperties.Name" Value="{Binding DisplayName}" />
-              </Style>
-            </ItemsControl.ItemContainerStyle>
-            <ItemsControl.ItemsPanel>
-              <ItemsPanelTemplate>
-                <UniformGrid Columns="{Binding DataContext.Zoom, RelativeSource={RelativeSource AncestorType=ItemsControl}}" />
-              </ItemsPanelTemplate>
-            </ItemsControl.ItemsPanel>
-            <ItemsControl.ItemTemplate>
-              <DataTemplate>
-                <!-- The tooltip is the name and the tag, which is the only place they are at the two tightest
-                     zoom steps (spec 3.1), and a longer name than the card can draw at any step. -->
-                <Button AutomationProperties.Name="{Binding DisplayName}"
-                        Command="{Binding DataContext.OpenMapCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                        CommandParameter="{Binding FolderName}"
-                        Style="{StaticResource MapCard}"
-                        ToolTip="{Binding ToolTipText}">
-                  <StackPanel>
-                    <!-- The Viewbox holds the card source's shape at any column width, so a card that has not
-                         drawn its preview yet is the same size as one that has and nothing jumps. The size comes
-                         from the compositor that renders it, so the two cannot drift apart. Through a OneTime
-                         Binding rather than a bare x:Static: the constants are pixel counts and so int, and
-                         setting a Double property from an int markup extension throws at load. -->
-                    <Grid>
-                      <Viewbox Stretch="Uniform">
-                        <Grid Width="{Binding Source={x:Static imaging:MapCompositor.CardWidth}, Mode=OneTime}"
-                              Height="{Binding Source={x:Static imaging:MapCompositor.CardHeight}, Mode=OneTime}"
-                              Background="{StaticResource TileBrush}">
-                          <Image RenderOptions.BitmapScalingMode="HighQuality"
-                                 Source="{Binding Preview}"
-                                 Stretch="UniformToFill" />
-                        </Grid>
-                      </Viewbox>
+        <!-- Spec 3.1 and 3.3: the grid is a ListBox with extended selection, so Ctrl and Shift clicks, Space, the
+             arrow keys and Ctrl+A all come from the control. The tick on each card and the container's own
+             IsSelected are the same MapCardViewModel.IsSelected. -->
+        <ListBox ItemContainerStyle="{StaticResource MapCardItem}"
+                 ItemsSource="{Binding Cards}"
+                 KeyboardNavigation.DirectionalNavigation="Contained"
+                 ScrollViewer.CanContentScroll="False"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                 SelectionMode="Extended"
+                 Style="{StaticResource TileListBox}">
+          <ListBox.ItemsPanel>
+            <ItemsPanelTemplate>
+              <!-- Top aligned, or a short list comes out with enormous cards. A UniformGrid does not virtualise,
+                   which is the point: every container is realised, so the IsSelected binding and Ctrl+A are exact
+                   (plan decision A-D10). -->
+              <UniformGrid VerticalAlignment="Top"
+                           Columns="{Binding DataContext.Zoom, RelativeSource={RelativeSource AncestorType=ListBox}}" />
+            </ItemsPanelTemplate>
+          </ListBox.ItemsPanel>
+          <ListBox.ItemTemplate>
+            <DataTemplate>
+              <!-- The name and the tag are the container's tooltip, which is the only place they are at the two
+                   tightest zoom steps (spec 3.1), and a longer name than the card can draw at any step. -->
+              <Border x:Name="Chrome"
+                      Padding="{Binding DataContext.CardPadding, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                      Style="{StaticResource CardBorder}">
+                <StackPanel>
+                  <!-- The Viewbox holds the card source's shape at any column width, so a card that has not
+                       drawn its preview yet is the same size as one that has and nothing jumps. The size comes
+                       from the compositor that renders it, so the two cannot drift apart. Through a OneTime
+                       Binding rather than a bare x:Static: the constants are pixel counts and so int, and
+                       setting a Double property from an int markup extension throws at load. -->
+                  <Grid>
+                    <Viewbox Stretch="Uniform">
+                      <Grid Width="{Binding Source={x:Static imaging:MapCompositor.CardWidth}, Mode=OneTime}"
+                            Height="{Binding Source={x:Static imaging:MapCompositor.CardHeight}, Mode=OneTime}"
+                            Background="{StaticResource TileBrush}">
+                        <Image RenderOptions.BitmapScalingMode="HighQuality"
+                               Source="{Binding Preview}"
+                               Stretch="UniformToFill" />
+                      </Grid>
+                    </Viewbox>
 
-                      <!-- Spec 3.1: with the tag row gone at 9 and 10, Missing is a mark on the picture. Over the
-                           Viewbox rather than inside it: the Viewbox scales the compositor's 640 px down to the
-                           card, which at 10 columns would draw these 10 px as 2. -->
-                      <Border Width="10"
-                              Height="10"
-                              Margin="4"
-                              HorizontalAlignment="Right"
+                    <!-- Spec 3.1: the tick box, top left of the preview and revealed by the triggers below. Over
+                         the Viewbox rather than inside it, for the reason the Missing mark is: the Viewbox would
+                         scale these 18 px down with the compositor's 640. -->
+                    <CheckBox x:Name="Tick"
+                              Margin="6"
+                              HorizontalAlignment="Left"
                               VerticalAlignment="Top"
-                              Background="{StaticResource MissingFgBrush}"
-                              CornerRadius="5">
-                        <Border.Style>
-                          <Style TargetType="Border">
-                            <Setter Property="Visibility" Value="Collapsed" />
-                            <Style.Triggers>
-                              <MultiDataTrigger>
-                                <MultiDataTrigger.Conditions>
-                                  <Condition Binding="{Binding IsMissing}" Value="True" />
-                                  <Condition Binding="{Binding DataContext.ShowMissingMark, RelativeSource={RelativeSource AncestorType=ItemsControl}}" Value="True" />
-                                </MultiDataTrigger.Conditions>
-                                <Setter Property="Visibility" Value="Visible" />
-                              </MultiDataTrigger>
-                            </Style.Triggers>
-                          </Style>
-                        </Border.Style>
+                              AutomationProperties.Name="Ticked"
+                              Focusable="False"
+                              IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                              Style="{StaticResource CardTick}"
+                              Visibility="Collapsed" />
+
+                    <!-- Spec 3.1: with the tag row gone at 9 and 10, Missing is a mark on the picture. Over the
+                         Viewbox rather than inside it: the Viewbox scales the compositor's 640 px down to the
+                         card, which at 10 columns would draw these 10 px as 2. -->
+                    <Border Width="10"
+                            Height="10"
+                            Margin="4"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Top"
+                            Background="{StaticResource MissingFgBrush}"
+                            CornerRadius="5">
+                      <Border.Style>
+                        <Style TargetType="Border">
+                          <Setter Property="Visibility" Value="Collapsed" />
+                          <Style.Triggers>
+                            <MultiDataTrigger>
+                              <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding IsMissing}" Value="True" />
+                                <Condition Binding="{Binding DataContext.ShowMissingMark, RelativeSource={RelativeSource AncestorType=ListBox}}" Value="True" />
+                              </MultiDataTrigger.Conditions>
+                              <Setter Property="Visibility" Value="Visible" />
+                            </MultiDataTrigger>
+                          </Style.Triggers>
+                        </Style>
+                      </Border.Style>
+                    </Border>
+                  </Grid>
+
+                  <TextBlock Margin="2,8,2,0"
+                             FontSize="{Binding DataContext.NameFontSize, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                             Text="{Binding DisplayName}"
+                             TextTrimming="CharacterEllipsis"
+                             Visibility="{Binding DataContext.ShowName, RelativeSource={RelativeSource AncestorType=ListBox}, Converter={StaticResource BoolToVis}}" />
+
+                  <!-- Two tags, because Missing is a style of its own rather than a colour on the ordinary one.
+                       Each sits in a wrapper that carries the visibility, so neither theme style is derived from.
+                       The row itself is the zoom's: at 7 and above there are no tags at all. -->
+                  <Grid Margin="2,6,2,0"
+                        HorizontalAlignment="Left"
+                        Visibility="{Binding DataContext.ShowTagRow, RelativeSource={RelativeSource AncestorType=ListBox}, Converter={StaticResource BoolToVis}}">
+                    <Grid>
+                      <Grid.Style>
+                        <Style TargetType="Grid">
+                          <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsMissing}" Value="True">
+                              <Setter Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding ShowTag}" Value="False">
+                              <Setter Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                          </Style.Triggers>
+                        </Style>
+                      </Grid.Style>
+                      <Border Style="{StaticResource StateTagBorder}">
+                        <TextBlock Text="{Binding TagText}" />
                       </Border>
                     </Grid>
-
-                    <TextBlock Margin="2,8,2,0"
-                               FontSize="{Binding DataContext.NameFontSize, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                               Text="{Binding DisplayName}"
-                               TextTrimming="CharacterEllipsis"
-                               Visibility="{Binding DataContext.ShowName, RelativeSource={RelativeSource AncestorType=ItemsControl}, Converter={StaticResource BoolToVis}}" />
-
-                    <!-- Two tags, because Missing is a style of its own rather than a colour on the ordinary one.
-                         Each sits in a wrapper that carries the visibility, so neither theme style is derived from.
-                         The row itself is the zoom's: at 7 and above there are no tags at all. -->
-                    <Grid Margin="2,6,2,0"
-                          HorizontalAlignment="Left"
-                          Visibility="{Binding DataContext.ShowTagRow, RelativeSource={RelativeSource AncestorType=ItemsControl}, Converter={StaticResource BoolToVis}}">
-                      <Grid>
-                        <Grid.Style>
-                          <Style TargetType="Grid">
-                            <Style.Triggers>
-                              <DataTrigger Binding="{Binding IsMissing}" Value="True">
-                                <Setter Property="Visibility" Value="Collapsed" />
-                              </DataTrigger>
-                              <DataTrigger Binding="{Binding ShowTag}" Value="False">
-                                <Setter Property="Visibility" Value="Collapsed" />
-                              </DataTrigger>
-                            </Style.Triggers>
-                          </Style>
-                        </Grid.Style>
-                        <Border Style="{StaticResource StateTagBorder}">
-                          <TextBlock Text="{Binding TagText}" />
-                        </Border>
-                      </Grid>
-                      <Grid>
-                        <Grid.Style>
-                          <Style TargetType="Grid">
-                            <Setter Property="Visibility" Value="Collapsed" />
-                            <Style.Triggers>
-                              <DataTrigger Binding="{Binding IsMissing}" Value="True">
-                                <Setter Property="Visibility" Value="Visible" />
-                              </DataTrigger>
-                            </Style.Triggers>
-                          </Style>
-                        </Grid.Style>
-                        <Border Style="{StaticResource MissingTagBorder}">
-                          <TextBlock Text="{Binding TagText}" />
-                        </Border>
-                      </Grid>
+                    <Grid>
+                      <Grid.Style>
+                        <Style TargetType="Grid">
+                          <Setter Property="Visibility" Value="Collapsed" />
+                          <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsMissing}" Value="True">
+                              <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                          </Style.Triggers>
+                        </Style>
+                      </Grid.Style>
+                      <Border Style="{StaticResource MissingTagBorder}">
+                        <TextBlock Text="{Binding TagText}" />
+                      </Border>
                     </Grid>
-                  </StackPanel>
-                </Button>
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
-        </ScrollViewer>
+                  </Grid>
+                </StackPanel>
+              </Border>
+              <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                  <Setter TargetName="Tick" Property="Visibility" Value="Visible" />
+                </DataTrigger>
+
+                <!-- The hover fill is the one the card wore as a Button; the tick box comes with it (spec 3.1). -->
+                <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
+                  <Setter TargetName="Tick" Property="Visibility" Value="Visible" />
+                  <Setter TargetName="Chrome" Property="Background" Value="{StaticResource Surface2Brush}" />
+                </DataTrigger>
+              </DataTemplate.Triggers>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
 
         <!-- Spec 3.1: an empty grid says why in one line, and offers the way back when a search caused it. -->
         <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
