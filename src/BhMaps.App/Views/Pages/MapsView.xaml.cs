@@ -19,7 +19,12 @@ public partial class MapsView : UserControl
     /// or Shift click is the ListBox's, and so is a click on the tick box itself.</summary>
     private void OnCardMouseDown(object sender, MouseButtonEventArgs e)
     {
-        if (sender is not ListBoxItem item || Keyboard.Modifiers != ModifierKeys.None || IsInsideTick(e.OriginalSource))
+        // Ctrl and Shift by name rather than "no modifier at all": every other combination, Alt+click above all,
+        // would otherwise fall through to the Extended ListBox, which reads it as a plain click and replaces the
+        // whole ticked set with the one card.
+        if (sender is not ListBoxItem item
+            || (Keyboard.Modifiers & (ModifierKeys.Control | ModifierKeys.Shift)) != ModifierKeys.None
+            || IsInsideTick(e.OriginalSource, item))
         {
             return;
         }
@@ -160,9 +165,11 @@ public partial class MapsView : UserControl
         }
     }
 
-    private static bool IsInsideTick(object? source)
+    /// <summary>Whether the click landed on the card's tick box. The walk stops at the card, because that is as
+    /// far as a tick box can be from what was clicked.</summary>
+    private static bool IsInsideTick(object? source, ListBoxItem item)
     {
-        for (var d = source as DependencyObject; d is not null; d = VisualTreeHelper.GetParent(d))
+        for (var d = source as DependencyObject; d is not null && d != item; d = VisualTreeHelper.GetParent(d))
         {
             if (d is CheckBox)
             {
