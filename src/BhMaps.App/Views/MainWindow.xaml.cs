@@ -4,6 +4,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using BhMaps.App.ViewModels;
+using BhMaps.App.ViewModels.Pages;
 
 namespace BhMaps.App.Views;
 
@@ -15,6 +16,7 @@ public partial class MainWindow : Window
         Loaded += OnLoaded;
         Closed += OnClosed;
         PreviewKeyDown += OnPreviewKeyDown;
+        KeyDown += OnKeyDown;
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -58,6 +60,25 @@ public partial class MainWindow : Window
                     box.SelectAll();
                 }
             });
+    }
+
+    /// <summary>Owner change O5: Ctrl+A ticks every shown map from anywhere on the Maps page. The page declares
+    /// the shortcut itself, but until something on the page takes keyboard focus the window is what holds it, and
+    /// a page's KeyBinding never sees a key routed from the window above it, so the window hands that one on.
+    /// KeyDown rather than PreviewKeyDown: the grid's own Ctrl+A and the search box's both run first and mark the
+    /// key handled, so what reaches here is only what nothing else wanted.</summary>
+    private void OnKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Handled
+            || e.Key != Key.A
+            || Keyboard.Modifiers != ModifierKeys.Control
+            || DataContext is not MainViewModel { CurrentPage: MapsViewModel maps })
+        {
+            return;
+        }
+
+        maps.SelectAllShownCommand.Execute(null);
+        e.Handled = true;
     }
 
     /// <summary>The page's search box, by its Tag, through the visual tree: the page is a DataTemplate's content,

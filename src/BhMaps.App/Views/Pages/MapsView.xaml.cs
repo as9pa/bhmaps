@@ -148,8 +148,8 @@ public partial class MapsView : UserControl
     }
 
     /// <summary>Spec 3.1: Escape in the search box clears what was typed and stops there, so the page's own
-    /// Escape order (the panel, then the ticks) is left for an empty or unfocused box. The same command the
-    /// Clear search button runs, so there is one way to empty the box.
+    /// Escape order (owner change O4: the ticks, then the panel) is left for an empty or unfocused box. The same
+    /// command the Clear search button runs, so there is one way to empty the box.
     /// Spec section 13's menu key and Shift+F10 are handled from here too, because a UserControl has one
     /// PreviewKeyDown: TileMenus takes those two keys and leaves every other one alone, so the two do not
     /// collide over Escape.</summary>
