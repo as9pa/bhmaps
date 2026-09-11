@@ -42,12 +42,46 @@ public partial class MapsView : UserControl
     }
 
     /// <summary>Space toggles the focused card (spec 3.1). Extended selection would otherwise make Space replace
-    /// the whole set with that one card.</summary>
+    /// the whole set with that one card. Enter opens the card's panel, which is what Enter did while the card was
+    /// a Button: without it the panel is mouse-only.</summary>
     private void OnCardKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Space && sender is ListBoxItem item)
+        if (sender is not ListBoxItem item)
+        {
+            return;
+        }
+
+        if (e.Key == Key.Space)
         {
             item.IsSelected = !item.IsSelected;
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.Enter && item.DataContext is MapCardViewModel card && DataContext is MapsViewModel page)
+        {
+            // Open only, never close: Escape and the X button are what close the panel, and the card a keyboard
+            // user is standing on is the one they just opened.
+            page.OpenMapCommand.Execute(card.FolderName);
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>Spec 3.1: Escape in the search box clears what was typed and stops there, so the page's own
+    /// Escape order (the panel, then the ticks) is left for an empty or unfocused box. The same command the
+    /// Clear search button runs, so there is one way to empty the box.</summary>
+    private void OnPageKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Escape || DataContext is not MapsViewModel page || page.SearchText.Length == 0)
+        {
+            return;
+        }
+
+        // By Tag, not by name: the box sits inside the PageHeader user control's own name scope (MainWindow's
+        // Ctrl+K finds it the same way).
+        if (e.OriginalSource is TextBox box && Equals(box.Tag, "SearchBox"))
+        {
+            page.ClearSearchCommand.Execute(null);
             e.Handled = true;
         }
     }

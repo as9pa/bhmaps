@@ -5,8 +5,10 @@
              xmlns:converters="clr-namespace:BhMaps.App.Converters"
              xmlns:imaging="clr-namespace:BhMaps.Core.Imaging;assembly=BhMaps.Core"
              xmlns:pages="clr-namespace:BhMaps.App.ViewModels.Pages"
-             xmlns:primitives="clr-namespace:System.Windows.Controls.Primitives;assembly=PresentationFramework">
-  <!-- Spec 3.2: Escape closes the panel first, and a second Escape clears the ticks. -->
+             xmlns:primitives="clr-namespace:System.Windows.Controls.Primitives;assembly=PresentationFramework"
+             PreviewKeyDown="OnPageKeyDown">
+  <!-- Spec 3.2: Escape closes the panel first, and a second Escape clears the ticks. Escape in the search box is
+       the typed text's first; OnPageKeyDown handles that one before this binding can see it. -->
   <UserControl.InputBindings>
     <KeyBinding Key="Escape" Command="{Binding EscapeCommand}" />
   </UserControl.InputBindings>
