@@ -19,7 +19,6 @@ public partial class MapCardViewModel : ObservableObject
         Map = map;
         FolderName = map.FolderName;
         DisplayName = map.DisplayName;
-        StateText = status?.Text ?? "";
 
         // Missing is the only coloured state (D8), which is exactly when the card wears the coloured tag.
         IsMissing = status?.State == MapState.Missing;
@@ -37,10 +36,6 @@ public partial class MapCardViewModel : ObservableObject
 
     /// <summary>The map's in-game name, or its folder name in the no-level-data fallback (spec 3.6).</summary>
     public string DisplayName { get; }
-
-    /// <summary>The scan's own summary: "Default", the pack names, "Custom" or "Missing". Empty when the scan
-    /// produced no status for this map.</summary>
-    public string StateText { get; }
 
     public bool IsMissing { get; }
 
