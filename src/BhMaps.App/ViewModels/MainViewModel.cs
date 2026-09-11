@@ -312,43 +312,31 @@ public partial class MainViewModel : ObservableObject
         await RunImportAsync(vm.Jobs);
     }
 
-    /// <summary>Spec 6.4: puts back the files the last game write was about to overwrite or delete. A restore is a
-    /// game write, so it is off while the folder is missing (spec 7.8), it goes through the same game-running
-    /// policy as any other, and it takes no snapshot of its own: the one it is restoring is the only one there is.</summary>
+    /// <summary>Spec 6.4 and 8: puts back the files the last game write was about to overwrite or delete, through
+    /// the same wrapper as every other write. It is a game write, so it is off while the folder is missing, and
+    /// it takes no snapshot of its own: the one it is restoring is the only one there is.</summary>
     [RelayCommand(CanExecute = nameof(CanWrite))]
     private async Task UndoAsync()
     {
-        if (Services.Undo.Latest is not { } session || IsBusy)
+        if (Services.Undo.Latest is not { } session)
         {
             return;
         }
 
         var gamePath = Services.GamePath;
         ApplyResult? result = null;
-        var accepted = true;
-        await RunBusyAsync(
+        await RunWriteCoreAsync(
             "Undoing",
-            async (_, _) =>
-            {
-                accepted = await _launcher.RunWriteAsync(
-                    "Undoing",
-                    () => Task.Run(() => { result = Services.Undo.Restore(session, gamePath); }));
-            });
-        if (!accepted)
-        {
-            // The user declined the restart, or the game would not close. Nothing was put back, so the snapshot is
-            // still there to be undone from and the header still says what the last write did.
-            return;
-        }
+            undoPaths: null,
+            (_, ct) => Task.Run(() => { result = Services.Undo.Restore(session, gamePath); }, ct),
+            UndoDoneText,
+            undoable: false,
+            clearTicks: false);
 
         if (result is not null)
         {
             Dialogs.ShowFailures("Some files could not be restored", result.Failures);
         }
-
-        DoneText = "";
-        CanUndo = Services.Undo.Latest is not null;
-        await RescanAsync();
     }
 
     /// <summary>Opens the Add pictures window (spec 6.8), then imports what it collected and, when it asked for
@@ -466,7 +454,7 @@ public partial class MainViewModel : ObservableObject
     }
 
     /// <summary>"1 map" or "3 maps": the done lines count things and every one of them can be one.</summary>
-    private static string Count(int n, string noun) => n == 1 ? $"1 {noun}" : $"{n} {noun}s";
+    public static string Count(int n, string noun) => n == 1 ? $"1 {noun}" : $"{n} {noun}s";
 
     /// <summary>Spec 5.3: the editor fits a picture and saves it into a pack. That is a library write and its own
     /// business; the "Apply to game now" it offers is a game write, so the pack file it left is copied into the
@@ -724,68 +712,83 @@ public partial class MainViewModel : ObservableObject
         DoneUndoable = false;
     }
 
-    /// <summary>One write into the game folder: the while-the-game-runs policy around it, an undo snapshot of the
-    /// paths it is about to touch, the busy boundary, a done line, and a rescan.</summary>
-    public async Task RunGameWriteAsync(
+    /// <summary>Spec 2.2: what a write reports about when it will show. One string, appended by the wrapper, so
+    /// two pages cannot word it differently. Read at completion, not at the start: a game that was launched while
+    /// the write ran gets the sentence that is true when the line appears.</summary>
+    public static string DoneSentence(bool gameRunning) =>
+        gameRunning ? "Shows on the next match load." : "Shows when Brawlhalla starts.";
+
+    /// <summary>The line an undo leaves. Spec 11 names no string for it, so this is the plan's (A-D7).</summary>
+    public const string UndoDoneText = "Last change undone.";
+
+    /// <summary>One write into the game folder (spec 8): the busy boundary, an undo snapshot of the paths it is
+    /// about to touch, a done line ending in the shared sentence, the ticks cleared when the write was aimed at
+    /// them, and a rescan. False when the folder was missing, another operation held the boundary, or the write
+    /// was cancelled or failed.</summary>
+    public Task<bool> RunGameWriteAsync(
         string label,
         IReadOnlyList<string> undoPaths,
         Func<IProgress<string>, CancellationToken, Task> work,
-        string doneText)
-    {
-        if (GameFolderMissing)
-        {
-            // There is nothing to write into and nothing to snapshot for undo. The header carries the notice, so
-            // the write is refused silently rather than telling the user twice (spec 7.8).
-            return;
-        }
+        string doneText,
+        bool clearTicks = false) =>
+        RunWriteCoreAsync(label, undoPaths, work, doneText, undoable: true, clearTicks);
 
-        if (IsBusy)
+    /// <summary>The one path every game write takes. <paramref name="undoPaths"/> null means take no snapshot,
+    /// which is Undo's case and only Undo's: the snapshot it is restoring is the only one there is, and Begin
+    /// would replace it with an empty one.</summary>
+    private async Task<bool> RunWriteCoreAsync(
+        string label,
+        IReadOnlyList<string>? undoPaths,
+        Func<IProgress<string>, CancellationToken, Task> work,
+        string doneText,
+        bool undoable,
+        bool clearTicks)
+    {
+        if (GameFolderMissing || IsBusy)
         {
-            // Spec 7.1: one operation at a time, and the launcher's confirm and close are part of this one. Taken
-            // here rather than left to RunBusyAsync below, because a refused write must not clear the done line or
-            // start a rescan of its own.
-            return;
+            // Nothing to write into, or one operation at a time (spec 7.1). Refused silently: the top bar already
+            // carries the missing-folder notice, and a refused write must not clear the done line or rescan.
+            return false;
         }
 
         var gamePath = Services.GamePath;
-
-        // False only when the launcher turned the write away: an exception inside the write comes back out through
-        // RunBusyAsync, which never reaches the assignment, so this starts as the value that case wants.
-        var accepted = true;
         var ok = await RunBusyAsync(
             label,
             async (progress, ct) =>
             {
-                // The launcher runs inside the boundary, so the write and the snapshot in front of it are one
-                // operation with everything else disabled (spec 8).
-                accepted = await _launcher.RunWriteAsync(
+                await _launcher.RunWriteAsync(
                     label,
                     async () =>
                     {
-                        // The capture is the first step of the work, not a step before it: it is file copying, so
-                        // it belongs off the UI thread, behind a progress line, and inside the boundary that turns
-                        // an IO failure into the same dialog any other write failure gets.
-                        progress.Report("Saving undo");
-                        await Task.Run(() => Services.Undo.Begin().Capture(gamePath, undoPaths), ct);
+                        if (undoPaths is not null)
+                        {
+                            // The capture is the first step of the work, not a step before it: it is file copying,
+                            // so it belongs off the UI thread, behind a progress line, and inside the boundary that
+                            // turns an IO failure into the same dialog any other write failure gets.
+                            progress.Report("Saving undo");
+                            await Task.Run(() => Services.Undo.Begin().Capture(gamePath, undoPaths), ct);
+                        }
+
                         await work(progress, ct);
                     });
             });
 
-        if (!accepted)
-        {
-            // The user declined the restart, or the game would not close. Nothing was written and no snapshot was
-            // taken, so the header still describes whatever the write before this one did.
-            return;
-        }
-
         // Begin has already replaced the previous snapshot, so a write that was cancelled or failed has to clear
         // the done line too; leaving it would describe something Undo no longer restores.
-        DoneText = ok ? doneText : "";
-        DoneUndoable = ok;
+        DoneText = ok ? $"{doneText} {DoneSentence(GameRunning)}" : "";
+        DoneUndoable = ok && undoable;
 
         // A restore that fully succeeds discards its snapshot, so what can be undone is always read back from the
         // store rather than remembered.
         CanUndo = Services.Undo.Latest is not null;
+        if (ok && clearTicks)
+        {
+            // Spec 3.3 (S3): a write aimed at the ticked maps is finished with them. A cancelled or failed write
+            // keeps them, which is why this is inside the ok branch.
+            ClearSelection();
+        }
+
         await RescanAsync();
+        return ok;
     }
 }
