@@ -1,10 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using BhMaps.App.Services;
-using BhMaps.Core.Hashing;
 using BhMaps.Core.LevelData;
-using BhMaps.Core.Maps;
-using BhMaps.Core.Model;
 using BhMaps.Core.Operations;
 using BhMaps.Core.Settings;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -12,21 +9,13 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace BhMaps.App.ViewModels.Pages;
 
-/// <summary>Spec 7.3: the whole background library on one grid, the header on one line, and a bottom bar while the
-/// ticked set is not empty. There is no New background action; the editor opens from a tile.</summary>
+/// <summary>Spec 4: the library of pictures, picture-first. The custom pictures are the first section, one tile
+/// per picture however many copies of it the library holds; the pack sections and the flat search grid follow.
+/// The ticked maps are the shell's and are reached through a tile's own menu, so the page has no bottom bar.</summary>
 public partial class BackgroundsViewModel : PageViewModel
 {
     public const int MinZoom = AppSettings.MinZoom;
     public const int MaxZoom = AppSettings.MaxZoom;
-
-    private const string BackgroundsFolder = "Backgrounds";
-
-    /// <summary>Every tile the last scan produced. Tiles is this list under the search box.</summary>
-    private readonly List<BackgroundTileViewModel> _all = [];
-
-    /// <summary>The hash of the game file behind each background slot, by its "Folder\file" path. Filled off the
-    /// UI thread after every scan, so ticking a map is set arithmetic rather than file work.</summary>
-    private readonly Dictionary<string, string> _slotHashes = new(StringComparer.OrdinalIgnoreCase);
 
     private ScanSnapshot? _snapshot;
     private CancellationTokenSource? _thumbnails;
@@ -34,25 +23,25 @@ public partial class BackgroundsViewModel : PageViewModel
     public BackgroundsViewModel(MainViewModel shell)
         : base(shell)
     {
-        Tiles = [];
+        CustomTiles = [];
 
-        // Before the first ApplyFilter, because setting it runs the change hook that filters the tiles.
+        // Before the first ApplySearch, because setting it runs the change hook.
         SearchText = "";
 
         // A stored zoom from another version, or a hand-edited one, is clamped rather than trusted.
         Zoom = Math.Clamp(shell.Services.Settings.BackgroundsZoom, MinZoom, MaxZoom);
 
-        // The bottom bar follows the ticked maps, which are the shell's. The page lives as long as the shell, so
+        // A tile's menu names the ticked count, which is the shell's. The page lives as long as the shell, so
         // there is nothing to unsubscribe from.
         shell.PropertyChanged += OnShellChanged;
     }
 
     public override string Title => "Backgrounds";
 
-    /// <summary>The tiles the search box leaves visible, sorted by pack then file name as the library is.</summary>
-    public ObservableCollection<BackgroundTileViewModel> Tiles { get; }
+    /// <summary>Spec 4's first section: one tile per picture, however many copies of it the library holds.</summary>
+    public ObservableCollection<CustomPictureTileViewModel> CustomTiles { get; }
 
-    /// <summary>The header's search box. The page's own string now; the shell has no search box left.</summary>
+    /// <summary>This page's own box (spec 4): file names, pack names and map names, not the Maps page's string.</summary>
     [ObservableProperty]
     public partial string SearchText { get; set; }
 
@@ -60,17 +49,19 @@ public partial class BackgroundsViewModel : PageViewModel
     [ObservableProperty]
     public partial int Zoom { get; set; }
 
-    /// <summary>True while at least one map is ticked, which is when the bottom bar shows and a tile's Apply has
-    /// somewhere to write.</summary>
-    public bool HasSelection => Shell.SelectedMapCount > 0;
+    /// <summary>The first section's header, which carries its own count (spec 4).</summary>
+    public string CustomHeader => $"Custom pictures ({CustomTiles.Count})";
 
-    /// <summary>The bottom bar's line: "Apply to 1 map" or "Apply to N maps".</summary>
-    public string SelectionText =>
-        Shell.SelectedMapCount == 1 ? "Apply to 1 map" : $"Apply to {Shell.SelectedMapCount} maps";
+    /// <summary>False while the library holds no custom picture, which is the state that says so and offers the
+    /// way in beside the line (spec 4).</summary>
+    public bool HasCustomPictures => CustomTiles.Count > 0;
 
-    /// <summary>True when the library holds nothing at all, as against being filtered to nothing by the search
-    /// box. The two states say different things and offer different ways out (spec 7.8).</summary>
-    public bool IsLibraryEmpty => _all.Count == 0;
+    /// <summary>True while the box has something in it, which is when the sections give way to one flat grid of
+    /// what matches (spec 4).</summary>
+    public bool IsSearching => SearchText.Length > 0;
+
+    /// <summary>Spec 4's no-results line, which quotes what was typed.</summary>
+    public string NoResultsText => $"No picture matches '{SearchText}'.";
 
     public override void Refresh(ScanSnapshot snapshot)
     {
@@ -81,95 +72,51 @@ public partial class BackgroundsViewModel : PageViewModel
         _thumbnails?.Dispose();
         _thumbnails = new CancellationTokenSource();
 
-        _all.Clear();
-        _slotHashes.Clear();
-        foreach (var background in snapshot.Backgrounds)
+        CustomTiles.Clear();
+        foreach (var picture in snapshot.CustomPictures)
         {
-            _all.Add(new BackgroundTileViewModel(background));
+            CustomTiles.Add(new CustomPictureTileViewModel(Shell, picture, Subtitle(picture, snapshot)));
         }
 
-        OnPropertyChanged(nameof(IsLibraryEmpty));
-        ApplyFilter();
-        _ = LoadAsync([.. _all], snapshot, _thumbnails.Token);
+        RebuildMenus();
+        OnPropertyChanged(nameof(CustomHeader));
+        OnPropertyChanged(nameof(HasCustomPictures));
+        _ = LoadThumbnailsAsync([.. CustomTiles], _thumbnails.Token);
     }
 
-    /// <summary>Spec 7.3's one header action, and the empty state's button. The page's button adds to the library
-    /// and names no maps, which is what the None kind says (spec 7.1).</summary>
-    [RelayCommand]
-    private Task AddPicturesAsync() => Shell.OpenAddPicturesAsync(new AddPicturesTarget(AddPicturesTargetKind.None, null, null));
-
-    /// <summary>Spec 6.3: one write covering every ticked map, with a confirm that names them when there is more
-    /// than one. The game-running policy belongs to the launcher inside RunGameWriteAsync, so there is no second
-    /// prompt here.</summary>
-    [RelayCommand(CanExecute = nameof(CanApply))]
-    private async Task ApplyAsync(BackgroundTileViewModel? tile)
+    /// <summary>Spec 4: "in game on 12 maps", else the pack it lives in, else that it is only in the game.</summary>
+    private static string Subtitle(CustomPicture picture, ScanSnapshot snapshot)
     {
-        if (tile is null || _snapshot is not { } snapshot)
+        if (picture.InGameSlots.Count > 0)
         {
-            return;
+            // A slot resolves through AssetPath, because one borrowed from a theme folder through "../" is not
+            // under Backgrounds at all; the picture's own list is of game file names.
+            var maps = snapshot.Catalog.Maps
+                .Count(m => m.BackgroundSlots.Any(s =>
+                    picture.InGameSlots.Contains(
+                        Path.GetFileName(AssetPath.Background(s)), StringComparer.OrdinalIgnoreCase)));
+            return maps == 1 ? "in game on 1 map" : $"in game on {maps} maps";
         }
 
-        var maps = SelectedMaps(snapshot).Where(m => m.BackgroundSlots.Count > 0).ToList();
-        if (maps.Count == 0)
-        {
-            // Without level data a map has no background slots at all (spec 3.6), so there is nothing to write.
-            Shell.Dialogs.Info(
-                "Nothing to apply to",
-                "The ticked maps have no background slots. Slots come from the game's own level data.");
-            return;
-        }
-
-        if (maps.Count > 1
-            && !Shell.Dialogs.Confirm(
-                "Apply background",
-                $"Apply {tile.FileName} to these {maps.Count} maps?\n\n{string.Join(", ", maps.Select(m => m.DisplayName))}"))
-        {
-            return;
-        }
-
-        var gamePath = Shell.Services.GamePath;
-        var source = tile.FullPath;
-        var undoPaths = maps
-            .SelectMany(m => BackgroundApplier.TargetPaths(m.BackgroundSlots))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        var failures = new List<FileFailure>();
-        await Shell.RunGameWriteAsync(
-            $"Applying {tile.FileName}",
-            undoPaths,
-            (progress, ct) => Task.Run(
-                () =>
-                {
-                    foreach (var map in maps)
-                    {
-                        ct.ThrowIfCancellationRequested();
-                        progress.Report(map.DisplayName);
-                        failures.AddRange(BackgroundApplier.Apply(source, gamePath, map.BackgroundSlots, null, ct).Failures);
-                    }
-                },
-                ct),
-            maps.Count == 1
-                ? $"{tile.FileName} applied to 1 map"
-                : $"{tile.FileName} applied to {maps.Count} maps");
-
-        Shell.Dialogs.ShowFailures("Some backgrounds could not be applied", failures);
+        return picture.PackName ?? "In game";
     }
 
-    /// <summary>Spec 7.3's second tile action. The editor now wants the picture that was clicked as well as the
-    /// slot it should open on, and a file in the game folder belongs to no pack.</summary>
+    /// <summary>Spec 4's one header action, and the empty state's button. The page adds to the library and names
+    /// no maps, which is what the None kind says (spec 7.1).</summary>
     [RelayCommand]
-    private Task EditAsync(BackgroundTileViewModel? tile) =>
-        tile is null
-            ? Task.CompletedTask
-            : Shell.OpenBackgroundEditorAsync(
-                new BackgroundEditorRequest(tile.FullPath, tile.FromGame ? null : tile.PackName, EditSlot(tile)));
+    private Task AddPicturesAsync() =>
+        Shell.OpenAddPicturesAsync(new AddPicturesTarget(AddPicturesTargetKind.None, null, null));
 
-    /// <summary>The no-results state's way back (spec 7.8).</summary>
+    /// <summary>The no-results state's way back (spec 4).</summary>
     [RelayCommand]
     private void ClearSearch() => SearchText = "";
 
-    partial void OnSearchTextChanged(string value) => ApplyFilter();
+    partial void OnSearchTextChanged(string value)
+    {
+        OnPropertyChanged(nameof(IsSearching));
+        OnPropertyChanged(nameof(NoResultsText));
+        ApplySearch();
+    }
 
     partial void OnZoomChanged(int value)
     {
@@ -179,174 +126,29 @@ public partial class BackgroundsViewModel : PageViewModel
         }
     }
 
-    private bool CanApply(BackgroundTileViewModel? tile) => tile is not null && Shell.SelectedMapCount > 0;
-
     private void OnShellChanged(object? sender, PropertyChangedEventArgs e)
     {
         // SelectedMaps is raised alongside this one; reacting to the count alone does the work once.
         if (e.PropertyName == nameof(MainViewModel.SelectedMapCount))
         {
-            OnPropertyChanged(nameof(HasSelection));
-            OnPropertyChanged(nameof(SelectionText));
-            ApplyCommand.NotifyCanExecuteChanged();
-            UpdateTicks();
+            RebuildMenus();
         }
     }
 
-    /// <summary>The shell's ticked maps as this snapshot's catalog entries. One whose folder the catalog does
-    /// not know is left out rather than guessed at.</summary>
-    private IEnumerable<MapEntry> SelectedMaps(ScanSnapshot snapshot) =>
-        Shell.SelectedMaps
-            .Select(m => snapshot.Catalog.ByFolder(m.FolderName))
-            .OfType<MapEntry>();
-
-    /// <summary>The slot the editor should open on: this tile's own name when the game has a background by that
-    /// name, otherwise the first slot a ticked map uses. Null lets the editor pick its first slot.</summary>
-    private string? EditSlot(BackgroundTileViewModel tile)
+    /// <summary>The ticked row is the one line of a tile's menu that changes without a scan, so every tile is
+    /// asked to rebuild whenever the count moves.</summary>
+    private void RebuildMenus()
     {
-        if (_snapshot is not { } snapshot)
+        foreach (var tile in CustomTiles)
         {
-            return null;
+            tile.RebuildMenu(Shell.SelectedMapCount);
         }
-
-        if (tile.FromGame || snapshot.Tree.FindFolder(BackgroundsFolder)?.FindFile(tile.FileName) is not null)
-        {
-            return tile.FileName;
-        }
-
-        return SelectedMaps(snapshot).SelectMany(m => m.BackgroundSlots).FirstOrDefault();
-    }
-
-    /// <summary>In use means the picture, not the name. Applying writes the chosen picture into the map's slot
-    /// under the slot's own name, so the tile that was clicked and the game's copy of that slot are one picture
-    /// under two names; matching on the name alone would tick the wrong tile. The comparison is the content hash
-    /// the scan already holds, taken off the UI thread beforehand.</summary>
-    private void UpdateTicks()
-    {
-        var inUse = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        if (_snapshot is { } snapshot)
-        {
-            foreach (var slot in SelectedMaps(snapshot).SelectMany(m => m.BackgroundSlots))
-            {
-                // A slot with no entry is one the game has no file for: nothing is on screen, so nothing ticks.
-                if (_slotHashes.TryGetValue(AssetPath.Background(slot), out var hash))
-                {
-                    inUse.Add(hash);
-                }
-            }
-        }
-
-        foreach (var tile in _all)
-        {
-            tile.IsInUse = tile.Hash is { } hash && inUse.Contains(hash);
-        }
-    }
-
-    /// <summary>The hashes the ticks compare, taken through the scan's cache so almost every one is a dictionary
-    /// lookup: the scan has just hashed both the packs' pictures and the game files behind the slots. Anything the
-    /// cache has not seen is hashed once here, off the UI thread, and cached for the next scan.</summary>
-    private static (Dictionary<string, string> Pictures, Dictionary<string, string> Slots) ComputeHashes(
-        IReadOnlyList<BackgroundTileViewModel> tiles, ScanSnapshot snapshot, HashCache hashes, CancellationToken ct)
-    {
-        var files = LibraryFiles(snapshot);
-        var pictures = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var tile in tiles)
-        {
-            ct.ThrowIfCancellationRequested();
-            if (files.TryGetValue(tile.FullPath, out var file) && Hash(hashes, file) is { } hash)
-            {
-                pictures[tile.FullPath] = hash;
-            }
-        }
-
-        var slots = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var slot in snapshot.Catalog.Maps.SelectMany(m => m.BackgroundSlots))
-        {
-            ct.ThrowIfCancellationRequested();
-
-            // Backgrounds\<slot>, except for a slot borrowed from a theme folder through "../".
-            var relative = AssetPath.Background(slot);
-            if (slots.ContainsKey(relative))
-            {
-                continue;
-            }
-
-            var file = snapshot.Tree
-                .FindFolder(AssetPath.FolderOf(relative))
-                ?.FindFile(Path.GetFileName(relative));
-            if (file is not null && Hash(hashes, file) is { } hash)
-            {
-                slots[relative] = hash;
-            }
-        }
-
-        return (pictures, slots);
-    }
-
-    /// <summary>The scan's own record for every picture on the grid, by full path, so the hashes are asked for on
-    /// the size and mtime the scan measured and come back without touching the disk.</summary>
-    private static Dictionary<string, GameFile> LibraryFiles(ScanSnapshot snapshot)
-    {
-        var files = new Dictionary<string, GameFile>(StringComparer.OrdinalIgnoreCase);
-        var folders = snapshot.Packs
-            .Select(pack => pack.FindFolder(BackgroundsFolder))
-            .Append(snapshot.Tree.FindFolder(BackgroundsFolder));
-
-        foreach (var file in folders.SelectMany(folder => folder?.Files ?? Array.Empty<GameFile>()))
-        {
-            files[file.FullPath] = file;
-        }
-
-        return files;
-    }
-
-    /// <summary>Null for a file that has gone since the scan, which simply never ticks.</summary>
-    private static string? Hash(HashCache hashes, GameFile file)
-    {
-        try
-        {
-            return hashes.GetOrCompute(file);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return null;
-        }
-    }
-
-    /// <summary>The two things a tile needs that the snapshot does not carry: the hash behind its tick and the
-    /// picture itself. Hashes first, because they are nearly free and the ticks are the answer to a question the
-    /// user has already asked by ticking a map.</summary>
-    private async Task LoadAsync(
-        IReadOnlyList<BackgroundTileViewModel> tiles, ScanSnapshot snapshot, CancellationToken ct)
-    {
-        var hashes = Shell.Services.HashCache;
-        try
-        {
-            var (pictures, slots) = await Task.Run(() => ComputeHashes(tiles, snapshot, hashes, ct), ct);
-            foreach (var tile in tiles)
-            {
-                tile.Hash = pictures.GetValueOrDefault(tile.FullPath);
-            }
-
-            foreach (var (relative, hash) in slots)
-            {
-                _slotHashes[relative] = hash;
-            }
-
-            UpdateTicks();
-        }
-        catch (OperationCanceledException)
-        {
-            return;
-        }
-
-        await LoadThumbnailsAsync(tiles, ct);
     }
 
     /// <summary>Fills the tiles one at a time, in grid order, so the ones on screen fill first. Fire and forget:
     /// the tile turns its own file failures into a blank picture, so the only thing left to stop for is
     /// cancellation.</summary>
-    private async Task LoadThumbnailsAsync(IReadOnlyList<BackgroundTileViewModel> tiles, CancellationToken ct)
+    private async Task LoadThumbnailsAsync(IReadOnlyList<PictureTileViewModel> tiles, CancellationToken ct)
     {
         foreach (var tile in tiles)
         {
@@ -366,21 +168,9 @@ public partial class BackgroundsViewModel : PageViewModel
         }
     }
 
-    private void ApplyFilter()
+    /// <summary>What the search box does to the page. Empty while the custom section is the only one there is:
+    /// the sections it collapses into one flat grid of matches arrive with the pack sections.</summary>
+    private void ApplySearch()
     {
-        Tiles.Clear();
-        foreach (var tile in _all.Where(Matches))
-        {
-            Tiles.Add(tile);
-        }
-    }
-
-    /// <summary>The header search box, on the file name or the pack it came from.</summary>
-    private bool Matches(BackgroundTileViewModel tile)
-    {
-        var search = SearchText;
-        return search.Length == 0
-            || tile.FileName.Contains(search, StringComparison.OrdinalIgnoreCase)
-            || tile.PackName.Contains(search, StringComparison.OrdinalIgnoreCase);
     }
 }
