@@ -82,12 +82,14 @@
 
     <!-- Spec 3.3: the bar floats over the cards, so while it is up the grid hands that room back at the bottom
          and the last row scrolls clear of it instead of sitting underneath it. Bottom only, so nothing above
-         moves when the first map is ticked. 67 px is the bar's own height (an action's 33, the style's 8 of
-         padding top and bottom, the card border's 1 each side) plus the 16 px it floats off the bottom. -->
+         moves when the first map is ticked. 51 px is the bar's own height and nothing else (an action's 33, the
+         style's 8 of padding top and bottom, the card border's 1 each side): owner change O9 floats the bar on
+         the page's own 24 px gutter rather than a margin, and the last row's 12 px card margin is the gap
+         between the two. -->
     <Style x:Key="MapGrid" TargetType="ListBox" BasedOn="{StaticResource TileListBox}">
       <Style.Triggers>
         <DataTrigger Binding="{Binding HasTicks}" Value="True">
-          <Setter Property="Padding" Value="0,0,0,67" />
+          <Setter Property="Padding" Value="0,0,0,51" />
         </DataTrigger>
       </Style.Triggers>
     </Style>
@@ -773,8 +775,10 @@
         </StackPanel>
 
         <!-- Spec 3.3: the last child of the cell, so the bar floats over the cards rather than taking a row of
-             its own and shortening the grid every time a map is ticked. -->
-        <Border Margin="0,0,0,16"
+             its own and shortening the grid every time a map is ticked. Owner change O9: the page's 24 px bottom
+             gutter is the bar's float, so it carries no margin of its own and the ground under it matches the
+             ground beside the cards. -->
+        <Border Margin="0"
                 HorizontalAlignment="Center"
                 VerticalAlignment="Bottom"
                 Style="{StaticResource SelectionBar}"
