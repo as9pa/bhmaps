@@ -51,14 +51,14 @@ public partial class MainViewModel : ObservableObject
         // After the list and its view, because setting it runs the change hook that filters them.
         SearchText = "";
         _launcher = new GameLauncher();
-        Home = new HomeViewModel(this);
+        Maps = new MapsViewModel(this);
         Backgrounds = new BackgroundsViewModel(this);
         Platforms = new PlatformsViewModel(this);
         Packs = new PacksViewModel(this);
         PackDetail = new PackDetailViewModel(this);
         SettingsPage = new SettingsPageViewModel(this);
-        _pages = [Home, Backgrounds, Platforms, Packs, PackDetail, SettingsPage];
-        CurrentPage = Home;
+        _pages = [Maps, Backgrounds, Platforms, Packs, PackDetail, SettingsPage];
+        CurrentPage = Maps;
 
         // The startup read usually lands after the first scan, and the catalog that scan built came from the cache
         // or from nothing, so the names have to be rebuilt when it does (spec 3.5). Subscribed once, for the life
@@ -79,7 +79,7 @@ public partial class MainViewModel : ObservableObject
     /// <summary>Result of the last successful scan. Null until the first scan completes.</summary>
     public ScanSnapshot? Snapshot { get; private set; }
 
-    public HomeViewModel Home { get; }
+    public MapsViewModel Maps { get; }
 
     public BackgroundsViewModel Backgrounds { get; }
 
@@ -145,7 +145,7 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     public partial bool CanUndo { get; set; }
 
-    /// <summary>Folder name of the map most recently opened on Home, or null before any. Home sets it; the
+    /// <summary>Folder name of the map most recently opened on Maps, or null before any. Maps sets it; the
     /// Platforms page falls back to it when the sidebar has no checked map (spec 7.4).</summary>
     [ObservableProperty]
     public partial string? LastOpenedMap { get; set; }
@@ -163,7 +163,7 @@ public partial class MainViewModel : ObservableObject
     private bool GameFolderExists() => Directory.Exists(Services.GamePath);
 
     [RelayCommand]
-    private void NavigateHome() => CurrentPage = Home;
+    private void NavigateMaps() => CurrentPage = Maps;
 
     [RelayCommand]
     private void NavigateBackgrounds() => CurrentPage = Backgrounds;
@@ -184,7 +184,7 @@ public partial class MainViewModel : ObservableObject
         CurrentPage = PackDetail;
     }
 
-    /// <summary>Enter on a suggestion, or a click on one: the box takes the whole name, and on Home the map that
+    /// <summary>Enter on a suggestion, or a click on one: the box takes the whole name, and on Maps the map that
     /// name belongs to opens. On any other page choosing only narrows the list.</summary>
     [RelayCommand]
     private void ChooseSuggestion(string? displayName)
@@ -196,9 +196,9 @@ public partial class MainViewModel : ObservableObject
 
         SearchText = displayName;
         var map = MapList.FirstOrDefault(m => m.DisplayName.Equals(displayName, StringComparison.OrdinalIgnoreCase));
-        if (map is not null && CurrentPage == Home)
+        if (map is not null && CurrentPage == Maps)
         {
-            Home.OpenMap(map.FolderName);
+            Maps.OpenMap(map.FolderName);
         }
     }
 

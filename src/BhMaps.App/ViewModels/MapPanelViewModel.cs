@@ -191,9 +191,9 @@ public partial class MapPanelViewModel : ObservableObject
         }
     }
 
-    /// <summary>Closes the panel by clearing Home's selection, which is the one thing that opens it.</summary>
+    /// <summary>Closes the panel by clearing the Maps page's selection, which is the one thing that opens it.</summary>
     [RelayCommand]
-    private void Close() => _shell.Home.Selected = null;
+    private void Close() => _shell.Maps.Selected = null;
 
     /// <summary>Spec 6.3: one map's slots, so no confirm. Applying to more than one map is the Backgrounds page's
     /// job and does need one.</summary>

@@ -2,9 +2,9 @@ using System.Windows.Controls;
 
 namespace BhMaps.App.Views.Pages;
 
-public partial class HomeView : UserControl
+public partial class MapsView : UserControl
 {
-    public HomeView()
+    public MapsView()
     {
         InitializeComponent();
     }

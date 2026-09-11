@@ -9,9 +9,9 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace BhMaps.App.ViewModels.Pages;
 
-/// <summary>Spec 7.2: the chip row with the zoom slider at its right end, and the grid of composed map cards.
+/// <summary>Spec 3.1: the chip row with the zoom slider at its right end, and the grid of composed map cards.
 /// No summary bar and no composition bars; the header carries the search box and Reset all to default.</summary>
-public partial class HomeViewModel : PageViewModel
+public partial class MapsViewModel : PageViewModel
 {
     public const int MinZoom = AppSettings.MinZoom;
     public const int MaxZoom = AppSettings.MaxZoom;
@@ -30,7 +30,7 @@ public partial class HomeViewModel : PageViewModel
     private ScanSnapshot? _snapshot;
     private CancellationTokenSource? _previews;
 
-    public HomeViewModel(MainViewModel shell)
+    public MapsViewModel(MainViewModel shell)
         : base(shell)
     {
         Cards = [];
@@ -48,7 +48,7 @@ public partial class HomeViewModel : PageViewModel
         shell.PropertyChanged += OnShellChanged;
     }
 
-    public override string Title => "Home";
+    public override string Title => "Maps";
 
     /// <summary>The cards the chip and the search leave visible, in display-name order.</summary>
     public ObservableCollection<MapCardViewModel> Cards { get; }
