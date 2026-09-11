@@ -53,8 +53,6 @@ public partial class MapPanelViewModel : ObservableObject
     public const string NoBackgroundText = "None";
     public const string NoDefaultPackText = "No Default pack yet. Capture defaults first.";
 
-    private const string BackgroundsFolder = "Backgrounds";
-
     private readonly MainViewModel _shell;
     private readonly MapEntry _map;
     private readonly ScanSnapshot _snapshot;
@@ -170,7 +168,7 @@ public partial class MapPanelViewModel : ObservableObject
         ResetOutcome? outcome = null;
         await _shell.RunGameWriteAsync(
             $"Resetting {DisplayName}",
-            ResetPaths(defaultPack),
+            PackApplier.ResetMapPaths(_snapshot.Tree, _map, defaultPack),
             (_, ct) => Task.Run(() => { outcome = MapReset.ResetMap(gamePath, folderName, slots, defaultPack); }, ct),
             $"Reset {DisplayName} to default");
 
@@ -233,25 +231,6 @@ public partial class MapPanelViewModel : ObservableObject
         {
             _shell.Dialogs.ShowFailures("Some files could not be applied", result.Failures);
         }
-    }
-
-    /// <summary>The folder's current files, the Default pack's files for it, and the background slots ResetMap
-    /// writes: everything the reset overwrites has to be in the undo set (spec 6.6).</summary>
-    private IReadOnlyList<string> ResetPaths(Pack defaultPack)
-    {
-        var folderName = _map.FolderName;
-        var backgrounds = defaultPack.FindFolder(BackgroundsFolder);
-
-        // Only the slots the Default pack can actually restore: ResetMap skips the rest, so nothing else is written.
-        var slots = _map.BackgroundSlots.Where(slot => backgrounds?.FindFile(slot) is not null).ToList();
-
-        var current = _snapshot.Tree.FindFolder(folderName)?.Files.Select(f => Path.Combine(folderName, f.Name))
-            ?? Array.Empty<string>();
-        return current
-            .Concat(PlatformSetApplier.TargetPaths(defaultPack, folderName))
-            .Concat(BackgroundApplier.TargetPaths(slots))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
     }
 
     /// <summary>Every pack's backgrounds, plus the game's own copy of a slot this map uses. The rest of the game's
