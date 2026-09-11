@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using BhMaps.App.Services;
+using BhMaps.App.ViewModels.Pages;
 using BhMaps.Core.Imaging;
 using BhMaps.Core.LevelData;
 using BhMaps.Core.Maps;
@@ -11,24 +12,6 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
 namespace BhMaps.App.ViewModels;
-
-/// <summary>One background the panel offers: a pack's, or the game's own copy of a slot this map uses.
-/// InUse marks the one the game is showing, as the scan measured it.</summary>
-public sealed record BackgroundChoiceViewModel(
-    LibraryBackground Background, bool InUse, IAsyncRelayCommand ApplyCommand, ImageSource? Thumbnail)
-{
-    public string FileName => Background.FileName;
-
-    public string PackName => Background.PackName;
-
-    /// <summary>"BG_Grove.jpg (dark)": the tile is 96 px wide, so the pack only fits in the tooltip.</summary>
-    public string Label => $"{Background.FileName} ({Background.PackName})";
-}
-
-/// <summary>One platform set on offer for this map: the Default pack, or any pack with files for its folder.
-/// The preview is a platform-only composite, so the tile shows what the set itself brings.</summary>
-public sealed record PlatformSetViewModel(
-    string PackName, bool InGame, ImageSource? Preview, IAsyncRelayCommand UseCommand);
 
 /// <summary>One file of the map's platform art: where the game's copy came from, and whether it is a fully
 /// transparent PNG that changes nothing in game.</summary>
@@ -41,80 +24,123 @@ public sealed record PlatformFileViewModel(
     public bool ShowSource => SourceText.Length > 0;
 }
 
-/// <summary>Spec 7.2: the right panel for one map. The composed preview, the background candidates, the platform
-/// sets, the platform files, and the two per-map actions. Built fresh for every selection and after every scan;
-/// <see cref="Cancel"/> stops the loads the panel it replaces still had in flight.</summary>
+/// <summary>Spec 3.2: the right panel for one map. The composed preview, the status sentence, the two per-map
+/// actions, and one of two segments: the backgrounds on offer, or the platform sets with the file list under
+/// them. Built fresh for every selection and after every scan; <see cref="Cancel"/> stops the loads the panel it
+/// replaces still had in flight.</summary>
 public partial class MapPanelViewModel : ObservableObject
 {
-    /// <summary>The platform-only composite behind a set tile, drawn at the same 16:9 as everything else.</summary>
-    public const int SetWidth = 320;
-    public const int SetHeight = 180;
+    /// <summary>The composite behind a set tile, rendered at twice the 156 by 88 the tile draws it at, so the
+    /// picture is still sharp on a high DPI screen.</summary>
+    public const int SetWidth = 312;
+    public const int SetHeight = 176;
 
-    public const string NoBackgroundText = "None";
     public const string NoDefaultPackText = "No Default pack yet. Capture defaults first.";
 
+    private const string BackgroundsFolder = "Backgrounds";
+
     private readonly MainViewModel _shell;
+    private readonly MapsViewModel _page;
     private readonly MapEntry _map;
+    private readonly MapStatus? _status;
     private readonly ScanSnapshot _snapshot;
 
-    /// <summary>The three lists are ObservableCollections behind the read-only surface: the records are immutable,
-    /// so a picture that lands replaces its row rather than mutating it.</summary>
-    private readonly ObservableCollection<BackgroundChoiceViewModel> _backgroundChoices = [];
-    private readonly ObservableCollection<PlatformSetViewModel> _platformSets = [];
+    /// <summary>ObservableCollections behind the read-only surfaces: the tiles fill their own pictures in as the
+    /// loads arrive, and a file row is an immutable record that a load replaces rather than mutates.</summary>
+    private readonly ObservableCollection<MapPictureTileViewModel> _backgroundTiles = [];
+    private readonly ObservableCollection<PlatformSetTileViewModel> _platformTiles = [];
     private readonly ObservableCollection<PlatformFileViewModel> _platformFiles = [];
 
     private readonly CancellationTokenSource _loads = new();
 
-    public MapPanelViewModel(MainViewModel shell, MapEntry map, MapStatus? status, ScanSnapshot snapshot)
+    public MapPanelViewModel(MainViewModel shell, MapsViewModel page, MapEntry map, MapStatus? status, ScanSnapshot snapshot)
     {
         _shell = shell;
+        _page = page;
         _map = map;
+        _status = status;
         _snapshot = snapshot;
         DisplayName = map.DisplayName;
+        SetsText = string.Join(", ", map.Sets.Select(MapCatalog.LabelFor));
+        StatusText = BuildStatusText();
         HasDefaultPack = snapshot.DefaultPack is not null;
         ResetHint = HasDefaultPack ? "" : NoDefaultPackText;
+        ShowPlatforms = page.PanelShowsPlatforms;
 
-        // The slot the game draws first is the map's current background; a map without one can take no picture.
-        CurrentBackgroundName = map.BackgroundSlots.Count > 0 ? map.BackgroundSlots[0] : NoBackgroundText;
-
-        foreach (var choice in BuildChoices(status))
+        foreach (var tile in BuildBackgroundTiles())
         {
-            _backgroundChoices.Add(choice);
+            _backgroundTiles.Add(tile);
         }
 
         foreach (var pack in PlatformSetApplier.SetsFor(map.FolderName, snapshot.Packs))
         {
-            _platformSets.Add(new PlatformSetViewModel(
-                pack.Name,
-                IsInGame(pack, map.FolderName, status),
-                Preview: null,
-                new AsyncRelayCommand(() => UseSetAsync(pack))));
+            _platformTiles.Add(new PlatformSetTileViewModel(
+                shell, map, pack, InGameMatch.SetInGame(pack, map.FolderName, status),
+                SetWidth, SetHeight, () => FilesExpanded = true));
         }
 
         // Built with no thumbnail and no transparency verdict: both are file work, and both arrive from LoadAsync.
-        // Sorted the way the Platforms page sorts the same list, so one map reads the same on both pages.
         foreach (var relativePath in map.PlatformFiles.OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
         {
             _platformFiles.Add(new PlatformFileViewModel(
-                relativePath, SourceOf(relativePath, status), ChangesNothing: false, Thumbnail: null));
+                relativePath, InGameMatch.File(status, relativePath)?.Text ?? "", ChangesNothing: false, Thumbnail: null));
         }
+
+        RebuildMenus(shell.SelectedMapCount);
     }
 
     public string DisplayName { get; }
 
-    /// <summary>The first background slot the map's levels name, or "None".</summary>
-    public string CurrentBackgroundName { get; }
+    /// <summary>The sets the map is in, labelled the way the chip row labels them.</summary>
+    public string SetsText { get; }
 
-    /// <summary>Every pack's backgrounds, plus the game's own copies of this map's slots. The one in game first.</summary>
-    public IReadOnlyList<BackgroundChoiceViewModel> BackgroundChoices => _backgroundChoices;
+    /// <summary>Spec 3.2: what the game is showing for this map, in one sentence of words.</summary>
+    public string StatusText { get; }
 
-    public IReadOnlyList<PlatformSetViewModel> PlatformSets => _platformSets;
+    /// <summary>Default first, then every pack with a picture for this map's first background slot.</summary>
+    public IReadOnlyList<MapPictureTileViewModel> BackgroundTiles => _backgroundTiles;
+
+    public IReadOnlyList<PlatformSetTileViewModel> PlatformTiles => _platformTiles;
 
     public IReadOnlyList<PlatformFileViewModel> PlatformFiles => _platformFiles;
 
     /// <summary>Null until the composite is ready, and then a 1280x720 source (spec 7.2).</summary>
     [ObservableProperty]
     public partial ImageSource? Preview { get; set; }
+
+    /// <summary>Which half of the segment is showing. Remembered on the page, so the next map opens on the same
+    /// one (spec 3.2).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowBackground), nameof(ShowBackgroundSegment), nameof(ShowPlatformsSegment))]
+    public partial bool ShowPlatforms { get; set; }
+
+    public bool ShowBackground => !ShowPlatforms;
+
+    /// <summary>The two segments bind these rather than ShowPlatforms directly, the same shape the Add Custom
+    /// Image fit radios use: a click on the segment that is already on is ignored instead of turning both off.</summary>
+    public bool ShowBackgroundSegment
+    {
+        get => !ShowPlatforms;
+        set
+        {
+            if (value)
+            {
+                ShowPlatforms = false;
+            }
+        }
+    }
+
+    public bool ShowPlatformsSegment
+    {
+        get => ShowPlatforms;
+        set
+        {
+            if (value)
+            {
+                ShowPlatforms = true;
+            }
+        }
+    }
 
     [ObservableProperty]
     public partial bool FilesExpanded { get; set; }
@@ -127,16 +153,31 @@ public partial class MapPanelViewModel : ObservableObject
     /// <summary>Why Reset is off, or empty when it is on.</summary>
     public string ResetHint { get; }
 
-    /// <summary>Fills the pictures, in the order the panel shows them. Fire and forget from Home: every file
-    /// failure is already a fallback rather than an error, so the only thing left to stop for is cancellation.</summary>
+    /// <summary>Every tile's menu names the ticked maps, so the count changing rewords every one of them.</summary>
+    public void RebuildMenus(int tickedCount)
+    {
+        foreach (var tile in _backgroundTiles)
+        {
+            tile.RebuildMenu(tickedCount);
+        }
+
+        foreach (var tile in _platformTiles)
+        {
+            tile.RebuildMenu(tickedCount);
+        }
+    }
+
+    /// <summary>Fills the pictures, in the order the panel shows them: the preview, then the Background segment
+    /// that opens, then the composites behind the sets. Fire and forget from Maps: every file failure is already
+    /// a fallback rather than an error, so the only thing left to stop for is cancellation.</summary>
     public async Task LoadAsync()
     {
         var ct = _loads.Token;
         try
         {
             await LoadPreviewAsync(ct);
-            await LoadPlatformSetsAsync(ct);
-            await LoadBackgroundThumbnailsAsync(ct);
+            await LoadTileThumbnailsAsync(_backgroundTiles, ct);
+            await LoadPlatformPreviewsAsync(ct);
             await LoadPlatformFilesAsync(ct);
         }
         catch (OperationCanceledException)
@@ -145,12 +186,8 @@ public partial class MapPanelViewModel : ObservableObject
         }
     }
 
-    /// <summary>Stops the loads still in flight. Home calls it when the panel is replaced or closed.</summary>
+    /// <summary>Stops the loads still in flight. Maps calls it when the panel is replaced or closed.</summary>
     public void Cancel() => _loads.Cancel();
-
-    /// <summary>Spec 6.8. The window is Task 27's; the panel only says which map the pictures are for.</summary>
-    [RelayCommand]
-    private Task AddPictureAsync() => _shell.OpenAddPicturesAsync(new AddPicturesTarget(AddPicturesTargetKind.Map, _map, null));
 
     /// <summary>Spec 6.1, for this map alone: the Default pack's files for the folder and its copies of the map's
     /// background slots.</summary>
@@ -193,114 +230,89 @@ public partial class MapPanelViewModel : ObservableObject
     [RelayCommand]
     private void Close() => _shell.Maps.Selected = null;
 
-    /// <summary>Spec 6.3: one map's slots, so no confirm. Applying to more than one map is the Backgrounds page's
-    /// job and does need one.</summary>
-    private async Task ApplyBackgroundAsync(LibraryBackground background)
-    {
-        var gamePath = _shell.Services.GamePath;
-        var sourcePath = background.FullPath;
-        var slots = _map.BackgroundSlots;
-        ApplyResult? result = null;
-        await _shell.RunGameWriteAsync(
-            $"Applying {background.FileName}",
-            BackgroundApplier.TargetPaths(slots),
-            (progress, ct) => Task.Run(
-                () => { result = BackgroundApplier.Apply(sourcePath, gamePath, slots, progress, ct); }, ct),
-            $"{background.FileName} applied to {DisplayName}");
+    partial void OnShowPlatformsChanged(bool value) => _page.PanelShowsPlatforms = value;
 
-        if (result is not null)
+    /// <summary>Default first, then every pack with a picture for this map's first slot (spec 3.2).</summary>
+    private IEnumerable<MapPictureTileViewModel> BuildBackgroundTiles()
+    {
+        if (_map.BackgroundSlots.Count == 0)
         {
-            _shell.Dialogs.ShowFailures("Some files could not be applied", result.Failures);
+            yield break;
+        }
+
+        var slot = _map.BackgroundSlots[0];
+        var relative = AssetPath.Background(slot);
+        var fileName = Path.GetFileName(relative);
+        var packs = _snapshot.Packs
+            .OrderBy(p => p.Name.Equals(DefaultPack.Name, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+            .ThenBy(p => p.Name, StringComparer.OrdinalIgnoreCase);
+        foreach (var pack in packs)
+        {
+            if (pack.FindFolder(BackgroundsFolder)?.FindFile(fileName) is not { } file)
+            {
+                continue;
+            }
+
+            yield return new MapPictureTileViewModel(
+                _shell, _map, slot, pack.Name, "", file.FullPath, pack.Name,
+                InGameMatch.Matches(_status, relative, pack.Name));
         }
     }
 
-    /// <summary>Spec 6.4: every file the pack has for this folder, transparent ones included.</summary>
-    private async Task UseSetAsync(Pack pack)
+    /// <summary>Spec 3.2's one sentence: "Missing 2 files", "Custom picture: sunset.jpg", "Default", or
+    /// "In game: flowermap background, Default platforms".</summary>
+    private string BuildStatusText()
     {
-        var gamePath = _shell.Services.GamePath;
-        var folderName = _map.FolderName;
-        ApplyResult? result = null;
-        await _shell.RunGameWriteAsync(
-            $"Applying {pack.Name}",
-            PlatformSetApplier.TargetPaths(pack, folderName),
-            (progress, ct) => Task.Run(
-                () => { result = PlatformSetApplier.Apply(pack, folderName, gamePath, progress, ct); }, ct),
-            $"{pack.Name} applied to {DisplayName}");
-
-        if (result is not null)
+        var missing = _status?.Files.Count(f => f.State == MapFileState.Missing) ?? 0;
+        if (missing > 0)
         {
-            _shell.Dialogs.ShowFailures("Some files could not be applied", result.Failures);
+            return missing == 1 ? "Missing 1 file" : $"Missing {missing} files";
         }
+
+        var slot = _map.BackgroundSlots.Count > 0 ? _map.BackgroundSlots[0] : null;
+        var file = slot is null ? null : InGameMatch.File(_status, AssetPath.Background(slot));
+        if (file is { State: MapFileState.Custom })
+        {
+            return $"Custom picture: {CustomPictureName(slot!)}";
+        }
+
+        var background = file is { State: MapFileState.Pack, PackNames.Count: > 0 }
+            ? file.PackNames[0]
+            : DefaultPack.Name;
+        var platforms = PlatformSource();
+        return background == DefaultPack.Name && platforms == DefaultPack.Name
+            ? "Default"
+            : $"In game: {background} background, {platforms} platforms";
     }
 
-    /// <summary>Every pack's backgrounds, plus the game's own copy of a slot this map uses. The rest of the game's
-    /// Backgrounds folder belongs to other maps, so it is not on offer here.</summary>
-    private IReadOnlyList<BackgroundChoiceViewModel> BuildChoices(MapStatus? status)
+    /// <summary>The name the user knows the picture by, from the custom library, or the slot's own file name.</summary>
+    private string CustomPictureName(string slot)
     {
-        var slots = _map.BackgroundSlots;
+        var fileName = Path.GetFileName(AssetPath.Background(slot));
+        return _snapshot.CustomPictures
+                   .FirstOrDefault(p => p.InGameSlots.Contains(fileName, StringComparer.OrdinalIgnoreCase))
+                   ?.DisplayName
+               ?? fileName;
+    }
 
-        // Without a slot there is nowhere to write, so the candidates are shown and disabled rather than hidden.
-        var canApply = slots.Count > 0;
-        return _snapshot.Backgrounds
-            .Where(b => !b.FromGame || slots.Contains(b.FileName, StringComparer.OrdinalIgnoreCase))
-            .Select(b => new BackgroundChoiceViewModel(
-                b,
-                IsInUse(b, slots, status),
-                new AsyncRelayCommand(() => ApplyBackgroundAsync(b), () => canApply),
-                Thumbnail: null))
-            .OrderBy(c => c.InUse ? 0 : 1)
+    /// <summary>Custom beats a pack beats Default, over this map's own folder only.</summary>
+    private string PlatformSource()
+    {
+        var files = (_status?.Files ?? Array.Empty<MapFileStatus>())
+            .Where(f => f.RelativePath.StartsWith(_map.FolderName + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
             .ToList();
-    }
-
-    /// <summary>What the game is showing now, as the scan measured it: the game's own copy of a slot, and any pack
-    /// the scan found byte-identical to it. Never re-hashes anything.</summary>
-    private static bool IsInUse(LibraryBackground background, IReadOnlyList<string> slots, MapStatus? status)
-    {
-        if (!slots.Contains(background.FileName, StringComparer.OrdinalIgnoreCase))
+        if (files.Any(f => f.State == MapFileState.Custom))
         {
-            return false;
+            return "Custom";
         }
 
-        if (background.FromGame)
-        {
-            return true;
-        }
-
-        var file = FileStatus(status, AssetPath.Background(background.FileName));
-        return Matches(file, background.PackName);
+        return files.SelectMany(f => f.PackNames).FirstOrDefault() ?? DefaultPack.Name;
     }
-
-    /// <summary>The tick and the ring: every file the set would write is in game already, as the scan measured it.</summary>
-    private static bool IsInGame(Pack pack, string folderName, MapStatus? status)
-    {
-        var paths = PlatformSetApplier.TargetPaths(pack, folderName);
-        if (status is null || paths.Count == 0)
-        {
-            return false;
-        }
-
-        return paths.All(path => Matches(FileStatus(status, path), pack.Name));
-    }
-
-    /// <summary>A file matches the Default pack only in the Default state: MapStatusDetector counts a file matching
-    /// both Default and another pack as the other pack's (spec 6.2).</summary>
-    private static bool Matches(MapFileStatus? file, string packName) =>
-        file is not null
-        && (packName.Equals(DefaultPack.Name, StringComparison.OrdinalIgnoreCase)
-            ? file.State == MapFileState.Default
-            : file.PackNames.Contains(packName, StringComparer.OrdinalIgnoreCase));
-
-    private static MapFileStatus? FileStatus(MapStatus? status, string relativePath) =>
-        status?.Files.FirstOrDefault(f => f.RelativePath.Equals(relativePath, StringComparison.OrdinalIgnoreCase));
-
-    /// <summary>"Default", the pack names, "Custom" or "Missing"; empty when the scan measured no such file.</summary>
-    private static string SourceOf(string relativePath, MapStatus? status) =>
-        FileStatus(status, relativePath)?.Text ?? "";
 
     private async Task LoadPreviewAsync(CancellationToken ct)
     {
         var image = _snapshot.Catalog.HasLevelData
-            ? await ComposeAsync(_map.BaseLevel, MapCompositor.PanelWidth, MapCompositor.PanelHeight, null, ct)
+            ? await ComposeAsync(_map.BaseLevel, MapCompositor.PanelWidth, MapCompositor.PanelHeight, null, null, ct)
             : null;
 
         // A preview is never worth an error dialog, so a composite that could not be drawn becomes the file tile.
@@ -311,40 +323,32 @@ public partial class MapPanelViewModel : ObservableObject
         }
     }
 
-    /// <summary>The brief's platform-only composite: the map's level with its backgrounds dropped, drawn out of the
-    /// pack, so the tile shows the set and not the picture behind it.</summary>
-    private async Task LoadPlatformSetsAsync(CancellationToken ct)
+    private async Task LoadTileThumbnailsAsync(IEnumerable<PictureTileViewModel> tiles, CancellationToken ct)
     {
-        var level = _map.BaseLevel with { Backgrounds = [] };
-        for (var i = 0; i < _platformSets.Count; i++)
+        foreach (var tile in tiles)
         {
             ct.ThrowIfCancellationRequested();
-            var set = _platformSets[i];
-            if (FindPack(set.PackName) is not { } pack)
-            {
-                continue;
-            }
-
-            var image = _snapshot.Catalog.HasLevelData
-                ? await ComposeAsync(level, SetWidth, SetHeight, pack.FullPath, ct)
-                : null;
-            image ??= await FolderThumbnailAsync(pack.FindFolder(_map.FolderName), ct);
-            if (image is not null)
-            {
-                _platformSets[i] = set with { Preview = image };
-            }
+            await tile.LoadThumbnailAsync(_shell.Services, ct);
         }
     }
 
-    private async Task LoadBackgroundThumbnailsAsync(CancellationToken ct)
+    /// <summary>The pack's platform art over the map's current background, so the tile shows what would change.</summary>
+    private async Task LoadPlatformPreviewsAsync(CancellationToken ct)
     {
-        for (var i = 0; i < _backgroundChoices.Count; i++)
+        var gamePath = _shell.Services.GamePath;
+        var background = _map.BaseLevel.Backgrounds.Count == 0
+            ? null
+            : Path.Combine(gamePath, AssetPath.Background(_map.BaseLevel.Backgrounds[0].AssetName));
+        foreach (var tile in _platformTiles)
         {
             ct.ThrowIfCancellationRequested();
-            var choice = _backgroundChoices[i];
-            if (await ThumbnailAsync(choice.Background.FullPath, ct) is { } image)
+            var image = _snapshot.Catalog.HasLevelData
+                ? await ComposeAsync(_map.BaseLevel, SetWidth, SetHeight, tile.Pack.FullPath, background, ct)
+                : null;
+            image ??= await FolderThumbnailAsync(tile.Pack.FindFolder(_map.FolderName), ct);
+            if (image is not null)
             {
-                _backgroundChoices[i] = choice with { Thumbnail = image };
+                tile.Preview = image;
             }
         }
     }
@@ -369,10 +373,10 @@ public partial class MapPanelViewModel : ObservableObject
     /// <summary>Every composite goes through the preview cache, never MapCompositor.Render: the cache queues the
     /// render on the one STA thread and keeps the result. Null when the picture could not be drawn.</summary>
     private async Task<ImageSource?> ComposeAsync(
-        LevelDesc level, int width, int height, string? packRoot, CancellationToken ct)
+        LevelDesc level, int width, int height, string? packRoot, string? backgroundPath, CancellationToken ct)
     {
         var previews = _shell.Services.Previews;
-        var sources = new AssetSources(_shell.Services.GamePath, packRoot);
+        var sources = new AssetSources(_shell.Services.GamePath, packRoot, backgroundPath);
         try
         {
             // The whole call goes on the pool: GetOrRenderAsync hashes every input file on its caller's thread
@@ -424,9 +428,6 @@ public partial class MapPanelViewModel : ObservableObject
         Path.GetExtension(fullPath).Equals(".png", StringComparison.OrdinalIgnoreCase)
             ? Task.Run(() => TransparentPng.IsFullyTransparent(fullPath), ct)
             : Task.FromResult(false);
-
-    private Pack? FindPack(string name) =>
-        _snapshot.Packs.FirstOrDefault(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>Decoded whole and frozen off the UI thread, so nothing is read from disk while the panel draws.</summary>
     private static ImageSource Decode(string path)

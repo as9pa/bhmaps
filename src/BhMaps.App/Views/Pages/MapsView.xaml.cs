@@ -5,6 +5,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using BhMaps.App.ViewModels;
 using BhMaps.App.ViewModels.Pages;
+using BhMaps.App.Views.Controls;
 
 namespace BhMaps.App.Views.Pages;
 
@@ -148,10 +149,14 @@ public partial class MapsView : UserControl
 
     /// <summary>Spec 3.1: Escape in the search box clears what was typed and stops there, so the page's own
     /// Escape order (the panel, then the ticks) is left for an empty or unfocused box. The same command the
-    /// Clear search button runs, so there is one way to empty the box.</summary>
+    /// Clear search button runs, so there is one way to empty the box.
+    /// Spec section 13's menu key and Shift+F10 are handled from here too, because a UserControl has one
+    /// PreviewKeyDown: TileMenus takes those two keys and leaves every other one alone, so the two do not
+    /// collide over Escape.</summary>
     private void OnPageKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key != Key.Escape || DataContext is not MapsViewModel page || page.SearchText.Length == 0)
+        TileMenus.OnPreviewKeyDown(sender, e);
+        if (e.Handled || e.Key != Key.Escape || DataContext is not MapsViewModel page || page.SearchText.Length == 0)
         {
             return;
         }
@@ -164,6 +169,10 @@ public partial class MapsView : UserControl
             e.Handled = true;
         }
     }
+
+    /// <summary>The three-dot button on a panel tile. The button carries no menu of its own, so TileMenus walks
+    /// up to the tile that does.</summary>
+    private void OnTileMenuButton(object sender, RoutedEventArgs e) => TileMenus.OpenFor(sender);
 
     /// <summary>Opens a bar button's menu on a left click, above the bar. The menu lives outside the visual
     /// tree, so it is given the button's DataContext: its items bind the page through it.</summary>

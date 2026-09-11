@@ -661,6 +661,15 @@
     <Setter Property="Padding" Value="6" />
   </Style>
 
+  <!-- The two tile actions sit over the picture, so they carry the surface behind them rather than the outline
+       button's transparent fill. Smaller than a page button, because at eight columns a tile is narrow. -->
+  <Style x:Key="TileAction" TargetType="Button" BasedOn="{StaticResource OutlineButton}">
+    <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="Padding" Value="8,3" />
+    <Setter Property="Margin" Value="4,0,0,0" />
+  </Style>
+
   <!-- A collapsible section's header: a leading chevron, the label and its count, the whole row clickable
        (spec 4). Two chevron geometries rather than one rotated, so there is no transform origin to get wrong.
        Foreground on the style, so the icon inherits the colour the label states. -->
