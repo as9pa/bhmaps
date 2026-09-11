@@ -16,11 +16,16 @@
   <UserControl.Resources>
     <BooleanToVisibilityConverter x:Key="BoolToVis" />
     <converters:NullToVisibilityConverter x:Key="NullToVis" />
+    <converters:WidthAtLeastConverter x:Key="WidthAtLeast" />
 
     <!-- A chip is a ListBoxItem so the list owns which one is on, and the theme's ChipToggle draws it. The toggle
          is chrome only: hit testing and focus belong to the row, which is what Tab and the arrow keys walk. -->
     <Style x:Key="ChipRow" TargetType="ListBoxItem">
       <Setter Property="Margin" Value="0,0,8,0" />
+
+      <!-- Owner change O2: the hand the top bar's tabs show. It belongs on the row rather than on ChipToggle,
+           which carries one already but is IsHitTestVisible=False, so the cursor under the pointer is the row's. -->
+      <Setter Property="Cursor" Value="Hand" />
       <Setter Property="FocusVisualStyle" Value="{x:Null}" />
       <Setter Property="Template">
         <Setter.Value>
@@ -597,12 +602,19 @@
                     </Border>
                   </Grid>
 
+                  <!-- Owner change O1: the name and the tag share one row where the card is wide enough to hold
+                       both, and the tag drops to a row of its own where it is not. Row 1 is Auto, so on the wide
+                       card it costs nothing. The trigger that moves the pill is on the template. -->
                   <Grid Margin="2,8,2,0"
                         Visibility="{Binding DataContext.ShowName, RelativeSource={RelativeSource AncestorType=ListBox}, Converter={StaticResource BoolToVis}}">
                     <Grid.ColumnDefinitions>
                       <ColumnDefinition Width="*" />
                       <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                      <RowDefinition Height="Auto" />
+                      <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
 
                     <TextBlock VerticalAlignment="Center"
                                FontSize="{Binding DataContext.NameFontSize, RelativeSource={RelativeSource AncestorType=ListBox}}"
@@ -611,11 +623,13 @@
 
                     <!-- Two tags, because Missing is a style of its own rather than a colour on the ordinary one.
                          Each sits in a wrapper that carries the visibility, so neither theme style is derived from.
-                         The pill shares the name's row and takes only the width it needs, so the row it used to
-                         have is a row no card spends any more; at 7 and above there are no tags at all. -->
-                    <Grid Grid.Column="1"
-                          Margin="8,0,0,0"
-                          HorizontalAlignment="Right"
+                         Under the name is where the pill sits until the card is wide enough to take it up onto the
+                         name's row, which is the safe way round: a card measures 0 wide before its first layout.
+                         At 7 and above there are no tags at all. -->
+                    <Grid x:Name="Tag"
+                          Grid.Row="1"
+                          Margin="0,6,0,0"
+                          HorizontalAlignment="Left"
                           VerticalAlignment="Center"
                           Visibility="{Binding DataContext.ShowTagRow, RelativeSource={RelativeSource AncestorType=ListBox}, Converter={StaticResource BoolToVis}}">
                       <Grid>
@@ -632,7 +646,7 @@
                           </Style>
                         </Grid.Style>
                         <Border Style="{StaticResource StateTagBorder}">
-                          <TextBlock Text="{Binding TagText}" />
+                          <TextBlock Text="{Binding TagText}" TextTrimming="CharacterEllipsis" />
                         </Border>
                       </Grid>
                       <Grid>
@@ -647,7 +661,7 @@
                           </Style>
                         </Grid.Style>
                         <Border Style="{StaticResource MissingTagBorder}">
-                          <TextBlock Text="{Binding TagText}" />
+                          <TextBlock Text="{Binding TagText}" TextTrimming="CharacterEllipsis" />
                         </Border>
                       </Grid>
                     </Grid>
@@ -655,6 +669,19 @@
                 </StackPanel>
               </Border>
               <DataTemplate.Triggers>
+                <!-- Owner change O1: the pill goes up onto the name's row once the card can hold both, which is
+                     the card's own width rather than the zoom step, because the window can be any width. 200 px
+                     is a 16 character pill (the ellipsis ceiling on a picture's name) plus the 8 px gap plus a
+                     14 character name at 13 px, plus the card's padding and border. A pack name longer than that
+                     takes the width from the name, and ellipsises in its own pill rather than running off the
+                     card. -->
+                <DataTrigger Binding="{Binding ActualWidth, ElementName=Chrome, Converter={StaticResource WidthAtLeast}, ConverterParameter=200}" Value="True">
+                  <Setter TargetName="Tag" Property="Grid.Row" Value="0" />
+                  <Setter TargetName="Tag" Property="Grid.Column" Value="1" />
+                  <Setter TargetName="Tag" Property="Margin" Value="8,0,0,0" />
+                  <Setter TargetName="Tag" Property="HorizontalAlignment" Value="Right" />
+                </DataTrigger>
+
                 <DataTrigger Binding="{Binding IsSelected}" Value="True">
                   <Setter TargetName="Tick" Property="Visibility" Value="Visible" />
                 </DataTrigger>
