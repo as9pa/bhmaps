@@ -559,13 +559,16 @@
         </ListBox.ItemsPanel>
       </ListBox>
 
-      <!-- Spec 3.1: the row's teaching button, always present, because it is what says maps can be ticked. -->
+      <!-- Spec 3.1: the row's teaching button, always present, because it is what says maps can be ticked.
+           Owner change O7: it says "Select all", because what the chips and the search show is what the user is
+           looking at; the tooltip says it in full and the bar's count line confirms what happened. -->
       <Button HorizontalAlignment="Right"
               VerticalAlignment="Center"
               Command="{Binding SelectAllShownCommand}"
-              Content="{Binding SelectAllShownText}"
+              Content="Select all"
               controls:Icon.Glyph="{StaticResource Icon.Check}"
-              Style="{StaticResource PlainButton}" />
+              Style="{StaticResource PlainButton}"
+              ToolTip="Ticks the maps the chips and search show" />
     </Grid>
 
     <!-- Spec 3.1: the only line a first-timer needs, and it goes when a pack arrives. -->
@@ -816,7 +819,8 @@
             <Button Margin="8,0,0,0" Command="{Binding ResetTickedCommand}" Content="Reset to default"
                     controls:Icon.Glyph="{StaticResource Icon.Undo}" Style="{StaticResource OutlineButton}"
                     IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}" />
-            <Button Margin="12,0,0,0" Command="{Binding SelectAllShownCommand}" Content="Select all shown" Style="{StaticResource PlainButton}" />
+            <Button Margin="12,0,0,0" Command="{Binding SelectAllShownCommand}" Content="Select all"
+                    Style="{StaticResource PlainButton}" ToolTip="Ticks the maps the chips and search show" />
             <Button Command="{Binding DataContext.ClearSelectionCommand, RelativeSource={RelativeSource AncestorType=Window}}" Content="Clear" Style="{StaticResource PlainButton}" />
           </StackPanel>
         </Border>
