@@ -18,7 +18,10 @@
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="ListBoxItem">
-            <Grid>
+            <!-- Transparent, not unset: a Grid with no Background is not hit-testable, and both children below
+                 are IsHitTestVisible=False, so without this the ListBoxItem never sees a mouse click and only UI
+                 Automation, which bypasses hit testing, could select a chip (spec 9). -->
+            <Grid Background="Transparent">
               <primitives:ToggleButton x:Name="Chip"
                                        Content="{TemplateBinding Content}"
                                        Focusable="False"
