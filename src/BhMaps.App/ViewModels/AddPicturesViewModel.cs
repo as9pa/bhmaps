@@ -121,8 +121,8 @@ public partial class AddPicturesViewModel : ObservableObject
     public string MapChoiceText => $"Add and apply to {_mapName}";
 
     public string TickedChoiceText => _tickedCount == 1
-        ? "Add and apply to the 1 ticked map"
-        : $"Add and apply to the {_tickedCount} ticked maps";
+        ? "Add and apply to the 1 selected map"
+        : $"Add and apply to the {_tickedCount} selected maps";
 
     public string AllChoiceText => $"Add and apply to all {_allCount} maps";
 

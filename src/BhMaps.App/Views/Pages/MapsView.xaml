@@ -643,7 +643,7 @@
                               Margin="6"
                               HorizontalAlignment="Left"
                               VerticalAlignment="Top"
-                              AutomationProperties.Name="Ticked"
+                              AutomationProperties.Name="Selected"
                               Focusable="False"
                               IsChecked="{Binding IsSelected, Mode=TwoWay}"
                               Style="{StaticResource CardTick}"

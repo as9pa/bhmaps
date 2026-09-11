@@ -65,7 +65,7 @@ public abstract partial class PictureTileViewModel : ObservableObject
 
     /// <summary>The ticked row's words, in one place, so no two tiles can word the same row differently.</summary>
     protected static string TickedText(int tickedCount) =>
-        tickedCount == 1 ? "Apply to the 1 ticked map" : $"Apply to the {tickedCount} ticked maps";
+        tickedCount == 1 ? "Apply to the 1 selected map" : $"Apply to the {tickedCount} selected maps";
 
     /// <summary>Every file touch is off the UI thread. A picture that cannot be read leaves the tile blank.</summary>
     public async Task LoadThumbnailAsync(AppServices services, CancellationToken ct)
