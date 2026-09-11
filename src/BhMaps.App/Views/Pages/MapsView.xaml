@@ -145,7 +145,7 @@
          there, and only there, which leaves the name row's pill on the two theme backgrounds it has always had.
          Collapsed on a card with no tag, or the ground would draw as a small empty square in the corner. -->
     <DataTemplate x:Key="CardTagPillOnPicture">
-      <Border Background="{StaticResource ScrimBrush}" CornerRadius="6" Padding="2">
+      <Border Background="{StaticResource ScrimBrush}" CornerRadius="{StaticResource Radius}" Padding="2">
         <Border.Style>
           <Style TargetType="Border">
             <Setter Property="Visibility" Value="Collapsed" />
@@ -570,7 +570,7 @@
               Content="Select all"
               controls:Icon.Glyph="{StaticResource Icon.Check}"
               Style="{StaticResource PlainButton}"
-              ToolTip="Ticks the maps the chips and search show" />
+              ToolTip="Selects the maps the chips and search show" />
     </Grid>
 
     <!-- Spec 3.1: the only line a first-timer needs, and it goes when a pack arrives. -->
@@ -824,7 +824,7 @@
                     controls:Icon.Glyph="{StaticResource Icon.Undo}" Style="{StaticResource OutlineButton}"
                     IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}" />
             <Button Margin="12,0,0,0" Command="{Binding SelectAllShownCommand}" Content="Select all"
-                    Style="{StaticResource PlainButton}" ToolTip="Ticks the maps the chips and search show" />
+                    Style="{StaticResource PlainButton}" ToolTip="Selects the maps the chips and search show" />
             <Button Command="{Binding DataContext.ClearSelectionCommand, RelativeSource={RelativeSource AncestorType=Window}}" Content="Clear" Style="{StaticResource PlainButton}" />
           </StackPanel>
         </Border>
