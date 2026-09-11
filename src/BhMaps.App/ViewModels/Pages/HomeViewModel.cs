@@ -3,6 +3,7 @@ using System.ComponentModel;
 using BhMaps.App.Services;
 using BhMaps.Core.Maps;
 using BhMaps.Core.Operations;
+using BhMaps.Core.Settings;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -12,8 +13,8 @@ namespace BhMaps.App.ViewModels.Pages;
 /// No summary bar and no composition bars; the header carries the search box and Reset all to default.</summary>
 public partial class HomeViewModel : PageViewModel
 {
-    public const int MinZoom = 2;
-    public const int MaxZoom = 5;
+    public const int MinZoom = AppSettings.MinZoom;
+    public const int MaxZoom = AppSettings.MaxZoom;
 
     private const string AllChip = "All";
     private const string ChangedChip = "Changed";
@@ -40,7 +41,7 @@ public partial class HomeViewModel : PageViewModel
         SelectedChip = AllChip;
 
         // A stored zoom from another version, or a hand-edited one, is clamped rather than trusted.
-        Zoom = Math.Clamp(shell.Services.Settings.HomeZoom, MinZoom, MaxZoom);
+        Zoom = Math.Clamp(shell.Services.Settings.MapsZoom, MinZoom, MaxZoom);
 
         // The header's search box and the sidebar's are one string, so the grid filters with the list. The page
         // lives as long as the shell, so there is nothing to unsubscribe from.
@@ -60,7 +61,7 @@ public partial class HomeViewModel : PageViewModel
     [ObservableProperty]
     public partial string SelectedChip { get; set; }
 
-    /// <summary>Columns in the grid, MinZoom to MaxZoom, persisted as homeZoom.</summary>
+    /// <summary>Columns in the grid, MinZoom to MaxZoom, persisted as mapsZoom.</summary>
     [ObservableProperty]
     public partial int Zoom { get; set; }
 
@@ -195,9 +196,9 @@ public partial class HomeViewModel : PageViewModel
 
     partial void OnZoomChanged(int value)
     {
-        if (Shell.Services.Settings.HomeZoom != value)
+        if (Shell.Services.Settings.MapsZoom != value)
         {
-            Shell.Services.UpdateSettings(Shell.Services.Settings with { HomeZoom = value });
+            Shell.Services.UpdateSettings(Shell.Services.Settings with { MapsZoom = value });
         }
     }
 
