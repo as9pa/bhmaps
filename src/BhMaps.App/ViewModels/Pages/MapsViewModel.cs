@@ -14,7 +14,7 @@ namespace BhMaps.App.ViewModels.Pages;
 /// <summary>One row of the Apply picture menu. A null Picture is the "Add Custom Image..." row.</summary>
 public sealed record PictureMenuItem(string Header, CustomPicture? Picture);
 
-/// <summary>Spec 3.1: the chip row with "Select all shown" at its right end, and the grid of composed map cards.
+/// <summary>Spec 3.1: the chip row with "Select all" at its right end, and the grid of composed map cards.
 /// No summary bar and no composition bars; the header carries the search box, the zoom and Reset all to
 /// default, so nothing the chips do can move the slider.</summary>
 public partial class MapsViewModel : PageViewModel
@@ -110,10 +110,6 @@ public partial class MapsViewModel : PageViewModel
     public Thickness CardPadding => Zoom <= 8 ? new Thickness(8) : new Thickness(4);
 
     public Thickness CardMargin => Zoom <= 8 ? new Thickness(0, 0, 12, 12) : new Thickness(0, 0, 8, 8);
-
-    /// <summary>Spec 3.1: the chip row's teaching button. It names the count whenever the grid is filtered.</summary>
-    public string SelectAllShownText =>
-        Cards.Count == _all.Count ? "Select all shown" : $"Select all {Cards.Count} shown";
 
     /// <summary>Spec 3.1: why the grid is empty, in one line.</summary>
     public string EmptyText
@@ -462,7 +458,6 @@ public partial class MapsViewModel : PageViewModel
         if (e.PropertyName == nameof(MainViewModel.SelectedMapCount))
         {
             RebuildChips(_snapshot?.Catalog);
-            OnPropertyChanged(nameof(SelectAllShownText));
             OnPropertyChanged(nameof(SelectionText));
             OnPropertyChanged(nameof(HasTicks));
 
@@ -579,7 +574,6 @@ public partial class MapsViewModel : PageViewModel
             }
         }
 
-        OnPropertyChanged(nameof(SelectAllShownText));
         OnPropertyChanged(nameof(EmptyText));
         OnPropertyChanged(nameof(ShowClearSearch));
     }
