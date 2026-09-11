@@ -5,15 +5,6 @@
              xmlns:pages="clr-namespace:BhMaps.App.ViewModels.Pages">
   <UserControl.Resources>
     <BooleanToVisibilityConverter x:Key="BoolToVis" />
-
-    <!-- The two tile actions sit over the picture, so they carry the surface behind them rather than the outline
-         button's transparent fill. Smaller than a page button, because at eight columns a tile is narrow. -->
-    <Style x:Key="TileAction" TargetType="Button" BasedOn="{StaticResource OutlineButton}">
-      <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
-      <Setter Property="FontSize" Value="11" />
-      <Setter Property="Padding" Value="8,3" />
-      <Setter Property="Margin" Value="4,0,0,0" />
-    </Style>
   </UserControl.Resources>
 
   <DockPanel Margin="24,16,24,24">

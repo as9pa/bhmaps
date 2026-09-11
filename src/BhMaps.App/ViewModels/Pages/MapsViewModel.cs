@@ -92,6 +92,9 @@ public partial class MapsViewModel : PageViewModel
     [ObservableProperty]
     public partial MapPanelViewModel? Panel { get; set; }
 
+    /// <summary>Which half of the map panel's segment is showing, for the life of the session (spec 3.2).</summary>
+    public bool PanelShowsPlatforms { get; set; }
+
     /// <summary>Spec 3.1's density steps. At 7 and 8 the name shrinks and the tag goes; at 9 and 10 the name row
     /// goes with it, the card tightens to 4 px padding and 8 px gaps, and Missing becomes a mark on the picture.
     /// ShowTagRow is the zoom's answer for every card; MapCardViewModel.ShowTag is one card's own answer about
@@ -420,7 +423,7 @@ public partial class MapsViewModel : PageViewModel
         }
 
         snapshot.MapStatuses.TryGetValue(value.FolderName, out var status);
-        var panel = new MapPanelViewModel(Shell, value.Map, status, snapshot);
+        var panel = new MapPanelViewModel(Shell, this, value.Map, status, snapshot);
         Panel = panel;
 
         // Fire and forget: the panel turns its own file failures into fallbacks, so there is nothing to await for.
@@ -454,6 +457,9 @@ public partial class MapsViewModel : PageViewModel
             OnPropertyChanged(nameof(SelectAllShownText));
             OnPropertyChanged(nameof(SelectionText));
             OnPropertyChanged(nameof(HasTicks));
+
+            // Every open tile menu names the ticked maps, so the count is what rewords them (spec 4).
+            Panel?.RebuildMenus(Shell.SelectedMapCount);
         }
     }
 

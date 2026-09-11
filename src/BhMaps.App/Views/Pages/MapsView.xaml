@@ -129,33 +129,11 @@
       <Setter Property="VerticalAlignment" Value="Top" />
     </Style>
 
-    <!-- Revealed by hover or by keyboard focus reaching into the tile (spec 7.8), never by Visibility: a collapsed
-         button cannot be tabbed to, so it would be mouse-only. -->
-    <Style x:Key="UseButton" TargetType="Button" BasedOn="{StaticResource OutlineButton}">
-      <Setter Property="Background" Value="{StaticResource BgBrush}" />
-      <Setter Property="FontSize" Value="12" />
-      <Setter Property="Opacity" Value="0" />
-      <Setter Property="Padding" Value="12,4" />
-      <Style.Triggers>
-        <Trigger Property="IsKeyboardFocused" Value="True">
-          <Setter Property="BorderBrush" Value="{StaticResource TextBrush}" />
-        </Trigger>
-      </Style.Triggers>
-    </Style>
-
     <!-- Radius 6 everywhere, so the picture is an ImageBrush on a Border rather than an Image with square corners.
          The tile colour behind it is what an empty slot shows. -->
     <Style x:Key="PictureTile" TargetType="Border">
       <Setter Property="Background" Value="{StaticResource TileBrush}" />
       <Setter Property="CornerRadius" Value="{StaticResource Radius}" />
-    </Style>
-
-    <!-- The set the game is showing wears a ring; keyboard focus lifts the fill instead, so the two never read as
-         the same thing. -->
-    <Style x:Key="SetTileBorder" TargetType="Border" BasedOn="{StaticResource CardBorder}">
-      <Setter Property="Padding" Value="6" />
-      <Setter Property="Width" Value="152" />
-      <Setter Property="Margin" Value="0,0,8,8" />
     </Style>
 
     <Style x:Key="TileCaption" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
@@ -217,27 +195,27 @@
       </Setter>
     </Style>
 
-    <!-- Without these the container a generated item sits in announces the view model's type name. -->
-    <Style x:Key="ChoiceContainer" TargetType="ContentPresenter">
-      <Setter Property="AutomationProperties.Name" Value="{Binding Label}" />
+    <!-- Without these the container a generated item sits in announces the view model's type name. On the container
+         and not on the tile: a Border has no automation peer of its own, so a name set there reaches nothing. -->
+    <Style x:Key="PanelTileContainer" TargetType="ContentPresenter">
+      <Setter Property="AutomationProperties.Name" Value="{Binding Title}" />
     </Style>
 
-    <Style x:Key="SetContainer" TargetType="ContentPresenter">
+    <Style x:Key="PanelSetContainer" TargetType="ContentPresenter">
       <Setter Property="AutomationProperties.Name" Value="{Binding PackName}" />
     </Style>
 
-    <!-- One background the map can be given. The whole tile is the button: one map's slots need no confirm.
-         CanWrite, not IsNotBusy: it writes into the game folder, so it is also off while that folder is
-         missing (spec 7.8). -->
-    <DataTemplate x:Key="BackgroundChoice">
-      <Button AutomationProperties.Name="{Binding Label}"
-              Command="{Binding ApplyCommand}"
-              IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}"
-              Style="{StaticResource PanelTileButton}"
-              ToolTip="{Binding Label}">
-        <StackPanel Width="96">
+    <!-- One background on offer for this map. The whole tile carries the menu, so a right click anywhere on it and
+         the menu button open the same five lines, and Shift+F10 finds it through TileMenus. -->
+    <DataTemplate x:Key="PanelPictureTile">
+      <Border x:Name="Tile"
+              ContextMenu="{StaticResource TileMenu}"
+              Focusable="True"
+              FocusVisualStyle="{x:Null}"
+              Style="{StaticResource PanelTile}">
+        <StackPanel>
           <Grid>
-            <Border Height="54" Style="{StaticResource PictureTile}">
+            <Border Height="80" Style="{StaticResource PictureTile}">
               <Border CornerRadius="{StaticResource Radius}" RenderOptions.BitmapScalingMode="HighQuality">
                 <Border.Background>
                   <ImageBrush ImageSource="{Binding Thumbnail}" Stretch="UniformToFill" />
@@ -245,13 +223,7 @@
               </Border>
             </Border>
 
-            <Border x:Name="InUseRing"
-                    BorderBrush="{StaticResource TextBrush}"
-                    BorderThickness="1"
-                    CornerRadius="{StaticResource Radius}"
-                    Visibility="Collapsed" />
-
-            <Border x:Name="InUseTick"
+            <Border x:Name="InGameTick"
                     Margin="0,4,4,0"
                     HorizontalAlignment="Right"
                     VerticalAlignment="Top"
@@ -266,28 +238,58 @@
                     StrokeStartLineCap="Round"
                     StrokeThickness="1.6" />
             </Border>
+
+            <!-- CanWrite, not IsNotBusy: an apply writes into the game folder, so it is also off while that folder
+                 is missing (spec 7.8). Revealed by opacity rather than Visibility: a collapsed button cannot be
+                 tabbed to, so it would be mouse-only. -->
+            <StackPanel x:Name="Actions"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Orientation="Horizontal"
+                        Opacity="0">
+              <Button AutomationProperties.Name="{Binding ApplyText}"
+                      Command="{Binding ApplyCommand}"
+                      Content="{Binding ApplyText}"
+                      IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}"
+                      Style="{StaticResource TileAction}" />
+              <Button Margin="4,0,0,0"
+                      AutomationProperties.Name="More actions"
+                      Click="OnTileMenuButton"
+                      Style="{StaticResource TileAction}">
+                <controls:Icon Geometry="{StaticResource Icon.Dots}" Size="14" />
+              </Button>
+            </StackPanel>
           </Grid>
 
-          <TextBlock Margin="0,4,0,0"
-                     HorizontalAlignment="Center"
-                     Style="{StaticResource TileCaption}"
-                     Text="{Binding PackName}" />
+          <TextBlock Margin="0,6,0,0" Style="{StaticResource TileCaption}" Text="{Binding Title}" />
         </StackPanel>
-      </Button>
+      </Border>
       <DataTemplate.Triggers>
-        <DataTrigger Binding="{Binding InUse}" Value="True">
-          <Setter TargetName="InUseRing" Property="Visibility" Value="Visible" />
-          <Setter TargetName="InUseTick" Property="Visibility" Value="Visible" />
+        <DataTrigger Binding="{Binding IsInGame}" Value="True">
+          <Setter TargetName="Tile" Property="BorderBrush" Value="{StaticResource TextBrush}" />
+          <Setter TargetName="InGameTick" Property="Visibility" Value="Visible" />
         </DataTrigger>
+        <Trigger SourceName="Tile" Property="IsMouseOver" Value="True">
+          <Setter TargetName="Actions" Property="Opacity" Value="1" />
+        </Trigger>
+        <Trigger SourceName="Tile" Property="IsKeyboardFocusWithin" Value="True">
+          <Setter TargetName="Actions" Property="Opacity" Value="1" />
+          <Setter TargetName="Tile" Property="Background" Value="{StaticResource Surface2Brush}" />
+        </Trigger>
       </DataTemplate.Triggers>
     </DataTemplate>
 
-    <!-- One platform set. Hover, or keyboard focus inside the tile, reveals Use (spec 7.2). -->
-    <DataTemplate x:Key="PlatformSet">
-      <Border x:Name="Tile" Style="{StaticResource SetTileBorder}">
+    <!-- One platform set on offer for this map. The same tile as a picture's, over the map's current background,
+         and the pack's name under it. Its menu is the set's three lines rather than a picture's five. -->
+    <DataTemplate x:Key="PanelSetTile">
+      <Border x:Name="Tile"
+              ContextMenu="{StaticResource TileMenu}"
+              Focusable="True"
+              FocusVisualStyle="{x:Null}"
+              Style="{StaticResource PanelTile}">
         <StackPanel>
           <Grid>
-            <Border Height="78" Style="{StaticResource PictureTile}">
+            <Border Height="88" Style="{StaticResource PictureTile}">
               <Border CornerRadius="{StaticResource Radius}" RenderOptions.BitmapScalingMode="HighQuality">
                 <Border.Background>
                   <ImageBrush ImageSource="{Binding Preview}" Stretch="UniformToFill" />
@@ -311,16 +313,23 @@
                     StrokeThickness="1.6" />
             </Border>
 
-            <!-- CanWrite, not IsNotBusy: applying a set writes into the game folder (spec 7.8). -->
-            <Button x:Name="Use"
-                    HorizontalAlignment="Center"
-                    VerticalAlignment="Center"
-                    AutomationProperties.Name="Use"
-                    Command="{Binding UseCommand}"
-                    Content="Use"
-                    controls:Icon.Glyph="{StaticResource Icon.Download}"
-                    IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}"
-                    Style="{StaticResource UseButton}" />
+            <StackPanel x:Name="Actions"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Orientation="Horizontal"
+                        Opacity="0">
+              <Button AutomationProperties.Name="Apply"
+                      Command="{Binding ApplyToMapCommand}"
+                      Content="Apply"
+                      IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}"
+                      Style="{StaticResource TileAction}" />
+              <Button Margin="4,0,0,0"
+                      AutomationProperties.Name="More actions"
+                      Click="OnTileMenuButton"
+                      Style="{StaticResource TileAction}">
+                <controls:Icon Geometry="{StaticResource Icon.Dots}" Size="14" />
+              </Button>
+            </StackPanel>
           </Grid>
 
           <TextBlock Margin="0,6,0,0" Style="{StaticResource TileCaption}" Text="{Binding PackName}" />
@@ -332,10 +341,10 @@
           <Setter TargetName="InGameTick" Property="Visibility" Value="Visible" />
         </DataTrigger>
         <Trigger SourceName="Tile" Property="IsMouseOver" Value="True">
-          <Setter TargetName="Use" Property="Opacity" Value="1" />
+          <Setter TargetName="Actions" Property="Opacity" Value="1" />
         </Trigger>
         <Trigger SourceName="Tile" Property="IsKeyboardFocusWithin" Value="True">
-          <Setter TargetName="Use" Property="Opacity" Value="1" />
+          <Setter TargetName="Actions" Property="Opacity" Value="1" />
           <Setter TargetName="Tile" Property="Background" Value="{StaticResource Surface2Brush}" />
         </Trigger>
       </DataTemplate.Triggers>
@@ -725,7 +734,6 @@
           <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
           </Grid.RowDefinitions>
 
           <Grid Margin="16,12,8,4">
@@ -734,11 +742,10 @@
               <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
-            <TextBlock VerticalAlignment="Center"
-                       FontSize="16"
-                       FontWeight="SemiBold"
-                       Text="{Binding DisplayName}"
-                       TextTrimming="CharacterEllipsis" />
+            <StackPanel VerticalAlignment="Center">
+              <TextBlock FontSize="16" FontWeight="SemiBold" Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" />
+              <TextBlock Margin="0,2,0,0" Style="{StaticResource QuietNote}" Text="{Binding SetsText}" TextTrimming="CharacterEllipsis" />
+            </StackPanel>
 
             <Button Grid.Column="1"
                     AutomationProperties.Name="Close"
@@ -751,12 +758,12 @@
           </Grid>
 
           <!-- The right margin is 4 and the content's is 12, so the overlay scrollbar rides in a gutter of its own
-               instead of sitting on top of the tiles and Add picture. -->
+               instead of sitting on top of the tiles. -->
           <ScrollViewer Grid.Row="1"
                         Margin="16,4,4,0"
                         HorizontalScrollBarVisibility="Disabled"
                         VerticalScrollBarVisibility="Auto">
-            <!-- The bottom margin keeps the last file row clear of the actions row under it. -->
+            <!-- The bottom margin keeps the last row clear of the panel's own edge. -->
             <StackPanel Margin="0,0,12,16">
               <!-- The panel preview's source is 1280x720 (spec 7.2); 16:9 at the panel's own width is 185 px tall. -->
               <Border Height="185" Style="{StaticResource PictureTile}">
@@ -767,55 +774,77 @@
                 </Border>
               </Border>
 
-              <Grid Margin="0,16,0,0">
-                <Grid.ColumnDefinitions>
-                  <ColumnDefinition Width="*" />
-                  <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
+              <!-- Spec 3.2: what the game is showing for this map, in words rather than file names. -->
+              <TextBlock Margin="0,12,0,0"
+                         Foreground="{StaticResource Text2Brush}"
+                         Text="{Binding StatusText}"
+                         TextWrapping="Wrap" />
 
-                <StackPanel VerticalAlignment="Center">
-                  <TextBlock Style="{StaticResource SectionHeaderText}" Text="Background" />
-                  <TextBlock Margin="0,2,0,0"
-                             Style="{StaticResource MonoText}"
-                             Text="{Binding CurrentBackgroundName}"
-                             TextTrimming="CharacterEllipsis" />
-                </StackPanel>
-
-                <!-- Spec 6.8's window is Task 27's; the button is the panel's. -->
-                <Button Grid.Column="1"
-                        VerticalAlignment="Center"
-                        Command="{Binding AddPictureCommand}"
-                        Content="Add picture"
-                        controls:Icon.Glyph="{StaticResource Icon.Plus}"
-                        IsEnabled="{Binding DataContext.IsNotBusy, RelativeSource={RelativeSource AncestorType=Window}}"
+              <StackPanel Margin="0,12,0,0" Orientation="Horizontal">
+                <!-- CanWrite, not IsNotBusy: a reset writes into the game folder (spec 7.8). -->
+                <Button Command="{Binding ResetCommand}"
+                        Content="Reset this map"
+                        controls:Icon.Glyph="{StaticResource Icon.Undo}"
+                        IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}"
                         Style="{StaticResource OutlineButton}" />
-              </Grid>
+                <Button Margin="8,0,0,0"
+                        Command="{Binding OpenFolderCommand}"
+                        Content="Open folder"
+                        controls:Icon.Glyph="{StaticResource Icon.FolderOpen}"
+                        Style="{StaticResource PlainButton}" />
+              </StackPanel>
 
-              <!-- One strip of candidates from every pack. Tab enters it once and the arrow keys walk it, because
-                   a library of a hundred backgrounds is a hundred tab stops otherwise. -->
-              <ScrollViewer Margin="0,8,0,0"
-                            HorizontalScrollBarVisibility="Auto"
-                            VerticalScrollBarVisibility="Disabled">
-                <ItemsControl Focusable="False"
-                              ItemContainerStyle="{StaticResource ChoiceContainer}"
-                              ItemTemplate="{StaticResource BackgroundChoice}"
-                              ItemsSource="{Binding BackgroundChoices}"
-                              KeyboardNavigation.DirectionalNavigation="Contained"
-                              KeyboardNavigation.TabNavigation="Once">
-                  <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                      <StackPanel Orientation="Horizontal" />
-                    </ItemsPanelTemplate>
-                  </ItemsControl.ItemsPanel>
-                </ItemsControl>
-              </ScrollViewer>
+              <!-- Why Reset is off, rather than a disabled button with no explanation (spec 7.8). The empty hint is
+                   what switches the line off, the same way the header's done line works. -->
+              <TextBlock Margin="0,8,0,0" Text="{Binding ResetHint}" TextWrapping="Wrap">
+                <TextBlock.Style>
+                  <Style TargetType="TextBlock" BasedOn="{StaticResource QuietNote}">
+                    <Style.Triggers>
+                      <DataTrigger Binding="{Binding ResetHint}" Value="">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                      </DataTrigger>
+                    </Style.Triggers>
+                  </Style>
+                </TextBlock.Style>
+              </TextBlock>
 
-              <TextBlock Margin="0,20,0,8" Style="{StaticResource SectionHeaderText}" Text="Platforms" />
+              <!-- Spec 3.2: Background or Platforms, one at a time. The page remembers which, so opening the next
+                   map lands on the same half. -->
+              <Border Margin="0,16,0,0"
+                      HorizontalAlignment="Left"
+                      Background="{StaticResource Surface2Brush}"
+                      CornerRadius="{StaticResource Radius}"
+                      Padding="2">
+                <StackPanel Orientation="Horizontal">
+                  <primitives:ToggleButton Content="Background" IsChecked="{Binding ShowBackgroundSegment}" Style="{StaticResource SegmentControl}" />
+                  <primitives:ToggleButton Content="Platforms" IsChecked="{Binding ShowPlatformsSegment}" Style="{StaticResource SegmentControl}" />
+                </StackPanel>
+              </Border>
 
-              <ItemsControl Focusable="False"
-                            ItemContainerStyle="{StaticResource SetContainer}"
-                            ItemTemplate="{StaticResource PlatformSet}"
-                            ItemsSource="{Binding PlatformSets}">
+              <!-- The -8 right margin is the gutter PanelTile carries on its own right: two tiles across is
+                   156 + 8 + 156 in 320 of content, so without it the trailing gutter puts the row 2 px over the
+                   panel's width and the second tile wraps. -->
+              <ItemsControl Margin="0,12,-8,0"
+                            Focusable="False"
+                            ItemContainerStyle="{StaticResource PanelTileContainer}"
+                            ItemTemplate="{StaticResource PanelPictureTile}"
+                            ItemsSource="{Binding BackgroundTiles}"
+                            Visibility="{Binding ShowBackground, Converter={StaticResource BoolToVis}}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <WrapPanel />
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+              </ItemsControl>
+
+              <!-- B5 inserts the custom pictures strip here, between the two ItemsControls. -->
+
+              <ItemsControl Margin="0,12,-8,0"
+                            Focusable="False"
+                            ItemContainerStyle="{StaticResource PanelSetContainer}"
+                            ItemTemplate="{StaticResource PanelSetTile}"
+                            ItemsSource="{Binding PlatformTiles}"
+                            Visibility="{Binding ShowPlatforms, Converter={StaticResource BoolToVis}}">
                 <ItemsControl.ItemsPanel>
                   <ItemsPanelTemplate>
                     <WrapPanel />
@@ -826,15 +855,29 @@
               <primitives:ToggleButton Margin="0,8,0,0"
                                        Content="{Binding FilesHeader}"
                                        IsChecked="{Binding FilesExpanded}"
-                                       Style="{StaticResource FilesToggle}" />
+                                       Style="{StaticResource FilesToggle}"
+                                       Visibility="{Binding ShowPlatforms, Converter={StaticResource BoolToVis}}" />
 
-              <!-- The list scrolls inside the panel (spec 7.2), so a map with twenty files does not push Reset and
-                   Open folder out of reach. -->
+              <!-- The list scrolls inside the panel (spec 7.2), so a map with twenty files does not push everything
+                   else out of reach. It belongs to the Platforms segment, so both conditions have to hold. -->
               <ScrollViewer MaxHeight="240"
                             Margin="8,4,0,0"
                             HorizontalScrollBarVisibility="Disabled"
-                            VerticalScrollBarVisibility="Auto"
-                            Visibility="{Binding FilesExpanded, Converter={StaticResource BoolToVis}}">
+                            VerticalScrollBarVisibility="Auto">
+                <ScrollViewer.Style>
+                  <Style TargetType="ScrollViewer">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                      <MultiDataTrigger>
+                        <MultiDataTrigger.Conditions>
+                          <Condition Binding="{Binding ShowPlatforms}" Value="True" />
+                          <Condition Binding="{Binding FilesExpanded}" Value="True" />
+                        </MultiDataTrigger.Conditions>
+                        <Setter Property="Visibility" Value="Visible" />
+                      </MultiDataTrigger>
+                    </Style.Triggers>
+                  </Style>
+                </ScrollViewer.Style>
                 <ItemsControl Focusable="False"
                               ItemContainerStyle="{StaticResource FileContainer}"
                               ItemTemplate="{StaticResource PlatformFile}"
@@ -842,37 +885,6 @@
               </ScrollViewer>
             </StackPanel>
           </ScrollViewer>
-
-          <StackPanel Grid.Row="2" Margin="16,8,16,16">
-            <!-- Why Reset is off, rather than a disabled button with no explanation (spec 7.8). The empty hint is
-                 what switches the line off, the same way the header's done line works. -->
-            <TextBlock Margin="0,0,0,8" Text="{Binding ResetHint}" TextWrapping="Wrap">
-              <TextBlock.Style>
-                <Style TargetType="TextBlock" BasedOn="{StaticResource QuietNote}">
-                  <Style.Triggers>
-                    <DataTrigger Binding="{Binding ResetHint}" Value="">
-                      <Setter Property="Visibility" Value="Collapsed" />
-                    </DataTrigger>
-                  </Style.Triggers>
-                </Style>
-              </TextBlock.Style>
-            </TextBlock>
-
-            <StackPanel Orientation="Horizontal">
-              <!-- CanWrite, not IsNotBusy: a reset writes into the game folder (spec 7.8). -->
-              <Button Command="{Binding ResetCommand}"
-                      Content="Reset to default (this map)"
-                      controls:Icon.Glyph="{StaticResource Icon.Undo}"
-                      IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}"
-                      Style="{StaticResource OutlineButton}" />
-
-              <Button Margin="8,0,0,0"
-                      Command="{Binding OpenFolderCommand}"
-                      Content="Open folder"
-                      controls:Icon.Glyph="{StaticResource Icon.FolderOpen}"
-                      Style="{StaticResource PlainButton}" />
-            </StackPanel>
-          </StackPanel>
         </Grid>
       </Border>
     </Grid>
