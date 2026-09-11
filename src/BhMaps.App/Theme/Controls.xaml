@@ -491,60 +491,71 @@
     <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
   </Style>
 
+  <!-- The app's one slider: a 2 px Line2 groove with a 12 px Text thumb, no ticks drawn. Shared by the zoom
+       sliders and by the editor's, so the two cannot drift. The disabled look is on each style rather than in
+       here, because the editor dims a whole row at 45% and two opacities would multiply (decision C-D9). -->
+  <ControlTemplate x:Key="SliderTrack" TargetType="Slider">
+    <ControlTemplate.Resources>
+      <!-- The two halves of the groove are invisible; the track line is drawn once, behind. -->
+      <Style x:Key="GrooveHalf" TargetType="RepeatButton">
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="IsTabStop" Value="False" />
+        <Setter Property="Template">
+          <Setter.Value>
+            <ControlTemplate TargetType="RepeatButton">
+              <Border Background="Transparent" />
+            </ControlTemplate>
+          </Setter.Value>
+        </Setter>
+      </Style>
+    </ControlTemplate.Resources>
+    <Grid Height="20" Background="Transparent">
+      <Border Height="2"
+              VerticalAlignment="Center"
+              Background="{StaticResource Line2Brush}"
+              CornerRadius="1" />
+      <Track x:Name="PART_Track">
+        <Track.DecreaseRepeatButton>
+          <RepeatButton Command="Slider.DecreaseLarge" Style="{StaticResource GrooveHalf}" />
+        </Track.DecreaseRepeatButton>
+        <Track.IncreaseRepeatButton>
+          <RepeatButton Command="Slider.IncreaseLarge" Style="{StaticResource GrooveHalf}" />
+        </Track.IncreaseRepeatButton>
+        <Track.Thumb>
+          <Thumb Width="12" Height="12" Focusable="False">
+            <Thumb.Template>
+              <ControlTemplate TargetType="Thumb">
+                <Ellipse Fill="{StaticResource TextBrush}" />
+              </ControlTemplate>
+            </Thumb.Template>
+          </Thumb>
+        </Track.Thumb>
+      </Track>
+    </Grid>
+  </ControlTemplate>
+
   <Style x:Key="ZoomSliderStyle" TargetType="Slider">
     <Setter Property="Width" Value="96" />
     <Setter Property="Orientation" Value="Horizontal" />
     <Setter Property="IsSnapToTickEnabled" Value="True" />
     <Setter Property="TickFrequency" Value="1" />
     <Setter Property="VerticalAlignment" Value="Center" />
-    <Setter Property="Template">
-      <Setter.Value>
-        <ControlTemplate TargetType="Slider">
-          <ControlTemplate.Resources>
-            <!-- The two halves of the groove are invisible; the track line is drawn once, behind. -->
-            <Style x:Key="GrooveHalf" TargetType="RepeatButton">
-              <Setter Property="Focusable" Value="False" />
-              <Setter Property="IsTabStop" Value="False" />
-              <Setter Property="Template">
-                <Setter.Value>
-                  <ControlTemplate TargetType="RepeatButton">
-                    <Border Background="Transparent" />
-                  </ControlTemplate>
-                </Setter.Value>
-              </Setter>
-            </Style>
-          </ControlTemplate.Resources>
-          <Grid x:Name="Chrome" Height="20" Background="Transparent">
-            <Border Height="2"
-                    VerticalAlignment="Center"
-                    Background="{StaticResource Line2Brush}"
-                    CornerRadius="1" />
-            <Track x:Name="PART_Track">
-              <Track.DecreaseRepeatButton>
-                <RepeatButton Command="Slider.DecreaseLarge" Style="{StaticResource GrooveHalf}" />
-              </Track.DecreaseRepeatButton>
-              <Track.IncreaseRepeatButton>
-                <RepeatButton Command="Slider.IncreaseLarge" Style="{StaticResource GrooveHalf}" />
-              </Track.IncreaseRepeatButton>
-              <Track.Thumb>
-                <Thumb Width="12" Height="12" Focusable="False">
-                  <Thumb.Template>
-                    <ControlTemplate TargetType="Thumb">
-                      <Ellipse Fill="{StaticResource TextBrush}" />
-                    </ControlTemplate>
-                  </Thumb.Template>
-                </Thumb>
-              </Track.Thumb>
-            </Track>
-          </Grid>
-          <ControlTemplate.Triggers>
-            <Trigger Property="IsEnabled" Value="False">
-              <Setter TargetName="Chrome" Property="Opacity" Value="0.4" />
-            </Trigger>
-          </ControlTemplate.Triggers>
-        </ControlTemplate>
-      </Setter.Value>
-    </Setter>
+    <Setter Property="Template" Value="{StaticResource SliderTrack}" />
+    <Style.Triggers>
+      <Trigger Property="IsEnabled" Value="False">
+        <Setter Property="Opacity" Value="0.4" />
+      </Trigger>
+    </Style.Triggers>
+  </Style>
+
+  <!-- Spec 7.2: the editor's sliders. Move-to-point on, so a click on the groove jumps the thumb there instead
+       of stepping; no snapping, because pan is continuous. The row around a disabled one carries the dimming. -->
+  <Style x:Key="EditorSlider" TargetType="Slider">
+    <Setter Property="Orientation" Value="Horizontal" />
+    <Setter Property="IsMoveToPointEnabled" Value="True" />
+    <Setter Property="IsSnapToTickEnabled" Value="False" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Template" Value="{StaticResource SliderTrack}" />
   </Style>
 
   <Style x:Key="SectionHeaderText" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
