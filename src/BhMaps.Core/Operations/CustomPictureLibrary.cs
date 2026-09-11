@@ -71,6 +71,18 @@ public static class CustomPictureLibrary
             .ToList();
     }
 
+    /// <summary>Spec 3.1: what to call the picture the game is showing in <paramref name="slot"/>. The library's
+    /// own name for it, or the slot's file name when no picture matches, which is a picture the last scan did not
+    /// see. One rule in one place, so a map's card and its panel can never name the same picture differently.</summary>
+    public static string NameFor(IReadOnlyList<CustomPicture> pictures, string slot)
+    {
+        var fileName = Path.GetFileName(AssetPath.Background(slot));
+        return pictures
+                   .FirstOrDefault(p => p.InGameSlots.Contains(fileName, StringComparer.OrdinalIgnoreCase))
+                   ?.DisplayName
+               ?? fileName;
+    }
+
     /// <summary>Every name a map's background slot resolves to, so a slot borrowed from a theme folder through
     /// "../" is compared on the file name the pack would actually hold.</summary>
     private static HashSet<string> SlotNames(MapCatalog catalog)

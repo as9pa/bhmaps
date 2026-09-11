@@ -123,22 +123,12 @@ public partial class MapCardViewModel : ObservableObject
         }
     }
 
-    /// <summary>Spec 3.1: the picture's own name when the library knows it, the slot's file name when it does not.
-    /// Read the way MapPanelViewModel.CustomPictureName reads it, so a card and its panel can never name the same
-    /// picture differently (plan decision A-D5).</summary>
-    private static string CustomName(MapEntry map, IReadOnlyList<CustomPicture> customPictures)
-    {
-        if (map.BackgroundSlots.Count == 0)
-        {
-            return "Custom";
-        }
-
-        var fileName = Path.GetFileName(AssetPath.Background(map.BackgroundSlots[0]));
-        return customPictures
-                   .FirstOrDefault(p => p.InGameSlots.Contains(fileName, StringComparer.OrdinalIgnoreCase))
-                   ?.DisplayName
-               ?? fileName;
-    }
+    /// <summary>Spec 3.1: the library's name for the picture in the map's first slot, through the one rule the
+    /// panel's status line uses too (plan decision A-D5). A map with no slot has no picture to name.</summary>
+    private static string CustomName(MapEntry map, IReadOnlyList<CustomPicture> customPictures) =>
+        map.BackgroundSlots.Count > 0
+            ? CustomPictureLibrary.NameFor(customPictures, map.BackgroundSlots[0])
+            : "Custom";
 
     private static string Ellipsise(string name) =>
         name.Length <= TagMaxLength ? name : name[..(TagMaxLength - 1)] + "\u2026";
