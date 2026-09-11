@@ -27,4 +27,8 @@
   <Geometry x:Key="Icon.ChevronDown">M6 9l6 6l6 -6</Geometry>
   <Geometry x:Key="Icon.ChevronRight">M9 6l6 6l-6 6</Geometry>
   <Geometry x:Key="Icon.ChevronLeft">M15 6l-6 6l6 6</Geometry>
+
+  <!-- Three dots, drawn as three zero length strokes: the Icon control caps every stroke round, so each one comes
+       out a 2 unit disc and no fill geometry is needed. -->
+  <Geometry x:Key="Icon.Dots">M5 12h.01 M12 12h.01 M19 12h.01</Geometry>
 </ResourceDictionary>

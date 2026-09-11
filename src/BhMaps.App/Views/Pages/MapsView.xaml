@@ -489,8 +489,11 @@
       <Grid>
         <!-- Spec 3.1 and 3.3: the grid is a ListBox with extended selection, so Ctrl and Shift clicks, Space, the
              arrow keys and Ctrl+A all come from the control. The tick on each card and the container's own
-             IsSelected are the same MapCardViewModel.IsSelected. -->
-        <ListBox ItemContainerStyle="{StaticResource MapCardItem}"
+             IsSelected are the same MapCardViewModel.IsSelected. The container draws no focus rectangle of
+             its own: the cards and the chips have their own ring, and the default is a dashed box around the
+             whole grid. A local attribute, because a FocusVisualStyle style setter crashes at startup. -->
+        <ListBox FocusVisualStyle="{x:Null}"
+                 ItemContainerStyle="{StaticResource MapCardItem}"
                  ItemsSource="{Binding Cards}"
                  KeyboardNavigation.DirectionalNavigation="Contained"
                  ScrollViewer.CanContentScroll="False"
@@ -669,9 +672,9 @@
             <Button Click="OnOpenMenu" Content="Apply pack" Style="{StaticResource OutlineButton}"
                     IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}">
               <Button.ContextMenu>
-                <ContextMenu ItemsSource="{Binding PackChoices}">
+                <ContextMenu ItemsSource="{Binding PackChoices}" Style="{StaticResource TileContextMenu}">
                   <ContextMenu.ItemContainerStyle>
-                    <Style TargetType="MenuItem">
+                    <Style TargetType="MenuItem" BasedOn="{StaticResource TileMenuItem}">
                       <Setter Property="Header" Value="{Binding Name}" />
                       <Setter Property="Command" Value="{Binding DataContext.ApplyPackToTickedCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                       <Setter Property="CommandParameter" Value="{Binding}" />
@@ -683,9 +686,9 @@
             <Button Margin="8,0,0,0" Click="OnOpenMenu" Content="Apply picture" Style="{StaticResource OutlineButton}"
                     IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}">
               <Button.ContextMenu>
-                <ContextMenu ItemsSource="{Binding PictureChoices}">
+                <ContextMenu ItemsSource="{Binding PictureChoices}" Style="{StaticResource TileContextMenu}">
                   <ContextMenu.ItemContainerStyle>
-                    <Style TargetType="MenuItem">
+                    <Style TargetType="MenuItem" BasedOn="{StaticResource TileMenuItem}">
                       <Setter Property="Header" Value="{Binding Header}" />
                       <Setter Property="Command" Value="{Binding DataContext.ApplyPictureToTickedCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                       <Setter Property="CommandParameter" Value="{Binding}" />

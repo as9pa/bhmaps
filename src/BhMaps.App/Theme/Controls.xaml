@@ -558,4 +558,147 @@
     <Setter Property="FontSize" Value="12" />
     <Setter Property="Foreground" Value="{StaticResource Text2Brush}" />
   </Style>
+
+  <!-- Spec section 13: the menus are themed rather than left as the platform's. BasedOn the Fluent implicit style,
+       the lesson Views/AddPicturesWindow.xaml line 40 records: without it these fall off the Fluent theme
+       (ThemeMode=Dark in App.xaml) onto the legacy template, which on this palette draws a light menu. Setters
+       only, no re-template: the roles a MenuItem template carries (submenu, check column, icon column) are not
+       worth re-implementing for a five line menu. -->
+  <Style x:Key="TileContextMenu" TargetType="ContextMenu" BasedOn="{StaticResource {x:Type ContextMenu}}">
+    <Setter Property="FontFamily" Value="{StaticResource Sans}" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+    <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Line2Brush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Padding" Value="4" />
+  </Style>
+
+  <!-- Header and Command are setters rather than per item markup, so one ItemsSource of TileMenuCommand drives
+       every tile's menu and a page never writes a MenuItem by hand. A literal MenuItem that sets its own Header
+       still wins: a local value beats a style setter. -->
+  <Style x:Key="TileMenuItem" TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}">
+    <Setter Property="FontFamily" Value="{StaticResource Sans}" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+    <Setter Property="Padding" Value="10,6" />
+    <Setter Property="Header" Value="{Binding Text}" />
+    <Setter Property="Command" Value="{Binding Command}" />
+    <Setter Property="AutomationProperties.Name" Value="{Binding Text}" />
+  </Style>
+
+  <!-- One menu for every tile in the app. x:Shared="False" so each StaticResource reference is a fresh instance,
+       and no ItemsSource plumbing: a ContextMenu set on an element inherits that element's DataContext, which is
+       the tile view model. -->
+  <ContextMenu x:Key="TileMenu"
+               x:Shared="False"
+               ItemContainerStyle="{StaticResource TileMenuItem}"
+               ItemsSource="{Binding MenuItems}"
+               Style="{StaticResource TileContextMenu}" />
+
+  <!-- One segment of a two or three way control (spec 3.2 and 5). The host is a Surface2 Border of Padding 2 with
+       these side by side inside it; the chosen one is the Surface pill. Part C's pack detail uses the same style
+       for Combined / Backgrounds / Platforms, so nothing about it names a page. -->
+  <Style x:Key="SegmentControl" TargetType="ToggleButton">
+    <Setter Property="FontFamily" Value="{StaticResource Sans}" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{StaticResource Text2Brush}" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Padding" Value="14,5" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="FocusVisualStyle" Value="{StaticResource DialogFocusRing}" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ToggleButton">
+          <ControlTemplate.Resources>
+            <!-- See PrimaryButton: a string ContentPresenter needs the Foreground handed to it as a local value. -->
+            <DataTemplate DataType="{x:Type sys:String}">
+              <TextBlock Text="{Binding}"
+                         FontFamily="{Binding FontFamily, RelativeSource={RelativeSource AncestorType={x:Type ButtonBase}}}"
+                         FontSize="{Binding FontSize, RelativeSource={RelativeSource AncestorType={x:Type ButtonBase}}}"
+                         Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type ButtonBase}}}" />
+            </DataTemplate>
+          </ControlTemplate.Resources>
+          <Border x:Name="Chrome"
+                  Background="{TemplateBinding Background}"
+                  CornerRadius="4"
+                  Padding="{TemplateBinding Padding}">
+            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+            </Trigger>
+            <Trigger Property="IsChecked" Value="True">
+              <Setter TargetName="Chrome" Property="Background" Value="{StaticResource SurfaceBrush}" />
+              <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+              <Setter TargetName="Chrome" Property="Opacity" Value="0.4" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- A tile in the 360 px panel: two across at 156 with an 8 px gutter is 320, which is the panel's content
+       width. The in-game ring and tick are the DataTemplate's, not this style's. -->
+  <Style x:Key="PanelTile" TargetType="Border" BasedOn="{StaticResource CardBorder}">
+    <Setter Property="Width" Value="156" />
+    <Setter Property="Margin" Value="0,0,8,8" />
+    <Setter Property="Padding" Value="6" />
+  </Style>
+
+  <!-- A collapsible section's header: a leading chevron, the label and its count, the whole row clickable
+       (spec 4). Two chevron geometries rather than one rotated, so there is no transform origin to get wrong.
+       Foreground on the style, so the icon inherits the colour the label states. -->
+  <Style x:Key="SectionHeaderRow" TargetType="ToggleButton">
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="Foreground" Value="{StaticResource Text2Brush}" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Left" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ToggleButton">
+          <Grid>
+            <Border x:Name="Chrome"
+                    Background="Transparent"
+                    CornerRadius="{StaticResource Radius}"
+                    Padding="8,7">
+              <StackPanel Orientation="Horizontal">
+                <controls:Icon x:Name="Chevron"
+                               Margin="0,0,8,0"
+                               VerticalAlignment="Center"
+                               Geometry="{StaticResource Icon.ChevronRight}"
+                               Size="14" />
+                <TextBlock FontFamily="{StaticResource Sans}"
+                           FontSize="13"
+                           Foreground="{StaticResource Text2Brush}"
+                           Text="{Binding Content, RelativeSource={RelativeSource TemplatedParent}}" />
+              </StackPanel>
+            </Border>
+            <Border x:Name="Ring"
+                    BorderBrush="{StaticResource TextBrush}"
+                    BorderThickness="1"
+                    CornerRadius="{StaticResource Radius}"
+                    IsHitTestVisible="False"
+                    Opacity="0" />
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsChecked" Value="True">
+              <Setter TargetName="Chevron" Property="Geometry" Value="{StaticResource Icon.ChevronDown}" />
+            </Trigger>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="Chrome" Property="Background" Value="{StaticResource Surface2Brush}" />
+            </Trigger>
+            <Trigger Property="IsKeyboardFocused" Value="True">
+              <Setter TargetName="Ring" Property="Opacity" Value="0.6" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
 </ResourceDictionary>
