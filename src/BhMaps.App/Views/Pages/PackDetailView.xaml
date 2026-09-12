@@ -65,6 +65,13 @@
                      PreviewKeyDown="Tiles_PreviewKeyDown"
                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                      ScrollViewer.VerticalScrollBarVisibility="Auto">
+              <ListBox.Resources>
+                <!-- The ScrollViewer is inside the ListBox's own template, so the behaviour reaches it through an
+                     implicit style rather than as an attribute (spec 10). -->
+                <Style TargetType="ScrollViewer">
+                  <Setter Property="behaviors:SmoothScroll.IsEnabled" Value="True" />
+                </Style>
+              </ListBox.Resources>
               <ListBox.ItemContainerStyle>
                 <!-- The theme's ring, plus one click to open: a plain click selects and opens the drawer, and the
                      keyboard opens with Enter, which the code-behind handles (spec 5). -->
@@ -158,6 +165,7 @@ AutomationProperties.Name="{Binding DisplayName}" behaviors:Fold.Animate="True"
             </Grid>
 
             <ScrollViewer Grid.Row="1" Margin="16,4,4,0" HorizontalScrollBarVisibility="Disabled"
+                          behaviors:SmoothScroll.IsEnabled="True"
                           VerticalScrollBarVisibility="Auto">
               <StackPanel Margin="0,0,12,16">
                 <Viewbox Stretch="Uniform">
