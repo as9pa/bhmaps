@@ -115,11 +115,13 @@ public static class MapCompositor
         return inputs;
     }
 
-    /// <summary>Frozen Bgr24 bitmap. Safe on any thread.
-    /// Never throws for a missing or bad asset; that asset is skipped.</summary>
-    public static BitmapSource Render(LevelDesc level, int width, int height, AssetSources sources)
+    /// <summary>Frozen Bgr24 bitmap. Safe on any thread. Never throws for a missing or bad asset; that asset is
+    /// skipped. <paramref name="viewport" /> is the part of the level to draw, in the level's own coordinates,
+    /// and null means the whole camera, which is what every caller but the Platforms page wants (addendum C).</summary>
+    public static BitmapSource Render(
+        LevelDesc level, int width, int height, AssetSources sources, CameraBounds? viewport = null)
     {
-        var camera = level.Camera;
+        var camera = viewport ?? level.Camera;
         var tile = new SolidColorBrush(TileColour);
         tile.Freeze();
 

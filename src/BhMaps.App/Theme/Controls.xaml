@@ -908,6 +908,10 @@
     <Button Style="{StaticResource RowChoiceTileButton}" />
   </DataTemplate>
 
+  <DataTemplate DataType="{x:Type vm:PlatformSetTileViewModel}">
+    <Button Style="{StaticResource RowChoiceTileButton}" />
+  </DataTemplate>
+
   <DataTemplate DataType="{x:Type vm:RowMoreViewModel}">
     <Button AutomationProperties.Name="{Binding Text}"
             Command="{Binding UnfoldCommand}"
