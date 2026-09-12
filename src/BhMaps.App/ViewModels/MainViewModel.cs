@@ -477,6 +477,7 @@ public partial class MainViewModel : ObservableObject
 
         if (vm.Saved is not { ApplyToGame: true } saved)
         {
+            // Saved into the pack and no further, so nothing in the game folder moved and there is nothing to undo.
             await RescanAsync();
             return;
         }
