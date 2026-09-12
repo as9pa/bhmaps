@@ -268,7 +268,8 @@ public partial class MapsViewModel : PageViewModel
             (progress, ct) => Task.Run(
                 () => { result = PackApplier.ApplyToMaps(pack, maps, gamePath, progress, ct); }, ct),
             $"{pack.Name} applied to {MainViewModel.Count(maps.Count, "map")}",
-            clearTicks: true);
+            clearTicks: true,
+            pack.Name);
 
         if (result is not null)
         {
@@ -305,7 +306,7 @@ public partial class MapsViewModel : PageViewModel
         }
 
         // The name the menu row was labelled with, so the done line reports the row that was clicked (spec 2.2).
-        await Shell.ApplyPictureAsync(source, Shell.SelectedMaps, clearTicks: true, picture.DisplayName);
+        await Shell.ApplyPictureAsync(source, Shell.SelectedMaps, clearTicks: true, picture.DisplayName, picture.PackName);
     }
 
     /// <summary>Spec 3.3: the ticked maps back to the Default pack, the same reset one map's panel offers.</summary>

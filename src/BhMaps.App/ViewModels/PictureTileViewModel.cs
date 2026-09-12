@@ -138,16 +138,16 @@ public sealed partial class MapPictureTileViewModel : PictureTileViewModel
 
     // Title, not the file name: it is the caption the tile shows, so the done line names what was clicked.
     [RelayCommand]
-    private Task ApplyToMapAsync() => Shell.ApplyPictureAsync(FullPath, [Map], clearTicks: false, Title);
+    private Task ApplyToMapAsync() => Shell.ApplyPictureAsync(FullPath, [Map], clearTicks: false, Title, PackName);
 
     [RelayCommand]
     private Task ApplyToTickedAsync() =>
-        Shell.ApplyPictureAsync(FullPath, Shell.SelectedMaps, clearTicks: true, Title);
+        Shell.ApplyPictureAsync(FullPath, Shell.SelectedMaps, clearTicks: true, Title, PackName);
 
     [RelayCommand]
     private Task ApplyToAllAsync() =>
         Shell.Snapshot is { } snapshot
-            ? Shell.ApplyPictureAsync(FullPath, snapshot.Catalog.Maps, clearTicks: false, Title)
+            ? Shell.ApplyPictureAsync(FullPath, snapshot.Catalog.Maps, clearTicks: false, Title, PackName)
             : Task.CompletedTask;
 
     [RelayCommand]

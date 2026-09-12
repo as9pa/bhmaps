@@ -95,17 +95,17 @@ public sealed partial class CustomPictureTileViewModel : PictureTileViewModel
     [RelayCommand]
     private Task ApplyToMapAsync() =>
         Map is { } map
-            ? Shell.ApplyPictureAsync(FullPath, [map], clearTicks: false, _picture.DisplayName)
+            ? Shell.ApplyPictureAsync(FullPath, [map], clearTicks: false, _picture.DisplayName, _picture.PackName)
             : Task.CompletedTask;
 
     [RelayCommand]
     private Task ApplyToTickedAsync() =>
-        Shell.ApplyPictureAsync(FullPath, Shell.SelectedMaps, clearTicks: true, _picture.DisplayName);
+        Shell.ApplyPictureAsync(FullPath, Shell.SelectedMaps, clearTicks: true, _picture.DisplayName, _picture.PackName);
 
     [RelayCommand]
     private Task ApplyToAllAsync() =>
         Shell.Snapshot is { } snapshot
-            ? Shell.ApplyPictureAsync(FullPath, snapshot.Catalog.Maps, clearTicks: false, _picture.DisplayName)
+            ? Shell.ApplyPictureAsync(FullPath, snapshot.Catalog.Maps, clearTicks: false, _picture.DisplayName, _picture.PackName)
             : Task.CompletedTask;
 
     [RelayCommand]

@@ -91,7 +91,9 @@ public sealed class AppServices : IDisposable
         var tree = GameTreeScanner.Scan(GamePath);
         ct.ThrowIfCancellationRequested();
         progress?.Report("packs");
-        var packs = PackScanner.ScanAll(LibraryPath);
+        // Spec 8: the shell sorts the packs once, here, and every list downstream keeps the order it is given.
+        var packs = PackOrder.Sort(PackScanner.ScanAll(LibraryPath), Settings.LastApplied);
+        DropStaleStamps(packs);
         ct.ThrowIfCancellationRequested();
         progress?.Report("hashing files");
         var status = StatusDetector.Detect(tree, packs, HashCache);
@@ -112,6 +114,24 @@ public sealed class AppServices : IDisposable
 
             // Built here, inside the scan, because it hashes: every page reads the list rather than computing one.
             CustomPictureLibrary.Build(packs, tree, catalog, HashCache));
+    }
+
+    /// <summary>Spec 8: a stamp naming a pack the library no longer holds would sit in settings.json for good,
+    /// so the scan that cannot find it drops it.</summary>
+    private void DropStaleStamps(IReadOnlyList<Pack> packs)
+    {
+        var stamps = Settings.LastApplied;
+        if (stamps.Count == 0)
+        {
+            return;
+        }
+
+        var names = packs.Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var kept = stamps.Where(s => names.Contains(s.Key)).ToDictionary(StringComparer.OrdinalIgnoreCase);
+        if (kept.Count != stamps.Count)
+        {
+            UpdateSettings(Settings with { PackLastApplied = kept });
+        }
     }
 
     /// <summary>Stops the render thread. Called once, from App.Exit.</summary>
