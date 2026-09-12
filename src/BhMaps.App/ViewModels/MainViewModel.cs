@@ -545,8 +545,9 @@ public partial class MainViewModel : ObservableObject
     /// <summary>Spec 6: the editor recolours a map's own pieces into a pack, which is a library write of its own.
     /// The "Apply to game now" it offers is a game write, so the set it left is applied here, with the boundary,
     /// the snapshot and the undo every other write gets. The rescan comes first either way, because the pack the
-    /// apply needs is one the last scan may never have seen.</summary>
-    public async Task OpenPlatformEditorAsync(MapEntry map, Pack? pack)
+    /// apply needs is one the last scan may never have seen. <paramref name="onlyFile" /> is the one file the
+    /// editor opens ticked, for the panel row that asked for it (ruling 7).</summary>
+    public async Task OpenPlatformEditorAsync(MapEntry map, Pack? pack, string? onlyFile = null)
     {
         if (Snapshot is not { } snapshot)
         {
@@ -554,7 +555,7 @@ public partial class MainViewModel : ObservableObject
         }
 
         var vm = new PlatformEditorViewModel(
-            Services, Dialogs, snapshot.Packs.Select(p => p.Name).ToList(), new PlatformEditorRequest(map, pack));
+            Services, Dialogs, snapshot.Packs.Select(p => p.Name).ToList(), new PlatformEditorRequest(map, pack, onlyFile));
         var window = new PlatformEditorWindow { DataContext = vm, Owner = Application.Current.MainWindow, ShowActivated = !App.Quiet };
         bool accepted;
         try

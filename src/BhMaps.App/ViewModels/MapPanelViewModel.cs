@@ -13,10 +13,13 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace BhMaps.App.ViewModels;
 
-/// <summary>One file of the map's platform art: where the game's copy came from, and whether it is a fully
-/// transparent PNG that changes nothing in game.</summary>
+/// <summary>One file of the map's platform art: where the game's copy came from, whether it is a fully
+/// transparent PNG that changes nothing in game, and the Edit that opens the editor on this file alone
+/// (ruling 7). <paramref name="CanEdit" /> is false until the scan has seen the game's copy on disk, because
+/// there is nothing to edit without it.</summary>
 public sealed record PlatformFileViewModel(
-    string RelativePath, string SourceText, bool ChangesNothing, ImageSource? Thumbnail)
+    string RelativePath, string SourceText, bool ChangesNothing, ImageSource? Thumbnail, bool CanEdit,
+    IRelayCommand EditCommand)
 {
     public string FileName => Path.GetFileName(RelativePath);
 
@@ -121,11 +124,14 @@ public partial class MapPanelViewModel : ObservableObject
             _platformTiles.Add(tile);
         }
 
-        // Built with no thumbnail and no transparency verdict: both are file work, and both arrive from LoadAsync.
+        // Built with no thumbnail, no transparency verdict and no Edit: all three are file work, and all three
+        // arrive from LoadAsync. The Edit opens the editor on the game's file, so it hands it no pack (ruling 7).
         foreach (var relativePath in map.PlatformFiles.OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
         {
+            var file = relativePath;
             _platformFiles.Add(new PlatformFileViewModel(
-                relativePath, InGameMatch.File(status, relativePath)?.Text ?? "", ChangesNothing: false, Thumbnail: null));
+                file, InGameMatch.File(status, file)?.Text ?? "", ChangesNothing: false, Thumbnail: null,
+                CanEdit: false, EditCommand: new RelayCommand(() => _ = shell.OpenPlatformEditorAsync(map, pack: null, onlyFile: file))));
         }
 
         RebuildMenus(shell.SelectedMapCount);
@@ -373,9 +379,10 @@ public partial class MapPanelViewModel : ObservableObject
             var fullPath = Path.Combine(gamePath, row.RelativePath);
             var changesNothing = await ChangesNothingAsync(fullPath, ct);
             var thumbnail = await ThumbnailAsync(fullPath, ct);
-            if (changesNothing || thumbnail is not null)
+            var canEdit = await Task.Run(() => File.Exists(fullPath), ct);
+            if (canEdit || changesNothing || thumbnail is not null)
             {
-                _platformFiles[i] = row with { ChangesNothing = changesNothing, Thumbnail = thumbnail };
+                _platformFiles[i] = row with { ChangesNothing = changesNothing, Thumbnail = thumbnail, CanEdit = canEdit };
             }
         }
     }
