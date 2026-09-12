@@ -22,6 +22,18 @@ public static class PlatformRecolor
             source = new FormatConvertedBitmap(decoder.Frames[0], PixelFormats.Bgra32, null, 0);
         }
 
+        Apply(source, destPng, opacity, hueDegrees);
+    }
+
+    /// <summary>The same recolour over a bitmap already in memory, so a caller that has just built one (a picture
+    /// fitted to a piece, say) does not have to write it out and read it back.</summary>
+    public static void Apply(BitmapSource source, string destPng, double opacity, double hueDegrees)
+    {
+        if (source.Format != PixelFormats.Bgra32)
+        {
+            source = new FormatConvertedBitmap(source, PixelFormats.Bgra32, null, 0);
+        }
+
         var width = source.PixelWidth;
         var height = source.PixelHeight;
         var stride = width * 4;
