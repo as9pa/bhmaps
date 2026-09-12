@@ -8,6 +8,12 @@ and `.jpg` files inside the `mapArt` folder and inside its own library, plus its
 `%APPDATA%\BhMaps`. The game's data files are read and never written, and nothing else in the game
 install is touched.
 
+## What is new in 2.2.2
+
+One fix to 2.2.1, nothing new on disk.
+
+- **Editor sliders follow the pointer.** A press on the groove drags the thumb under the pointer for as long as the button is held. In 2.2.1 the thumb moved with the pointer but at a fixed distance from it.
+
 ## What is new in 2.2.1
 
 Two fixes to 2.2, nothing new on disk.
