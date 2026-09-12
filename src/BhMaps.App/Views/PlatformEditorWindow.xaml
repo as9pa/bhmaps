@@ -2,6 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:converters="clr-namespace:BhMaps.App.Converters"
+        xmlns:vm="clr-namespace:BhMaps.App.ViewModels"
         Title="{Binding Title}" Width="1040" Height="720" MinWidth="860" MinHeight="600"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
         Background="{StaticResource BgBrush}">
@@ -97,6 +98,107 @@
           <TextBlock Style="{StaticResource FieldLabel}" Text="Source" />
           <TextBlock Text="{Binding SourceText}" TextTrimming="CharacterEllipsis" />
 
+          <!-- The header counts the ticked rows, so All and None belong on its line rather than under the list. -->
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Style="{StaticResource FieldLabel}" Text="{Binding FilesHeader}" />
+            <StackPanel Grid.Column="1" Margin="0,18,0,6" Orientation="Horizontal">
+              <Button Command="{Binding AllCommand}"
+                      Content="All"
+                      FocusVisualStyle="{StaticResource DialogFocusRing}"
+                      Style="{StaticResource ResetLink}" />
+              <Button Margin="10,0,0,0"
+                      Command="{Binding NoneCommand}"
+                      Content="None"
+                      FocusVisualStyle="{StaticResource DialogFocusRing}"
+                      Style="{StaticResource ResetLink}" />
+            </StackPanel>
+          </Grid>
+
+          <!-- Ruling 10: CardTick is a bare 18 x 18 box with no content of its own, so the tick takes its own
+               column beside the thumbnail and the name, and carries the file name for the screen reader. -->
+          <ItemsControl ItemsSource="{Binding Pieces}" KeyboardNavigation.TabNavigation="Continue">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate DataType="{x:Type vm:PlatformPieceViewModel}">
+                <Grid Margin="0,0,0,8">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+
+                  <CheckBox Margin="0,0,10,0"
+                            VerticalAlignment="Center"
+                            AutomationProperties.Name="{Binding FileName}"
+                            FocusVisualStyle="{StaticResource DialogFocusRing}"
+                            IsChecked="{Binding IsTicked}"
+                            Style="{StaticResource CardTick}" />
+
+                  <Border Grid.Column="1"
+                          Width="48"
+                          Height="27"
+                          VerticalAlignment="Center"
+                          Style="{StaticResource PictureTile}">
+                    <Border CornerRadius="{StaticResource Radius}" RenderOptions.BitmapScalingMode="HighQuality">
+                      <Border.Background>
+                        <ImageBrush ImageSource="{Binding Thumbnail}" Stretch="UniformToFill" />
+                      </Border.Background>
+                    </Border>
+                  </Border>
+
+                  <TextBlock Grid.Column="2"
+                             Margin="8,0,0,0"
+                             VerticalAlignment="Center"
+                             Style="{StaticResource MonoText}"
+                             Text="{Binding FileName}"
+                             TextTrimming="CharacterEllipsis"
+                             ToolTip="{Binding RelativePath}" />
+
+                  <TextBlock Grid.Column="3"
+                             Margin="10,0,0,0"
+                             Style="{StaticResource Readout}"
+                             Text="{Binding Readout}" />
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <StackPanel Margin="0,18,0,6" Orientation="Horizontal">
+            <TextBlock Margin="0" Style="{StaticResource FieldLabel}" Text="Image" />
+            <Button AutomationProperties.Name="Reset image"
+                    Command="{Binding ResetImageCommand}"
+                    Content="Reset"
+                    FocusVisualStyle="{StaticResource DialogFocusRing}"
+                    Style="{StaticResource ResetLink}" />
+          </StackPanel>
+          <!-- Two lines rather than one with a style trigger: with nothing ticked the text is a hint, and with a
+               file ticked it is the value the Source line above reads in. -->
+          <TextBlock Style="{StaticResource HintText}"
+                     Text="{Binding ImageText}"
+                     Visibility="{Binding ImageHintVisible, Converter={StaticResource BoolToVis}}" />
+          <TextBlock Text="{Binding ImageText}"
+                     TextTrimming="CharacterEllipsis"
+                     Visibility="{Binding CanUseImage, Converter={StaticResource BoolToVis}}" />
+          <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
+            <Button Padding="10,4"
+                    Command="{Binding ReplaceCommand}"
+                    Content="Replace"
+                    FocusVisualStyle="{StaticResource DialogFocusRing}"
+                    Style="{StaticResource PlainButton}" />
+            <Button Margin="8,0,0,0"
+                    Padding="10,4"
+                    Command="{Binding EditOutsideCommand}"
+                    Content="Edit in another app"
+                    FocusVisualStyle="{StaticResource DialogFocusRing}"
+                    IsEnabled="{Binding CanEditOutside}"
+                    Style="{StaticResource PlainButton}" />
+          </StackPanel>
+          <TextBlock Style="{StaticResource ErrorText}" Text="{Binding ImageError}" />
+
           <Grid>
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="*" />
@@ -111,12 +213,13 @@
               <Button Margin="0,18,0,6"
                       Command="{Binding ResetOpacityCommand}"
                       Content="Reset"
+                      IsEnabled="{Binding CanAdjust}"
                       Style="{StaticResource ResetLink}" />
             </StackPanel>
             <Slider Grid.Row="1"
                     AutomationProperties.Name="Opacity"
                     FocusVisualStyle="{StaticResource DialogFocusRing}"
-                    IsEnabled="{Binding CanEdit}"
+                    IsEnabled="{Binding CanAdjust}"
                     LargeChange="10"
                     Maximum="100"
                     Minimum="0"
@@ -145,12 +248,13 @@
               <Button Margin="0,18,0,6"
                       Command="{Binding ResetHueCommand}"
                       Content="Reset"
+                      IsEnabled="{Binding CanAdjust}"
                       Style="{StaticResource ResetLink}" />
             </StackPanel>
             <Slider Grid.Row="1"
                     AutomationProperties.Name="Hue"
                     FocusVisualStyle="{StaticResource DialogFocusRing}"
-                    IsEnabled="{Binding CanEdit}"
+                    IsEnabled="{Binding CanAdjust}"
                     LargeChange="15"
                     Maximum="180"
                     Minimum="-180"

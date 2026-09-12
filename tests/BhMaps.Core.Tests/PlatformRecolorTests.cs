@@ -1,3 +1,5 @@
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using BhMaps.Core.Imaging;
 using BhMaps.Core.Tests.Helpers;
 
@@ -110,5 +112,28 @@ public class PlatformRecolorTests
         var written = SyntheticImage.DecodePng(dest);
         Assert.Equal(2, written.PixelWidth);
         Assert.Equal((0, 255, 0, 255), SyntheticImage.PixelRgbaAt(written, 0, 0));
+    }
+
+    [Fact]
+    public void Apply_BitmapOverload_WritesWhatTheFileOverloadWrites()
+    {
+        using var dir = new TempDir();
+        var src = SyntheticImage.SaveQuadrants(dir.Sub("src.png"), 64, 32);
+        var fromFile = dir.Sub("file.png");
+        var fromBitmap = dir.Sub("bitmap.png");
+
+        PlatformRecolor.Apply(src, fromFile, 0.6, 140);
+        PlatformRecolor.Apply(BackgroundFitter.LoadSource(src), fromBitmap, 0.6, 140);
+
+        Assert.Equal(Bytes(fromFile), Bytes(fromBitmap));
+    }
+
+    private static byte[] Bytes(string png)
+    {
+        var bitmap = SyntheticImage.DecodePng(png);
+        var stride = bitmap.PixelWidth * 4;
+        var pixels = new byte[stride * bitmap.PixelHeight];
+        new FormatConvertedBitmap(bitmap, PixelFormats.Bgra32, null, 0).CopyPixels(pixels, stride, 0);
+        return pixels;
     }
 }

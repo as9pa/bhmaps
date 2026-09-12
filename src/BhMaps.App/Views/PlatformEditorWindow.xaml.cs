@@ -1,3 +1,4 @@
+using System.Threading;
 using System.Windows;
 using BhMaps.App.ViewModels;
 
@@ -18,6 +19,10 @@ public partial class PlatformEditorWindow : Window
             if (e.NewValue is PlatformEditorViewModel vm)
             {
                 vm.CloseRequested += OnCloseRequested;
+
+                // The rows draw their tile colour until a file has decoded, so the list is up before the
+                // thumbnails are and nothing waits on the disk.
+                _ = vm.LoadThumbnailsAsync(CancellationToken.None);
             }
         };
     }
