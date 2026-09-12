@@ -369,6 +369,9 @@ public partial class MapPanelViewModel : ObservableObject
         }
     }
 
+    /// <summary>The scan did not measure these paths, so the row's own probe answers both questions the rest of
+    /// the load asks: whether the file is there, and the mtime the thumbnail cache keys on. A missing file reads
+    /// as 1601 rather than throwing, so it is the Exists answer that keeps it out of the decode.</summary>
     private async Task LoadPlatformFilesAsync(CancellationToken ct)
     {
         var gamePath = _shell.Services.GamePath;
@@ -377,13 +380,33 @@ public partial class MapPanelViewModel : ObservableObject
             ct.ThrowIfCancellationRequested();
             var row = _platformFiles[i];
             var fullPath = Path.Combine(gamePath, row.RelativePath);
-            var changesNothing = await ChangesNothingAsync(fullPath, ct);
-            var thumbnail = await ThumbnailAsync(fullPath, ct);
-            var canEdit = await Task.Run(() => File.Exists(fullPath), ct);
-            if (canEdit || changesNothing || thumbnail is not null)
+            var (exists, mtimeTicks) = await Task.Run(
+                () => (File.Exists(fullPath), File.GetLastWriteTimeUtc(fullPath).Ticks), ct);
+            if (!exists)
             {
-                _platformFiles[i] = row with { ChangesNothing = changesNothing, Thumbnail = thumbnail, CanEdit = canEdit };
+                // Nothing is known about a file that is not there, so the row is only put back to nothing when it
+                // is reading as something already.
+                if (row.CanEdit || row.ChangesNothing || row.Thumbnail is not null)
+                {
+                    _platformFiles[i] = row with { ChangesNothing = false, Thumbnail = null, CanEdit = false };
+                }
+
+                continue;
             }
+
+            var changesNothing = await ChangesNothingAsync(fullPath, ct);
+            ImageSource? thumbnail;
+            try
+            {
+                thumbnail = await _shell.Services.Thumbnails.GetAsync(fullPath, mtimeTicks, ct);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+            {
+                // The file went between the probe and the decode.
+                thumbnail = null;
+            }
+
+            _platformFiles[i] = row with { ChangesNothing = changesNothing, Thumbnail = thumbnail, CanEdit = true };
         }
     }
 
@@ -423,20 +446,6 @@ public partial class MapPanelViewModel : ObservableObject
         }
 
         return await _shell.Services.Thumbnails.GetAsync(file.FullPath, file.MtimeTicks, ct);
-    }
-
-    /// <summary>A thumbnail for a path the scan did not measure, so its mtime is read off the UI thread first.</summary>
-    private async Task<ImageSource?> ThumbnailAsync(string fullPath, CancellationToken ct)
-    {
-        try
-        {
-            var mtimeTicks = await Task.Run(() => File.GetLastWriteTimeUtc(fullPath).Ticks, ct);
-            return await _shell.Services.Thumbnails.GetAsync(fullPath, mtimeTicks, ct);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
-        {
-            return null;
-        }
     }
 
     /// <summary>Only a PNG can be fully transparent, and the check decodes the whole file, so it stays off the UI

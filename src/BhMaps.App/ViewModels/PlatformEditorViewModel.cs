@@ -191,12 +191,14 @@ public partial class PlatformEditorViewModel : ObservableObject
     public bool CanNone => TickedCount > 0;
 
     /// <summary>"Mixed" is the honest reading when the ticked rows do not agree; the slider still shows one of
-    /// them, and moving it puts them all on that value (spec 4).</summary>
-    public string OpacityText => IsMixed(p => p.Opacity) ? MixedText : $"{Opacity}%";
+    /// them, and moving it puts them all on that value (spec 4). Blank while nothing is ticked, because the
+    /// sliders are off and the Image line is already asking for a tick.</summary>
+    public string OpacityText => !HasTicked ? "" : IsMixed(p => p.Opacity) ? MixedText : $"{Opacity}%";
 
-    /// <summary>The sign is part of the reading: "+140" is a turn one way and "-30" the other, and "0" is neither.</summary>
+    /// <summary>The sign is part of the reading: "+140" is a turn one way and "-30" the other, and "0" is neither.
+    /// Blank while nothing is ticked, as the opacity reading is.</summary>
     public string HueText =>
-        IsMixed(p => p.Hue) ? MixedText : Hue > 0 ? $"+{Hue}" : Hue.ToString();
+        !HasTicked ? "" : IsMixed(p => p.Hue) ? MixedText : Hue > 0 ? $"+{Hue}" : Hue.ToString();
 
     /// <summary>The Image value line: one reading for the ticked rows when they agree, "Mixed" when they do not,
     /// and the hint while nothing is ticked (spec 4).</summary>
@@ -662,6 +664,7 @@ public partial class PlatformEditorViewModel : ObservableObject
             };
             watcher.Changed += OnFolderChanged;
             watcher.Created += OnFolderChanged;
+            watcher.Deleted += OnFolderChanged;
             watcher.Renamed += OnFolderChanged;
             _watchers[full] = watcher;
         }
@@ -676,9 +679,40 @@ public partial class PlatformEditorViewModel : ObservableObject
     private void OnFolderChanged(object sender, FileSystemEventArgs e) =>
         Application.Current?.Dispatcher.InvokeAsync(() => _changed.Run(async ct => await ReloadChangedAsync(ct)));
 
-    /// <summary>What a save in another program changes: the rows reading from a watched folder, and the map.</summary>
+    /// <summary>What a save in another program changes: the rows reading from a watched folder, and the map.
+    /// A working copy that program deleted, or renamed to another name, is gone from under its row, so the row
+    /// goes back to the piece's own art rather than keeping the picture it last read (ruling 9).</summary>
     private async Task ReloadChangedAsync(CancellationToken ct)
     {
+        var watched = new List<(PlatformPieceViewModel Row, string FilePath)>();
+        foreach (var row in Pieces)
+        {
+            if (row.WorkingCopyPath is { } filePath && IsWatched(filePath))
+            {
+                watched.Add((row, filePath));
+            }
+        }
+
+        // One hop for the whole set, because the watcher fires on every write another program makes.
+        var removed = await Task.Run(() => watched.Where(w => !File.Exists(w.FilePath)).ToList(), ct);
+        if (removed.Count > 0)
+        {
+            // Read before the reset, which is what drops the path the name comes from.
+            var names = removed.Select(w => Path.GetFileName(w.FilePath)).ToList();
+            foreach (var (row, _) in removed)
+            {
+                ct.ThrowIfCancellationRequested();
+                row.ResetArt();
+                await RefreshThumbnailAsync(row, ct);
+            }
+
+            ImageError = names.Count == 1
+                ? $"{names[0]} was removed from the pack; showing the piece's own art."
+                : $"{string.Join(", ", names.Take(names.Count - 1))} and {names[^1]} were removed from the pack;"
+                    + " showing the piece's own art.";
+            OnImageChanged();
+        }
+
         foreach (var row in Pieces.Where(p => p.Replacement is null && IsWatched(p.SourcePath)))
         {
             ct.ThrowIfCancellationRequested();
