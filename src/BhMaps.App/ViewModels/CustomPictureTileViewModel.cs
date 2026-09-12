@@ -163,7 +163,7 @@ public sealed partial class CustomPictureTileViewModel : PictureTileViewModel
         Shell.Dialogs.ShowFailures("Some files could not be removed", failures);
         if (ok)
         {
-            Shell.SetLibraryDone($"Removed {Title} from the library");
+            Shell.SetLibraryDone($"Removed {Title} from {PackName}");
         }
 
         await Shell.RescanAsync();
