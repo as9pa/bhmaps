@@ -8,6 +8,21 @@ and `.jpg` files inside the `mapArt` folder and inside its own library, plus its
 `%APPDATA%\BhMaps`. The game's data files are read and never written, and nothing else in the game
 install is touched.
 
+## What is new in 2.3
+
+- The platform editor lists the map's pieces as rows with a tick each. Tick the pieces you want to
+  change; All and None above the list.
+- Opacity and Hue apply to the ticked pieces only, and every piece keeps its own values. When ticked
+  pieces disagree the readout says Mixed.
+- Image, above the sliders: Replace fits any picture (PNG, JPG, BMP, GIF or WebP) to each ticked
+  piece, covering and centring it and cutting it to the piece's own shape. Reset puts the piece's
+  own art back.
+- Edit in another app writes the ticked pieces into the pack you are saving into and opens each one
+  with the Windows "Open with" dialog. The preview follows what the other program saves. Cancel
+  keeps those files in the pack.
+- On the map panel, every Platform files row has an Edit button that opens the editor with only that
+  piece ticked.
+
 ## What is new in 2.2.2
 
 One fix to 2.2.1, nothing new on disk.
@@ -216,14 +231,26 @@ These windows open on top of the pages:
   which file it replaces and that choosing another pack keeps the original, and it can write the
   result into the game in the same step. Opened from Add Image with no picture, the source row is
   where a picture is dropped or browsed for.
-- The **platform editor**, from a platform set tile's **Edit**, changes a map's platform pieces
-  without redrawing them. Its title names the map, as in "Edit platforms, Apocalypse", and the source
-  row says which pack the pieces come from and how many there are, or "In game" for the art the game
-  has. **Opacity** fades the pieces so the background shows through, and **Hue** turns their colour
-  round the wheel, in degrees, to match a background; each has its own reset and the preview recomposes
-  as the slider moves. **Save into pack** takes an existing pack or a new one, and **Apply to game
-  now** writes the result over the map's own art in the same step. A map with no platform art of its
-  own says so and has nothing to edit.
+- The **platform editor**, from a platform set tile's **Edit** or from **Edit** on a Platform files
+  row of the map panel, changes a map's platform pieces without redrawing them by hand. Its title
+  names the map, as in "Edit platforms, Apocalypse", and the source row says which pack the pieces
+  come from and how many there are, or "In game" for the art the game has. **Files** lists the
+  pieces, one row each with a tick, a thumbnail, the file name and that piece's own values; every row
+  starts ticked, **All** and **None** above the list change them together, and the header counts
+  them, as in "Files, 2 of 6". Opened from a map panel row, only that row's piece is ticked.
+  **Image** says what the ticked pieces show: the piece's own art, a picture fitted to it, or Mixed.
+  **Replace** takes a PNG, JPG, BMP, GIF or WebP and fits it to each ticked piece, covering and
+  centring it and cutting it to the piece's own shape, so the platform keeps its outline. **Edit in
+  another app** writes each ticked piece into the pack named under Save into pack and opens it with
+  the Windows "Open with" dialog; the preview follows what that program saves, and Cancel leaves
+  those files in the pack. **Reset** beside Image puts the piece's own art back, asking first over a
+  file another app has been editing. **Opacity** fades the ticked pieces so the background shows
+  through, and **Hue** turns their colour round the wheel, in degrees, to match a background; each has
+  its own reset, the readout says Mixed when ticked pieces disagree, and the preview recomposes as
+  the slider moves. **Save into pack** takes an existing pack or a new one and writes the ticked
+  pieces, copying a piece left at its own art and default values as it is, and **Apply to game now**
+  writes the result over the map's own art in the same step. A map with no platform art of its own
+  says so and has nothing to edit.
 
 Every change is written straight into the game folder, whether Brawlhalla is open or closed, and
 nothing is restarted. Each write reports in the page header: what it did, then "Shows on the next
@@ -393,3 +420,5 @@ Formatting and layout:
 - A level whose XML will not parse is skipped rather than reported. The names of the skipped levels
   are collected, but they are only shown when the read failed outright, so a map that is missing for
   that reason is indistinguishable from one the game does not have.
+- Replace fits a picture to the whole piece; there is no pan or zoom. Edit in another app opens the
+  Windows Open with dialog; the program you pick must save PNG in place.
