@@ -90,10 +90,11 @@ public static class MapChoices
     }
 
     /// <summary>One tile per pack with at least one file for this map's folder, the Default pack first. A pack
-    /// that has nothing for the map is not a choice at all (addendum C).</summary>
+    /// that has nothing for the map is not a choice at all (addendum C). <paramref name="showFiles" /> is null
+    /// where the caller has no file list to open, and the tiles then leave Show files out of the menu (spec 9).</summary>
     public static IReadOnlyList<PlatformSetTileViewModel> Platforms(
         MainViewModel shell, MapEntry map, MapStatus? status, ScanSnapshot snapshot,
-        int width, int height, Action showFiles)
+        int width, int height, Action? showFiles)
     {
         var tiles = new List<PlatformSetTileViewModel>();
         foreach (var pack in PlatformSetApplier.SetsFor(map.FolderName, snapshot.Packs))
