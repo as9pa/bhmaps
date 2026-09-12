@@ -8,6 +8,10 @@ namespace BhMaps.App;
 
 public partial class App : Application
 {
+    /// <summary>--quiet: every window this run opens is shown without activating it, so an automated capture
+    /// never takes the foreground from whoever is at the machine.</summary>
+    public static bool Quiet { get; private set; }
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
@@ -18,6 +22,7 @@ public partial class App : Application
         };
 
         var parsed = CommandLine.Parse(e.Args);
+        Quiet = parsed.Quiet;
         if (parsed.MissingAppDataError() is { } overrideError)
         {
             // Refuse before anything loads settings or scans, so the real %APPDATA% files stay as they were.
@@ -39,7 +44,7 @@ public partial class App : Application
         // so a loop on the same condition would never end.
         if (!services.Settings.WelcomeDone || !SettingsStore.ValidateGamePath(services.GamePath, out _))
         {
-            var welcome = new WelcomeWindow { DataContext = new WelcomeViewModel(services, dialogs) };
+            var welcome = new WelcomeWindow { DataContext = new WelcomeViewModel(services, dialogs), ShowActivated = !Quiet };
             if (welcome.ShowDialog() != true)
             {
                 Shutdown(0);
@@ -53,7 +58,7 @@ public partial class App : Application
             _ = services.LevelData.RefreshAsync();
         }
 
-        var window = new MainWindow { DataContext = new MainViewModel(services, dialogs) };
+        var window = new MainWindow { DataContext = new MainViewModel(services, dialogs), ShowActivated = !Quiet };
         MainWindow = window;
         window.Closed += (_, _) => Shutdown();
         window.Show();

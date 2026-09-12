@@ -27,7 +27,7 @@ public sealed class WpfDialogs : IDialogs
             return;
         }
 
-        var window = new ErrorSummaryWindow(title, failures) { Owner = Owner };
+        var window = new ErrorSummaryWindow(title, failures) { Owner = Owner, ShowActivated = !App.Quiet };
         window.ShowDialog();
     }
 
@@ -57,7 +57,7 @@ public sealed class WpfDialogs : IDialogs
 
     public string? PromptText(string title, string message, string initial)
     {
-        var window = new TextPromptWindow(title, message, initial) { Owner = Owner };
+        var window = new TextPromptWindow(title, message, initial) { Owner = Owner, ShowActivated = !App.Quiet };
         return window.ShowDialog() == true ? window.Value : null;
     }
 
@@ -69,7 +69,7 @@ public sealed class WpfDialogs : IDialogs
     /// Confirm returns; the one-button kinds have nothing to read.</summary>
     private static bool Show(DialogKind kind, string title, string message)
     {
-        var window = new DialogWindow(new DialogViewModel(kind, title, message)) { Owner = Owner };
+        var window = new DialogWindow(new DialogViewModel(kind, title, message)) { Owner = Owner, ShowActivated = !App.Quiet };
         if (window.Owner is null)
         {
             // CenterOwner has nothing to centre on before the shell exists, as at a start-up error.
