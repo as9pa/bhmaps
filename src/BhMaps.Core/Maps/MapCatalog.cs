@@ -179,12 +179,17 @@ public sealed class MapCatalog
             .First();
     }
 
-    /// <summary>Every asset of a platform tree, themed nodes included: the compositor skips seasonal art, the
-    /// file list does not.</summary>
+    /// <summary>Every asset of a platform tree a map draws itself, skipping themed nodes and their children the
+    /// way <see cref="Imaging.MapCompositor" /> does: the file list matches what the compositor draws.</summary>
     private static IEnumerable<LevelAsset> Assets(IEnumerable<PlatformNode> nodes)
     {
         foreach (var node in nodes)
         {
+            if (node.IsThemed)
+            {
+                continue;
+            }
+
             foreach (var asset in node.Assets)
             {
                 yield return asset;

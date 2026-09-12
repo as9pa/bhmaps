@@ -8,10 +8,15 @@ namespace BhMaps.Core.Tests;
 public class MapCatalogTests
 {
     private static LevelDesc Level(string name, string dir, params string[] assets) =>
+        Tree(name, dir, Node(null, assets));
+
+    private static LevelDesc Tree(string name, string dir, params PlatformNode[] nodes) =>
         new(name, dir, new CameraBounds(0, 0, 100, 50),
             [new LevelBackground("BG_" + dir + ".jpg", null, null)],
-            [new PlatformNode(0, 0, 1, 1, 1, 0, null,
-                assets.Select(a => new LevelAsset(a, 0, 0, 1, 1)).ToList(), [])]);
+            nodes);
+
+    private static PlatformNode Node(string? theme, string[] assets, params PlatformNode[] children) =>
+        new(0, 0, 1, 1, 1, 0, theme, assets.Select(a => new LevelAsset(a, 0, 0, 1, 1)).ToList(), children);
 
     private static LevelDataModel Model(
         IEnumerable<LevelDesc> levels, IEnumerable<LevelType> types, IEnumerable<LevelSet> sets) =>
@@ -147,14 +152,36 @@ public class MapCatalogTests
     public void Build_CollectsDistinctBackgroundSlotsAndPlatformFilesIncludingParentReferences()
     {
         var data = Model(
-            [Level("Grove", "Grove", "a.png", "../Snow/Snow1.png", "a.png"), Level("SmallGrove", "Grove", "b.png")],
+            [
+                Tree("Grove", "Grove", Node(null, ["a.png", "../Grove/a.png"])),
+                Level("SmallGrove", "Grove", "b.png"),
+            ],
             [Type("Grove", "Twilight Grove"), Type("SmallGrove", "Small Grove")],
             []);
 
         var grove = MapCatalog.Build(data).ByFolder("Grove")!;
 
         Assert.Equal(["BG_Grove.jpg"], grove.BackgroundSlots);
-        Assert.Equal([@"Grove\a.png", @"Snow\Snow1.png", @"Grove\b.png"], grove.PlatformFiles);
+        Assert.Equal([@"Grove\a.png", @"Grove\b.png"], grove.PlatformFiles);
+    }
+
+    [Fact]
+    public void Build_SkipsThemedNodesAndTheirChildren()
+    {
+        var data = Model(
+            [
+                Tree(
+                    "Grove",
+                    "Grove",
+                    Node(null, ["a.png"]),
+                    Node("Snow", ["../Snow/Snow1.png"], Node(null, ["../Snow/Snow2.png"]))),
+            ],
+            [Type("Grove", "Twilight Grove")],
+            []);
+
+        var grove = MapCatalog.Build(data).ByFolder("Grove")!;
+
+        Assert.Equal([@"Grove\a.png"], grove.PlatformFiles);
     }
 
     [Fact]
