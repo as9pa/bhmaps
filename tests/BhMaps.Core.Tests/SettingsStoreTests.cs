@@ -284,6 +284,18 @@ public class SettingsStoreTests
     }
 
     [Fact]
+    public void Save_ThenLoad_RoundTripsBackgroundsShowPictures()
+    {
+        using var tmp = new TempDir();
+        var path = tmp.Sub("settings.json");
+
+        SettingsStore.Save(path, AppSettings.Default with { BackgroundsShowPictures = true });
+
+        Assert.True(SettingsStore.Load(path).BackgroundsShowPictures);
+        Assert.False(AppSettings.Default.BackgroundsShowPictures);
+    }
+
+    [Fact]
     public void Save_ThenLoad_RoundTripsPackLastApplied()
     {
         using var tmp = new TempDir();

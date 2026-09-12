@@ -58,7 +58,6 @@ public partial class PlatformsViewModel : RowsPageViewModel
             Haystack(map, sets),
             alwaysShown,
             [],
-            foldedLabel: "",
             [],
             sets,
             ComposeSetAsync);

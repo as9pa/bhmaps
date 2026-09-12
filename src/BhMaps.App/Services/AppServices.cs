@@ -39,6 +39,11 @@ public sealed class AppServices : IDisposable
         RowThumbnails = new ThumbnailCache(Thumbnails);
     }
 
+    /// <summary>Spec 4.1: Windows' own animation switch, read once, statically, because the behaviours that
+    /// ask (Fold, and item 8's scrolling) are attached to elements and have no AppServices to hand. Every fold
+    /// snaps and every scroll is instant when it is false.</summary>
+    public static bool AnimationsEnabled { get; } = System.Windows.SystemParameters.ClientAreaAnimation;
+
     public string AppDataDir { get; }
 
     public string SettingsPath { get; }
