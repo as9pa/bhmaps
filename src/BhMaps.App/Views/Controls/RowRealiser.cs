@@ -32,23 +32,36 @@ public static class RowRealiser
         }
     }
 
-    /// <summary>Loaded fires again every time a recycled container comes back on screen; the row itself ignores
+    /// <summary>Loaded fires again every time a recycled container comes back on screen; both row types ignore
     /// every call after the first, so scrolling up and down costs one read of each file and no more.</summary>
     private static void OnLoaded(object sender, RoutedEventArgs e)
     {
-        if (sender is FrameworkElement { DataContext: MapRowViewModel row } element && FindPage(element) is { } page)
+        if (sender is not FrameworkElement element)
         {
-            page.RealiseRow(row);
+            return;
+        }
+
+        switch (element.DataContext)
+        {
+            case MapRowViewModel row when Find<RowsPageViewModel>(element) is { } page:
+                page.RealiseRow(row);
+                break;
+            case PackRowViewModel pack when Find<PacksViewModel>(element) is { } packs:
+                packs.RealiseRow(pack);
+                break;
         }
     }
 
-    private static RowsPageViewModel? FindPage(DependencyObject start)
+    /// <summary>The nearest ancestor whose DataContext is that page. The rows page and the Packs page are both
+    /// bound as the view's DataContext, so the walk ends at the UserControl.</summary>
+    private static T? Find<T>(DependencyObject start)
+        where T : class
     {
         for (DependencyObject? d = start; d is not null; d = VisualTreeHelper.GetParent(d))
         {
-            if (d is FrameworkElement { DataContext: RowsPageViewModel page })
+            if (d is FrameworkElement element && element.DataContext is T found)
             {
-                return page;
+                return found;
             }
         }
 

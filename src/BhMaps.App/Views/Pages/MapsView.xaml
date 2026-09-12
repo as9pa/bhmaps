@@ -163,13 +163,6 @@
       <Setter Property="VerticalAlignment" Value="Top" />
     </Style>
 
-    <!-- Radius 6 everywhere, so the picture is an ImageBrush on a Border rather than an Image with square corners.
-         The tile colour behind it is what an empty slot shows. -->
-    <Style x:Key="PictureTile" TargetType="Border">
-      <Setter Property="Background" Value="{StaticResource TileBrush}" />
-      <Setter Property="CornerRadius" Value="{StaticResource Radius}" />
-    </Style>
-
     <Style x:Key="TileCaption" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
       <Setter Property="FontSize" Value="11" />
       <Setter Property="Foreground" Value="{StaticResource Text2Brush}" />

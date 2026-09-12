@@ -684,6 +684,15 @@
     <Setter Property="Margin" Value="4,0,0,0" />
   </Style>
 
+  <!-- The ground under a picture, wherever one is drawn: Radius 6 everywhere, so a preview is an ImageBrush on a
+       Border rather than an Image with square corners, and the tile colour is what an empty slot shows while the
+       file is still decoding. Lifted out of MapsView, which had the only copy, because the Packs rows draw
+       pictures too. -->
+  <Style x:Key="PictureTile" TargetType="Border">
+    <Setter Property="Background" Value="{StaticResource TileBrush}" />
+    <Setter Property="CornerRadius" Value="{StaticResource Radius}" />
+  </Style>
+
   <!-- A collapsible section's header: a leading chevron, the label and its count, the whole row clickable
        (spec 4). Two chevron geometries rather than one rotated, so there is no transform origin to get wrong.
        Foreground on the style, so the icon inherits the colour the label states. -->

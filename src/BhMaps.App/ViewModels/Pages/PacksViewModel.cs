@@ -1,5 +1,8 @@
 using System.Collections.ObjectModel;
+using System.Windows.Media;
 using BhMaps.App.Services;
+using BhMaps.Core.Imaging;
+using BhMaps.Core.Maps;
 using BhMaps.Core.Model;
 using BhMaps.Core.Operations;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -10,6 +13,22 @@ namespace BhMaps.App.ViewModels.Pages;
 /// <summary>Spec 7.5: the library's packs, one row each, with the whole-pack operations of spec 6.5 beside them.</summary>
 public partial class PacksViewModel : PageViewModel
 {
+    /// <summary>Addendum E: the empty library's line. "No packs yet." was the v2 wording and said less.</summary>
+    public const string EmptyText = "No packs in the library.";
+
+    /// <summary>The folder a pack keeps its background images in. Every other folder is a map.</summary>
+    private const string BackgroundsFolder = "Backgrounds";
+
+    /// <summary>What a background is: the game ships every one of its background slots as a JPEG.</summary>
+    private const string BackgroundExtension = ".jpg";
+
+    /// <summary>The snapshot the rows were built from, which the composites are drawn against.</summary>
+    private ScanSnapshot? _snapshot;
+
+    /// <summary>Cancels the loads the last scan's rows started. Replaced, never disposed, exactly as
+    /// PackDetailViewModel does, because those loads still hold the token.</summary>
+    private CancellationTokenSource? _cts;
+
     public PacksViewModel(MainViewModel shell)
         : base(shell)
     {
@@ -32,14 +51,129 @@ public partial class PacksViewModel : PageViewModel
 
     public override void Refresh(ScanSnapshot snapshot)
     {
+        _cts?.Cancel();
+        _cts = new CancellationTokenSource();
+        _snapshot = snapshot;
         Rows.Clear();
         foreach (var pack in snapshot.Packs)
         {
-            Rows.Add(new PackRowViewModel(pack));
+            var row = new PackRowViewModel(pack, MapsIn(snapshot.Catalog, pack));
+            row.SetMenu(BuildMenu(row));
+            Rows.Add(row);
         }
 
         IsEmpty = Rows.Count == 0;
     }
+
+    /// <summary>Addendum E: a row reads its files when it comes on screen and not before, so a library of forty
+    /// packs does not compose forty leads to show six. Called from the row template's Loaded through
+    /// RowRealiser; the row itself refuses every call after the first, so scrolling back costs nothing.</summary>
+    public void RealiseRow(PackRowViewModel row)
+    {
+        if (_cts is { } cts && row.BeginRealise())
+        {
+            Load(row, cts.Token);
+        }
+    }
+
+    /// <summary>The lead, then the strip left to right, one at a time, so the single render thread works down
+    /// the list in the order the eye does. Fire and forget, like PackDetailViewModel.Load.</summary>
+    private async void Load(PackRowViewModel row, CancellationToken ct)
+    {
+        try
+        {
+            row.Lead = await LeadAsync(row, ct);
+            foreach (var tile in row.Previews)
+            {
+                ct.ThrowIfCancellationRequested();
+                tile.Preview = await ComposeAsync(row.Pack, tile.Map, ct);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Superseded by a rescan.
+        }
+    }
+
+    /// <summary>Addendum E's lead: the pack's first map put together. A pack with no map folders has no
+    /// composite to draw, so its first background stands in; a pack with neither leaves the tile colour showing,
+    /// which is what an empty slot looks like everywhere else in the app.</summary>
+    private async Task<ImageSource?> LeadAsync(PackRowViewModel row, CancellationToken ct)
+    {
+        if (row.Maps.Count > 0)
+        {
+            return await ComposeAsync(row.Pack, row.Maps[0], ct);
+        }
+
+        var file = (row.Pack.FindFolder(BackgroundsFolder)?.Files ?? Array.Empty<GameFile>())
+            .FirstOrDefault(f => Path.GetExtension(f.Name).Equals(BackgroundExtension, StringComparison.OrdinalIgnoreCase));
+        return file is null ? null : await Shell.Services.RowThumbnails.GetAsync(file.FullPath, ct);
+    }
+
+    /// <summary>One map with the pack's own files over it, through the preview cache so the render is queued on
+    /// the one STA thread and kept on disk, and then through the shared decode cache so the same file never
+    /// decodes twice. AssetSources takes the pack second, which means the pack's background when it ships one
+    /// and the game's otherwise: what the pack looks like in game (addendum E). A composite that cannot be drawn
+    /// falls back to a plain file tile; it is a picture, never an error dialog.</summary>
+    private async Task<ImageSource?> ComposeAsync(Pack pack, MapEntry map, CancellationToken ct)
+    {
+        var previews = Shell.Services.Previews;
+        var thumbnails = Shell.Services.RowThumbnails;
+        var gamePath = Shell.Services.GamePath;
+        ImageSource? image = null;
+
+        // Spec 3.6: with no level data there are no camera bounds and no platform tree, so there is nothing to
+        // compose, and the pack's own art is the only picture of the map there is.
+        if (_snapshot?.Catalog.HasLevelData == true)
+        {
+            try
+            {
+                var sources = new AssetSources(gamePath, pack.FullPath);
+                image = await Task.Run(
+                    async () =>
+                    {
+                        var path = await previews
+                            .GetOrRenderAsync(
+                                map.BaseLevel, PackRowViewModel.ComposeWidth, PackRowViewModel.ComposeHeight,
+                                sources, ct)
+                            .ConfigureAwait(false);
+                        return await thumbnails.GetAsync(path, ct).ConfigureAwait(false);
+                    },
+                    ct);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException
+                                          or FileFormatException or ArgumentException)
+            {
+                image = null;
+            }
+        }
+
+        if (image is null
+            && pack.FindFolder(map.FolderName) is { } folder
+            && ThumbnailProvider.PickRepresentative(folder) is { } file)
+        {
+            image = await thumbnails.GetAsync(file.FullPath, ct);
+        }
+
+        return image;
+    }
+
+    /// <summary>The row's dots menu (addendum E, q7). Each line wraps the page's own command with this row as
+    /// its parameter, because a TileMenuCommand carries no parameter of its own. Remove is last: it is the
+    /// destructive one, and the pointer should not have to pass over it to reach another line.</summary>
+    private IReadOnlyList<TileMenuCommand> BuildMenu(PackRowViewModel row) =>
+    [
+        new TileMenuCommand("Export", new RelayCommand(() => ExportCommand.Execute(row))),
+        new TileMenuCommand("Open folder", new RelayCommand(() => OpenFolderCommand.Execute(row))),
+        new TileMenuCommand("Remove", new RelayCommand(() => RemoveCommand.Execute(row))),
+    ];
+
+    /// <summary>The maps the pack touches: the catalog maps it has at least one file for, in catalog order. A
+    /// pack folder that is not a map, such as a theme folder other maps borrow from (spec 4), is not one of
+    /// them, and neither is Backgrounds. The same rule pack detail uses, so a row's strip and the pack's own
+    /// page show the same maps in the same order.</summary>
+    private static IReadOnlyList<MapEntry> MapsIn(MapCatalog catalog, Pack pack) =>
+        [.. catalog.Maps.Where(map => pack.FindFolder(map.FolderName) is { Files.Count: > 0 })];
 
     /// <summary>A click on the row body opens the pack's detail page.</summary>
     [RelayCommand]
@@ -86,15 +220,10 @@ public partial class PacksViewModel : PageViewModel
         }
     }
 
-    /// <summary>Display names of the maps the pack writes into: the catalog maps it has at least one file for,
-    /// the same set its detail page composes. A pack folder that is not a map, such as a theme folder other maps
-    /// borrow from (spec 4), is not one of them, and neither is Backgrounds.</summary>
+    /// <summary>Display names of the maps the pack writes into, for the confirm that names them.</summary>
     private IReadOnlyList<string> MapsTouched(Pack pack) =>
         Shell.Snapshot is { } snapshot
-            ? snapshot.Catalog.Maps
-                .Where(map => pack.FindFolder(map.FolderName) is { Files.Count: > 0 })
-                .Select(map => map.DisplayName)
-                .ToList()
+            ? [.. MapsIn(snapshot.Catalog, pack).Select(map => map.DisplayName)]
             : Array.Empty<string>();
 
     /// <summary>Copies the game folder into the Default pack. The confirm text and the busy boundary live on the
