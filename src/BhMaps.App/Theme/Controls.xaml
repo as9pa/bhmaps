@@ -622,52 +622,6 @@
                ItemsSource="{Binding MenuItems}"
                Style="{StaticResource TileContextMenu}" />
 
-  <!-- One segment of a two or three way control (spec 3.2 and 5). The host is a Surface2 Border of Padding 2 with
-       these side by side inside it; the chosen one is the Surface pill. Part C's pack detail uses the same style
-       for Combined / Backgrounds / Platforms, so nothing about it names a page. -->
-  <Style x:Key="SegmentControl" TargetType="ToggleButton">
-    <Setter Property="FontFamily" Value="{StaticResource Sans}" />
-    <Setter Property="FontSize" Value="12" />
-    <Setter Property="Foreground" Value="{StaticResource Text2Brush}" />
-    <Setter Property="Background" Value="Transparent" />
-    <Setter Property="Padding" Value="14,5" />
-    <Setter Property="Cursor" Value="Hand" />
-    <Setter Property="FocusVisualStyle" Value="{StaticResource DialogFocusRing}" />
-    <Setter Property="Template">
-      <Setter.Value>
-        <ControlTemplate TargetType="ToggleButton">
-          <ControlTemplate.Resources>
-            <!-- See PrimaryButton: a string ContentPresenter needs the Foreground handed to it as a local value. -->
-            <DataTemplate DataType="{x:Type sys:String}">
-              <TextBlock Text="{Binding}"
-                         FontFamily="{Binding FontFamily, RelativeSource={RelativeSource AncestorType={x:Type ButtonBase}}}"
-                         FontSize="{Binding FontSize, RelativeSource={RelativeSource AncestorType={x:Type ButtonBase}}}"
-                         Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type ButtonBase}}}" />
-            </DataTemplate>
-          </ControlTemplate.Resources>
-          <Border x:Name="Chrome"
-                  Background="{TemplateBinding Background}"
-                  CornerRadius="4"
-                  Padding="{TemplateBinding Padding}">
-            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
-          </Border>
-          <ControlTemplate.Triggers>
-            <Trigger Property="IsMouseOver" Value="True">
-              <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
-            </Trigger>
-            <Trigger Property="IsChecked" Value="True">
-              <Setter TargetName="Chrome" Property="Background" Value="{StaticResource SurfaceBrush}" />
-              <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
-            </Trigger>
-            <Trigger Property="IsEnabled" Value="False">
-              <Setter TargetName="Chrome" Property="Opacity" Value="0.4" />
-            </Trigger>
-          </ControlTemplate.Triggers>
-        </ControlTemplate>
-      </Setter.Value>
-    </Setter>
-  </Style>
-
   <!-- A tile in the 360 px panel: two across at 156 with an 8 px gutter is 320, which is the panel's content
        width. The in-game ring and tick are the DataTemplate's, not this style's. -->
   <Style x:Key="PanelTile" TargetType="Border" BasedOn="{StaticResource CardBorder}">

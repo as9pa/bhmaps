@@ -860,28 +860,19 @@
                 </TextBlock.Style>
               </TextBlock>
 
-              <!-- Spec 3.2: Background or Platforms, one at a time. The page remembers which, so opening the next
-                   map lands on the same half. -->
-              <Border Margin="0,16,0,0"
-                      HorizontalAlignment="Left"
-                      Background="{StaticResource Surface2Brush}"
-                      CornerRadius="{StaticResource Radius}"
-                      Padding="2">
-                <StackPanel Orientation="Horizontal">
-                  <primitives:ToggleButton Content="Background" IsChecked="{Binding ShowBackgroundSegment}" Style="{StaticResource SegmentControl}" />
-                  <primitives:ToggleButton Content="Platforms" IsChecked="{Binding ShowPlatformsSegment}" Style="{StaticResource SegmentControl}" />
-                </StackPanel>
-              </Border>
+              <!-- Spec 7: the two halves are stacked rather than segmented, so one map's whole state is on the
+                   screen at once. The header is the one a page already puts over a section, so a section in the
+                   panel reads as the same kind of thing. -->
+              <TextBlock Margin="0,16,0,0" Style="{StaticResource SectionHeaderText}" Text="Background" />
 
               <!-- The -8 right margin is the gutter PanelTile carries on its own right: two tiles across is
                    156 + 8 + 156 in 320 of content, so without it the trailing gutter puts the row 2 px over the
                    panel's width and the second tile wraps. -->
-              <ItemsControl Margin="0,12,-8,0"
+              <ItemsControl Margin="0,8,-8,0"
                             Focusable="False"
                             ItemContainerStyle="{StaticResource PanelTileContainer}"
                             ItemTemplate="{StaticResource PanelPictureTile}"
-                            ItemsSource="{Binding BackgroundTiles}"
-                            Visibility="{Binding ShowBackground, Converter={StaticResource BoolToVis}}">
+                            ItemsSource="{Binding Backgrounds}">
                 <ItemsControl.ItemsPanel>
                   <ItemsPanelTemplate>
                     <WrapPanel />
@@ -892,16 +883,16 @@
               <!-- Spec 3: the any-map pictures, under the packs, one strip per pack and then the game's own. A
                    pack with none of them is no strip at all, because a count of zero says nothing the Add Image
                    button beside it does not. -->
-              <Grid Margin="0,4,0,0" Visibility="{Binding ShowBackground, Converter={StaticResource BoolToVis}}">
+              <Grid Margin="0,4,0,0">
                 <Grid.ColumnDefinitions>
                   <ColumnDefinition Width="*" />
                   <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
-                <!-- Every strip answers the one CustomExpanded, so the panel opens and closes them together and
-                     the thumbnails behind them are still read only once, when the first header is clicked. The
-                     tiles are the ones the packs above use, so the -8 right margin and the container's automation
-                     name are the same too. -->
+                <!-- Every strip folds on its own and starts folded, so the panel opens on the status line and the
+                     pack tiles alone; a strip's thumbnails are a file read each, and they wait for the click on
+                     its header. The tiles are the ones the packs above use, so the -8 right margin and the
+                     container's automation name are the same too. -->
                 <ItemsControl Focusable="False"
                               ItemsSource="{Binding PictureGroups}"
                               Visibility="{Binding HasCustomPictures, Converter={StaticResource BoolToVis}}">
@@ -909,7 +900,7 @@
                     <DataTemplate>
                       <StackPanel>
                         <primitives:ToggleButton Content="{Binding Header}"
-                                                 IsChecked="{Binding DataContext.CustomExpanded, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                 IsChecked="{Binding IsOpen}"
                                                  Style="{StaticResource SectionHeaderRow}" />
 
                         <ItemsControl Margin="0,4,-8,0"
@@ -918,7 +909,7 @@
                                       ItemContainerStyle="{StaticResource PanelTileContainer}"
                                       ItemTemplate="{StaticResource PanelPictureTile}"
                                       ItemsSource="{Binding Tiles}"
-                                      Visibility="{Binding DataContext.CustomExpanded, RelativeSource={RelativeSource AncestorType=ItemsControl}, Converter={StaticResource BoolToVis}}">
+                                      Visibility="{Binding IsOpen, Converter={StaticResource BoolToVis}}">
                           <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
                               <WrapPanel />
@@ -941,13 +932,17 @@
                         Style="{StaticResource PlainButton}" />
               </Grid>
 
+              <!-- One hairline, not a box or a gap: the least chrome that still says the two sections are
+                   separate things. -->
+              <Border Margin="0,16,0,0" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,1,0,0" />
 
-              <ItemsControl Margin="0,12,-8,0"
+              <TextBlock Margin="0,16,0,0" Style="{StaticResource SectionHeaderText}" Text="Platforms" />
+
+              <ItemsControl Margin="0,8,-8,0"
                             Focusable="False"
                             ItemContainerStyle="{StaticResource PanelSetContainer}"
                             ItemTemplate="{StaticResource PanelSetTile}"
-                            ItemsSource="{Binding PlatformTiles}"
-                            Visibility="{Binding ShowPlatforms, Converter={StaticResource BoolToVis}}">
+                            ItemsSource="{Binding Platforms}">
                 <ItemsControl.ItemsPanel>
                   <ItemsPanelTemplate>
                     <WrapPanel />
@@ -957,35 +952,21 @@
 
               <primitives:ToggleButton Margin="0,8,0,0"
                                        Content="{Binding FilesHeader}"
-                                       IsChecked="{Binding FilesExpanded}"
-                                       Style="{StaticResource FilesToggle}"
-                                       Visibility="{Binding ShowPlatforms, Converter={StaticResource BoolToVis}}" />
+                                       IsChecked="{Binding FilesOpen}"
+                                       Style="{StaticResource FilesToggle}" />
 
               <!-- The list scrolls inside the panel (spec 7.2), so a map with twenty files does not push everything
-                   else out of reach. It belongs to the Platforms segment, so both conditions have to hold. -->
+                   else out of reach. -->
               <ScrollViewer MaxHeight="240"
                             Margin="8,4,0,0"
                             behaviors:Fold.Animate="True"
                             HorizontalScrollBarVisibility="Disabled"
-                            VerticalScrollBarVisibility="Auto">
-                <ScrollViewer.Style>
-                  <Style TargetType="ScrollViewer">
-                    <Setter Property="Visibility" Value="Collapsed" />
-                    <Style.Triggers>
-                      <MultiDataTrigger>
-                        <MultiDataTrigger.Conditions>
-                          <Condition Binding="{Binding ShowPlatforms}" Value="True" />
-                          <Condition Binding="{Binding FilesExpanded}" Value="True" />
-                        </MultiDataTrigger.Conditions>
-                        <Setter Property="Visibility" Value="Visible" />
-                      </MultiDataTrigger>
-                    </Style.Triggers>
-                  </Style>
-                </ScrollViewer.Style>
+                            VerticalScrollBarVisibility="Auto"
+                            Visibility="{Binding FilesOpen, Converter={StaticResource BoolToVis}}">
                 <ItemsControl Focusable="False"
                               ItemContainerStyle="{StaticResource FileContainer}"
                               ItemTemplate="{StaticResource PlatformFile}"
-                              ItemsSource="{Binding PlatformFiles}" />
+                              ItemsSource="{Binding Files}" />
               </ScrollViewer>
             </StackPanel>
           </ScrollViewer>
