@@ -2,24 +2,36 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using BhMaps.App.Services;
 using BhMaps.Core.Imaging;
+using BhMaps.Core.LevelData;
 using BhMaps.Core.Maps;
+using BhMaps.Core.Operations;
 using BhMaps.Core.Scanning;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace BhMaps.App.ViewModels;
 
-/// <summary>One card on the Home grid (spec 7.2): the composed preview, the map's name and its state tag.</summary>
+/// <summary>One card on the Maps grid (spec 7.2): the composed preview, the map's name and its state tag.</summary>
 public partial class MapCardViewModel : ObservableObject
 {
-    public MapCardViewModel(MapEntry map, MapStatus? status)
+    /// <summary>The longest a custom picture's name is drawn at (spec 3.1).</summary>
+    public const int TagMaxLength = 16;
+
+    public MapCardViewModel(MapEntry map, MapStatus? status, IReadOnlyList<CustomPicture> customPictures)
     {
         Map = map;
         FolderName = map.FolderName;
         DisplayName = map.DisplayName;
-        StateText = status?.Text ?? "";
 
         // Missing is the only coloured state (D8), which is exactly when the card wears the coloured tag.
-        IsMissing = status?.IsColoured ?? false;
+        IsMissing = status?.State == MapState.Missing;
+        TagText = status?.State switch
+        {
+            MapState.Missing => "Missing",
+            MapState.Packs => status.Text,
+            MapState.Custom => Ellipsise(CustomName(map, customPictures)),
+            _ => "",
+        };
+        ToolTipText = TagText.Length == 0 ? DisplayName : $"{DisplayName} ({TagText})";
     }
 
     public string FolderName { get; }
@@ -27,11 +39,18 @@ public partial class MapCardViewModel : ObservableObject
     /// <summary>The map's in-game name, or its folder name in the no-level-data fallback (spec 3.6).</summary>
     public string DisplayName { get; }
 
-    /// <summary>The tag's text: "Default", the pack names, "Custom" or "Missing". Empty when the scan produced
-    /// no status for this map, and then no tag is drawn.</summary>
-    public string StateText { get; }
-
     public bool IsMissing { get; }
+
+    /// <summary>Spec 3.1's tag, drawn only when it says which art is on the map: the pack names, the custom
+    /// picture's name ellipsised at <see cref="TagMaxLength"/>, or "Missing". Default draws no tag, and
+    /// neither does a map the scan produced no status for.</summary>
+    public string TagText { get; }
+
+    /// <summary>The name and the tag in one line, for the two tightest zoom steps where the card draws neither
+    /// (spec 3.1).</summary>
+    public string ToolTipText { get; }
+
+    public bool ShowTag => TagText.Length > 0;
 
     /// <summary>The catalog entry behind the card, so a page can filter on its sets without a second lookup.</summary>
     public MapEntry Map { get; }
@@ -39,6 +58,12 @@ public partial class MapCardViewModel : ObservableObject
     /// <summary>Null until the preview is ready. Always frozen, because it is decoded off the UI thread.</summary>
     [ObservableProperty]
     public partial ImageSource? Preview { get; set; }
+
+    /// <summary>Spec 3.3: whether this map is in the ticked set. The grid's ListBoxItem binds its own IsSelected
+    /// to it two ways, so a click, a Ctrl click, a shift range, Space and the tick box all say the same thing.
+    /// MapsViewModel watches it and tells the shell.</summary>
+    [ObservableProperty]
+    public partial bool IsSelected { get; set; }
 
     /// <summary>Composes the card preview, falling back to the v1 single-file thumbnail without level data or when
     /// the composite could not be drawn (spec 3.6). Called on the UI thread; every file touch happens off it.</summary>
@@ -97,6 +122,16 @@ public partial class MapCardViewModel : ObservableObject
             return null;
         }
     }
+
+    /// <summary>Spec 3.1: the library's name for the picture in the map's first slot, through the one rule the
+    /// panel's status line uses too (plan decision A-D5). A map with no slot has no picture to name.</summary>
+    private static string CustomName(MapEntry map, IReadOnlyList<CustomPicture> customPictures) =>
+        map.BackgroundSlots.Count > 0
+            ? CustomPictureLibrary.NameFor(customPictures, map.BackgroundSlots[0])
+            : "Custom";
+
+    private static string Ellipsise(string name) =>
+        name.Length <= TagMaxLength ? name : name[..(TagMaxLength - 1)] + "\u2026";
 
     /// <summary>Decoded whole and frozen off the UI thread, so nothing is read from disk while the card draws.</summary>
     private static BitmapImage Load(string path)

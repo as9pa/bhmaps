@@ -1,67 +1,89 @@
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using BhMaps.App.Services;
 using BhMaps.Core.Imaging;
 using BhMaps.Core.Operations;
 using BhMaps.Core.Scanning;
+using BhMaps.Core.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
 namespace BhMaps.App.ViewModels;
 
-/// <summary>What one Save left in the library: the fitted picture, the slot it was fitted for, and whether the
-/// user asked for it to go into the game as well. The shell does that part, so the editor never writes there.</summary>
-public sealed record BackgroundSave(string PackFile, string Slot, bool ApplyToGame);
+/// <summary>What one Save left in the library: the fitted picture, the slot it was fitted for, the maps that slot
+/// belongs to, and whether the user asked for it to go into the game as well. The shell does that part, so the
+/// editor never writes into the game folder.</summary>
+public sealed record BackgroundSave(string PackFile, string Slot, string MapNames, bool ApplyToGame);
 
+/// <summary>Spec 7.2: one picture, fitted to one map's background slot. The source is decoded once into a
+/// 640x360 working bitmap and every preview is drawn from it on a 16 ms throttle, so a slider drag moves the
+/// picture rather than queueing decodes.</summary>
 public partial class BackgroundEditorViewModel : ObservableObject
 {
     public const int PreviewWidth = 640;
     public const int PreviewHeight = 360;
     public const string NewPackChoice = "New pack...";
     public const string DefaultPackName = "My Backgrounds";
+    public const string NoSourceText = "No picture yet. Drop one here or browse.";
+    public const string NoMapsText = "No maps yet. Refresh the game data in Settings.";
+    public const string PreviewSizeText = "preview 640 x 360";
+
+    private const string BackgroundsFolder = "Backgrounds";
 
     private readonly AppServices _services;
     private readonly IDialogs _dialogs;
-    private readonly Debouncer _render = new();
+    private readonly BackgroundEditorRequest _request;
+    private readonly Throttler _preview = new();
+
+    private BitmapSource? _working;
+    private string _workingPath = "";
 
     public BackgroundEditorViewModel(
         AppServices services,
         IDialogs dialogs,
-        IReadOnlyList<string> slots,
+        IReadOnlyList<MapSlotChoice> maps,
         IReadOnlyList<string> packNames,
-        string? initialSlot)
+        BackgroundEditorRequest request)
     {
         _services = services;
         _dialogs = dialogs;
-        Slots = slots;
+        _request = request;
+        Maps = maps;
         PackChoices = packNames.Concat([NewPackChoice]).ToList();
-        Slot = initialSlot ?? slots.FirstOrDefault() ?? "BG_New.jpg";
-        SourcePath = "";
+        SelectedMap = maps.FirstOrDefault(m => m.Slot.Equals(request.Slot, StringComparison.OrdinalIgnoreCase))
+            ?? maps.FirstOrDefault();
         Error = "";
+        SourceDetail = "";
         PanX = 0.5;
         PanY = 0.5;
         ApplyNow = true;
+
+        // The tile's own pack, so Save replaces the picture the user was looking at; anything else keeps it.
+        var requested = packNames.FirstOrDefault(p => p.Equals(request.PackName, StringComparison.OrdinalIgnoreCase));
         var existingDefault = packNames.FirstOrDefault(p => p.Equals(DefaultPackName, StringComparison.OrdinalIgnoreCase));
-        TargetPack = existingDefault ?? NewPackChoice;
-        NewPackName = existingDefault is null ? DefaultPackName : "";
+        TargetPack = requested ?? existingDefault ?? NewPackChoice;
+        NewPackName = TargetPack == NewPackChoice ? DefaultPackName : "";
+
+        // Last: the change hook reads everything above it.
+        SourcePath = request.SourcePath;
     }
 
     public event Action<bool>? CloseRequested;
 
-    public IReadOnlyList<string> Slots { get; }
+    public IReadOnlyList<MapSlotChoice> Maps { get; }
 
     public IReadOnlyList<string> PackChoices { get; }
 
-    /// <summary>What Save wrote into the library, or null while nothing has been saved. The shell reads it once
-    /// the window closes with OK and applies it to the game when it says so.</summary>
+    /// <summary>What Save wrote into the library, or null while nothing has been saved.</summary>
     public BackgroundSave? Saved { get; private set; }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(SlotError), nameof(CanSave))]
+    [NotifyPropertyChangedFor(nameof(CanSave), nameof(OverwriteHint), nameof(MapLabel))]
     [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
-    public partial string Slot { get; set; }
+    public partial MapSlotChoice? SelectedMap { get; set; }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanSave), nameof(HasSource))]
+    [NotifyPropertyChangedFor(nameof(CanSave), nameof(HasSource), nameof(Title), nameof(SourceFileName), nameof(EmptyText))]
     [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
     public partial string SourcePath { get; set; }
 
@@ -69,7 +91,14 @@ public partial class BackgroundEditorViewModel : ObservableObject
     public partial ImageSource? Preview { get; set; }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsCover), nameof(ModeCover), nameof(ModeContain), nameof(ModeStretch))]
+    public partial ImageSource? SourceThumbnail { get; set; }
+
+    /// <summary>"flowermap, 1920 x 1080" under the source's file name, or "" while it is unknown.</summary>
+    [ObservableProperty]
+    public partial string SourceDetail { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsFill), nameof(ModeFill), nameof(ModeFit), nameof(ModeStretch))]
     public partial FitMode Mode { get; set; }
 
     [ObservableProperty]
@@ -82,12 +111,12 @@ public partial class BackgroundEditorViewModel : ObservableObject
     public partial double DarkenPercent { get; set; }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsNewPack), nameof(CanSave))]
+    [NotifyPropertyChangedFor(nameof(IsNewPack), nameof(CanSave), nameof(OverwriteHint))]
     [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
     public partial string TargetPack { get; set; }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanSave))]
+    [NotifyPropertyChangedFor(nameof(CanSave), nameof(OverwriteHint))]
     [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
     public partial string NewPackName { get; set; }
 
@@ -97,111 +126,111 @@ public partial class BackgroundEditorViewModel : ObservableObject
     [ObservableProperty]
     public partial string Error { get; set; }
 
-    public bool IsCover => Mode == FitMode.Cover;
+    public string Title => SourceFileName.Length == 0 ? "Edit background" : $"Edit {SourceFileName}";
+
+    public string SourceFileName => SourcePath.Length == 0 ? "" : Path.GetFileName(SourcePath);
 
     public bool HasSource => File.Exists(SourcePath);
+
+    public bool HasMaps => Maps.Count > 0;
+
+    /// <summary>The Map row's own note: empty while there are maps to pick from (decision C-D8).</summary>
+    public string MapLabel => HasMaps ? "" : NoMapsText;
+
+    /// <summary>What the preview says instead of a picture: nothing chosen yet, or a source that has gone.</summary>
+    public string EmptyText => SourcePath.Length == 0
+        ? NoSourceText
+        : HasSource ? "" : $"{SourceFileName} is no longer in {_request.PackName ?? "the library"}. Choose another source.";
+
+    public bool IsFill => Mode == FitMode.Cover;
 
     public bool IsNewPack => TargetPack == NewPackChoice;
 
     public string EffectivePackName => IsNewPack ? NewPackName.Trim() : TargetPack;
 
-    public bool ModeCover
+    public string Slot => SelectedMap?.Slot ?? "";
+
+    /// <summary>Spec 7.2, shown only when Save would replace a file that is already in the pack.</summary>
+    public string OverwriteHint =>
+        Slot.Length > 0 && !IsNewPack && File.Exists(PackFilePath())
+            ? $"Replaces {Slot} in {TargetPack}. Pick another pack to keep the original."
+            : "";
+
+    public bool ModeFill
     {
         get => Mode == FitMode.Cover;
-        set
-        {
-            if (value)
-            {
-                Mode = FitMode.Cover;
-            }
-        }
+        set { if (value) { Mode = FitMode.Cover; } }
     }
 
-    public bool ModeContain
+    public bool ModeFit
     {
         get => Mode == FitMode.Contain;
-        set
-        {
-            if (value)
-            {
-                Mode = FitMode.Contain;
-            }
-        }
+        set { if (value) { Mode = FitMode.Contain; } }
     }
 
     public bool ModeStretch
     {
         get => Mode == FitMode.Stretch;
-        set
-        {
-            if (value)
-            {
-                Mode = FitMode.Stretch;
-            }
-        }
+        set { if (value) { Mode = FitMode.Stretch; } }
     }
 
-    public string SlotError
-    {
-        get
-        {
-            var slot = Slot.Trim();
-            if (slot.Length == 0)
-            {
-                return "Slot name is empty.";
-            }
-
-            if (!slot.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase))
-            {
-                return "Slot name must end in .jpg";
-            }
-
-            if (slot.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
-            {
-                return "Slot name has characters that are not allowed in a file name.";
-            }
-
-            return "";
-        }
-    }
-
-    public bool CanSave => SlotError.Length == 0 && HasSource && PackNameValidator.IsValid(EffectivePackName, out _);
+    public bool CanSave => HasSource && Slot.Length > 0 && PackNameValidator.IsValid(EffectivePackName, out _);
 
     private FitOptions Options => new(Mode, PanX, PanY, DarkenPercent / 100.0);
 
     public void AcceptDroppedFile(string path) => SourcePath = path;
 
-    partial void OnSourcePathChanged(string value) => ScheduleRender();
+    /// <summary>The render a drag ends with: the throttle can only have dropped values that are stale by now, so
+    /// the newest ones are drawn with nothing queued behind them (spec 7.2).</summary>
+    public void RenderFinal()
+    {
+        _preview.Cancel();
+        SchedulePreview();
+    }
 
-    partial void OnModeChanged(FitMode value) => ScheduleRender();
+    partial void OnSourcePathChanged(string value)
+    {
+        _working = null;
+        _workingPath = "";
+        LoadSourceInfo(value);
+        SchedulePreview();
+    }
 
-    partial void OnPanXChanged(double value) => ScheduleRender();
+    partial void OnModeChanged(FitMode value) => SchedulePreview();
 
-    partial void OnPanYChanged(double value) => ScheduleRender();
+    partial void OnPanXChanged(double value) => SchedulePreview();
 
-    partial void OnDarkenPercentChanged(double value) => ScheduleRender();
+    partial void OnPanYChanged(double value) => SchedulePreview();
+
+    partial void OnDarkenPercentChanged(double value) => SchedulePreview();
 
     [RelayCommand]
-    private void Browse()
+    private void Replace()
     {
-        var file = _dialogs.PickImageFile("Choose a source image");
-        if (file is not null)
+        if (_dialogs.PickImageFile("Choose a source image") is { } file)
         {
             SourcePath = file;
         }
     }
 
-    /// <summary>Saves the fitted picture into the pack and nothing else. The apply the "Apply to game now" box asks
-    /// for is a game write, so it is left to the shell, which has the busy boundary, the undo snapshot and the
-    /// running-game policy to put around it.</summary>
+    [RelayCommand]
+    private void ResetPanX() => PanX = 0.5;
+
+    [RelayCommand]
+    private void ResetPanY() => PanY = 0.5;
+
+    [RelayCommand]
+    private void ResetDarken() => DarkenPercent = 0;
+
+    /// <summary>Saves the fitted picture into the pack and nothing else; the "Apply to game now" box is the
+    /// shell's business, because a game write needs the boundary, the snapshot and the undo (spec 8).</summary>
     [RelayCommand(CanExecute = nameof(CanSave))]
     private async Task SaveAsync()
     {
-        var packName = EffectivePackName;
-        var slot = Slot.Trim();
-        var packFile = Path.Combine(PackScanner.PacksRoot(_services.LibraryPath), packName, "Backgrounds", slot);
+        var packFile = PackFilePath();
+        var slot = Slot;
         if (File.Exists(packFile)
-            && !_dialogs.Confirm("Replace background?", $"{slot} already exists in pack {packName}. Replace it?"))
+            && !_dialogs.Confirm("Replace background?", $"{slot} already exists in pack {EffectivePackName}. Replace it?"))
         {
             return;
         }
@@ -210,10 +239,11 @@ public partial class BackgroundEditorViewModel : ObservableObject
         var options = Options;
         try
         {
+            // The original, not the working bitmap: Save fits at 2048x1151 (spec 7.2).
             var bytes = await Task.Run(() => BackgroundFitter.Fit(path, options));
             Directory.CreateDirectory(Path.GetDirectoryName(packFile)!);
             await File.WriteAllBytesAsync(packFile, bytes);
-            Saved = new BackgroundSave(packFile, slot, ApplyNow);
+            Saved = new BackgroundSave(packFile, slot, SelectedMap?.DisplayNames ?? slot, ApplyNow);
             CloseRequested?.Invoke(true);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or FileFormatException)
@@ -222,38 +252,111 @@ public partial class BackgroundEditorViewModel : ObservableObject
         }
     }
 
-    /// <summary>Spec 5.3: debounce 150 ms, render off the UI thread, latest request wins. A source that is not
-    /// there clears the preview at once rather than after the quiet period, because there is nothing to wait for.</summary>
-    private void ScheduleRender()
+    private string PackFilePath() =>
+        Path.Combine(PackScanner.PacksRoot(_services.LibraryPath), EffectivePackName, BackgroundsFolder, Slot);
+
+    /// <summary>The Source row: a thumbnail, and the pack and pixel size under the file name. Both are file work,
+    /// so both arrive late and neither blocks the preview.</summary>
+    private async void LoadSourceInfo(string path)
+    {
+        SourceThumbnail = null;
+        SourceDetail = "";
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        var pack = PackOfPath(path);
+        BitmapSource? thumbnail;
+        (int Width, int Height)? size;
+
+        // async void: nothing above this frame can catch, so a file that goes away between the drop and the read
+        // has to land in the Error line rather than on the dispatcher. Both callees are total today; this guard is
+        // for the awaits themselves and for the day one of them stops being.
+        try
+        {
+            thumbnail = await Task.Run(() => ThumbnailProvider.Decode(path));
+            size = await Task.Run(() => ImageDimensions.Read(path));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
+        {
+            Error = ex.Message;
+            return;
+        }
+
+        if (!string.Equals(path, SourcePath, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        SourceThumbnail = thumbnail;
+        SourceDetail = size is { } s ? $"{pack}, {s.Width} x {s.Height}" : pack;
+    }
+
+    /// <summary>The pack a path sits in, when it sits under the library's packs root.</summary>
+    private string PackOfPath(string path)
+    {
+        var root = PackScanner.PacksRoot(_services.LibraryPath);
+        var full = Path.GetFullPath(path);
+        if (!full.StartsWith(Path.GetFullPath(root) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+        {
+            return _request.PackName ?? "Not in a pack";
+        }
+
+        var rest = full[(Path.GetFullPath(root).Length + 1)..];
+        var cut = rest.IndexOf(Path.DirectorySeparatorChar);
+        return cut < 0 ? rest : rest[..cut];
+    }
+
+    /// <summary>Spec 7.2: 16 ms throttle, newest values win, rendered off the UI thread from a working bitmap that
+    /// is decoded once per source. A source that is not there clears the preview at once.</summary>
+    private void SchedulePreview()
     {
         var path = SourcePath;
         var options = Options;
         if (!File.Exists(path))
         {
-            _render.Cancel();
+            _preview.Cancel();
             Preview = null;
             return;
         }
 
-        _render.Run(async ct =>
+        _preview.Run(ct => RenderAsync(path, options, ct));
+    }
+
+    private async Task RenderAsync(string path, FitOptions options, CancellationToken ct)
+    {
+        try
         {
-            try
+            if (_working is null || !_workingPath.Equals(path, StringComparison.OrdinalIgnoreCase))
             {
-                var bitmap = await Task.Run(() => BackgroundFitter.Render(path, options, PreviewWidth, PreviewHeight), ct);
-                if (!ct.IsCancellationRequested)
+                var loaded = await Task.Run(() => BackgroundFitter.LoadWorkingSource(path, PreviewWidth, PreviewHeight), ct);
+                if (ct.IsCancellationRequested)
                 {
-                    Preview = bitmap;
-                    Error = "";
+                    return;
                 }
+
+                _working = loaded;
+                _workingPath = path;
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or FileFormatException)
+
+            var source = _working;
+            var bitmap = await Task.Run(() => BackgroundFitter.Render(source, options, PreviewWidth, PreviewHeight), ct);
+            if (ct.IsCancellationRequested)
             {
-                if (!ct.IsCancellationRequested)
-                {
-                    Preview = null;
-                    Error = "Could not read the image: " + ex.Message;
-                }
+                return;
             }
-        });
+
+            Preview = bitmap;
+            Error = "";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or FileFormatException or ArgumentException)
+        {
+            if (!ct.IsCancellationRequested)
+            {
+                Preview = null;
+                Error = "Could not read the image: " + ex.Message;
+            }
+        }
     }
 }

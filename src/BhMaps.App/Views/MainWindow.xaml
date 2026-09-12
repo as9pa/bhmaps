@@ -2,316 +2,116 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:BhMaps.App.Views.Controls"
-        xmlns:converters="clr-namespace:BhMaps.App.Converters"
-        xmlns:sys="clr-namespace:System;assembly=System.Runtime"
         Title="BhMaps" Width="1280" Height="800" MinWidth="1000" MinHeight="640"
         Background="{StaticResource BgBrush}">
-  <Window.Resources>
-    <converters:IsCurrentPageConverter x:Key="IsCurrentPage" />
-
-    <!-- The sidebar's own row button: full width, left aligned, and a focus ring like the one the tiles wear,
-         because keyboard focus has to be visible on every nav row (spec 7.8). Sidebar-only, so it lives here
-         rather than in the theme. -->
-    <Style x:Key="NavRow" TargetType="Button">
-      <Setter Property="FontFamily" Value="{StaticResource Sans}" />
-      <Setter Property="FontSize" Value="13" />
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="Foreground" Value="{StaticResource Text2Brush}" />
-      <Setter Property="Padding" Value="10,7" />
-      <Setter Property="Cursor" Value="Hand" />
-      <Setter Property="FocusVisualStyle" Value="{x:Null}" />
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="Button">
-            <ControlTemplate.Resources>
-              <!-- As in the theme's buttons: the implicit TextBlock style reaches the ContentPresenter's own
-                   TextBlock and would beat the button's Foreground, so the string is templated instead. -->
-              <DataTemplate DataType="{x:Type sys:String}">
-                <TextBlock Text="{Binding}"
-                           FontFamily="{Binding FontFamily, RelativeSource={RelativeSource AncestorType={x:Type ButtonBase}}}"
-                           FontSize="{Binding FontSize, RelativeSource={RelativeSource AncestorType={x:Type ButtonBase}}}"
-                           Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type ButtonBase}}}" />
-              </DataTemplate>
-            </ControlTemplate.Resources>
-            <Grid>
-              <Border x:Name="Chrome"
-                      Background="{TemplateBinding Background}"
-                      CornerRadius="{StaticResource Radius}"
-                      Padding="{TemplateBinding Padding}">
-                <!-- The canvas gives each row a 16 px icon 10 px before its label. Attached rather than content,
-                     as the theme's buttons do it, so the row's accessible name is still its Content and the icon
-                     takes the Foreground the hover and current-page triggers below set. -->
-                <StackPanel HorizontalAlignment="Left" VerticalAlignment="Center" Orientation="Horizontal">
-                  <controls:Icon x:Name="Glyph"
-                                 Margin="0,0,10,0"
-                                 VerticalAlignment="Center"
-                                 Geometry="{Binding Path=(controls:Icon.Glyph), RelativeSource={RelativeSource TemplatedParent}}"
-                                 Size="16" />
-                  <ContentPresenter VerticalAlignment="Center" />
-                </StackPanel>
-              </Border>
-              <Border x:Name="Ring"
-                      BorderBrush="{StaticResource TextBrush}"
-                      BorderThickness="1"
-                      CornerRadius="{StaticResource Radius}"
-                      IsHitTestVisible="False"
-                      Opacity="0" />
-            </Grid>
-            <ControlTemplate.Triggers>
-              <Trigger Property="controls:Icon.Glyph" Value="{x:Null}">
-                <Setter TargetName="Glyph" Property="Visibility" Value="Collapsed" />
-              </Trigger>
-              <Trigger Property="IsKeyboardFocused" Value="True">
-                <Setter TargetName="Ring" Property="Opacity" Value="0.6" />
-              </Trigger>
-              <Trigger Property="IsEnabled" Value="False">
-                <Setter TargetName="Chrome" Property="Opacity" Value="0.4" />
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-      <!-- Hover and the open page paint the button's own Background, which the Chrome template-binds, rather
-           than the Chrome directly: a trigger's binding cannot reach its TemplatedParent, so the "is this row's
-           page the open one" test has to live out here where RelativeSource Self means the button. The current
-           trigger comes second, so it wins while the pointer is over the row it already marks, and neither
-           touches the Ring, so keyboard focus still shows on top of either. -->
-      <Style.Triggers>
-        <Trigger Property="IsMouseOver" Value="True">
-          <Setter Property="Background" Value="{StaticResource Surface2Brush}" />
-          <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
-        </Trigger>
-        <DataTrigger Value="True">
-          <DataTrigger.Binding>
-            <MultiBinding Converter="{StaticResource IsCurrentPage}">
-              <Binding Path="Tag" RelativeSource="{RelativeSource Self}" />
-              <Binding Path="CurrentPage" />
-            </MultiBinding>
-          </DataTrigger.Binding>
-          <Setter Property="Background" Value="{StaticResource TileBrush}" />
-          <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
-        </DataTrigger>
-      </Style.Triggers>
-    </Style>
-
-    <Style x:Key="SidebarDivider" TargetType="Border">
-      <Setter Property="Height" Value="1" />
-      <Setter Property="Margin" Value="12,8" />
-      <Setter Property="Background" Value="{StaticResource LineBrush}" />
-    </Style>
-
-    <!-- The sidebar list is the app's multi-select: the container's IsSelected is the row's own IsSelected, so a
-         click, Space on a focused row and the row's checkbox all say the same thing, and the tile ring shows it. -->
-    <Style x:Key="MapRow" TargetType="ListBoxItem" BasedOn="{StaticResource TileListBoxItem}">
-      <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
-      <Setter Property="Padding" Value="6,2" />
-      <!-- Without this a screen reader reads the row's view model type name. -->
-      <Setter Property="AutomationProperties.Name" Value="{Binding DisplayName}" />
-    </Style>
-  </Window.Resources>
-
-  <!-- Nothing on a page triggers a rescan, so the keyboard does. -->
+  <!-- Nothing on a page triggers a rescan, so the keyboard does; Ctrl+1..5 are the five tabs (addendum A).
+       Ctrl+K is in the code-behind: it navigates and then focuses, which a command cannot do. -->
   <Window.InputBindings>
     <KeyBinding Key="F5" Command="{Binding RefreshCommand}" />
+    <KeyBinding Key="D1" Modifiers="Control" Command="{Binding NavigateMapsCommand}" />
+    <KeyBinding Key="D2" Modifiers="Control" Command="{Binding NavigateBackgroundsCommand}" />
+    <KeyBinding Key="D3" Modifiers="Control" Command="{Binding NavigatePlatformsCommand}" />
+    <KeyBinding Key="D4" Modifiers="Control" Command="{Binding NavigatePacksCommand}" />
+    <KeyBinding Key="D5" Modifiers="Control" Command="{Binding NavigateSettingsCommand}" />
   </Window.InputBindings>
 
   <Grid>
-    <Grid.ColumnDefinitions>
-      <!-- Auto, not a fixed width: ColumnDefinition.Width is a GridLength and SidebarWidth is a Double, so the
-           token is applied to the sidebar itself and the column takes its size from it. -->
-      <ColumnDefinition Width="Auto" />
-      <ColumnDefinition Width="*" />
-    </Grid.ColumnDefinitions>
+    <Grid.RowDefinitions>
+      <RowDefinition Height="44" />
+      <RowDefinition Height="*" />
+    </Grid.RowDefinitions>
 
-    <Border Grid.Column="0"
-            Width="{StaticResource SidebarWidth}"
-            Background="{StaticResource SurfaceBrush}"
+    <!-- Addendum A: brand, five tabs, and the game line at the right. 44 px with a hairline under it. -->
+    <Border Grid.Row="0"
+            Background="{StaticResource BgBrush}"
             BorderBrush="{StaticResource LineBrush}"
-            BorderThickness="0,0,1,0">
-      <!-- Spec 7.1 order: name, the three nav rows, the search box and the map list, then Packs and Settings and
-           the game block pinned to the bottom. Rows rather than docking, so the order the eye reads is also the
-           order Tab walks: a DockPanel would have to declare the bottom of the sidebar before the map list. -->
-      <Grid>
-        <Grid.RowDefinitions>
-          <RowDefinition Height="Auto" />
-          <RowDefinition Height="Auto" />
-          <RowDefinition Height="Auto" />
-          <RowDefinition Height="Auto" />
-          <RowDefinition Height="*" />
-          <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
+            BorderThickness="0,0,0,1">
+      <Grid Margin="16,0,12,0">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
 
-        <TextBlock Grid.Row="0"
-                   Margin="18,18,18,10"
-                   FontSize="15"
-                   FontWeight="SemiBold"
-                   Text="BhMaps" />
+        <TextBlock VerticalAlignment="Center" FontSize="14" FontWeight="SemiBold" Text="BhMaps" />
 
-        <StackPanel Grid.Row="1" Margin="8,0">
-          <Button Command="{Binding NavigateHomeCommand}"
-                  Content="Home"
-                  controls:Icon.Glyph="{StaticResource Icon.Home}"
-                  Style="{StaticResource NavRow}"
-                  Tag="{Binding Home}" />
-          <Button Command="{Binding NavigateBackgroundsCommand}"
-                  Content="Backgrounds"
-                  controls:Icon.Glyph="{StaticResource Icon.Image}"
-                  Style="{StaticResource NavRow}"
-                  Tag="{Binding Backgrounds}" />
-          <Button Command="{Binding NavigatePlatformsCommand}"
-                  Content="Platforms"
-                  controls:Icon.Glyph="{StaticResource Icon.Layers}"
-                  Style="{StaticResource NavRow}"
-                  Tag="{Binding Platforms}" />
+        <StackPanel Grid.Column="1" Margin="24,0,0,0" VerticalAlignment="Center" Orientation="Horizontal">
+          <Button Command="{Binding NavigateMapsCommand}" Content="Maps" Style="{StaticResource TopBarTab}" Tag="{Binding Maps}" />
+          <Button Command="{Binding NavigateBackgroundsCommand}" Content="Backgrounds" Style="{StaticResource TopBarTab}" Tag="{Binding Backgrounds}" />
+          <Button Command="{Binding NavigatePlatformsCommand}" Content="Platforms" Style="{StaticResource TopBarTab}" Tag="{Binding Platforms}" />
+          <Button Command="{Binding NavigatePacksCommand}" Content="Packs" Style="{StaticResource TopBarTab}" Tag="{Binding Packs}" />
+          <Button Command="{Binding NavigateSettingsCommand}" Content="Settings" Style="{StaticResource TopBarTab}" Tag="{Binding SettingsPage}" />
         </StackPanel>
 
-        <Border Grid.Row="2" Style="{StaticResource SidebarDivider}" />
-
-        <controls:SuggestBox Grid.Row="3"
-                             Margin="12,0,12,8"
-                             ChooseCommand="{Binding ChooseSuggestionCommand}"
-                             Placeholder="Search maps"
-                             Suggestions="{Binding Suggestions}"
-                             Text="{Binding SearchText, Mode=TwoWay}" />
-
-        <ListBox Grid.Row="4"
-                 Margin="6,0,6,0"
-                 ItemContainerStyle="{StaticResource MapRow}"
-                 ItemsSource="{Binding MapList}"
-                 SelectionMode="Multiple"
-                 Style="{StaticResource TileListBox}">
-          <ListBox.ItemTemplate>
-            <DataTemplate>
-              <Grid Height="28" Background="Transparent">
-                <Grid.ColumnDefinitions>
-                  <ColumnDefinition Width="26" />
-                  <ColumnDefinition Width="*" />
-                  <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-
-                <!-- The column keeps its width whether or not the box shows, so hovering a row moves nothing. The
-                     visibility sits on the wrapper because a Style on the CheckBox itself would displace the
-                     theme's own implicit one and leave a classic Windows box behind.
-                     Not focusable: Tab walks the list, not every checkbox in it, and Space toggles the row. -->
-                <Grid Grid.Column="0">
-                  <Grid.Style>
-                    <Style TargetType="Grid">
-                      <Setter Property="Visibility" Value="Collapsed" />
-                      <Style.Triggers>
-                        <DataTrigger Binding="{Binding IsSelected}" Value="True">
-                          <Setter Property="Visibility" Value="Visible" />
-                        </DataTrigger>
-                        <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
-                          <Setter Property="Visibility" Value="Visible" />
-                        </DataTrigger>
-                      </Style.Triggers>
-                    </Style>
-                  </Grid.Style>
-                  <CheckBox HorizontalAlignment="Left"
-                            VerticalAlignment="Center"
-                            Focusable="False"
-                            IsChecked="{Binding IsSelected, Mode=TwoWay}" />
-                </Grid>
-
-                <TextBlock Grid.Column="1"
-                           VerticalAlignment="Center"
-                           Text="{Binding DisplayName}"
-                           TextTrimming="CharacterEllipsis" />
-
-                <!-- Two tags, because Missing is a style of its own rather than a colour on the ordinary one.
-                     Each sits in a wrapper that carries the visibility, so neither theme style is derived from. -->
-                <Grid Grid.Column="2" Margin="6,0,0,0" VerticalAlignment="Center">
-                  <Grid>
-                    <Grid.Style>
-                      <Style TargetType="Grid">
-                        <Style.Triggers>
-                          <DataTrigger Binding="{Binding IsMissing}" Value="True">
-                            <Setter Property="Visibility" Value="Collapsed" />
-                          </DataTrigger>
-                          <DataTrigger Binding="{Binding StateText}" Value="">
-                            <Setter Property="Visibility" Value="Collapsed" />
-                          </DataTrigger>
-                        </Style.Triggers>
-                      </Style>
-                    </Grid.Style>
-                    <Border Style="{StaticResource StateTagBorder}">
-                      <TextBlock Text="{Binding StateText}" />
-                    </Border>
-                  </Grid>
-                  <Grid>
-                    <Grid.Style>
-                      <Style TargetType="Grid">
-                        <Setter Property="Visibility" Value="Collapsed" />
-                        <Style.Triggers>
-                          <DataTrigger Binding="{Binding IsMissing}" Value="True">
-                            <Setter Property="Visibility" Value="Visible" />
-                          </DataTrigger>
-                        </Style.Triggers>
-                      </Style>
-                    </Grid.Style>
-                    <Border Style="{StaticResource MissingTagBorder}">
-                      <TextBlock Text="{Binding StateText}" />
-                    </Border>
-                  </Grid>
-                </Grid>
-              </Grid>
-            </DataTemplate>
-          </ListBox.ItemTemplate>
-        </ListBox>
-
-        <StackPanel Grid.Row="5">
-          <Border Style="{StaticResource SidebarDivider}" />
-          <StackPanel Margin="8,0,8,8">
-            <Button Command="{Binding NavigatePacksCommand}"
-                    Content="Packs"
-                    controls:Icon.Glyph="{StaticResource Icon.Package}"
-                    Style="{StaticResource NavRow}"
-                    Tag="{Binding Packs}" />
-            <Button Command="{Binding NavigateSettingsCommand}"
-                    Content="Settings"
-                    controls:Icon.Glyph="{StaticResource Icon.Sliders}"
-                    Style="{StaticResource NavRow}"
-                    Tag="{Binding SettingsPage}" />
+        <!-- Three states, one at a time: the folder is gone, the game is up, the game is down. The missing
+             folder outranks the other two, so its trigger is the only one that does not test it. -->
+        <Grid Grid.Column="2" VerticalAlignment="Center">
+          <StackPanel Orientation="Horizontal">
+            <StackPanel.Style>
+              <Style TargetType="StackPanel">
+                <Setter Property="Visibility" Value="Collapsed" />
+                <Style.Triggers>
+                  <DataTrigger Binding="{Binding GameFolderMissing}" Value="True">
+                    <Setter Property="Visibility" Value="Visible" />
+                  </DataTrigger>
+                </Style.Triggers>
+              </Style>
+            </StackPanel.Style>
+            <TextBlock VerticalAlignment="Center"
+                       Foreground="{StaticResource MissingFgBrush}"
+                       Text="Game folder not found" />
+            <Button Margin="8,0,0,0"
+                    Command="{Binding NavigateSettingsCommand}"
+                    Content="Choose folder"
+                    Style="{StaticResource PlainButton}" />
           </StackPanel>
-          <Border Padding="12,10" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,1,0,0">
-            <Grid>
-              <StackPanel Margin="10,0" HorizontalAlignment="Left" Orientation="Horizontal">
-                <StackPanel.Style>
-                  <Style TargetType="StackPanel">
-                    <Setter Property="Visibility" Value="Collapsed" />
-                    <Style.Triggers>
-                      <DataTrigger Binding="{Binding GameRunning}" Value="True">
-                        <Setter Property="Visibility" Value="Visible" />
-                      </DataTrigger>
-                    </Style.Triggers>
-                  </Style>
-                </StackPanel.Style>
-                <Ellipse Width="6"
-                         Height="6"
-                         VerticalAlignment="Center"
-                         Fill="{StaticResource Text2Brush}" />
-                <TextBlock Margin="8,0,0,0"
-                           VerticalAlignment="Center"
-                           Foreground="{StaticResource Text2Brush}"
-                           Text="Brawlhalla running" />
-              </StackPanel>
-              <Button Command="{Binding LaunchGameCommand}" Content="Launch" controls:Icon.Glyph="{StaticResource Icon.Play}">
-                <Button.Style>
-                  <Style TargetType="Button" BasedOn="{StaticResource OutlineButton}">
-                    <Style.Triggers>
-                      <DataTrigger Binding="{Binding GameRunning}" Value="True">
-                        <Setter Property="Visibility" Value="Collapsed" />
-                      </DataTrigger>
-                    </Style.Triggers>
-                  </Style>
-                </Button.Style>
-              </Button>
-            </Grid>
-          </Border>
-        </StackPanel>
+
+          <StackPanel Orientation="Horizontal">
+            <StackPanel.Style>
+              <Style TargetType="StackPanel">
+                <Setter Property="Visibility" Value="Collapsed" />
+                <Style.Triggers>
+                  <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                      <Condition Binding="{Binding GameFolderMissing}" Value="False" />
+                      <Condition Binding="{Binding GameRunning}" Value="True" />
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Visibility" Value="Visible" />
+                  </MultiDataTrigger>
+                </Style.Triggers>
+              </Style>
+            </StackPanel.Style>
+            <Ellipse Width="6" Height="6" VerticalAlignment="Center" Fill="{StaticResource TextBrush}" />
+            <TextBlock Margin="8,0,0,0" VerticalAlignment="Center" Foreground="{StaticResource Text2Brush}" Text="Brawlhalla running" />
+          </StackPanel>
+
+          <StackPanel Orientation="Horizontal">
+            <StackPanel.Style>
+              <Style TargetType="StackPanel">
+                <Setter Property="Visibility" Value="Collapsed" />
+                <Style.Triggers>
+                  <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                      <Condition Binding="{Binding GameFolderMissing}" Value="False" />
+                      <Condition Binding="{Binding GameRunning}" Value="False" />
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Visibility" Value="Visible" />
+                  </MultiDataTrigger>
+                </Style.Triggers>
+              </Style>
+            </StackPanel.Style>
+            <Ellipse Width="6" Height="6" VerticalAlignment="Center" Fill="{StaticResource Line2Brush}" />
+            <TextBlock Margin="8,0,0,0" VerticalAlignment="Center" Foreground="{StaticResource Text2Brush}" Text="Brawlhalla not running" />
+            <Button Margin="8,0,0,0"
+                    Command="{Binding LaunchGameCommand}"
+                    Content="Launch"
+                    controls:Icon.Glyph="{StaticResource Icon.Play}"
+                    Style="{StaticResource PlainButton}" />
+          </StackPanel>
+        </Grid>
       </Grid>
     </Border>
 
-    <ContentControl Grid.Column="1" Content="{Binding CurrentPage}" />
+    <ContentControl x:Name="PageHost" Grid.Row="1" Content="{Binding CurrentPage}" />
   </Grid>
 </Window>

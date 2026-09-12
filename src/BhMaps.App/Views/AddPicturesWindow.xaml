@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:BhMaps.App.Views.Controls"
         xmlns:converters="clr-namespace:BhMaps.App.Converters"
-        Title="Add pictures" Width="900" Height="720" MinWidth="760" MinHeight="600"
+        Title="Add Custom Image" Width="900" Height="720" MinWidth="760" MinHeight="600"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
         AllowDrop="True" PreviewDragOver="Window_PreviewDragOver" PreviewDrop="Window_PreviewDrop"
         Background="{StaticResource BgBrush}">
@@ -216,12 +216,29 @@
                    Visibility="{Binding IsNewPack, Converter={StaticResource BoolToVis}}" />
           <TextBlock Style="{StaticResource ErrorText}" Text="{Binding PackNameError}" />
 
-          <TextBlock Style="{StaticResource FieldLabel}" Text="Maps" />
-          <CheckBox Content="{Binding ApplyToMapsLabel}"
-                    FocusVisualStyle="{StaticResource DialogFocusRing}"
-                    IsChecked="{Binding ApplyToMaps}"
-                    IsEnabled="{Binding CanApplyToMaps}" />
-          <TextBlock Margin="0,6,0,0"
+          <TextBlock Style="{StaticResource FieldLabel}" Text="Then" />
+          <RadioButton Content="Add to the library"
+                       FocusVisualStyle="{StaticResource DialogFocusRing}"
+                       GroupName="Then"
+                       IsChecked="{Binding ThenLibrary}" />
+          <RadioButton Margin="0,6,0,0"
+                       Content="{Binding MapChoiceText}"
+                       FocusVisualStyle="{StaticResource DialogFocusRing}"
+                       GroupName="Then"
+                       IsChecked="{Binding ThenMap}"
+                       Visibility="{Binding ShowMapChoice, Converter={StaticResource BoolToVis}}" />
+          <RadioButton Margin="0,6,0,0"
+                       Content="{Binding TickedChoiceText}"
+                       FocusVisualStyle="{StaticResource DialogFocusRing}"
+                       GroupName="Then"
+                       IsChecked="{Binding ThenTicked}"
+                       Visibility="{Binding ShowTickedChoice, Converter={StaticResource BoolToVis}}" />
+          <RadioButton Margin="0,6,0,0"
+                       Content="{Binding AllChoiceText}"
+                       FocusVisualStyle="{StaticResource DialogFocusRing}"
+                       GroupName="Then"
+                       IsChecked="{Binding ThenAll}" />
+          <TextBlock Margin="0,8,0,0"
                      Style="{StaticResource HintText}"
                      Text="The pictures go to the maps in order, repeating from the first when there are more maps than pictures." />
         </StackPanel>

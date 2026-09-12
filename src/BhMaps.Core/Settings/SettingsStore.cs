@@ -12,14 +12,19 @@ public static class SettingsStore
     /// than as a property this version does not know.</summary>
     private static readonly JsonNodeOptions NodeOptions = new() { PropertyNameCaseInsensitive = true };
 
-    /// <summary>Keys this version writes itself. Everything else in the file is carried in <see cref="AppSettings.Unknown"/>.</summary>
+    /// <summary>Keys this version writes, plus the two 2.0 keys it drops. A dropped key has to stay known, or
+    /// Load would carry it into <see cref="AppSettings.Unknown"/> and Save would write it straight back.</summary>
     private static readonly string[] KnownKeys =
-        ["gamePath", "libraryPath", "firstRunDone", "homeZoom", "backgroundsZoom", "whileRunning", "welcomeDone"];
+    [
+        "gamePath", "libraryPath", "firstRunDone", "mapsZoom", "backgroundsRowZoom", "packZoom", "platformsZoom",
+        "welcomeDone", "homeZoom", "whileRunning", "backgroundsZoom",
+    ];
 
     public static string DefaultAppDataDir =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "BhMaps");
 
-    /// <summary>Missing file, unreadable file, corrupt file, or missing fields all fall back to defaults. Zooms are clamped and any whileRunning value other than "live" loads as "restart".</summary>
+    /// <summary>Missing file, unreadable file, corrupt file or missing fields all fall back to defaults. Zooms are
+    /// clamped, a 2.0 homeZoom loads as MapsZoom, and whileRunning is dropped.</summary>
     public static AppSettings Load(string settingsPath)
     {
         JsonObject? obj = null;
@@ -51,16 +56,38 @@ public static class SettingsStore
             }
         }
 
+        // Spec 8: there is no restart flow any more, so an old whileRunning is read once, reported and dropped.
+        if (obj["whileRunning"] is not null)
+        {
+            System.Diagnostics.Trace.WriteLine(
+                "BhMaps settings: whileRunning is no longer used and was dropped; writes are always live.");
+        }
+
+        // Addendum B, q1: Backgrounds is a rows page whose zoom is a thumbnail height under backgroundsRowZoom.
+        // The old backgroundsZoom was a 2.0 tile size and then a 2.1 column count; read as a height it would put
+        // every upgrader on the largest rows, so it is reported once and dropped.
+        if (obj["backgroundsZoom"] is not null)
+        {
+            System.Diagnostics.Trace.WriteLine(
+                "BhMaps settings: backgroundsZoom is no longer used and was dropped; the Backgrounds rows start dense.");
+        }
+
+        // 2.0 stored the Maps zoom as homeZoom. The new key wins where both are present; otherwise the old one is
+        // read once and written back under the new name, so an upgrade does not reset anyone's column count.
+        var mapsZoom = obj["mapsZoom"] is not null ? Int(obj, "mapsZoom", 6) : Int(obj, "homeZoom", 6);
+
         return new AppSettings(
             Str(obj, "gamePath") is { Length: > 0 } g ? g : AppSettings.DefaultGamePath,
             Str(obj, "libraryPath") is { Length: > 0 } l ? l : AppSettings.DefaultLibraryPath,
             Bool(obj, "firstRunDone"),
-            Math.Clamp(Int(obj, "homeZoom", 3), 2, 5),
-            Math.Clamp(Int(obj, "backgroundsZoom", 4), 3, 8),
-            Str(obj, "whileRunning") == AppSettings.LiveWhileRunning
-                ? AppSettings.LiveWhileRunning
-                : AppSettings.RestartWhileRunning,
-            Bool(obj, "welcomeDone"))
+            Math.Clamp(mapsZoom, AppSettings.MinZoom, AppSettings.MaxZoom),
+
+            // Addendum B: Backgrounds is a rows page now, so its stored value is a thumbnail height under its own
+            // key; the old backgroundsZoom was dropped above.
+            Math.Clamp(Int(obj, "backgroundsRowZoom", 2), AppSettings.MinRowZoom, AppSettings.MaxRowZoom),
+            Math.Clamp(Int(obj, "packZoom", 5), AppSettings.MinZoom, AppSettings.MaxZoom),
+            Bool(obj, "welcomeDone"),
+            Math.Clamp(Int(obj, "platformsZoom", 3), AppSettings.MinRowZoom, AppSettings.MaxRowZoom))
         {
             Unknown = unknown.Count == 0 ? null : unknown,
         };
@@ -74,9 +101,10 @@ public static class SettingsStore
             ["gamePath"] = settings.GamePath,
             ["libraryPath"] = settings.LibraryPath,
             ["firstRunDone"] = settings.FirstRunDone,
-            ["homeZoom"] = settings.HomeZoom,
-            ["backgroundsZoom"] = settings.BackgroundsZoom,
-            ["whileRunning"] = settings.WhileRunning,
+            ["mapsZoom"] = settings.MapsZoom,
+            ["backgroundsRowZoom"] = settings.BackgroundsZoom,
+            ["packZoom"] = settings.PackZoom,
+            ["platformsZoom"] = settings.PlatformsZoom,
             ["welcomeDone"] = settings.WelcomeDone,
         };
         if (settings.Unknown is { } extra)

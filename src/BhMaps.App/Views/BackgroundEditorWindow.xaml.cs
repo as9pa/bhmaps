@@ -39,4 +39,14 @@ public partial class BackgroundEditorWindow : Window
             e.Handled = true;
         }
     }
+
+    /// <summary>The throttle draws from the working bitmap while the thumb moves; the drag ending is when the
+    /// newest values are worth one more draw with nothing queued behind it (spec 7.2).</summary>
+    private void Slider_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
+    {
+        if (DataContext is BackgroundEditorViewModel vm)
+        {
+            vm.RenderFinal();
+        }
+    }
 }

@@ -1,7 +1,4 @@
-using System.Collections.ObjectModel;
-using System.ComponentModel;
 using System.Windows;
-using System.Windows.Data;
 using System.Windows.Threading;
 using BhMaps.App.Services;
 using BhMaps.App.ViewModels.Pages;
@@ -16,19 +13,14 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace BhMaps.App.ViewModels;
 
-/// <summary>The shell (decision D13): the busy boundary, navigation between the six pages, the scan that feeds
+/// <summary>The shell (decision D13): the busy boundary, navigation between the five pages, the scan that feeds
 /// them, and the undo of the last game write.</summary>
 public partial class MainViewModel : ObservableObject
 {
-    private const int MaxSuggestions = 8;
-
     private static readonly TimeSpan GamePollInterval = TimeSpan.FromSeconds(3);
 
     private readonly GameLauncher _launcher;
     private readonly IReadOnlyList<PageViewModel> _pages;
-
-    /// <summary>The view the sidebar list binds through, so the search filters without a second collection.</summary>
-    private readonly ICollectionView _mapListView;
 
     private readonly DispatcherTimer _gameTimer;
     private CancellationTokenSource? _cts;
@@ -43,29 +35,22 @@ public partial class MainViewModel : ObservableObject
         Dialogs = dialogs;
         ProgressText = "";
         DoneText = "";
-        MapList = [];
-        Suggestions = [];
-        _mapListView = CollectionViewSource.GetDefaultView(MapList);
-        _mapListView.Filter = MatchesSearch;
-
-        // After the list and its view, because setting it runs the change hook that filters them.
-        SearchText = "";
-        _launcher = new GameLauncher(services, dialogs);
-        Home = new HomeViewModel(this);
+        _launcher = new GameLauncher();
+        Maps = new MapsViewModel(this);
         Backgrounds = new BackgroundsViewModel(this);
         Platforms = new PlatformsViewModel(this);
         Packs = new PacksViewModel(this);
         PackDetail = new PackDetailViewModel(this);
         SettingsPage = new SettingsPageViewModel(this);
-        _pages = [Home, Backgrounds, Platforms, Packs, PackDetail, SettingsPage];
-        CurrentPage = Home;
+        _pages = [Maps, Backgrounds, Platforms, Packs, PackDetail, SettingsPage];
+        CurrentPage = Maps;
 
         // The startup read usually lands after the first scan, and the catalog that scan built came from the cache
         // or from nothing, so the names have to be rebuilt when it does (spec 3.5). Subscribed once, for the life
         // of the app: the shell outlives the service.
         services.LevelData.Changed += OnLevelDataChanged;
 
-        // Nothing tells the app when Brawlhalla starts or stops, so the sidebar's game block asks every 3 seconds.
+        // Nothing tells the app when Brawlhalla starts or stops, so the top bar's game line asks every 3 seconds.
         GameRunning = GameProcess.IsRunning();
         _gameTimer = new DispatcherTimer { Interval = GamePollInterval };
         _gameTimer.Tick += (_, _) => GameRunning = GameProcess.IsRunning();
@@ -79,10 +64,11 @@ public partial class MainViewModel : ObservableObject
     /// <summary>Result of the last successful scan. Null until the first scan completes.</summary>
     public ScanSnapshot? Snapshot { get; private set; }
 
-    public HomeViewModel Home { get; }
+    public MapsViewModel Maps { get; }
 
     public BackgroundsViewModel Backgrounds { get; }
 
+    /// <summary>Addendum C: the tab the owner asked back, between Backgrounds and Packs.</summary>
     public PlatformsViewModel Platforms { get; }
 
     public PacksViewModel Packs { get; }
@@ -91,27 +77,29 @@ public partial class MainViewModel : ObservableObject
 
     public SettingsPageViewModel SettingsPage { get; }
 
-    /// <summary>Every map the scan found, in display-name order. The sidebar lists this collection's default view,
-    /// filtered live by <see cref="SearchText"/>, so there is no second copy to keep in step.</summary>
-    public ObservableCollection<MapListItemViewModel> MapList { get; }
-
-    /// <summary>The search box's autocomplete list: at most eight display names, empty when the box is empty.</summary>
-    public ObservableCollection<string> Suggestions { get; }
-
-    /// <summary>The ticked maps, in list order. A page's multi-map action reads this and its count.</summary>
-    public IReadOnlyList<MapListItemViewModel> SelectedMaps => MapList.Where(m => m.IsSelected).ToList();
+    /// <summary>The ticked maps, in display order (spec 3.3). One list for the whole app: a tile on any page
+    /// aims at these. Read from the Maps page's unfiltered cards, not its visible ones, so a search does not
+    /// silently shrink what a write is about to touch (plan decision A-D1).</summary>
+    public IReadOnlyList<MapEntry> SelectedMaps => Maps.TickedMaps;
 
     public int SelectedMapCount => SelectedMaps.Count;
 
-    [ObservableProperty]
-    public partial string SearchText { get; set; }
-
-    /// <summary>Whether Brawlhalla is running, as of the last poll. The sidebar's game block shows it.</summary>
+    /// <summary>Whether Brawlhalla is running, as of the last poll. The top bar's game line shows it.</summary>
     [ObservableProperty]
     public partial bool GameRunning { get; set; }
 
     [ObservableProperty]
     public partial PageViewModel? CurrentPage { get; set; }
+
+    /// <summary>Addendum B: unfolded rows fold back when the page is left, so coming back to a rows page shows
+    /// the same thing it shows on a first visit.</summary>
+    partial void OnCurrentPageChanging(PageViewModel? oldValue, PageViewModel? newValue)
+    {
+        if (oldValue is RowsPageViewModel rows)
+        {
+            rows.FoldAll();
+        }
+    }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsNotBusy), nameof(CanWrite))]
@@ -145,8 +133,8 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     public partial bool CanUndo { get; set; }
 
-    /// <summary>Folder name of the map most recently opened on Home, or null before any. Home sets it; the
-    /// Platforms page falls back to it when the sidebar has no checked map (spec 7.4).</summary>
+    /// <summary>Folder name of the map most recently opened on Maps, or null before any. Maps sets it; part B's
+    /// panel reads it back.</summary>
     [ObservableProperty]
     public partial string? LastOpenedMap { get; set; }
 
@@ -163,7 +151,7 @@ public partial class MainViewModel : ObservableObject
     private bool GameFolderExists() => Directory.Exists(Services.GamePath);
 
     [RelayCommand]
-    private void NavigateHome() => CurrentPage = Home;
+    private void NavigateMaps() => CurrentPage = Maps;
 
     [RelayCommand]
     private void NavigateBackgrounds() => CurrentPage = Backgrounds;
@@ -184,105 +172,22 @@ public partial class MainViewModel : ObservableObject
         CurrentPage = PackDetail;
     }
 
-    /// <summary>Enter on a suggestion, or a click on one: the box takes the whole name, and on Home the map that
-    /// name belongs to opens. On any other page choosing only narrows the list.</summary>
-    [RelayCommand]
-    private void ChooseSuggestion(string? displayName)
-    {
-        if (string.IsNullOrEmpty(displayName))
-        {
-            return;
-        }
-
-        SearchText = displayName;
-        var map = MapList.FirstOrDefault(m => m.DisplayName.Equals(displayName, StringComparison.OrdinalIgnoreCase));
-        if (map is not null && CurrentPage == Home)
-        {
-            Home.OpenMap(map.FolderName);
-        }
-    }
-
-    /// <summary>Unticks every map. The pages' multi-map bars offer it as "Clear".</summary>
-    [RelayCommand]
-    private void ClearSelection()
-    {
-        foreach (var map in MapList)
-        {
-            map.IsSelected = false;
-        }
-    }
-
-    /// <summary>Every keystroke re-filters the list and rebuilds the suggestions.</summary>
-    partial void OnSearchTextChanged(string value)
-    {
-        _mapListView.Refresh();
-        Suggestions.Clear();
-        foreach (var name in Suggest(value))
-        {
-            Suggestions.Add(name);
-        }
-    }
-
-    /// <summary>Names that start with what was typed first, then names that merely contain it, capped at eight.</summary>
-    private IEnumerable<string> Suggest(string search)
-    {
-        if (search.Length == 0)
-        {
-            return [];
-        }
-
-        var names = MapList.Select(m => m.DisplayName).ToList();
-        return names
-            .Where(n => n.StartsWith(search, StringComparison.OrdinalIgnoreCase))
-            .Concat(names.Where(n => n.Contains(search, StringComparison.OrdinalIgnoreCase)))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Take(MaxSuggestions);
-    }
-
-    private bool MatchesSearch(object item) =>
-        item is MapListItemViewModel map
-        && (SearchText.Length == 0 || map.DisplayName.Contains(SearchText, StringComparison.OrdinalIgnoreCase));
-
-    /// <summary>Rebuilds the sidebar list from a scan, keeping the maps that were ticked ticked, matched by folder
-    /// name because a game update can rename a map.</summary>
-    private void PopulateMapList(ScanSnapshot snapshot)
-    {
-        var ticked = MapList
-            .Where(m => m.IsSelected)
-            .Select(m => m.FolderName)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        foreach (var old in MapList)
-        {
-            old.PropertyChanged -= OnMapItemChanged;
-        }
-
-        MapList.Clear();
-        foreach (var map in snapshot.Catalog.Maps)
-        {
-            snapshot.MapStatuses.TryGetValue(map.FolderName, out var status);
-
-            // Ticked before subscribing, so restoring the selection is not mistaken for the user changing it.
-            var item = new MapListItemViewModel(map, status) { IsSelected = ticked.Contains(map.FolderName) };
-            item.PropertyChanged += OnMapItemChanged;
-            MapList.Add(item);
-        }
-
-        NotifySelectionChanged();
-    }
-
-    private void OnMapItemChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName == nameof(MapListItemViewModel.IsSelected))
-        {
-            NotifySelectionChanged();
-        }
-    }
-
-    /// <summary>SelectedMaps is computed, so the pages bound to it are told by hand when it changes.</summary>
-    private void NotifySelectionChanged()
+    /// <summary>SelectedMaps is computed, so the pages bound to it are told by hand when it changes. Public:
+    /// the Maps page raises it when a card is ticked.</summary>
+    public void NotifySelectionChanged()
     {
         OnPropertyChanged(nameof(SelectedMaps));
         OnPropertyChanged(nameof(SelectedMapCount));
+    }
+
+    /// <summary>Unticks every map. The selection bar offers it as "Clear".</summary>
+    [RelayCommand]
+    private void ClearSelection()
+    {
+        foreach (var card in Maps.AllCards)
+        {
+            card.IsSelected = false;
+        }
     }
 
     [RelayCommand(CanExecute = nameof(CanAct))]
@@ -312,59 +217,51 @@ public partial class MainViewModel : ObservableObject
         await RunImportAsync(vm.Jobs);
     }
 
-    /// <summary>Spec 6.4: puts back the files the last game write was about to overwrite or delete. A restore is a
-    /// game write, so it is off while the folder is missing (spec 7.8), it goes through the same game-running
-    /// policy as any other, and it takes no snapshot of its own: the one it is restoring is the only one there is.</summary>
+    /// <summary>Spec 6.4 and 8: puts back the files the last game write was about to overwrite or delete, through
+    /// the same wrapper as every other write. It is a game write, so it is off while the folder is missing, and
+    /// it takes no snapshot of its own: the one it is restoring is the only one there is.</summary>
     [RelayCommand(CanExecute = nameof(CanWrite))]
     private async Task UndoAsync()
     {
-        if (Services.Undo.Latest is not { } session || IsBusy)
+        if (Services.Undo.Latest is not { } session)
         {
             return;
         }
 
         var gamePath = Services.GamePath;
         ApplyResult? result = null;
-        var accepted = true;
-        await RunBusyAsync(
+        await RunWriteCoreAsync(
             "Undoing",
-            async (_, _) =>
-            {
-                accepted = await _launcher.RunWriteAsync(
-                    "Undoing",
-                    () => Task.Run(() => { result = Services.Undo.Restore(session, gamePath); }));
-            });
-        if (!accepted)
-        {
-            // The user declined the restart, or the game would not close. Nothing was put back, so the snapshot is
-            // still there to be undone from and the header still says what the last write did.
-            return;
-        }
+            undoPaths: null,
+            (_, ct) => Task.Run(() => { result = Services.Undo.Restore(session, gamePath); }, ct),
+            UndoDoneText,
+            undoable: false,
+            clearTicks: false);
 
         if (result is not null)
         {
             Dialogs.ShowFailures("Some files could not be restored", result.Failures);
         }
-
-        DoneText = "";
-        CanUndo = Services.Undo.Latest is not null;
-        await RescanAsync();
     }
 
-    /// <summary>Opens the Add pictures window (spec 6.8), then imports what it collected and, when it asked for
-    /// it, applies those pictures to the maps. <paramref name="mapFolder"/> is the one map the pictures should
-    /// also go to, from the Home panel; null means the sidebar's ticked maps decide.</summary>
-    public async Task OpenAddPicturesAsync(string? mapFolder)
+    /// <summary>Spec 7.1: the window collects pictures, a pack and one of four outcomes. The import and any apply
+    /// belong here, because both belong to the busy boundary.</summary>
+    public async Task OpenAddPicturesAsync(AddPicturesTarget target)
     {
         if (Snapshot is not { } snapshot)
         {
             return;
         }
 
-        var maps = AddPicturesTargets(snapshot, mapFolder);
+        var mapName = target.Map?.DisplayName;
         var vm = new AddPicturesViewModel(
-            Dialogs, snapshot.Packs.Select(p => p.Name).ToList(), maps.Count, mapFolder is not null);
-        var window = new AddPicturesWindow { DataContext = vm, Owner = Application.Current.MainWindow };
+            Dialogs,
+            snapshot.Packs.Select(p => p.Name).ToList(),
+            target.Kind,
+            mapName,
+            SelectedMapCount,
+            snapshot.Catalog.Maps.Count);
+        var window = new AddPicturesWindow { DataContext = vm, Owner = Application.Current.MainWindow, ShowActivated = !App.Quiet };
         if (window.ShowDialog() != true)
         {
             return;
@@ -372,18 +269,6 @@ public partial class MainViewModel : ObservableObject
 
         var sources = vm.Files.Select(f => f.FullPath).ToList();
         var packName = vm.EffectivePackName;
-        var apply = vm.ApplyToMaps && maps.Count > 0;
-
-        // Spec 6.3: the maps are named before more than one of them is written. Declining leaves the import to
-        // run on its own, so the work of choosing the pictures is not thrown away with the apply.
-        if (apply
-            && maps.Count > 1
-            && !Dialogs.Confirm(
-                "Apply pictures",
-                $"Apply these pictures to these {maps.Count} maps?\n\n{string.Join(", ", maps.Select(m => m.DisplayName))}"))
-        {
-            apply = false;
-        }
 
         // A library write: no undo snapshot and no game-running policy, so RunBusyAsync rather than a game write.
         PictureImportResult? result = null;
@@ -397,11 +282,11 @@ public partial class MainViewModel : ObservableObject
             Dialogs.ShowFailures("Some pictures could not be imported", result.Failures);
         }
 
-        // Nothing landing in the pack leaves nothing to apply, however the checkbox was left.
-        if (ok && apply && result is { Written.Count: > 0 })
+        var maps = ThenMaps(vm.Then, target, snapshot);
+        if (ok && maps.Count > 0 && result is { Written.Count: > 0 })
         {
             // The apply rescans on its way out, and its done line is the one that ends up in the header.
-            await ApplyPicturesAsync(maps, packName, result.Written);
+            await ApplyPicturesAsync(maps, packName, result.Written, vm.Then == AddPicturesThen.Ticked);
             return;
         }
 
@@ -415,24 +300,39 @@ public partial class MainViewModel : ObservableObject
         await RescanAsync();
     }
 
-    /// <summary>The maps the Add pictures dialog would write to: the one map the Home panel named, or the
-    /// sidebar's ticked maps. A map with no background slots is left out, because without level data there is
-    /// nothing to write into (spec 3.6).</summary>
-    private IReadOnlyList<MapEntry> AddPicturesTargets(ScanSnapshot snapshot, string? mapFolder)
+    /// <summary>The maps the chosen radio names. A map with no background slots is left out: without level data
+    /// there is nothing to write into (spec 3.6).</summary>
+    private IReadOnlyList<MapEntry> ThenMaps(AddPicturesThen then, AddPicturesTarget target, ScanSnapshot snapshot)
     {
-        IEnumerable<string> folders = mapFolder is null ? SelectedMaps.Select(m => m.FolderName) : [mapFolder];
-        return folders
-            .Select(snapshot.Catalog.ByFolder)
-            .OfType<MapEntry>()
-            .Where(m => m.BackgroundSlots.Count > 0)
-            .ToList();
+        IEnumerable<MapEntry> maps = then switch
+        {
+            AddPicturesThen.Map => target.Map is null ? [] : [target.Map],
+            AddPicturesThen.Ticked => SelectedMaps,
+            AddPicturesThen.All => snapshot.Catalog.Maps,
+            _ => [],
+        };
+
+        return maps.Where(m => m.BackgroundSlots.Count > 0).ToList();
     }
 
     /// <summary>Spec 6.8's optional half, as one game write: the imported pictures go to the maps in order,
     /// starting again from the first picture when there are more maps than pictures, and a picture past the last
     /// map is imported only.</summary>
-    private async Task ApplyPicturesAsync(IReadOnlyList<MapEntry> maps, string packName, IReadOnlyList<string> written)
+    private async Task ApplyPicturesAsync(
+        IReadOnlyList<MapEntry> maps, string packName, IReadOnlyList<string> written, bool clearTicks)
     {
+        // Spec 6.3: the maps are named before more than one of them is written. The import has already run, so
+        // declining still rescans: the library has changed even though nothing was applied. Nothing reached the
+        // game folder, so the ticks stay as they are.
+        if (maps.Count > 1
+            && !Dialogs.Confirm(
+                "Apply pictures",
+                $"Apply these pictures to these {maps.Count} maps?\n\n{string.Join(", ", maps.Select(m => m.DisplayName))}"))
+        {
+            await RescanAsync();
+            return;
+        }
+
         var backgrounds = Path.Combine(
             PackScanner.PacksRoot(Services.LibraryPath), packName, PictureImporter.BackgroundsFolder);
         var pictures = written.Select(name => Path.Combine(backgrounds, name)).ToList();
@@ -460,28 +360,133 @@ public partial class MainViewModel : ObservableObject
                     }
                 },
                 ct),
-            $"{Count(used, "picture")} applied to {Count(maps.Count, "map")}");
+            $"{Count(used, "picture")} applied to {Count(maps.Count, "map")}",
+            clearTicks);
 
         Dialogs.ShowFailures("Some pictures could not be applied", failures);
     }
 
-    /// <summary>"1 map" or "3 maps": the done lines count things and every one of them can be one.</summary>
-    private static string Count(int n, string noun) => n == 1 ? $"1 {noun}" : $"{n} {noun}s";
-
-    /// <summary>Spec 5.3: the editor fits a picture and saves it into a pack. That is a library write and its own
-    /// business; the "Apply to game now" it offers is a game write, so the pack file it left is copied into the
-    /// slot here, with the boundary, the snapshot and the running-game policy every other one gets.</summary>
-    public async Task OpenBackgroundEditorAsync(string? initialSlot)
+    /// <summary>Spec 3.2 and 4: one picture into the background slots of every map given, as one game write.
+    /// More than one map confirms with the count first (spec 3.3) and clears the ticks on success.
+    /// displayName is the name the user chose the picture by, which is the pack on a panel tile and the picture's
+    /// own name in the custom library: spec 2.2 words the done line "flowermap applied to Brawlhaven", never the
+    /// file name inside the pack, which the user never picked. Null for a caller with no such name, and then the
+    /// file name is the best there is. Whichever it is, the confirm, the busy title and the done line all use the
+    /// one name, so the user reads the same word from the first prompt to the last line.</summary>
+    public async Task ApplyPictureAsync(
+        string sourcePath, IReadOnlyList<MapEntry> maps, bool clearTicks, string? displayName = null)
     {
-        if (Snapshot is null)
+        // Without level data a map has no background slots at all, so there is nowhere to write (spec 3.6).
+        var targets = maps.Where(m => m.BackgroundSlots.Count > 0).ToList();
+        var name = displayName ?? Path.GetFileName(sourcePath);
+        if (targets.Count == 0)
+        {
+            Dialogs.Info(
+                "Nothing to apply",
+                "These maps have no background slots. Slots come from the game's own level data.");
+            return;
+        }
+
+        if (targets.Count > 1
+            && !Dialogs.Confirm(
+                "Apply picture",
+                $"Apply {name} to these {targets.Count} maps?\n\n{string.Join(", ", targets.Select(m => m.DisplayName))}"))
         {
             return;
         }
 
-        var slots = Snapshot.Tree.FindFolder("Backgrounds")?.Files.Select(f => f.Name).ToList() ?? new List<string>();
-        var packNames = Snapshot.Packs.Select(p => p.Name).ToList();
-        var vm = new BackgroundEditorViewModel(Services, Dialogs, slots, packNames, initialSlot);
-        var window = new BackgroundEditorWindow { DataContext = vm, Owner = Application.Current.MainWindow };
+        var gamePath = Services.GamePath;
+        var undoPaths = targets
+            .SelectMany(m => BackgroundApplier.TargetPaths(m.BackgroundSlots))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var failures = new List<FileFailure>();
+        await RunGameWriteAsync(
+            $"Applying {name}",
+            undoPaths,
+            (progress, ct) => Task.Run(
+                () =>
+                {
+                    foreach (var map in targets)
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        progress.Report(map.DisplayName);
+                        failures.AddRange(
+                            BackgroundApplier.Apply(sourcePath, gamePath, map.BackgroundSlots, null, ct).Failures);
+                    }
+                },
+                ct),
+            targets.Count == 1
+                ? $"{name} applied to {targets[0].DisplayName}"
+                : $"{name} applied to {targets.Count} maps",
+            clearTicks);
+
+        Dialogs.ShowFailures("Some backgrounds could not be applied", failures);
+    }
+
+    /// <summary>Spec 3.2: one pack's platform art onto every map given, each map getting its own set from the
+    /// same pack. A map the pack has nothing for is left out rather than cleared.</summary>
+    public async Task ApplySetAsync(Pack pack, IReadOnlyList<MapEntry> maps, bool clearTicks)
+    {
+        var targets = maps.Where(m => pack.FindFolder(m.FolderName) is { Files.Count: > 0 }).ToList();
+        if (targets.Count == 0)
+        {
+            Dialogs.Info("Nothing to apply", $"{pack.Name} has no platform art for these maps.");
+            return;
+        }
+
+        if (targets.Count > 1
+            && !Dialogs.Confirm(
+                "Apply platform set",
+                $"Apply {pack.Name} to these {targets.Count} maps?\n\n{string.Join(", ", targets.Select(m => m.DisplayName))}"))
+        {
+            return;
+        }
+
+        var gamePath = Services.GamePath;
+        var undoPaths = targets
+            .SelectMany(m => PlatformSetApplier.TargetPaths(pack, m.FolderName))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var failures = new List<FileFailure>();
+        await RunGameWriteAsync(
+            $"Applying {pack.Name}",
+            undoPaths,
+            (progress, ct) => Task.Run(
+                () =>
+                {
+                    foreach (var map in targets)
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        progress.Report(map.DisplayName);
+                        failures.AddRange(PlatformSetApplier.Apply(pack, map.FolderName, gamePath, null, ct).Failures);
+                    }
+                },
+                ct),
+            targets.Count == 1
+                ? $"{pack.Name} applied to {targets[0].DisplayName}"
+                : $"{pack.Name} applied to {targets.Count} maps",
+            clearTicks);
+
+        Dialogs.ShowFailures("Some files could not be applied", failures);
+    }
+
+    /// <summary>"1 map" or "3 maps": the done lines count things and every one of them can be one.</summary>
+    public static string Count(int n, string noun) => n == 1 ? $"1 {noun}" : $"{n} {noun}s";
+
+    /// <summary>Spec 7.2: the editor fits a picture and saves it into a pack, which is a library write of its own.
+    /// The "Apply to game now" it offers is a game write, so the pack file it left is copied into the slot here,
+    /// with the boundary, the snapshot and the undo every other write gets.</summary>
+    public async Task OpenBackgroundEditorAsync(BackgroundEditorRequest request)
+    {
+        if (Snapshot is not { } snapshot)
+        {
+            return;
+        }
+
+        var vm = new BackgroundEditorViewModel(
+            Services, Dialogs, MapSlotChoices(snapshot), snapshot.Packs.Select(p => p.Name).ToList(), request);
+        var window = new BackgroundEditorWindow { DataContext = vm, Owner = Application.Current.MainWindow, ShowActivated = !App.Quiet };
         if (window.ShowDialog() != true)
         {
             return;
@@ -499,14 +504,52 @@ public partial class MainViewModel : ObservableObject
         var slot = saved.Slot;
         var failures = new List<FileFailure>();
         await RunGameWriteAsync(
-            $"Applying {slot}",
+            $"Applying {Path.GetFileName(source)}",
             BackgroundApplier.TargetPaths([slot]),
             (_, ct) => Task.Run(
                 () => failures.AddRange(BackgroundApplier.Apply(source, gamePath, [slot], null, ct).Failures),
                 ct),
-            $"Background applied to {slot}");
+            $"{Path.GetFileName(source)} applied to {saved.MapNames}");
 
         Dialogs.ShowFailures("Some backgrounds could not be applied", failures);
+    }
+
+    /// <summary>One entry per background slot the maps name, labelled with every map that shares it (spec 7.2),
+    /// then any slot the game folder has that no map names, labelled with its own file name (decision C-D8).</summary>
+    private static IReadOnlyList<MapSlotChoice> MapSlotChoices(ScanSnapshot snapshot)
+    {
+        var bySlot = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var map in snapshot.Catalog.Maps)
+        {
+            foreach (var slot in map.BackgroundSlots)
+            {
+                if (!bySlot.TryGetValue(slot, out var names))
+                {
+                    names = [];
+                    bySlot[slot] = names;
+                }
+
+                if (!names.Contains(map.DisplayName))
+                {
+                    names.Add(map.DisplayName);
+                }
+            }
+        }
+
+        var choices = bySlot
+            .Select(pair => new MapSlotChoice(pair.Key, string.Join(", ", pair.Value)))
+            .OrderBy(c => c.DisplayNames, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        foreach (var file in snapshot.Tree.FindFolder("Backgrounds")?.Files ?? Array.Empty<GameFile>())
+        {
+            if (!bySlot.ContainsKey(file.Name))
+            {
+                choices.Add(new MapSlotChoice(file.Name, file.Name));
+            }
+        }
+
+        return choices;
     }
 
     /// <summary>Spec 6: all of the plans as one long operation, one failure summary, and one rescan at the end
@@ -585,8 +628,10 @@ public partial class MainViewModel : ObservableObject
 
         Snapshot = snapshot;
 
-        // Before the pages, because a page's Refresh may read the sidebar's selection.
-        PopulateMapList(snapshot);
+        // A file may be a different picture now, so the rows pages' decodes are forgotten before they rebuild.
+        Services.RowThumbnails.Clear();
+
+        // Maps rebuilds its cards first, because SelectedMaps reads them and a page's Refresh may ask for it.
         foreach (var page in _pages)
         {
             page.Refresh(snapshot);
@@ -656,13 +701,6 @@ public partial class MainViewModel : ObservableObject
         await RescanAsync();
     }
 
-    /// <summary>Spec 6: warn when Brawlhalla is running. True means go ahead.</summary>
-    public bool ConfirmIfGameRunning() =>
-        !GameProcess.IsRunning()
-        || Dialogs.Confirm(
-            "Brawlhalla is running",
-            "Brawlhalla is running. Changes will not show until it restarts, and some files may be locked. Continue?");
-
     public Pack? FindPack(string name) =>
         Snapshot?.Packs.FirstOrDefault(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
 
@@ -731,71 +769,93 @@ public partial class MainViewModel : ObservableObject
         DoneUndoable = false;
     }
 
-    /// <summary>One write into the game folder: the while-the-game-runs policy around it, an undo snapshot of the
-    /// paths it is about to touch, the busy boundary, a done line, and a rescan.</summary>
-    public async Task RunGameWriteAsync(
+    /// <summary>Spec 2.2: what a write reports about when it will show. One string, appended by the wrapper, so
+    /// two pages cannot word it differently. Read at completion, not at the start: a game that was launched while
+    /// the write ran gets the sentence that is true when the line appears.</summary>
+    public static string DoneSentence(bool gameRunning) =>
+        gameRunning ? "Shows on the next match load." : "Shows when Brawlhalla starts.";
+
+    /// <summary>The line an undo leaves. Spec 11 names no string for it, so this is the plan's (A-D7).</summary>
+    public const string UndoDoneText = "Last change undone.";
+
+    /// <summary>The whole done line: the page's fragment, then the shared sentence, with exactly one period
+    /// between them however the fragment was punctuated. The wrapper settles the period for the same reason it
+    /// settles the sentence: a page cannot get it wrong if a page does not decide it. An empty fragment leaves
+    /// the sentence standing alone rather than a line that opens with a stop.</summary>
+    private static string DoneLine(string doneText, bool gameRunning)
+    {
+        var fragment = doneText.TrimEnd('.');
+        return fragment.Length == 0 ? DoneSentence(gameRunning) : $"{fragment}. {DoneSentence(gameRunning)}";
+    }
+
+    /// <summary>One write into the game folder (spec 8): the busy boundary, an undo snapshot of the paths it is
+    /// about to touch, a done line the wrapper finishes with the period and the shared sentence, the ticks
+    /// cleared when the write was aimed at them, and a rescan. False when the folder was missing, another
+    /// operation held the boundary, or the write was cancelled or failed.</summary>
+    public Task<bool> RunGameWriteAsync(
         string label,
         IReadOnlyList<string> undoPaths,
         Func<IProgress<string>, CancellationToken, Task> work,
-        string doneText)
-    {
-        if (GameFolderMissing)
-        {
-            // There is nothing to write into and nothing to snapshot for undo. The header carries the notice, so
-            // the write is refused silently rather than telling the user twice (spec 7.8).
-            return;
-        }
+        string doneText,
+        bool clearTicks = false) =>
+        RunWriteCoreAsync(label, undoPaths, work, doneText, undoable: true, clearTicks);
 
-        if (IsBusy)
+    /// <summary>The one path every game write takes. <paramref name="undoPaths"/> null means take no snapshot,
+    /// which is Undo's case and only Undo's: the snapshot it is restoring is the only one there is, and Begin
+    /// would replace it with an empty one.</summary>
+    private async Task<bool> RunWriteCoreAsync(
+        string label,
+        IReadOnlyList<string>? undoPaths,
+        Func<IProgress<string>, CancellationToken, Task> work,
+        string doneText,
+        bool undoable,
+        bool clearTicks)
+    {
+        if (GameFolderMissing || IsBusy)
         {
-            // Spec 7.1: one operation at a time, and the launcher's confirm and close are part of this one. Taken
-            // here rather than left to RunBusyAsync below, because a refused write must not clear the done line or
-            // start a rescan of its own.
-            return;
+            // Nothing to write into, or one operation at a time (spec 7.1). Refused silently: the top bar already
+            // carries the missing-folder notice, and a refused write must not clear the done line or rescan.
+            return false;
         }
 
         var gamePath = Services.GamePath;
-
-        // False only when the launcher turned the write away: an exception inside the write comes back out through
-        // RunBusyAsync, which never reaches the assignment, so this starts as the value that case wants.
-        var accepted = true;
         var ok = await RunBusyAsync(
             label,
             async (progress, ct) =>
             {
-                // The launcher runs inside the boundary, so the "Restart and apply" confirm and the wait for the
-                // game to close happen with everything else disabled. Outside it, a second write could start while
-                // the game was closing and be copying files when the launcher's finally relaunched it.
-                accepted = await _launcher.RunWriteAsync(
+                await _launcher.RunWriteAsync(
                     label,
                     async () =>
                     {
-                        // Inside the launcher's callback, so with whileRunning=restart the game is already closed
-                        // and its files are the ones being snapshotted. The capture is the first step of the work,
-                        // not a step before it: it is file copying, so it belongs off the UI thread, behind a
-                        // progress line, and inside the boundary that turns an IO failure into the same dialog any
-                        // other write failure gets.
-                        progress.Report("Saving undo");
-                        await Task.Run(() => Services.Undo.Begin().Capture(gamePath, undoPaths), ct);
+                        if (undoPaths is not null)
+                        {
+                            // The capture is the first step of the work, not a step before it: it is file copying,
+                            // so it belongs off the UI thread, behind a progress line, and inside the boundary that
+                            // turns an IO failure into the same dialog any other write failure gets.
+                            progress.Report("Saving undo");
+                            await Task.Run(() => Services.Undo.Begin().Capture(gamePath, undoPaths), ct);
+                        }
+
                         await work(progress, ct);
                     });
             });
 
-        if (!accepted)
-        {
-            // The user declined the restart, or the game would not close. Nothing was written and no snapshot was
-            // taken, so the header still describes whatever the write before this one did.
-            return;
-        }
-
         // Begin has already replaced the previous snapshot, so a write that was cancelled or failed has to clear
         // the done line too; leaving it would describe something Undo no longer restores.
-        DoneText = ok ? doneText : "";
-        DoneUndoable = ok;
+        DoneText = ok ? DoneLine(doneText, GameRunning) : "";
+        DoneUndoable = ok && undoable;
 
         // A restore that fully succeeds discards its snapshot, so what can be undone is always read back from the
         // store rather than remembered.
         CanUndo = Services.Undo.Latest is not null;
+        if (ok && clearTicks)
+        {
+            // Spec 3.3 (S3): a write aimed at the ticked maps is finished with them. A cancelled or failed write
+            // keeps them, which is why this is inside the ok branch.
+            ClearSelection();
+        }
+
         await RescanAsync();
+        return ok;
     }
 }
