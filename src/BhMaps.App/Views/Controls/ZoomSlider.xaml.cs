@@ -20,6 +20,9 @@ public partial class ZoomSlider : UserControl
     public static readonly DependencyProperty MaximumProperty =
         DependencyProperty.Register(nameof(Maximum), typeof(int), typeof(ZoomSlider), new PropertyMetadata(10));
 
+    public static readonly DependencyProperty LabelProperty =
+        DependencyProperty.Register(nameof(Label), typeof(string), typeof(ZoomSlider), new PropertyMetadata("Columns"));
+
     public ZoomSlider()
     {
         InitializeComponent();
@@ -42,5 +45,13 @@ public partial class ZoomSlider : UserControl
     {
         get => (int)GetValue(MaximumProperty);
         set => SetValue(MaximumProperty, value);
+    }
+
+    /// <summary>What the slider sizes, for the automation tree: a grid counts columns, a rows page sizes
+    /// thumbnails, and a screen reader must not read the second as the first.</summary>
+    public string Label
+    {
+        get => (string)GetValue(LabelProperty);
+        set => SetValue(LabelProperty, value);
     }
 }

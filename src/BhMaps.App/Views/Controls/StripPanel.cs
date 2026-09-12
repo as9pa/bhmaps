@@ -29,7 +29,11 @@ public sealed class StripPanel : Panel
             new FrameworkPropertyMetadata(8d, FrameworkPropertyMetadataOptions.AffectsMeasure));
 
     public static readonly DependencyProperty OverflowProperty =
-        DependencyProperty.Register(nameof(Overflow), typeof(int), typeof(StripPanel), new PropertyMetadata(0));
+        DependencyProperty.Register(
+            nameof(Overflow),
+            typeof(int),
+            typeof(StripPanel),
+            new FrameworkPropertyMetadata(0, FrameworkPropertyMetadataOptions.BindsTwoWayByDefault));
 
     public bool IsUnfolded
     {
@@ -48,7 +52,7 @@ public sealed class StripPanel : Panel
     public int Overflow
     {
         get => (int)GetValue(OverflowProperty);
-        private set => SetValue(OverflowProperty, value);
+        set => SetValue(OverflowProperty, value);
     }
 
     protected override Size MeasureOverride(Size availableSize)
@@ -62,7 +66,7 @@ public sealed class StripPanel : Panel
 
         if (IsUnfolded)
         {
-            Overflow = 0;
+            SetCurrentValue(OverflowProperty, 0);
             return Wrap(width, arrange: false);
         }
 
@@ -74,7 +78,7 @@ public sealed class StripPanel : Panel
             shown = Fit(Math.Max(0, width - MoreWidth - Spacing));
         }
 
-        Overflow = InternalChildren.Count - shown;
+        SetCurrentValue(OverflowProperty, InternalChildren.Count - shown);
         double used = 0;
         double height = 0;
         for (var i = 0; i < shown; i++)

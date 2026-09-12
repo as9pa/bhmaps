@@ -109,7 +109,19 @@ public sealed partial class MapRowViewModel : ObservableObject
     /// <summary>Whether the row is showing every choice it has, on as many lines as that needs (addendum B, q2
     /// and q3). The page folds every row when the page is left.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowMore))]
     public partial bool IsUnfolded { get; set; }
+
+    /// <summary>How many choices the strip could not fit on one line. Written by StripPanel through a
+    /// OneWayToSource binding, because the panel is the only thing that measured them (addendum B, q2).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(MoreText), nameof(ShowMore))]
+    public partial int Overflow { get; set; }
+
+    /// <summary>"+7". Empty at zero, which is also when the tile is hidden.</summary>
+    public string MoreText => Overflow > 0 ? $"+{Overflow}" : "";
+
+    public bool ShowMore => Overflow > 0 && !IsUnfolded;
 
     /// <summary>Every tile's menu names the ticked maps, so the count changing rewords every one of them.</summary>
     public void RebuildMenus(int tickedCount)
@@ -161,6 +173,11 @@ public sealed partial class MapRowViewModel : ObservableObject
             // The page was rebuilt by a scan, so what was still loading is for a row nothing shows any more.
         }
     }
+
+    /// <summary>What the row's own "+N" tile does: the row shows every choice it has, on as many lines as that
+    /// needs (addendum B, q2). The folded "Custom (N)" tile is a child and runs its own.</summary>
+    [RelayCommand]
+    private void Unfold() => IsUnfolded = true;
 
     /// <summary>What a click on the row body does: an unfolded row folds again, and a folded one stays folded,
     /// because on a folded row the click was aimed at a thumbnail.</summary>
