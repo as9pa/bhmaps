@@ -99,7 +99,8 @@ public static class MapChoices
         foreach (var pack in PlatformSetApplier.SetsFor(map.FolderName, snapshot.Packs))
         {
             tiles.Add(new PlatformSetTileViewModel(
-                shell, map, pack, InGameMatch.SetInGame(pack, map.FolderName, status), width, height, showFiles));
+                shell, map, pack, InGameMatch.SetInGame(pack, map.FolderName, status), width, height, showFiles,
+                () => _ = shell.OpenPlatformEditorAsync(map, pack)));
         }
 
         return tiles;
