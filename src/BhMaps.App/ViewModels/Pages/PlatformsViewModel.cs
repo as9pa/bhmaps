@@ -46,8 +46,8 @@ public partial class PlatformsViewModel : RowsPageViewModel
         var map = card.Map;
 
         // Show files belongs to the map panel, which is where the file list lives; on a row the menu line would
-        // have nothing to open, so the tile is handed a no-op and its own menu keeps Open folder.
-        var sets = MapChoices.Platforms(Shell, map, status, snapshot, SetWidth, SetHeight, () => { });
+        // have nothing to open, so the tile is handed null and its menu leaves the line out (spec 9).
+        var sets = MapChoices.Platforms(Shell, map, status, snapshot, SetWidth, SetHeight, showFiles: null);
         List<object> alwaysShown = [.. sets.Where(t => t.InGame), .. sets.Where(t => !t.InGame)];
         var (tag, missing) = Tag(map, status);
 

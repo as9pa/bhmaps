@@ -124,7 +124,9 @@ public sealed partial class MapPictureTileViewModel : PictureTileViewModel
 
     public override void RebuildMenu(int tickedCount)
     {
-        var items = new List<TileMenuCommand> { new($"Apply to {Map.DisplayName}", ApplyToMapCommand) };
+        // No "Apply to <map>": the tile's own button already does exactly that, and a menu holds only what the
+        // tile cannot do on its own (spec 9).
+        var items = new List<TileMenuCommand>();
         if (tickedCount > 0)
         {
             items.Add(new TileMenuCommand(TickedText(tickedCount), ApplyToTickedCommand));

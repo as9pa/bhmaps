@@ -10,15 +10,16 @@ namespace BhMaps.App.ViewModels;
 
 /// <summary>One pack's platform art for one map (spec 4): the preview the page composes into it, the tick that
 /// says the game is showing that set already, and the menu its hover button opens. Show files belongs to the
-/// page, not to the tile, so the page hands its own action in.</summary>
+/// page, not to the tile, so the page hands its own action in, and hands null where there is no file list to
+/// open (spec 9).</summary>
 public sealed partial class PlatformSetTileViewModel : ObservableObject
 {
     private readonly MainViewModel _shell;
-    private readonly Action _showFiles;
+    private readonly Action? _showFiles;
     private readonly Action _edit;
 
     public PlatformSetTileViewModel(
-        MainViewModel shell, MapEntry map, Pack pack, bool inGame, int width, int height, Action showFiles,
+        MainViewModel shell, MapEntry map, Pack pack, bool inGame, int width, int height, Action? showFiles,
         Action edit)
     {
         _shell = shell;
@@ -86,7 +87,12 @@ public sealed partial class PlatformSetTileViewModel : ObservableObject
                 ApplyToTickedCommand));
         }
 
-        items.Add(new TileMenuCommand("Show files", ShowFilesCommand));
+        // Only where there is a file list to open: on a row the line would do nothing, so it is not offered.
+        if (_showFiles is not null)
+        {
+            items.Add(new TileMenuCommand("Show files", ShowFilesCommand));
+        }
+
         items.Add(new TileMenuCommand("Open folder", OpenFolderCommand));
         MenuItems = items;
     }
@@ -101,7 +107,7 @@ public sealed partial class PlatformSetTileViewModel : ObservableObject
     private void Edit() => _edit();
 
     [RelayCommand]
-    private void ShowFiles() => _showFiles();
+    private void ShowFiles() => _showFiles?.Invoke();
 
     [RelayCommand]
     private void OpenFolder()

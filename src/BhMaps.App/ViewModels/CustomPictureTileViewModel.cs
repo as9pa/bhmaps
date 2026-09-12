@@ -11,7 +11,7 @@ namespace BhMaps.App.ViewModels;
 
 /// <summary>One custom picture, which belongs to no map: its Apply is always a choice (spec 4), so the hover
 /// button opens the menu. Remove from the pack deletes every copy of it in the packs and is the one destructive
-/// action on this page, so it confirms and names the count.</summary>
+/// action on this page, so it confirms and names the pack.</summary>
 public sealed partial class CustomPictureTileViewModel : PictureTileViewModel
 {
     private readonly CustomPicture _picture;
@@ -22,7 +22,7 @@ public sealed partial class CustomPictureTileViewModel : PictureTileViewModel
     }
 
     /// <summary>The rows page's and the map panel's form: the same picture, offered for one map's slot, so the
-    /// hover button applies in a click and the menu opens with "Apply to Brawlhaven".</summary>
+    /// hover button applies in a click and the menu is what the button cannot do.</summary>
     public CustomPictureTileViewModel(
         MainViewModel shell, CustomPicture picture, string subtitle, MapEntry? map, string? slot, bool inGame)
         : base(
@@ -71,12 +71,9 @@ public sealed partial class CustomPictureTileViewModel : PictureTileViewModel
 
     public override void RebuildMenu(int tickedCount)
     {
+        // No "Apply to <map>": a tile that names a map carries the Apply button, and a menu holds only what the
+        // tile cannot do on its own (spec 9).
         var items = new List<TileMenuCommand>();
-        if (Map is { } map)
-        {
-            items.Add(new TileMenuCommand($"Apply to {map.DisplayName}", ApplyToMapCommand));
-        }
-
         if (tickedCount > 0)
         {
             items.Add(new TileMenuCommand(TickedText(tickedCount), ApplyToTickedCommand));
@@ -124,10 +121,9 @@ public sealed partial class CustomPictureTileViewModel : PictureTileViewModel
     private async Task RemoveFromLibraryAsync()
     {
         var paths = _picture.LibraryPaths;
-        var count = paths.Count == 1 ? "1 copy" : $"{paths.Count} copies";
         if (!Shell.Dialogs.Confirm(
-                "Remove from library",
-                $"Remove {Title} from the library?\n\nThe {count} in your packs are deleted. Nothing in the game folder changes."))
+                $"Remove from {PackName}?",
+                $"{Title} is removed from {PackName}. The game keeps whatever is applied until you apply something else."))
         {
             return;
         }
