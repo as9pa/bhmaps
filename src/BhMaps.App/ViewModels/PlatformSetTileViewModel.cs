@@ -75,11 +75,9 @@ public sealed partial class PlatformSetTileViewModel : ObservableObject
     /// <summary>Rebuilt whenever the ticked count changes, because the ticked line names it and is dropped at zero.</summary>
     public void RebuildMenu(int tickedCount)
     {
-        var items = new List<TileMenuCommand>
-        {
-            new("Edit", EditCommand),
-            new($"Apply to {Map.DisplayName}", ApplyToMapCommand),
-        };
+        // No "Apply to <map>": a click on the tile is that apply, and so is the panel's Apply button, and a menu
+        // holds only what the tile cannot do on its own (spec 9).
+        var items = new List<TileMenuCommand> { new("Edit", EditCommand) };
         if (tickedCount > 0)
         {
             items.Add(new TileMenuCommand(
