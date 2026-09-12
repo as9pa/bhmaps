@@ -11,13 +11,13 @@ public enum MapFileState
 /// <summary>One file of a map, measured against every pack. PackNames is filled only in the Pack state.</summary>
 public sealed record MapFileStatus(string RelativePath, MapFileState State, IReadOnlyList<string> PackNames)
 {
-    /// <summary>"Default", the joined pack names, "Custom" or "Missing".</summary>
+    /// <summary>"Default", the joined pack names, "In game only" or "Missing".</summary>
     public string Text => State switch
     {
         MapFileState.Default => "Default",
         MapFileState.Pack => string.Join(", ", PackNames),
         MapFileState.Missing => "Missing",
-        _ => "Custom",
+        _ => "In game only",
     };
 }
 
@@ -36,7 +36,7 @@ public sealed record MapStatus(
 {
     private const int ShownPackNames = 2;
 
-    /// <summary>"Default", "dark", "dark, flowers", "dark, flowers +2", "Custom" or "Missing".</summary>
+    /// <summary>"Default", "dark", "dark, flowers", "dark, flowers +2", "In game only" or "Missing".</summary>
     public string Text => State switch
     {
         MapState.Default => "Default",
@@ -44,7 +44,7 @@ public sealed record MapStatus(
             ? string.Join(", ", PackNames.Take(ShownPackNames)) + " +" + (PackNames.Count - ShownPackNames)
             : string.Join(", ", PackNames),
         MapState.Missing => "Missing",
-        _ => "Custom",
+        _ => "In game only",
     };
 
     /// <summary>Only Missing is coloured (spec 6.2).</summary>
