@@ -8,11 +8,19 @@
   <Grid Height="56">
     <Grid.ColumnDefinitions>
       <ColumnDefinition Width="Auto" />
+      <ColumnDefinition Width="Auto" />
       <ColumnDefinition Width="*" />
       <ColumnDefinition Width="Auto" />
     </Grid.ColumnDefinitions>
 
-    <TextBlock Grid.Column="0"
+    <!-- Empty on every page but pack detail, where it is the back chevron; with no content it measures to zero
+         and the title stays where it was. -->
+    <ContentPresenter Grid.Column="0"
+                      Margin="0,0,4,0"
+                      VerticalAlignment="Center"
+                      Content="{Binding Leading, ElementName=Root}" />
+
+    <TextBlock Grid.Column="1"
                VerticalAlignment="Center"
                FontSize="22"
                FontWeight="SemiBold"
@@ -20,7 +28,7 @@
 
     <!-- The busy line and the done line belong to the shell, not to the page, so this one cell binds past the
          page view model to the window's MainViewModel (decision D11). Only one of the two is ever visible. -->
-    <Grid Grid.Column="1"
+    <Grid Grid.Column="2"
           Margin="16,0"
           HorizontalAlignment="Right"
           VerticalAlignment="Center"
@@ -76,6 +84,6 @@
       </StackPanel>
     </Grid>
 
-    <ContentPresenter Grid.Column="2" VerticalAlignment="Center" Content="{Binding Actions, ElementName=Root}" />
+    <ContentPresenter Grid.Column="3" VerticalAlignment="Center" Content="{Binding Actions, ElementName=Root}" />
   </Grid>
 </UserControl>
