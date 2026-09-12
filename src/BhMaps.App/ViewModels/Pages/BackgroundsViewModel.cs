@@ -19,8 +19,6 @@ public partial class BackgroundsViewModel : RowsPageViewModel
 
     public override string SearchPlaceholder => "Search maps and pictures";
 
-    protected override bool HasCustomChip => true;
-
     protected override string NoResultsText => $"No map or picture matches '{SearchText}'.";
 
     /// <summary>Spec 4's one header action. The page adds to the library and names no maps, which is what the
@@ -38,9 +36,9 @@ public partial class BackgroundsViewModel : RowsPageViewModel
     }
 
     /// <summary>Addendum B's order: the in-game choice first with the check, then Default, then each pack that
-    /// has a picture for this map's slot in the Packs page order, then the custom pictures, which are folded
-    /// behind one "Custom (N)" tile (q3). A custom picture the game is showing is unfolded and first, because it
-    /// is the in-game choice.</summary>
+    /// has a picture for this map's slot in the Packs page order, then the any-map pictures, which are folded
+    /// behind one "My Backgrounds (N)" tile (q3). An any-map picture the game is showing is unfolded and first,
+    /// because it is the in-game choice.</summary>
     protected override MapRowViewModel BuildRow(MapCardViewModel card, MapStatus? status, ScanSnapshot snapshot)
     {
         var map = card.Map;
@@ -50,14 +48,12 @@ public partial class BackgroundsViewModel : RowsPageViewModel
         List<PictureTileViewModel> pictures = [.. packs, .. customs];
         List<object> alwaysShown = [.. pictures.Where(t => t.IsInGame), .. packs.Where(t => !t.IsInGame)];
         List<object> foldedAway = [.. customs.Where(t => !t.IsInGame)];
-        var foldedLabel = foldedAway.Count == 0 ? "" : $"Custom ({foldedAway.Count})";
+        var foldedLabel = foldedAway.Count == 0 ? "" : $"My Backgrounds ({foldedAway.Count})";
 
         return new MapRowViewModel(
             map,
             card.TagText,
             card.IsMissing,
-            IsChanged(status),
-            ShowsCustomPicture(map, status),
             Haystack(map, pictures),
             alwaysShown,
             foldedAway,
@@ -66,15 +62,6 @@ public partial class BackgroundsViewModel : RowsPageViewModel
             [],
             composeSet: null);
     }
-
-    /// <summary>Spec 3.1's Changed chip, on rows: everything that has a tag other than Missing.</summary>
-    private static bool IsChanged(MapStatus? status) => status?.State is MapState.Packs or MapState.Custom;
-
-    /// <summary>Addendum B's Custom chip: the game is showing a custom picture in this map's first slot. The
-    /// slot, not the whole map, because a pack's platform art must not put a map on this chip.</summary>
-    private static bool ShowsCustomPicture(MapEntry map, MapStatus? status) =>
-        map.BackgroundSlots.Count > 0
-        && InGameMatch.File(status, AssetPath.Background(map.BackgroundSlots[0])) is { State: MapFileState.Custom };
 
     /// <summary>Addendum B: the map's name, then every thumbnail's caption and file name, one per line, so a
     /// search for a pack name or a file name keeps the rows that offer it.</summary>

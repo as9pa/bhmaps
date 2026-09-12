@@ -9,7 +9,7 @@
   </UserControl.Resources>
 
   <DockPanel Margin="24,16,24,24">
-    <!-- Addendum B: title, search, zoom and Add Custom Image all on the header's one line. -->
+    <!-- Addendum B: title, search, zoom and Add Image all on the header's one line. -->
     <controls:PageHeader DockPanel.Dock="Top" Title="Backgrounds">
       <controls:PageHeader.Actions>
         <StackPanel Orientation="Horizontal">
@@ -59,7 +59,7 @@
           <!-- Solid: adding a picture is this page's one primary action (spec 4). -->
           <Button Margin="12,0,0,0"
                   Command="{Binding AddPicturesCommand}"
-                  Content="Add Custom Image"
+                  Content="Add Image"
                   controls:Icon.Glyph="{StaticResource Icon.Plus}"
                   IsEnabled="{Binding DataContext.IsNotBusy, RelativeSource={RelativeSource AncestorType=Window}}"
                   Style="{StaticResource PrimaryButton}" />
@@ -89,7 +89,7 @@
                Foreground="{StaticResource Text2Brush}"
                TextWrapping="Wrap"
                Visibility="{Binding ShowFirstRunLine, Converter={StaticResource BoolToVis}}">
-      <Run Text="No packs yet. Import a folder of map art on the " /><Hyperlink Command="{Binding DataContext.NavigatePacksCommand, RelativeSource={RelativeSource AncestorType=Window}}" Foreground="{StaticResource TextBrush}"><Run Text="Packs" /></Hyperlink><Run Text=" page, or add a custom image on " /><Hyperlink Command="{Binding AddPicturesCommand}" Foreground="{StaticResource TextBrush}"><Run Text="Backgrounds" /></Hyperlink><Run Text="." />
+      <Run Text="No packs yet. Import a folder of map art on the " /><Hyperlink Command="{Binding DataContext.NavigatePacksCommand, RelativeSource={RelativeSource AncestorType=Window}}" Foreground="{StaticResource TextBrush}"><Run Text="Packs" /></Hyperlink><Run Text=" page, or add an image on " /><Hyperlink Command="{Binding AddPicturesCommand}" Foreground="{StaticResource TextBrush}"><Run Text="Backgrounds" /></Hyperlink><Run Text="." />
     </TextBlock>
 
     <Grid>

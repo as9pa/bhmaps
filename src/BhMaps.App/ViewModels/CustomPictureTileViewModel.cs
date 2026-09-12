@@ -10,7 +10,7 @@ using CommunityToolkit.Mvvm.Input;
 namespace BhMaps.App.ViewModels;
 
 /// <summary>One custom picture, which belongs to no map: its Apply is always a choice (spec 4), so the hover
-/// button opens the menu. Remove from library deletes every copy of it in the packs and is the one destructive
+/// button opens the menu. Remove from the pack deletes every copy of it in the packs and is the one destructive
 /// action on this page, so it confirms and names the count.</summary>
 public sealed partial class CustomPictureTileViewModel : PictureTileViewModel
 {
@@ -27,7 +27,7 @@ public sealed partial class CustomPictureTileViewModel : PictureTileViewModel
         MainViewModel shell, CustomPicture picture, string subtitle, MapEntry? map, string? slot, bool inGame)
         : base(
             shell,
-            picture.DisplayName,
+            Path.GetFileNameWithoutExtension(picture.DisplayName),
             subtitle,
             // Empty only for the picture SourcePath calls impossible, and then every action on the tile reports a
             // file that is not there rather than throwing on a path nobody could resolve.
@@ -65,8 +65,8 @@ public sealed partial class CustomPictureTileViewModel : PictureTileViewModel
 
     public override ICommand? ApplyCommand => Map is null ? null : ApplyToMapCommand;
 
-    /// <summary>False for a picture that is only in the game folder, which is offered Save to library instead of
-    /// Remove from library.</summary>
+    /// <summary>False for a picture that is only in the game folder, which is offered Save to My Backgrounds
+    /// instead of Remove from its pack.</summary>
     private bool InLibrary => _picture.LibraryPaths.Count > 0;
 
     public override void RebuildMenu(int tickedCount)
@@ -86,8 +86,8 @@ public sealed partial class CustomPictureTileViewModel : PictureTileViewModel
         items.Add(new TileMenuCommand("Edit", EditCommand));
         items.Add(new TileMenuCommand("Show in folder", ShowInFolderCommand));
         items.Add(InLibrary
-            ? new TileMenuCommand("Remove from library", RemoveFromLibraryCommand)
-            : new TileMenuCommand("Save to library", SaveToLibraryCommand));
+            ? new TileMenuCommand($"Remove from {PackName}", RemoveFromLibraryCommand)
+            : new TileMenuCommand("Save to My Backgrounds", SaveToLibraryCommand));
         MenuItems = items;
     }
 
