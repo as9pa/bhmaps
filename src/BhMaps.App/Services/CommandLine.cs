@@ -1,6 +1,6 @@
 namespace BhMaps.App.Services;
 
-public sealed record CommandLineArgs(string? Game, string? Library, string? AppData)
+public sealed record CommandLineArgs(string? Game, string? Library, string? AppData, bool Quiet = false)
 {
     /// <summary>
     /// The settings file and hash cache follow --appdata alone, so --game or --library on their own
@@ -28,7 +28,8 @@ public sealed record CommandLineArgs(string? Game, string? Library, string? AppD
 }
 
 /// <summary>Development overrides: --game &lt;path&gt; --library &lt;path&gt; --appdata &lt;dir&gt;. All optional,
-/// except that --game or --library also needs --appdata.</summary>
+/// except that --game or --library also needs --appdata. --quiet opens every window without activating it,
+/// for automated captures.</summary>
 public static class CommandLine
 {
     public static CommandLineArgs Parse(string[] args)
@@ -36,22 +37,26 @@ public static class CommandLine
         string? game = null;
         string? library = null;
         string? appData = null;
-        for (var i = 0; i + 1 < args.Length; i++)
+        var quiet = false;
+        for (var i = 0; i < args.Length; i++)
         {
             switch (args[i])
             {
-                case "--game":
+                case "--game" when i + 1 < args.Length:
                     game = args[++i];
                     break;
-                case "--library":
+                case "--library" when i + 1 < args.Length:
                     library = args[++i];
                     break;
-                case "--appdata":
+                case "--appdata" when i + 1 < args.Length:
                     appData = args[++i];
+                    break;
+                case "--quiet":
+                    quiet = true;
                     break;
             }
         }
 
-        return new CommandLineArgs(game, library, appData);
+        return new CommandLineArgs(game, library, appData, quiet);
     }
 }

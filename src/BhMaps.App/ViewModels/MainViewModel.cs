@@ -244,7 +244,7 @@ public partial class MainViewModel : ObservableObject
             mapName,
             SelectedMapCount,
             snapshot.Catalog.Maps.Count);
-        var window = new AddPicturesWindow { DataContext = vm, Owner = Application.Current.MainWindow };
+        var window = new AddPicturesWindow { DataContext = vm, Owner = Application.Current.MainWindow, ShowActivated = !App.Quiet };
         if (window.ShowDialog() != true)
         {
             return;
@@ -469,7 +469,7 @@ public partial class MainViewModel : ObservableObject
 
         var vm = new BackgroundEditorViewModel(
             Services, Dialogs, MapSlotChoices(snapshot), snapshot.Packs.Select(p => p.Name).ToList(), request);
-        var window = new BackgroundEditorWindow { DataContext = vm, Owner = Application.Current.MainWindow };
+        var window = new BackgroundEditorWindow { DataContext = vm, Owner = Application.Current.MainWindow, ShowActivated = !App.Quiet };
         if (window.ShowDialog() != true)
         {
             return;
