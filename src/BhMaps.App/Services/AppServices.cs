@@ -36,6 +36,7 @@ public sealed class AppServices : IDisposable
         Renderer = new RenderQueue();
         Previews = new PreviewCache(appDataDir, HashCache, Renderer);
         Undo = new UndoStore(appDataDir);
+        RowThumbnails = new ThumbnailCache(Thumbnails);
     }
 
     public string AppDataDir { get; }
@@ -53,6 +54,10 @@ public sealed class AppServices : IDisposable
     public HashCache HashCache { get; }
 
     public ThumbnailProvider Thumbnails { get; } = new();
+
+    /// <summary>The rows pages' loader over <see cref="Thumbnails" /> (addendum B). One instance for the app, so
+    /// a picture decoded for a Backgrounds row is already decoded when a Platforms row asks for it.</summary>
+    public ThumbnailCache RowThumbnails { get; }
 
     public LevelDataService LevelData { get; }
 

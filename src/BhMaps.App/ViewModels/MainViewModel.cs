@@ -611,6 +611,9 @@ public partial class MainViewModel : ObservableObject
 
         Snapshot = snapshot;
 
+        // A file may be a different picture now, so the rows pages' decodes are forgotten before they rebuild.
+        Services.RowThumbnails.Clear();
+
         // Maps rebuilds its cards first, because SelectedMaps reads them and a page's Refresh may ask for it.
         foreach (var page in _pages)
         {

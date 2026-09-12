@@ -142,7 +142,8 @@ public class SettingsStoreTests
         var loaded = SettingsStore.Load(path);
 
         Assert.Equal(6, loaded.MapsZoom);
-        Assert.Equal(6, loaded.BackgroundsZoom);
+        Assert.Equal(2, loaded.BackgroundsZoom);
+        Assert.Equal(3, loaded.PlatformsZoom);
         Assert.Equal(5, loaded.PackZoom);
         Assert.False(loaded.WelcomeDone);
     }
@@ -205,17 +206,51 @@ public class SettingsStoreTests
     }
 
     [Fact]
-    public void Load_ClampsEveryZoomToTwoThroughTen()
+    public void Load_ClampsTheGridZoomsToTwoThroughTenAndTheRowZoomsToOneThroughFive()
     {
         using var tmp = new TempDir();
         var path = tmp.Sub("settings.json");
-        File.WriteAllText(path, """{"mapsZoom":99,"backgroundsZoom":0,"packZoom":-4}""");
+        File.WriteAllText(path, """{"mapsZoom":99,"backgroundsRowZoom":0,"packZoom":-4,"platformsZoom":9}""");
 
         var loaded = SettingsStore.Load(path);
 
         Assert.Equal(10, loaded.MapsZoom);
-        Assert.Equal(2, loaded.BackgroundsZoom);
+        Assert.Equal(1, loaded.BackgroundsZoom);
         Assert.Equal(2, loaded.PackZoom);
+        Assert.Equal(5, loaded.PlatformsZoom);
+    }
+
+    [Fact]
+    public void Load_DropsAnOldBackgroundsZoomSoAnUpgradeStartsDense()
+    {
+        using var tmp = new TempDir();
+        var path = tmp.Sub("settings.json");
+
+        // backgroundsZoom was a 2.0 tile size (3 to 8) and then a 2.1 column count (2 to 10). The rows page keeps
+        // its thumbnail height under backgroundsRowZoom, so an old value is dropped rather than read as a height;
+        // every upgrader starts at the dense default the owner chose (q1).
+        File.WriteAllText(path, """{"backgroundsZoom":6}""");
+
+        var loaded = SettingsStore.Load(path);
+
+        Assert.Equal(2, loaded.BackgroundsZoom);
+        Assert.Null(loaded.Unknown);
+    }
+
+    [Fact]
+    public void SaveThenLoad_RoundTripsThePlatformsZoom()
+    {
+        using var tmp = new TempDir();
+        var path = tmp.Sub("settings.json");
+
+        SettingsStore.Save(path, AppSettings.Default with { PlatformsZoom = 4, BackgroundsZoom = 1 });
+        var loaded = SettingsStore.Load(path);
+
+        Assert.Equal(4, loaded.PlatformsZoom);
+        Assert.Equal(1, loaded.BackgroundsZoom);
+        Assert.Contains("\"platformsZoom\": 4", File.ReadAllText(path));
+        Assert.Contains("\"backgroundsRowZoom\": 1", File.ReadAllText(path));
+        Assert.DoesNotContain("\"backgroundsZoom\"", File.ReadAllText(path));
     }
 
     [Fact]

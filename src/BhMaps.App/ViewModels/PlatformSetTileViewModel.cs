@@ -35,6 +35,9 @@ public sealed partial class PlatformSetTileViewModel : ObservableObject
 
     public string PackName => Pack.Name;
 
+    /// <summary>Addendum C: a set tile's tooltip is the pack it came from, which is also its caption.</summary>
+    public string ToolTipText => Pack.Name;
+
     /// <summary>True when every file the set would write is the file that is there, as the last scan measured it.</summary>
     public bool InGame { get; }
 
