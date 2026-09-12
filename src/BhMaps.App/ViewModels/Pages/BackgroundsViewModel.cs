@@ -74,13 +74,17 @@ public partial class BackgroundsViewModel : RowsPageViewModel
     {
         var map = card.Map;
         var packs = MapChoices.PackBackgrounds(Shell, map, status, snapshot);
-        List<CustomPictureTileViewModel> customs =
-            [.. MapChoices.PictureGroups(Shell, map, snapshot).SelectMany(g => g.Tiles)];
-        _pictureCount = Math.Max(_pictureCount, customs.Count);
+
+        // The whole list, so the picture the game is showing on this row is found whatever pack it came from.
+        // Only the user's own imports are counted and offered under the switch, though: a picture only the game
+        // has is already the in-game tile on the row that shows it (2.2.1).
+        var customs = MapChoices.CustomBackgrounds(Shell, map, snapshot);
+        List<CustomPictureTileViewModel> imports = [.. customs.Where(t => t.PackName is not null)];
+        _pictureCount = Math.Max(_pictureCount, imports.Count);
 
         List<PictureTileViewModel> pictures = [.. packs, .. customs];
         List<object> alwaysShown = [.. pictures.Where(t => t.IsInGame), .. packs.Where(t => !t.IsInGame)];
-        List<object> extras = [.. customs.Where(t => !t.IsInGame)];
+        List<object> extras = [.. imports.Where(t => !t.IsInGame)];
 
         return new MapRowViewModel(
             map,

@@ -8,6 +8,18 @@ and `.jpg` files inside the `mapArt` folder and inside its own library, plus its
 `%APPDATA%\BhMaps`. The game's data files are read and never written, and nothing else in the game
 install is touched.
 
+## What is new in 2.2.1
+
+Two fixes to 2.2, nothing new on disk.
+
+- **My Backgrounds counts only your own pictures.** The switch on Backgrounds, the picture groups on
+  the map panel and every place that lists pictures show the files you imported into packs other than
+  Default. The Default pack is a capture of the game's folder, so its files are the game's art; a
+  picture only the game has appears on the rows and panel of the maps showing it and is never counted.
+- **Editor sliders drag from anywhere.** In the background and platform editors, and on the Maps zoom
+  slider, pressing anywhere on the groove moves the thumb there and keeps dragging it while the button
+  is held, instead of only when the press lands on the thumb.
+
 ## What is new in 2.2
 
 Eleven changes, sharing one idea: the app stops inventing categories the user never asked for and
@@ -15,11 +27,14 @@ describes things by where they are and what they do. Nothing on disk changes sha
 
 - **Any-map pictures are grouped by pack.** Wherever the app listed pictures of its own making, it now
   lists any-map pictures grouped by the pack that holds them, one group per pack in the Packs order,
-  with a last group "In game only" for the pictures no pack has. A group header is the pack's name and
-  a count, as in "My Backgrounds (11)".
+  with a last group "In game only" for the picture the game is showing on that map that no pack holds.
+  A group header is the pack's name and a count, as in "My Backgrounds (11)". The Default pack is a
+  capture of the game's own folder, so what is in it is the game's art and not a picture of yours.
 - **One switch on Backgrounds.** At the right end of the chip row, a plus that becomes a minus beside
-  the text "My Backgrounds (11)" shows or hides the any-map pictures on every row at once, in place of
-  the fold that answered the same question once per row. The page remembers it.
+  the text "My Backgrounds (11)" shows or hides your own pictures on every row at once, in place of
+  the fold that answered the same question once per row. The count is the pictures you imported, the
+  ones in packs other than Default; a picture only the game has is not one of them, and it appears on
+  the rows and the panel of the maps showing it. The page remembers it.
 - **The background editor can save for all maps.** Its Map picker starts with "All maps", which saves
   the picture into the pack under its own name instead of a map's slot name, and can apply it to every
   map in the same step.
@@ -108,9 +123,9 @@ stops a long operation.
   folder. Below those it is one list, Background first and then Platforms, under a section header
   each with a hairline between them. Background lists the choices two across: Default, then one per
   pack that has a picture for this map in the Packs order, then one folded strip per any-map group,
-  one per pack that holds one and a last strip named "In game only", with Add Image beside the first
-  header. Platforms lists Default and each pack that has a set for this map, drawn over the map's
-  current background, and under them a "Platform files" fold with a count, closed to begin with,
+  one per pack that holds one and a last strip named "In game only" for the picture the game is
+  showing on this map that no pack holds, with Add Image beside the first header. Platforms lists
+  Default and each pack that has a set for this map, drawn over the map's current background, and under them a "Platform files" fold with a count, closed to begin with,
   listing the pieces that map draws. The choice the game is showing carries a check. Hovering a
   choice shows Apply and a dots button, and the dots or a right-click opens its menu: apply to the
   selected maps, apply to all maps, then Edit and Show in folder for a picture, or Edit, apply to
@@ -121,8 +136,10 @@ stops a long operation.
   border; then Default, then one thumbnail for each pack that has a picture for that map in the Packs
   order, captioned with the pack's name. At the right end of the chip row is the "My Backgrounds"
   switch and a count, a plus that becomes a minus: turn it on and every row goes on to show the
-  any-map pictures as well, grouped by the pack that holds them with the pictures no pack has last,
-  wrapping onto further lines. The page remembers the switch. When more choices exist than fit the
+  pictures you imported as well, grouped by the pack that holds them, wrapping onto further lines.
+  The count is those imports, the pictures in packs other than Default. A picture only the game has
+  is not under the switch: it is already first on the row of every map showing it, with its check.
+  The page remembers the switch. When more choices exist than fit the
   row, a tile reading "+" and a number stands for the rest; clicking it unfolds that row, and rows
   fold back when the page is left.
   One click on a thumbnail applies it to that map, with no confirmation to answer. Hovering shows
