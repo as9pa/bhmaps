@@ -16,8 +16,8 @@ public static class SettingsStore
     /// Load would carry it into <see cref="AppSettings.Unknown"/> and Save would write it straight back.</summary>
     private static readonly string[] KnownKeys =
     [
-        "gamePath", "libraryPath", "firstRunDone", "mapsZoom", "backgroundsZoom", "packZoom", "welcomeDone",
-        "homeZoom", "whileRunning",
+        "gamePath", "libraryPath", "firstRunDone", "mapsZoom", "backgroundsRowZoom", "packZoom", "platformsZoom",
+        "welcomeDone", "homeZoom", "whileRunning", "backgroundsZoom",
     ];
 
     public static string DefaultAppDataDir =>
@@ -63,6 +63,15 @@ public static class SettingsStore
                 "BhMaps settings: whileRunning is no longer used and was dropped; writes are always live.");
         }
 
+        // Addendum B, q1: Backgrounds is a rows page whose zoom is a thumbnail height under backgroundsRowZoom.
+        // The old backgroundsZoom was a 2.0 tile size and then a 2.1 column count; read as a height it would put
+        // every upgrader on the largest rows, so it is reported once and dropped.
+        if (obj["backgroundsZoom"] is not null)
+        {
+            System.Diagnostics.Trace.WriteLine(
+                "BhMaps settings: backgroundsZoom is no longer used and was dropped; the Backgrounds rows start dense.");
+        }
+
         // 2.0 stored the Maps zoom as homeZoom. The new key wins where both are present; otherwise the old one is
         // read once and written back under the new name, so an upgrade does not reset anyone's column count.
         var mapsZoom = obj["mapsZoom"] is not null ? Int(obj, "mapsZoom", 6) : Int(obj, "homeZoom", 6);
@@ -72,9 +81,13 @@ public static class SettingsStore
             Str(obj, "libraryPath") is { Length: > 0 } l ? l : AppSettings.DefaultLibraryPath,
             Bool(obj, "firstRunDone"),
             Math.Clamp(mapsZoom, AppSettings.MinZoom, AppSettings.MaxZoom),
-            Math.Clamp(Int(obj, "backgroundsZoom", 6), AppSettings.MinZoom, AppSettings.MaxZoom),
+
+            // Addendum B: Backgrounds is a rows page now, so its stored value is a thumbnail height under its own
+            // key; the old backgroundsZoom was dropped above.
+            Math.Clamp(Int(obj, "backgroundsRowZoom", 2), AppSettings.MinRowZoom, AppSettings.MaxRowZoom),
             Math.Clamp(Int(obj, "packZoom", 5), AppSettings.MinZoom, AppSettings.MaxZoom),
-            Bool(obj, "welcomeDone"))
+            Bool(obj, "welcomeDone"),
+            Math.Clamp(Int(obj, "platformsZoom", 3), AppSettings.MinRowZoom, AppSettings.MaxRowZoom))
         {
             Unknown = unknown.Count == 0 ? null : unknown,
         };
@@ -89,8 +102,9 @@ public static class SettingsStore
             ["libraryPath"] = settings.LibraryPath,
             ["firstRunDone"] = settings.FirstRunDone,
             ["mapsZoom"] = settings.MapsZoom,
-            ["backgroundsZoom"] = settings.BackgroundsZoom,
+            ["backgroundsRowZoom"] = settings.BackgroundsZoom,
             ["packZoom"] = settings.PackZoom,
+            ["platformsZoom"] = settings.PlatformsZoom,
             ["welcomeDone"] = settings.WelcomeDone,
         };
         if (settings.Unknown is { } extra)

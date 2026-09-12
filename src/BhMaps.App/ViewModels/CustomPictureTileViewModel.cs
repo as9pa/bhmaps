@@ -1,5 +1,7 @@
+using System.Windows.Input;
 using BhMaps.App.Services;
 using BhMaps.Core.LevelData;
+using BhMaps.Core.Maps;
 using BhMaps.Core.Model;
 using BhMaps.Core.Operations;
 using BhMaps.Core.Scanning;
@@ -15,6 +17,14 @@ public sealed partial class CustomPictureTileViewModel : PictureTileViewModel
     private readonly CustomPicture _picture;
 
     public CustomPictureTileViewModel(MainViewModel shell, CustomPicture picture, string subtitle)
+        : this(shell, picture, subtitle, null, null, picture.InGameSlots.Count > 0)
+    {
+    }
+
+    /// <summary>The rows page's and the map panel's form: the same picture, offered for one map's slot, so the
+    /// hover button applies in a click and the menu opens with "Apply to Brawlhaven".</summary>
+    public CustomPictureTileViewModel(
+        MainViewModel shell, CustomPicture picture, string subtitle, MapEntry? map, string? slot, bool inGame)
         : base(
             shell,
             picture.DisplayName,
@@ -23,10 +33,19 @@ public sealed partial class CustomPictureTileViewModel : PictureTileViewModel
             // file that is not there rather than throwing on a path nobody could resolve.
             SourcePath(picture, shell.Services.GamePath) ?? "",
             picture.PackName,
-            picture.InGameSlots.Count > 0)
+            inGame)
     {
         _picture = picture;
+        Map = map;
+        Slot = slot;
     }
+
+    /// <summary>The map this tile offers the picture for, or null on a tile that names no map.</summary>
+    public MapEntry? Map { get; }
+
+    /// <summary>The background slot the apply writes, or null with no map. The apply still writes every slot the
+    /// map names; this is what the editor opens on.</summary>
+    public string? Slot { get; }
 
     /// <summary>The file a custom picture is: its first copy in the library, or the game's own copy of the first
     /// slot it fills when the library has none. A slot resolves through <see cref="AssetPath" />, because a slot
@@ -40,9 +59,11 @@ public sealed partial class CustomPictureTileViewModel : PictureTileViewModel
                 ? Path.Combine(gamePath, AssetPath.Background(picture.InGameSlots[0]))
                 : null;
 
-    public override string ApplyText => "Apply to...";
+    public override string ApplyText => Map is null ? "Apply to..." : "Apply";
 
-    public override bool ShowChevron => true;
+    public override bool ShowChevron => Map is null;
+
+    public override ICommand? ApplyCommand => Map is null ? null : ApplyToMapCommand;
 
     /// <summary>False for a picture that is only in the game folder, which is offered Save to library instead of
     /// Remove from library.</summary>
@@ -51,6 +72,11 @@ public sealed partial class CustomPictureTileViewModel : PictureTileViewModel
     public override void RebuildMenu(int tickedCount)
     {
         var items = new List<TileMenuCommand>();
+        if (Map is { } map)
+        {
+            items.Add(new TileMenuCommand($"Apply to {map.DisplayName}", ApplyToMapCommand));
+        }
+
         if (tickedCount > 0)
         {
             items.Add(new TileMenuCommand(TickedText(tickedCount), ApplyToTickedCommand));
@@ -67,6 +93,12 @@ public sealed partial class CustomPictureTileViewModel : PictureTileViewModel
 
     // The picture's own name, not the file it happens to be stored as, is what the done line reports (spec 2.2).
     [RelayCommand]
+    private Task ApplyToMapAsync() =>
+        Map is { } map
+            ? Shell.ApplyPictureAsync(FullPath, [map], clearTicks: false, _picture.DisplayName)
+            : Task.CompletedTask;
+
+    [RelayCommand]
     private Task ApplyToTickedAsync() =>
         Shell.ApplyPictureAsync(FullPath, Shell.SelectedMaps, clearTicks: true, _picture.DisplayName);
 
@@ -77,7 +109,7 @@ public sealed partial class CustomPictureTileViewModel : PictureTileViewModel
             : Task.CompletedTask;
 
     [RelayCommand]
-    private Task EditAsync() => Shell.OpenBackgroundEditorAsync(new BackgroundEditorRequest(FullPath, PackName, null));
+    private Task EditAsync() => Shell.OpenBackgroundEditorAsync(new BackgroundEditorRequest(FullPath, PackName, Slot));
 
     [RelayCommand]
     private void ShowInFolder()

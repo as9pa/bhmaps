@@ -37,8 +37,6 @@ public partial class MapPanelViewModel : ObservableObject
 
     public const string NoDefaultPackText = "No Default pack yet. Capture defaults first.";
 
-    private const string BackgroundsFolder = "Backgrounds";
-
     private readonly MainViewModel _shell;
     private readonly MapsViewModel _page;
     private readonly MapEntry _map;
@@ -48,7 +46,7 @@ public partial class MapPanelViewModel : ObservableObject
     /// <summary>ObservableCollections behind the read-only surfaces: the tiles fill their own pictures in as the
     /// loads arrive, and a file row is an immutable record that a load replaces rather than mutates.</summary>
     private readonly ObservableCollection<MapPictureTileViewModel> _backgroundTiles = [];
-    private readonly ObservableCollection<MapPictureTileViewModel> _customTiles = [];
+    private readonly ObservableCollection<CustomPictureTileViewModel> _customTiles = [];
     private readonly ObservableCollection<PlatformSetTileViewModel> _platformTiles = [];
     private readonly ObservableCollection<PlatformFileViewModel> _platformFiles = [];
 
@@ -72,34 +70,22 @@ public partial class MapPanelViewModel : ObservableObject
         ResetHint = HasDefaultPack ? "" : NoDefaultPackText;
         ShowPlatforms = page.PanelShowsPlatforms;
 
-        foreach (var tile in BuildBackgroundTiles())
+        foreach (var tile in MapChoices.PackBackgrounds(shell, map, status, snapshot))
         {
             _backgroundTiles.Add(tile);
         }
 
         // Spec 4: every picture in the custom library, offered for this map the way a pack's is. A map with no
         // background slot has nowhere to put one, so it gets no strip at all.
-        if (map.BackgroundSlots.Count > 0)
+        foreach (var tile in MapChoices.CustomBackgrounds(shell, map, snapshot))
         {
-            var slot = map.BackgroundSlots[0];
-            var fileName = Path.GetFileName(AssetPath.Background(slot));
-            foreach (var picture in snapshot.CustomPictures)
-            {
-                // Resolved by the rule a custom tile's own menu uses, so the panel and the Backgrounds page apply
-                // the same file. Empty only for the picture SourcePath calls impossible, and then every action on
-                // the tile reports a file that is not there rather than throwing on a path nobody could resolve.
-                var source = CustomPictureTileViewModel.SourcePath(picture, shell.Services.GamePath) ?? "";
-                _customTiles.Add(new MapPictureTileViewModel(
-                    shell, map, slot, picture.DisplayName, "", source, picture.PackName,
-                    picture.InGameSlots.Contains(fileName, StringComparer.OrdinalIgnoreCase)));
-            }
+            _customTiles.Add(tile);
         }
 
-        foreach (var pack in PlatformSetApplier.SetsFor(map.FolderName, snapshot.Packs))
+        foreach (var tile in MapChoices.Platforms(
+                     shell, map, status, snapshot, SetWidth, SetHeight, () => FilesExpanded = true))
         {
-            _platformTiles.Add(new PlatformSetTileViewModel(
-                shell, map, pack, InGameMatch.SetInGame(pack, map.FolderName, status),
-                SetWidth, SetHeight, () => FilesExpanded = true));
+            _platformTiles.Add(tile);
         }
 
         // Built with no thumbnail and no transparency verdict: both are file work, and both arrive from LoadAsync.
@@ -124,7 +110,7 @@ public partial class MapPanelViewModel : ObservableObject
     public IReadOnlyList<MapPictureTileViewModel> BackgroundTiles => _backgroundTiles;
 
     /// <summary>Spec 4: the custom library, under the packs, for this map's first background slot.</summary>
-    public IReadOnlyList<MapPictureTileViewModel> CustomTiles => _customTiles;
+    public IReadOnlyList<CustomPictureTileViewModel> CustomTiles => _customTiles;
 
     public IReadOnlyList<PlatformSetTileViewModel> PlatformTiles => _platformTiles;
 
@@ -293,33 +279,6 @@ public partial class MapPanelViewModel : ObservableObject
         if (value)
         {
             _ = LoadCustomThumbnailsAsync(_loads.Token);
-        }
-    }
-
-    /// <summary>Default first, then every pack with a picture for this map's first slot (spec 3.2).</summary>
-    private IEnumerable<MapPictureTileViewModel> BuildBackgroundTiles()
-    {
-        if (_map.BackgroundSlots.Count == 0)
-        {
-            yield break;
-        }
-
-        var slot = _map.BackgroundSlots[0];
-        var relative = AssetPath.Background(slot);
-        var fileName = Path.GetFileName(relative);
-        var packs = _snapshot.Packs
-            .OrderBy(p => p.Name.Equals(DefaultPack.Name, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
-            .ThenBy(p => p.Name, StringComparer.OrdinalIgnoreCase);
-        foreach (var pack in packs)
-        {
-            if (pack.FindFolder(BackgroundsFolder)?.FindFile(fileName) is not { } file)
-            {
-                continue;
-            }
-
-            yield return new MapPictureTileViewModel(
-                _shell, _map, slot, pack.Name, "", file.FullPath, pack.Name,
-                InGameMatch.Matches(_status, relative, pack.Name));
         }
     }
 

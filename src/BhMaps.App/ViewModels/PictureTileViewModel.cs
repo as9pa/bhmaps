@@ -52,6 +52,11 @@ public abstract partial class PictureTileViewModel : ObservableObject
     /// nothing one click could mean.</summary>
     public virtual ICommand? ApplyCommand => null;
 
+    /// <summary>Addendum B: a strip thumbnail's tooltip is its full caption, and the file name under it when the
+    /// picture came from a pack, because two packs can caption the same slot with different files.</summary>
+    public string ToolTipText =>
+        PackName is null ? Title : $"{Title}\n{Path.GetFileName(FullPath)}";
+
     /// <summary>Null until the thumbnail is ready. Always frozen, because it is decoded off the UI thread.</summary>
     [ObservableProperty]
     public partial ImageSource? Thumbnail { get; set; }
@@ -82,6 +87,16 @@ public abstract partial class PictureTileViewModel : ObservableObject
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
         {
             // A file that vanished between the scan and the decode. A tile is never worth an error dialog.
+        }
+    }
+
+    /// <summary>The rows pages' load (addendum B): one decode per file across every row, through the shell's
+    /// shared cache rather than a decode of this tile's own.</summary>
+    public async Task LoadThumbnailAsync(ThumbnailCache cache, CancellationToken ct)
+    {
+        if (await cache.GetAsync(FullPath, ct) is { } image && !ct.IsCancellationRequested)
+        {
+            Thumbnail = image;
         }
     }
 }
