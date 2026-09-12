@@ -52,6 +52,10 @@ public abstract partial class RowsPageViewModel : PageViewModel
     /// <summary>The last scan, or null before the first one.</summary>
     protected ScanSnapshot? Snapshot { get; private set; }
 
+    /// <summary>Every row the last scan produced, filtered or not, for a page that has something to tell all of
+    /// them (spec 4's switch writes ShowExtras on each rather than building the list again).</summary>
+    protected IReadOnlyList<MapRowViewModel> AllRows => _all;
+
     /// <summary>The rows the chip and the search leave visible, in map order.</summary>
     public ObservableCollection<MapRowViewModel> Rows { get; }
 

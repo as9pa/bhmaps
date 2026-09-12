@@ -282,6 +282,13 @@ public partial class MainViewModel : ObservableObject
             Dialogs.ShowFailures("Some pictures could not be imported", result.Failures);
         }
 
+        // Spec 4: a picture just added is one the user wants to see, so the page showing the rows turns its
+        // switch on for it. A picture added from anywhere else leaves the switch where it was.
+        if (result is { Copied: > 0 } && CurrentPage == Backgrounds)
+        {
+            Backgrounds.ShowPictures = true;
+        }
+
         var maps = ThenMaps(vm.Then, target, snapshot);
         if (ok && maps.Count > 0 && result is { Written.Count: > 0 })
         {

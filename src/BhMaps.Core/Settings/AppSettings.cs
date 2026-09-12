@@ -9,7 +9,8 @@ public sealed record AppSettings(
     int PackZoom = 5,
     bool WelcomeDone = false,
     int PlatformsZoom = 3,
-    IReadOnlyDictionary<string, DateTimeOffset>? PackLastApplied = null)
+    IReadOnlyDictionary<string, DateTimeOffset>? PackLastApplied = null,
+    bool BackgroundsShowPictures = false)
 {
     public const string DefaultGamePath = @"C:\Program Files (x86)\Steam\steamapps\common\Brawlhalla\mapArt";
 
