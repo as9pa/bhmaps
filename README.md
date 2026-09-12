@@ -10,8 +10,8 @@ Requires Windows 10 or 11, 64-bit, and Brawlhalla installed through Steam.
 
 | [Releases](https://github.com/as9pa/bhmaps/releases) | Size | Needs .NET? |
 |---|---|---|
-| `bhmaps-v2.1.0-win-x64.exe` | ~135 MB | No, the runtime is inside |
-| `bhmaps-v2.1.0-win-x64-dotnet.zip` | ~0.7 MB | Yes, [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) |
+| `bhmaps-v2.2.0-win-x64.exe` | ~135 MB | No, the runtime is inside |
+| `bhmaps-v2.2.0-win-x64-dotnet.zip` | ~0.7 MB | Yes, [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) |
 
 Take the `.exe` unless you already have .NET 10 installed. Windows may warn on first run because the
 exe is unsigned: choose "More info", then "Run anyway".
@@ -33,7 +33,11 @@ Brawlhalla open or closed, and show on the next match load.
 - Packs imports folders as packs, applies them, exports them, and captures the game's current art as
   a Default pack.
 - Add Image fits any image to the background size and writes it into a pack, and the editor
-  crops, pans and darkens one picture into a map's background slot.
+  crops, pans and darkens one picture into a map's background slot, for one map or for all of them.
+- The platform editor fades a map's platforms with an Opacity slider and recolours them with a Hue
+  slider, over a live preview, and saves the result into a pack.
+- The My Backgrounds switch on Backgrounds shows your own pictures on every row at once, or hides
+  them all while you compare packs.
 - Select maps on Maps to apply a pack or a picture to all of them at once, from the selection bar or
   from any choice's menu.
 - Undo puts back whatever the last write into the game folder overwrote or deleted.
