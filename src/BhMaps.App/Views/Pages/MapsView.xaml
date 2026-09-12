@@ -388,10 +388,14 @@
 
     <!-- One platform file: its thumbnail, its name, and where the game's copy came from. -->
     <DataTemplate x:Key="PlatformFile">
-      <Grid Margin="0,0,0,8">
+      <Grid x:Name="Row"
+            Margin="0,0,0,8"
+            Focusable="True"
+            FocusVisualStyle="{x:Null}">
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="Auto" />
           <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
 
         <Border Width="48"
@@ -424,7 +428,28 @@
                        Visibility="{Binding ChangesNothing, Converter={StaticResource BoolToVis}}" />
           </StackPanel>
         </StackPanel>
+
+        <!-- Revealed by opacity rather than Visibility, the way the tiles reveal theirs: a collapsed button
+             cannot be tabbed to. Collapsed only where the game has no copy of the file to edit. -->
+        <Button x:Name="EditAction"
+                Grid.Column="2"
+                Margin="8,0,0,0"
+                VerticalAlignment="Center"
+                AutomationProperties.Name="{Binding FileName, StringFormat='Edit {0}'}"
+                Command="{Binding EditCommand}"
+                Content="Edit"
+                Opacity="0"
+                Style="{StaticResource TileAction}"
+                Visibility="{Binding CanEdit, Converter={StaticResource BoolToVis}}" />
       </Grid>
+      <DataTemplate.Triggers>
+        <Trigger SourceName="Row" Property="IsMouseOver" Value="True">
+          <Setter TargetName="EditAction" Property="Opacity" Value="1" />
+        </Trigger>
+        <Trigger SourceName="Row" Property="IsKeyboardFocusWithin" Value="True">
+          <Setter TargetName="EditAction" Property="Opacity" Value="1" />
+        </Trigger>
+      </DataTemplate.Triggers>
     </DataTemplate>
   </UserControl.Resources>
 
