@@ -5,8 +5,10 @@ using BhMaps.Core.Model;
 
 namespace BhMaps.Core.Operations;
 
-/// <summary>One picture that is nobody's map art: a pack file under a name no map's background slot uses, or a
-/// background in the game that no pack accounts for. One picture is one entry however many copies of it exist,
+/// <summary>One picture that is nobody's map art: a file the user imported into a pack of their own under a name
+/// no map's background slot uses, or a background in the game that no pack accounts for. The Default pack is a
+/// capture of the game's own folder, so a file of its own is the game's and never a picture of the user's. One
+/// picture is one entry however many copies of it exist,
 /// because the user thinks in pictures and the app should not show the same one four times (spec 4).</summary>
 public sealed record CustomPicture(
     string Hash,
@@ -32,6 +34,10 @@ public static class CustomPictureLibrary
         var packHashes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var pack in packs)
         {
+            // The Default pack is a capture of the game folder, so a file in it under no map's slot name is one
+            // of the game's own unreferenced backgrounds, not something the user imported. Its hash still counts
+            // as pack art, so the game file matching it stays out of the picture list too.
+            var isDefault = pack.Name.Equals(DefaultPack.Name, StringComparison.OrdinalIgnoreCase);
             foreach (var file in Jpgs(pack.FindFolder(BackgroundsFolder)))
             {
                 if (Hash(hashes, file) is not { } hash)
@@ -40,7 +46,7 @@ public static class CustomPictureLibrary
                 }
 
                 packHashes.Add(hash);
-                if (!slotNames.Contains(file.Name))
+                if (!isDefault && !slotNames.Contains(file.Name))
                 {
                     Of(byHash, hash).Library.Add((pack.Name, file.FullPath));
                 }

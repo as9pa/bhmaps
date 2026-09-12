@@ -545,6 +545,7 @@
     <Setter Property="TickFrequency" Value="1" />
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Template" Value="{StaticResource SliderTrack}" />
+    <Setter Property="behaviors:SliderDrag.IsEnabled" Value="True" />
     <Style.Triggers>
       <Trigger Property="IsEnabled" Value="False">
         <Setter Property="Opacity" Value="0.4" />
@@ -553,13 +554,15 @@
   </Style>
 
   <!-- Spec 7.2: the editor's sliders. Move-to-point on, so a click on the groove jumps the thumb there instead
-       of stepping; no snapping, because pan is continuous. The row around a disabled one carries the dimming. -->
+       of stepping, and SliderDrag so that holding the button after that goes on dragging it; no snapping,
+       because pan is continuous. The row around a disabled one carries the dimming. -->
   <Style x:Key="EditorSlider" TargetType="Slider">
     <Setter Property="Orientation" Value="Horizontal" />
     <Setter Property="IsMoveToPointEnabled" Value="True" />
     <Setter Property="IsSnapToTickEnabled" Value="False" />
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Template" Value="{StaticResource SliderTrack}" />
+    <Setter Property="behaviors:SliderDrag.IsEnabled" Value="True" />
   </Style>
 
   <Style x:Key="SectionHeaderText" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
