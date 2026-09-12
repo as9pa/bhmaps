@@ -11,7 +11,7 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace BhMaps.App.ViewModels.Pages;
 
-/// <summary>One row of the Apply picture menu. A null Picture is the "Add Custom Image..." row.</summary>
+/// <summary>One row of the Apply picture menu. A null Picture is the "Add Image..." row.</summary>
 public sealed record PictureMenuItem(string Header, CustomPicture? Picture);
 
 /// <summary>Spec 3.1: the chip row with "Select all" at its right end, and the grid of composed map cards.
@@ -23,7 +23,6 @@ public partial class MapsViewModel : PageViewModel
     public const int MaxZoom = AppSettings.MaxZoom;
 
     private const string AllChip = "All";
-    private const string ChangedChip = "Changed";
     private const string TickedChip = "Selected";
 
     /// <summary>Every card the last scan produced. Cards is this list under the chip and the search.</summary>
@@ -42,7 +41,6 @@ public partial class MapsViewModel : PageViewModel
     {
         Cards = [];
         _chips.Add(AllChip);
-        _chips.Add(ChangedChip);
 
         // After the collections, because setting them runs the change hooks that filter them.
         SearchText = "";
@@ -71,7 +69,7 @@ public partial class MapsViewModel : PageViewModel
     [ObservableProperty]
     public partial string SearchText { get; set; }
 
-    /// <summary>"All", the UI set labels, "Changed", and "Selected" once anything is ticked. Without level data the
+    /// <summary>"All", the UI set labels, and "Selected" once anything is ticked. Without level data the
     /// set chips are gone entirely (spec 3.6). An ObservableCollection behind the read-only surface, because the
     /// row changes when the level data does and when the first map is ticked.</summary>
     public IReadOnlyList<string> Chips => _chips;
@@ -119,7 +117,6 @@ public partial class MapsViewModel : PageViewModel
             var what = SelectedChip switch
             {
                 AllChip => "map",
-                ChangedChip => "changed map",
                 TickedChip => "selected map",
 
                 // RebuildChips clears the chip ListBox's items, and the ListBox pushes its lost selection back
@@ -129,18 +126,16 @@ public partial class MapsViewModel : PageViewModel
             };
             if (SearchText.Length > 0)
             {
-                return $"No {what} named '{SearchText}'";
+                return $"No map matches '{SearchText}'.";
             }
 
-            return SelectedChip == ChangedChip
-                ? "No map is changed. Every map matches the Default pack."
-                : $"No {what} to show.";
+            return $"No {what} to show.";
         }
     }
 
     public bool ShowClearSearch => SearchText.Length > 0;
 
-    /// <summary>Spec 3.1's first-run line: nothing in the library but the Default pack, and no custom picture
+    /// <summary>Spec 3.1's first-run line: nothing in the library but the Default pack, and no any-map picture
     /// either (plan decision A-D6, settled here).</summary>
     public bool ShowFirstRunLine =>
         _snapshot is { } s
@@ -155,7 +150,7 @@ public partial class MapsViewModel : PageViewModel
     /// <summary>The packs the Apply pack menu offers, in library order.</summary>
     public IReadOnlyList<Pack> PackChoices => _snapshot?.Packs ?? [];
 
-    /// <summary>The Apply picture menu: the library's custom pictures, then "Add Custom Image..." (spec 3.3).
+    /// <summary>The Apply picture menu: the library's any-map pictures, then "Add Image..." (spec 3.3).
     /// Rebuilt by every scan, so a picture that has just been imported is on the menu the next time it opens.</summary>
     public IReadOnlyList<PictureMenuItem> PictureChoices { get; private set; } = [];
 
@@ -400,7 +395,7 @@ public partial class MapsViewModel : PageViewModel
         PictureChoices =
         [
             .. CustomPictures().Select(p => new PictureMenuItem(p.DisplayName, p)),
-            new PictureMenuItem("Add Custom Image...", null),
+            new PictureMenuItem("Add Image...", null),
         ];
         OnPropertyChanged(nameof(PackChoices));
         OnPropertyChanged(nameof(PictureChoices));
@@ -511,8 +506,8 @@ public partial class MapsViewModel : PageViewModel
             return;
         }
 
-        // Spec 3.1: All, the set chips, Changed, and Selected once anything is ticked.
-        List<string> wanted = [AllChip, .. catalog.UiSets.Select(s => s.Label), ChangedChip];
+        // Spec 11: All, the set chips, and Selected once anything is ticked.
+        List<string> wanted = [AllChip, .. catalog.UiSets.Select(s => s.Label)];
         if (Shell.SelectedMapCount > 0)
         {
             wanted.Add(TickedChip);
@@ -591,16 +586,10 @@ public partial class MapsViewModel : PageViewModel
         return SelectedChip switch
         {
             AllChip => true,
-            ChangedChip => IsChanged(card),
             TickedChip => card.IsSelected,
             _ => _uiSets.FirstOrDefault(s => s.Label == SelectedChip) is { } set
                 && card.Map.Sets.Contains(set.Name, StringComparer.OrdinalIgnoreCase),
         };
     }
 
-    /// <summary>Everything that has a tag other than Missing (spec 3.1): a pack's art or a custom picture.</summary>
-    private bool IsChanged(MapCardViewModel card) =>
-        _snapshot is { } snapshot
-        && snapshot.MapStatuses.TryGetValue(card.FolderName, out var status)
-        && status.State is MapState.Packs or MapState.Custom;
 }

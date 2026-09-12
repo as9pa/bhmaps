@@ -26,13 +26,13 @@ Brawlhalla open or closed, and show on the next match load.
 ## What it does
 
 - Maps is a grid of every map with a composed preview and a tag saying what art is on it: the pack it
-  matches, a custom picture's name, or Missing. Clicking a map opens a panel with everything that one
+  matches, an any-map picture's name, or Missing. Clicking a map opens a panel with everything that one
   map can do.
 - Backgrounds and Platforms are one row per map, with every background or platform set that map could
   have laid out along it. One click applies the one you want.
 - Packs imports folders as packs, applies them, exports them, and captures the game's current art as
   a Default pack.
-- Add Custom Image fits any image to the background size and writes it into a pack, and the editor
+- Add Image fits any image to the background size and writes it into a pack, and the editor
   crops, pans and darkens one picture into a map's background slot.
 - Select maps on Maps to apply a pack or a picture to all of them at once, from the selection bar or
   from any choice's menu.

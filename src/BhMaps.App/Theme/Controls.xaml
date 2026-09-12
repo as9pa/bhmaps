@@ -898,7 +898,7 @@
     </Setter>
   </Style>
 
-  <!-- "Custom (11)" at the end of a folded strip, and "+7" beside one. The same height as a thumbnail, so the
+  <!-- "My Backgrounds (11)" at the end of a folded strip, and "+7" beside one. The same height as a thumbnail, so the
        line of them is level. -->
   <Style x:Key="RowMoreTileButton" TargetType="Button" BasedOn="{StaticResource OutlineButton}">
     <Setter Property="FontSize" Value="11" />

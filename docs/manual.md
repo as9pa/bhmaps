@@ -40,14 +40,14 @@ line turns red and offers Choose folder, which opens Settings. F5 rescans; Cance
 stops a long operation.
 
 - **Maps** is the grid of maps, and the only page where maps are selected. Chips above the grid
-  filter: All, one per level set, Changed, which is every map that is not entirely default, and
-  Selected, which appears once anything is selected. The set chips are Ranked 1v1, Ranked 2v2 and
+  filter: All, one per level set, and Selected, which appears once anything is selected. The set
+  chips are Ranked 1v1, Ranked 2v2 and
   Tournament when the game's data has the ranked sets, and the standard ones when it does not; the
   other sets the game defines are read but not shown. At the right end of the chip row is Select all,
   which selects every map the chips and the search currently show. The zoom slider in the header sets
   2 to 10 columns, 6 to begin with. Each card is a composed preview, the map's name, and a tag only
-  when there is something to say: the pack the map matches, the file name of the custom picture on
-  it, or Missing. A map that is entirely default draws no tag. Wide cards keep the tag on the name
+  when there is something to say: the pack the map matches, the name of the any-map picture on it,
+  or Missing. A map that is entirely default draws no tag. Wide cards keep the tag on the name
   row; narrower ones draw it over the bottom-left corner of the picture instead, so every card in the
   grid is the same height. From 7 columns on the name is smaller and the tag is hidden; at 9 and 10
   the name row goes altogether, the name and tag become the card's tooltip, and a missing map is
@@ -58,15 +58,16 @@ stops a long operation.
   selected, a bar floats at the bottom of the grid saying how many, as in "3 of 67 maps selected",
   with Apply pack, Apply picture, Reset to default, Select all and Clear on it. Apply pack opens a
   menu of packs and gives each selected map that pack's platform art and background. Apply picture
-  opens a menu of custom pictures with Add Custom Image at the end. A write to more than one map asks
+  opens a menu of any-map pictures with Add Image at the end. A write to more than one map asks
   first and names the count. The selection clears after a write that worked, and stays after one that
   failed or was cancelled. Escape closes the panel when one is open, and clears the selection when
   none is.
 - The **map panel** opens on the right and holds everything one map can do: its name and the sets it
   belongs to, a larger preview, a line saying in words what is in game, Reset this map and Open
   folder, and then a two-part switch, Background and Platforms. Background lists the choices two
-  across: Default, one per pack that has a picture for this map, then the custom pictures behind a
-  strip that folds open. Platforms lists Default and each pack that has a set for this map, drawn
+  across: Default, one per pack that has a picture for this map, then the any-map pictures, one
+  strip per pack that holds one and a last strip of the pictures only the game has, all folding open
+  together. Platforms lists Default and each pack that has a set for this map, drawn
   over the map's current background. The choice the game is showing carries a check. Hovering a
   choice shows Apply and a dots button, and the dots or a right-click opens its menu: apply to this
   map, apply to the selected maps, apply to all maps, then Edit and Show in folder for a picture, or
@@ -74,16 +75,16 @@ stops a long operation.
 - **Backgrounds** is one row per map: the map's name and its tag on the left, then a strip of every
   background that map could have. The picture the game is showing comes first, with a check and a
   border; then Default, then one thumbnail for each pack that has a picture for that map, captioned
-  with the pack's name. Custom pictures are folded behind a single tile reading "Custom" and a count,
+  with the pack's name. Any-map pictures are folded behind a single tile reading "My Backgrounds" and a count,
   and when more choices exist than fit the row, a tile reading "+" and a number stands for the rest.
   Clicking either unfolds that row; rows fold back when the row is clicked again or the page is left.
   One click on a thumbnail applies it to that map, with no confirmation to answer. Hovering shows
   Apply and a dots button, and the menu offers to apply the picture to this map, to the selected
-  maps or to all maps, then Edit and Show in folder, and for a custom picture Remove from library, or
-  Save to library for a picture the game is showing that no pack holds. Search matches map names,
-  pack names and file names. The chips are the ones Maps has, without Selected and with Custom, which
-  keeps the maps showing a custom picture. The zoom slider sets the row height in five steps, the
-  second to begin with. Add Custom Image is in the header. Maps are not selected on this page: it has
+  maps or to all maps, then Edit and Show in folder, and for a picture in a pack Remove from that
+  pack, or Save to My Backgrounds for a picture the game is showing that no pack holds. Search
+  matches map names, pack names and file names. The chips are the ones Maps has, without Selected.
+  The zoom slider sets the row height in five steps, the second to begin with. Add Image is in the
+  header. Maps are not selected on this page: it has
   no selection boxes and no selection bar, and "apply to the selected maps" means the maps
   selected on Maps. Up and Down move between rows, Left and Right along a strip, and Enter applies
   the thumbnail the keyboard is on.
@@ -117,7 +118,7 @@ These windows open on top of the pages:
 - **Welcome** opens on the first run and asks for the three things the app needs: the game folder,
   found through Steam when it can be, the library folder, and whether to capture the game's current
   art as the `Default` pack. It comes back if the saved game folder later stops working.
-- **Add Custom Image**, from the Backgrounds header, the selection bar or a map's panel, takes any
+- **Add Image**, from the Backgrounds header, the selection bar or a map's panel, takes any
   number of images, dropped on the window or picked, fits them all one way (**Stretch**, **Center**,
   **Fill** or **Fit**) and writes each one into an existing or new pack as a 2048x1151 JPEG. A block
   of choices headed "Then" decides what happens after that: add them to the library and stop; add and
@@ -136,7 +137,7 @@ These windows open on top of the pages:
   or **Stretch**, with two pan sliders that apply only to Fill; and how far to darken it. It saves
   into a pack, the picture's own to begin with, under a note saying which file it replaces and that
   choosing another pack keeps the original, and it can write the result into the game in the same
-  step. Opened from Add Custom Image with no picture, the source row is where a picture is dropped or
+  step. Opened from Add Image with no picture, the source row is where a picture is dropped or
   browsed for.
 
 Every change is written straight into the game folder, whether Brawlhalla is open or closed, and
@@ -175,7 +176,8 @@ the exception and use a message box: an error the app did not expect, and a deve
 - A **pack** is a folder under `<library>\packs`. Inside it are folders named exactly like the game's
   folders, holding the images that replace the game's. A pack may hold one file or every folder.
 - **Status** is decided by SHA-256, file by file. A file that matches only the `Default` pack is
-  default; one that matches other packs is labelled with them; one that matches nothing is custom; a
+  default; one that matches other packs is labelled with them; one that matches nothing is in game
+  only; a
   file the `Default` pack has and the game folder lacks is missing. A map is summarised from its
   files, and missing is the only state that gets a colour. Hashes are cached by full path, size and
   last-write time, so a rescan only rehashes what changed.
@@ -291,7 +293,7 @@ Formatting and layout:
   denies access, fails the whole scan with an error dialog instead of being skipped.
 - Cancel interrupts only the operations that check for it: the scan, Reset all to default, applying a
   pack, applying a background, applying a platform set, exporting a pack, capturing defaults,
-  importing a folder and adding custom images. Resetting one map, deleting a pack and Undo run to the end.
+  importing a folder and adding images. Resetting one map, deleting a pack and Undo run to the end.
 - Cancelling an import or an apply leaves whatever was already copied on disk. The rescan that
   follows shows it.
 - The import dialog's text boxes stay editable while a scan is running, and editing the source path

@@ -28,9 +28,6 @@ public partial class PlatformsViewModel : RowsPageViewModel
 
     public override string SearchPlaceholder => "Search maps and packs";
 
-    /// <summary>Addendum C: the Maps chip row without "Custom". A platform set is never a custom picture.</summary>
-    protected override bool HasCustomChip => false;
-
     protected override string NoResultsText => $"No map or pack matches '{SearchText}'.";
 
     protected override void SaveZoom(int value)
@@ -58,8 +55,6 @@ public partial class PlatformsViewModel : RowsPageViewModel
             map,
             tag,
             missing,
-            isChanged: tag.Length > 0 && !missing,
-            showsCustomPicture: false,
             Haystack(map, sets),
             alwaysShown,
             [],
@@ -69,8 +64,8 @@ public partial class PlatformsViewModel : RowsPageViewModel
             ComposeSetAsync);
     }
 
-    /// <summary>Addendum C's state tag, measured over this map's own folder only: Missing beats Custom beats the
-    /// first pack that matched, and Default draws no tag at all.</summary>
+    /// <summary>Addendum C's state tag, measured over this map's own folder only: Missing beats the game's own
+    /// art beats the first pack that matched, and Default draws no tag at all.</summary>
     private static (string Tag, bool Missing) Tag(MapEntry map, MapStatus? status)
     {
         var prefix = map.FolderName + Path.DirectorySeparatorChar;
@@ -84,7 +79,7 @@ public partial class PlatformsViewModel : RowsPageViewModel
 
         if (files.Any(f => f.State == MapFileState.Custom))
         {
-            return ("Custom", false);
+            return ("In game only", false);
         }
 
         return (files.SelectMany(f => f.PackNames).FirstOrDefault() ?? "", false);

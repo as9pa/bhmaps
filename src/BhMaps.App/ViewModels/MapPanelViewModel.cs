@@ -75,9 +75,10 @@ public partial class MapPanelViewModel : ObservableObject
             _backgroundTiles.Add(tile);
         }
 
-        // Spec 4: every picture in the custom library, offered for this map the way a pack's is. A map with no
-        // background slot has nowhere to put one, so it gets no strip at all.
-        foreach (var tile in MapChoices.CustomBackgrounds(shell, map, snapshot))
+        // Spec 3: every any-map picture, grouped by the pack it lives in and offered for this map the way a
+        // pack's picture is. A map with no background slot has nowhere to put one, so it gets no strip at all.
+        PictureGroups = MapChoices.PictureGroups(shell, map, snapshot);
+        foreach (var tile in PictureGroups.SelectMany(g => g.Tiles))
         {
             _customTiles.Add(tile);
         }
@@ -109,8 +110,11 @@ public partial class MapPanelViewModel : ObservableObject
     /// <summary>Default first, then every pack with a picture for this map's first background slot.</summary>
     public IReadOnlyList<MapPictureTileViewModel> BackgroundTiles => _backgroundTiles;
 
-    /// <summary>Spec 4: the custom library, under the packs, for this map's first background slot.</summary>
+    /// <summary>Every any-map picture, under the packs, for this map's first background slot.</summary>
     public IReadOnlyList<CustomPictureTileViewModel> CustomTiles => _customTiles;
+
+    /// <summary>The same tiles in the strips the panel draws: one per pack, then the game's own (spec 3).</summary>
+    public IReadOnlyList<PictureGroup> PictureGroups { get; }
 
     public IReadOnlyList<PlatformSetTileViewModel> PlatformTiles => _platformTiles;
 
@@ -154,15 +158,13 @@ public partial class MapPanelViewModel : ObservableObject
         }
     }
 
-    /// <summary>Whether the custom pictures strip is open. Closed on every new panel: the pictures under it are
-    /// read only once it is asked for.</summary>
+    /// <summary>Whether the picture strips are open. Closed on every new panel: the pictures under them are
+    /// read only once they are asked for.</summary>
     [ObservableProperty]
     public partial bool CustomExpanded { get; set; }
 
-    public string CustomHeader => $"Custom pictures ({_customTiles.Count})";
-
-    /// <summary>False hides the header altogether, so a library with no custom picture shows nothing but the
-    /// Add Custom Image button.</summary>
+    /// <summary>False hides the headers altogether, so a library with no any-map picture shows nothing but the
+    /// Add Image button.</summary>
     public bool HasCustomPictures => _customTiles.Count > 0;
 
     [ObservableProperty]
@@ -282,7 +284,7 @@ public partial class MapPanelViewModel : ObservableObject
         }
     }
 
-    /// <summary>Spec 3.2's one sentence: "Missing 2 files", "Custom picture: sunset.jpg", "Default", or
+    /// <summary>Spec 3.2's one sentence: "Missing 2 files", "sunset, from My Backgrounds", "Default", or
     /// "In game: flowermap background, Default platforms".</summary>
     private string BuildStatusText()
     {
@@ -296,7 +298,13 @@ public partial class MapPanelViewModel : ObservableObject
         var file = slot is null ? null : InGameMatch.File(_status, AssetPath.Background(slot));
         if (file is { State: MapFileState.Custom })
         {
-            return $"Custom picture: {CustomPictureLibrary.NameFor(_snapshot.CustomPictures, slot!)}";
+            // The picture the game is showing names the pack it lives in, which is where the user would look for
+            // it again; a picture no pack holds is in the game and nowhere else (spec 3).
+            var fileName = Path.GetFileName(AssetPath.Background(slot!));
+            var picture = _snapshot.CustomPictures.FirstOrDefault(
+                p => p.InGameSlots.Contains(fileName, StringComparer.OrdinalIgnoreCase));
+            var name = Path.GetFileNameWithoutExtension(picture?.DisplayName ?? fileName);
+            return picture?.PackName is { } pack ? $"{name}, from {pack}" : $"{name}, in game only";
         }
 
         var background = file is { State: MapFileState.Pack, PackNames.Count: > 0 }
@@ -308,7 +316,7 @@ public partial class MapPanelViewModel : ObservableObject
             : $"In game: {background} background, {platforms} platforms";
     }
 
-    /// <summary>Custom beats a pack beats Default, over this map's own folder only.</summary>
+    /// <summary>The game's own art beats a pack beats Default, over this map's own folder only.</summary>
     private string PlatformSource()
     {
         var files = (_status?.Files ?? Array.Empty<MapFileStatus>())
@@ -316,7 +324,7 @@ public partial class MapPanelViewModel : ObservableObject
             .ToList();
         if (files.Any(f => f.State == MapFileState.Custom))
         {
-            return "Custom";
+            return "in game only";
         }
 
         return files.SelectMany(f => f.PackNames).FirstOrDefault() ?? DefaultPack.Name;

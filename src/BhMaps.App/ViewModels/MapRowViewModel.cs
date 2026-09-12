@@ -6,7 +6,7 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace BhMaps.App.ViewModels;
 
-/// <summary>The last tile of a folded strip: "Custom (11)" for the pictures the row keeps folded (addendum B,
+/// <summary>The last tile of a folded strip: "My Backgrounds (11)" for the pictures the row keeps folded (addendum B,
 /// q3). The "+N" tile for choices the row had no width for is drawn by the view from StripPanel.Overflow,
 /// because only the panel that measured them knows the number.</summary>
 public sealed partial class RowMoreViewModel : ObservableObject
@@ -42,8 +42,6 @@ public sealed partial class MapRowViewModel : ObservableObject
         MapEntry map,
         string tagText,
         bool isMissing,
-        bool isChanged,
-        bool showsCustomPicture,
         string haystack,
         IReadOnlyList<object> alwaysShown,
         IReadOnlyList<object> foldedAway,
@@ -55,8 +53,6 @@ public sealed partial class MapRowViewModel : ObservableObject
         Map = map;
         TagText = tagText;
         IsMissing = isMissing;
-        IsChanged = isChanged;
-        ShowsCustomPicture = showsCustomPicture;
         Haystack = haystack;
         _alwaysShown = alwaysShown;
         _foldedAway = foldedAway;
@@ -74,7 +70,7 @@ public sealed partial class MapRowViewModel : ObservableObject
 
     public string DisplayName => Map.DisplayName;
 
-    /// <summary>The pack name, the custom picture's name, "Missing", or empty for Default. The page decides it:
+    /// <summary>The pack name, the any-map picture's name, "Missing", or empty for Default. The page decides it:
     /// Backgrounds takes the Maps card's own tag, Platforms measures the map's folder instead.</summary>
     public string TagText { get; }
 
@@ -82,18 +78,11 @@ public sealed partial class MapRowViewModel : ObservableObject
 
     public bool ShowTag => TagText.Length > 0;
 
-    /// <summary>Whether the Changed chip keeps this row.</summary>
-    public bool IsChanged { get; }
-
-    /// <summary>Whether the Backgrounds page's Custom chip keeps this row. Always false on Platforms, which has
-    /// no such chip (addendum C).</summary>
-    public bool ShowsCustomPicture { get; }
-
     /// <summary>Everything the search box matches against: the map's name, then every choice's caption and file
     /// name, one per line (addendum B).</summary>
     public string Haystack { get; }
 
-    /// <summary>"Custom (11)", or empty when the row folds nothing away.</summary>
+    /// <summary>"My Backgrounds (11)", or empty when the row folds nothing away.</summary>
     public string FoldedLabel { get; }
 
     /// <summary>Every picture tile in the row, folded or not, so one load reaches all of them.</summary>
@@ -101,7 +90,7 @@ public sealed partial class MapRowViewModel : ObservableObject
 
     public IReadOnlyList<PlatformSetTileViewModel> Sets { get; }
 
-    /// <summary>What the strip draws right now: the tiles, plus the "Custom (N)" tile while the row is folded.
+    /// <summary>What the strip draws right now: the tiles, plus the "My Backgrounds (N)" tile while the row is folded.
     /// Typed as object because a Backgrounds strip holds two tile types and that last one; the view picks a
     /// template by type, which is what an implicit DataTemplate in the page's resources is for.</summary>
     public ObservableCollection<object> Choices { get; }
@@ -175,7 +164,7 @@ public sealed partial class MapRowViewModel : ObservableObject
     }
 
     /// <summary>What the row's own "+N" tile does: the row shows every choice it has, on as many lines as that
-    /// needs (addendum B, q2). The folded "Custom (N)" tile is a child and runs its own.</summary>
+    /// needs (addendum B, q2). The folded "My Backgrounds (N)" tile is a child and runs its own.</summary>
     [RelayCommand]
     private void Unfold() => IsUnfolded = true;
 
