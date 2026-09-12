@@ -158,4 +158,41 @@ public class CustomPictureLibraryTests
 
         Assert.Equal(["apple.jpg", "zebra.jpg"], pictures.Select(p => p.DisplayName));
     }
+
+    [Fact]
+    public void Build_DefaultPackNonSlotFile_IsNotAPicture()
+    {
+        using var tmp = new TempDir();
+        var (tree, packs, cache) = Arrange(tmp, (_, lib) =>
+            PackTree(lib, "Default").File("Backgrounds", "BG_Bp9_Anim.jpg", "bp9"));
+
+        Assert.Empty(CustomPictureLibrary.Build(packs, tree, Catalog("Grove", "BG_Grove.jpg"), cache));
+    }
+
+    [Fact]
+    public void Build_SameFileInMyBackgrounds_IsAPicture()
+    {
+        using var tmp = new TempDir();
+        var (tree, packs, cache) = Arrange(tmp, (_, lib) =>
+            PackTree(lib, "My Backgrounds").File("Backgrounds", "BG_Bp9_Anim.jpg", "bp9"));
+
+        var picture = Assert.Single(
+            CustomPictureLibrary.Build(packs, tree, Catalog("Grove", "BG_Grove.jpg"), cache));
+
+        Assert.Equal("BG_Bp9_Anim.jpg", picture.DisplayName);
+        Assert.Equal("My Backgrounds", picture.PackName);
+    }
+
+    [Fact]
+    public void Build_GameFileMatchingDefaultNonSlotFile_IsNotInGameOnly()
+    {
+        using var tmp = new TempDir();
+        var (tree, packs, cache) = Arrange(tmp, (game, lib) =>
+        {
+            new FakeGameTree(game).File("Backgrounds", "BG_Bp9_Anim.jpg", "bp9");
+            PackTree(lib, "Default").File("Backgrounds", "BG_Bp9_Anim.jpg", "bp9");
+        });
+
+        Assert.Empty(CustomPictureLibrary.Build(packs, tree, Catalog("Grove", "BG_Grove.jpg"), cache));
+    }
 }

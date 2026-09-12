@@ -63,7 +63,9 @@ public static class MapChoices
 
     /// <summary>The same tiles as <see cref="CustomBackgrounds" />, one group per pack that has an any-map
     /// picture, in the Packs page order, then one last group for the pictures only the game has (spec 3). A pack
-    /// with nothing of the kind is not a group at all.</summary>
+    /// with nothing of the kind is not a group at all. The last group holds only the game-only pictures the game
+    /// is showing on this map: one the game has somewhere else is that map's business, and it is offered on that
+    /// map's row and panel, where its menu still has Save to My Backgrounds.</summary>
     public static IReadOnlyList<PictureGroup> PictureGroups(
         MainViewModel shell, MapEntry map, ScanSnapshot snapshot)
     {
@@ -80,7 +82,7 @@ public static class MapChoices
             }
         }
 
-        var inGameOnly = tiles.Where(t => t.PackName is null).ToList();
+        var inGameOnly = tiles.Where(t => t.PackName is null && t.IsInGame).ToList();
         if (inGameOnly.Count > 0)
         {
             groups.Add(new PictureGroup($"In game only ({inGameOnly.Count})", null, inGameOnly));
