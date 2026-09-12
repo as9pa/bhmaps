@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using BhMaps.Core.Storage;
@@ -17,7 +18,8 @@ public static class SettingsStore
     private static readonly string[] KnownKeys =
     [
         "gamePath", "libraryPath", "firstRunDone", "mapsZoom", "backgroundsRowZoom", "packZoom", "platformsZoom",
-        "welcomeDone", "homeZoom", "whileRunning", "backgroundsZoom",
+        "welcomeDone", "homeZoom", "whileRunning", "backgroundsZoom", "packLastApplied",
+        "backgroundsShowPictures",
     ];
 
     public static string DefaultAppDataDir =>
@@ -87,7 +89,9 @@ public static class SettingsStore
             Math.Clamp(Int(obj, "backgroundsRowZoom", 2), AppSettings.MinRowZoom, AppSettings.MaxRowZoom),
             Math.Clamp(Int(obj, "packZoom", 5), AppSettings.MinZoom, AppSettings.MaxZoom),
             Bool(obj, "welcomeDone"),
-            Math.Clamp(Int(obj, "platformsZoom", 3), AppSettings.MinRowZoom, AppSettings.MaxRowZoom))
+            Math.Clamp(Int(obj, "platformsZoom", 3), AppSettings.MinRowZoom, AppSettings.MaxRowZoom),
+            Stamps(obj),
+            Bool(obj, "backgroundsShowPictures"))
         {
             Unknown = unknown.Count == 0 ? null : unknown,
         };
@@ -106,7 +110,21 @@ public static class SettingsStore
             ["packZoom"] = settings.PackZoom,
             ["platformsZoom"] = settings.PlatformsZoom,
             ["welcomeDone"] = settings.WelcomeDone,
+            ["backgroundsShowPictures"] = settings.BackgroundsShowPictures,
         };
+
+        // Spec 8: a library nobody has applied from writes no key at all, rather than an empty object nobody reads.
+        if (settings.LastApplied.Count > 0)
+        {
+            var stamps = new JsonObject();
+            foreach (var (pack, stamp) in settings.LastApplied)
+            {
+                stamps[pack] = stamp.ToString("o", CultureInfo.InvariantCulture);
+            }
+
+            obj["packLastApplied"] = stamps;
+        }
+
         if (settings.Unknown is { } extra)
         {
             foreach (var (key, value) in extra)
@@ -201,4 +219,28 @@ public static class SettingsStore
     /// <summary><paramref name="fallback"/> when the key is absent or holds anything other than a JSON integer.</summary>
     private static int Int(JsonObject obj, string key, int fallback) =>
         obj[key] is JsonValue value && value.TryGetValue<int>(out var i) ? i : fallback;
+
+    /// <summary>Spec 8's last-applied stamps, as { "&lt;pack&gt;": "&lt;round-trip date&gt;" }. An entry whose value is not
+    /// a date this version can read is skipped rather than failing the whole file: a hand-edited stamp costs its
+    /// own pack its place in the order and nothing else.</summary>
+    private static IReadOnlyDictionary<string, DateTimeOffset>? Stamps(JsonObject obj)
+    {
+        if (obj["packLastApplied"] is not JsonObject stamps)
+        {
+            return null;
+        }
+
+        var read = new Dictionary<string, DateTimeOffset>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (key, value) in stamps)
+        {
+            if (value?.GetValueKind() == JsonValueKind.String
+                && DateTimeOffset.TryParse(
+                    value.GetValue<string>(), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var stamp))
+            {
+                read[key] = stamp;
+            }
+        }
+
+        return read;
+    }
 }

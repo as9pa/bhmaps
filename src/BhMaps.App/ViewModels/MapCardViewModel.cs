@@ -127,8 +127,8 @@ public partial class MapCardViewModel : ObservableObject
     /// panel's status line uses too (plan decision A-D5). A map with no slot has no picture to name.</summary>
     private static string CustomName(MapEntry map, IReadOnlyList<CustomPicture> customPictures) =>
         map.BackgroundSlots.Count > 0
-            ? CustomPictureLibrary.NameFor(customPictures, map.BackgroundSlots[0])
-            : "Custom";
+            ? Path.GetFileNameWithoutExtension(CustomPictureLibrary.NameFor(customPictures, map.BackgroundSlots[0]))
+            : "In game only";
 
     private static string Ellipsise(string name) =>
         name.Length <= TagMaxLength ? name : name[..(TagMaxLength - 1)] + "\u2026";

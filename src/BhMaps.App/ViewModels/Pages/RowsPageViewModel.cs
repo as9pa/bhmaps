@@ -19,8 +19,6 @@ public abstract partial class RowsPageViewModel : PageViewModel
     public const int MaxZoom = AppSettings.MaxRowZoom;
 
     protected const string AllChip = "All";
-    protected const string ChangedChip = "Changed";
-    protected const string CustomChip = "Custom";
 
     /// <summary>Every row the last scan produced. Rows is this list under the chip and the search.</summary>
     private readonly List<MapRowViewModel> _all = [];
@@ -37,7 +35,6 @@ public abstract partial class RowsPageViewModel : PageViewModel
     {
         Rows = [];
         _chips.Add(AllChip);
-        _chips.Add(ChangedChip);
 
         // After the collections, because setting them runs the change hooks that filter them.
         SearchText = "";
@@ -55,11 +52,14 @@ public abstract partial class RowsPageViewModel : PageViewModel
     /// <summary>The last scan, or null before the first one.</summary>
     protected ScanSnapshot? Snapshot { get; private set; }
 
+    /// <summary>Every row the last scan produced, filtered or not, for a page that has something to tell all of
+    /// them (spec 4's switch writes ShowExtras on each rather than building the list again).</summary>
+    protected IReadOnlyList<MapRowViewModel> AllRows => _all;
+
     /// <summary>The rows the chip and the search leave visible, in map order.</summary>
     public ObservableCollection<MapRowViewModel> Rows { get; }
 
-    /// <summary>"All", the UI set labels, "Changed", and "Custom" on the page that has it. Without level data the
-    /// set chips are gone entirely (spec 3.6).</summary>
+    /// <summary>"All" and the UI set labels. Without level data the set chips are gone entirely (spec 3.6).</summary>
     public IReadOnlyList<string> Chips => _chips;
 
     [ObservableProperty]
@@ -95,13 +95,10 @@ public abstract partial class RowsPageViewModel : PageViewModel
     /// <summary>The zoom slider's automation name: a rows page sizes thumbnails, it does not count columns.</summary>
     public virtual string ZoomLabel => "Thumbnail size";
 
-    /// <summary>Whether the chip row carries "Custom" (addendum B; Platforms has no such chip).</summary>
-    protected abstract bool HasCustomChip { get; }
-
     public bool ShowClearSearch => SearchText.Length > 0;
 
     /// <summary>Spec 3.1's first-run line, on this page too: nothing in the library but the Default pack, and no
-    /// custom picture either.</summary>
+    /// any-map picture either.</summary>
     public bool ShowFirstRunLine =>
         Snapshot is { } s
         && !s.Packs.Any(p => !p.Name.Equals(DefaultPack.Name, StringComparison.OrdinalIgnoreCase))
@@ -121,8 +118,6 @@ public abstract partial class RowsPageViewModel : PageViewModel
             // its lost selection back through this two-way binding, so the getter can run with nothing chosen.
             return SelectedChip switch
             {
-                ChangedChip => "No map is changed. Every map matches the Default pack.",
-                CustomChip => "No map is showing a custom picture.",
                 null or "" or AllChip => "No map to show.",
                 _ => $"No {SelectedChip.ToLowerInvariant()} map to show.",
             };
@@ -225,12 +220,7 @@ public abstract partial class RowsPageViewModel : PageViewModel
     /// SelectedChip back through the two-way binding, and the filter answering it runs against no chip at all.</summary>
     private void RebuildChips(MapCatalog catalog)
     {
-        List<string> wanted = [AllChip, .. catalog.UiSets.Select(s => s.Label), ChangedChip];
-        if (HasCustomChip)
-        {
-            wanted.Add(CustomChip);
-        }
-
+        List<string> wanted = [AllChip, .. catalog.UiSets.Select(s => s.Label)];
         if (_chips.SequenceEqual(wanted))
         {
             return;
@@ -285,8 +275,6 @@ public abstract partial class RowsPageViewModel : PageViewModel
         return SelectedChip switch
         {
             AllChip => true,
-            ChangedChip => row.IsChanged,
-            CustomChip => row.ShowsCustomPicture,
             null or "" => true,
             _ => _uiSets.FirstOrDefault(s => s.Label == SelectedChip) is { } set
                 && row.Map.Sets.Contains(set.Name, StringComparer.OrdinalIgnoreCase),

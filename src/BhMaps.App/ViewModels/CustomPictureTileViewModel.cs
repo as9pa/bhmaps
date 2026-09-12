@@ -10,8 +10,8 @@ using CommunityToolkit.Mvvm.Input;
 namespace BhMaps.App.ViewModels;
 
 /// <summary>One custom picture, which belongs to no map: its Apply is always a choice (spec 4), so the hover
-/// button opens the menu. Remove from library deletes every copy of it in the packs and is the one destructive
-/// action on this page, so it confirms and names the count.</summary>
+/// button opens the menu. Remove from the pack deletes every copy of it in the packs and is the one destructive
+/// action on this page, so it confirms and names the pack.</summary>
 public sealed partial class CustomPictureTileViewModel : PictureTileViewModel
 {
     private readonly CustomPicture _picture;
@@ -22,12 +22,12 @@ public sealed partial class CustomPictureTileViewModel : PictureTileViewModel
     }
 
     /// <summary>The rows page's and the map panel's form: the same picture, offered for one map's slot, so the
-    /// hover button applies in a click and the menu opens with "Apply to Brawlhaven".</summary>
+    /// hover button applies in a click and the menu is what the button cannot do.</summary>
     public CustomPictureTileViewModel(
         MainViewModel shell, CustomPicture picture, string subtitle, MapEntry? map, string? slot, bool inGame)
         : base(
             shell,
-            picture.DisplayName,
+            Path.GetFileNameWithoutExtension(picture.DisplayName),
             subtitle,
             // Empty only for the picture SourcePath calls impossible, and then every action on the tile reports a
             // file that is not there rather than throwing on a path nobody could resolve.
@@ -65,18 +65,15 @@ public sealed partial class CustomPictureTileViewModel : PictureTileViewModel
 
     public override ICommand? ApplyCommand => Map is null ? null : ApplyToMapCommand;
 
-    /// <summary>False for a picture that is only in the game folder, which is offered Save to library instead of
-    /// Remove from library.</summary>
+    /// <summary>False for a picture that is only in the game folder, which is offered Save to My Backgrounds
+    /// instead of Remove from its pack.</summary>
     private bool InLibrary => _picture.LibraryPaths.Count > 0;
 
     public override void RebuildMenu(int tickedCount)
     {
+        // No "Apply to <map>": a tile that names a map carries the Apply button, and a menu holds only what the
+        // tile cannot do on its own (spec 9).
         var items = new List<TileMenuCommand>();
-        if (Map is { } map)
-        {
-            items.Add(new TileMenuCommand($"Apply to {map.DisplayName}", ApplyToMapCommand));
-        }
-
         if (tickedCount > 0)
         {
             items.Add(new TileMenuCommand(TickedText(tickedCount), ApplyToTickedCommand));
@@ -86,8 +83,8 @@ public sealed partial class CustomPictureTileViewModel : PictureTileViewModel
         items.Add(new TileMenuCommand("Edit", EditCommand));
         items.Add(new TileMenuCommand("Show in folder", ShowInFolderCommand));
         items.Add(InLibrary
-            ? new TileMenuCommand("Remove from library", RemoveFromLibraryCommand)
-            : new TileMenuCommand("Save to library", SaveToLibraryCommand));
+            ? new TileMenuCommand($"Remove from {PackName}", RemoveFromLibraryCommand)
+            : new TileMenuCommand("Save to My Backgrounds", SaveToLibraryCommand));
         MenuItems = items;
     }
 
@@ -95,17 +92,17 @@ public sealed partial class CustomPictureTileViewModel : PictureTileViewModel
     [RelayCommand]
     private Task ApplyToMapAsync() =>
         Map is { } map
-            ? Shell.ApplyPictureAsync(FullPath, [map], clearTicks: false, _picture.DisplayName)
+            ? Shell.ApplyPictureAsync(FullPath, [map], clearTicks: false, _picture.DisplayName, _picture.PackName)
             : Task.CompletedTask;
 
     [RelayCommand]
     private Task ApplyToTickedAsync() =>
-        Shell.ApplyPictureAsync(FullPath, Shell.SelectedMaps, clearTicks: true, _picture.DisplayName);
+        Shell.ApplyPictureAsync(FullPath, Shell.SelectedMaps, clearTicks: true, _picture.DisplayName, _picture.PackName);
 
     [RelayCommand]
     private Task ApplyToAllAsync() =>
         Shell.Snapshot is { } snapshot
-            ? Shell.ApplyPictureAsync(FullPath, snapshot.Catalog.Maps, clearTicks: false, _picture.DisplayName)
+            ? Shell.ApplyPictureAsync(FullPath, snapshot.Catalog.Maps, clearTicks: false, _picture.DisplayName, _picture.PackName)
             : Task.CompletedTask;
 
     [RelayCommand]
@@ -124,10 +121,9 @@ public sealed partial class CustomPictureTileViewModel : PictureTileViewModel
     private async Task RemoveFromLibraryAsync()
     {
         var paths = _picture.LibraryPaths;
-        var count = paths.Count == 1 ? "1 copy" : $"{paths.Count} copies";
         if (!Shell.Dialogs.Confirm(
-                "Remove from library",
-                $"Remove {Title} from the library?\n\nThe {count} in your packs are deleted. Nothing in the game folder changes."))
+                $"Remove from {PackName}?",
+                $"{Title} is removed from {PackName}. The game keeps whatever is applied until you apply something else."))
         {
             return;
         }
@@ -167,7 +163,7 @@ public sealed partial class CustomPictureTileViewModel : PictureTileViewModel
         Shell.Dialogs.ShowFailures("Some files could not be removed", failures);
         if (ok)
         {
-            Shell.SetLibraryDone($"Removed {Title} from the library");
+            Shell.SetLibraryDone($"Removed {Title} from {PackName}");
         }
 
         await Shell.RescanAsync();

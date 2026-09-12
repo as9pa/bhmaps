@@ -8,7 +8,9 @@ public sealed record AppSettings(
     int BackgroundsZoom = 2,
     int PackZoom = 5,
     bool WelcomeDone = false,
-    int PlatformsZoom = 3)
+    int PlatformsZoom = 3,
+    IReadOnlyDictionary<string, DateTimeOffset>? PackLastApplied = null,
+    bool BackgroundsShowPictures = false)
 {
     public const string DefaultGamePath = @"C:\Program Files (x86)\Steam\steamapps\common\Brawlhalla\mapArt";
 
@@ -32,6 +34,14 @@ public sealed record AppSettings(
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "BhMaps");
 
     public static AppSettings Default { get; } = new(DefaultGamePath, DefaultLibraryPath, FirstRunDone: false);
+
+    /// <summary>Spec 8: when each pack was last applied, so the packs sort by the one in use. Read through
+    /// <see cref="LastApplied"/>, which is never null, so no caller has to know a settings file that never
+    /// carried a stamp from one that carried an empty object.</summary>
+    public IReadOnlyDictionary<string, DateTimeOffset> LastApplied => PackLastApplied ?? EmptyStamps;
+
+    private static readonly IReadOnlyDictionary<string, DateTimeOffset> EmptyStamps =
+        new Dictionary<string, DateTimeOffset>();
 
     /// <summary>Properties from settings.json this version does not know. Written back untouched.</summary>
     public System.Text.Json.Nodes.JsonObject? Unknown { get; init; }

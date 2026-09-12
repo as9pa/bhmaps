@@ -282,4 +282,64 @@ public class SettingsStoreTests
         Assert.Equal(4, (int)json["mapsZoom"]!);
         Assert.Equal(1, (int)json["keepMe"]!);
     }
+
+    [Fact]
+    public void Save_ThenLoad_RoundTripsBackgroundsShowPictures()
+    {
+        using var tmp = new TempDir();
+        var path = tmp.Sub("settings.json");
+
+        SettingsStore.Save(path, AppSettings.Default with { BackgroundsShowPictures = true });
+
+        Assert.True(SettingsStore.Load(path).BackgroundsShowPictures);
+        Assert.False(AppSettings.Default.BackgroundsShowPictures);
+    }
+
+    [Fact]
+    public void Save_ThenLoad_RoundTripsPackLastApplied()
+    {
+        using var tmp = new TempDir();
+        var path = tmp.Sub("settings.json");
+        var stamp = new DateTimeOffset(2026, 9, 12, 10, 30, 0, TimeSpan.FromHours(2));
+        var settings = AppSettings.Default with
+        {
+            PackLastApplied = new Dictionary<string, DateTimeOffset> { ["dark"] = stamp },
+        };
+
+        SettingsStore.Save(path, settings);
+
+        var loaded = SettingsStore.Load(path);
+        Assert.Equal(stamp, loaded.LastApplied["dark"]);
+        Assert.Equal(stamp, loaded.LastApplied["DARK"]);
+        Assert.Single(loaded.LastApplied);
+    }
+
+    [Fact]
+    public void Load_SkipsUnparseableStamps()
+    {
+        using var tmp = new TempDir();
+        var path = tmp.Sub("settings.json");
+        File.WriteAllText(
+            path,
+            """{"packLastApplied":{"dark":"2026-09-12T10:30:00.0000000+02:00","b&w maps":"whenever","flowermap":7}}""");
+
+        var loaded = SettingsStore.Load(path);
+
+        Assert.Equal(new[] { "dark" }, loaded.LastApplied.Keys);
+    }
+
+    [Fact]
+    public void Load_WithoutKey_GivesEmptyStamps()
+    {
+        using var tmp = new TempDir();
+        var path = tmp.Sub("settings.json");
+        File.WriteAllText(path, """{"gamePath":"C:\\g"}""");
+
+        var loaded = SettingsStore.Load(path);
+
+        Assert.Empty(loaded.LastApplied);
+
+        SettingsStore.Save(path, loaded);
+        Assert.DoesNotContain("packLastApplied", File.ReadAllText(path));
+    }
 }

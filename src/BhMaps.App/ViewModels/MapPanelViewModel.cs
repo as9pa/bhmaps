@@ -24,10 +24,48 @@ public sealed record PlatformFileViewModel(
     public bool ShowSource => SourceText.Length > 0;
 }
 
-/// <summary>Spec 3.2: the right panel for one map. The composed preview, the status sentence, the two per-map
-/// actions, and one of two segments: the backgrounds on offer, or the platform sets with the file list under
-/// them. Built fresh for every selection and after every scan; <see cref="Cancel"/> stops the loads the panel it
-/// replaces still had in flight.</summary>
+/// <summary>Spec 3: one strip of any-map pictures in the map panel. The group is the one
+/// <see cref="MapChoices.PictureGroups"/> built; the panel wraps it so every strip folds on its own, and so the
+/// pictures under a strip are read the first time that strip is opened rather than with the panel.</summary>
+public sealed partial class PictureGroupViewModel : ObservableObject
+{
+    private readonly Func<PictureGroupViewModel, Task> _load;
+
+    /// <summary>True once the strip's thumbnails have been asked for, so opening and closing it reads the files
+    /// once rather than once a click.</summary>
+    private bool _thumbnailsStarted;
+
+    public PictureGroupViewModel(PictureGroup group, Func<PictureGroupViewModel, Task> load)
+    {
+        _load = load;
+        Header = group.Header;
+        Tiles = group.Tiles;
+    }
+
+    /// <summary>The pack's name and how many of its pictures this map can take, or "In game only".</summary>
+    public string Header { get; }
+
+    public IReadOnlyList<CustomPictureTileViewModel> Tiles { get; }
+
+    /// <summary>Whether the strip is open. Closed on every new panel (spec 7).</summary>
+    [ObservableProperty]
+    public partial bool IsOpen { get; set; }
+
+    /// <summary>The strip's thumbnails are a file each, so they wait for the first time it is opened.</summary>
+    partial void OnIsOpenChanged(bool value)
+    {
+        if (value && !_thumbnailsStarted)
+        {
+            _thumbnailsStarted = true;
+            _ = _load(this);
+        }
+    }
+}
+
+/// <summary>Spec 3.2 and 7: the right panel for one map, as one scroll. The composed preview, the status
+/// sentence, the two per-map actions, then the Background section over the Platforms section. Built fresh for
+/// every selection and after every scan; <see cref="Cancel"/> stops the loads the panel it replaces still had in
+/// flight.</summary>
 public partial class MapPanelViewModel : ObservableObject
 {
     /// <summary>The composite behind a set tile, rendered at twice the 156 by 88 the tile draws it at, so the
@@ -38,7 +76,6 @@ public partial class MapPanelViewModel : ObservableObject
     public const string NoDefaultPackText = "No Default pack yet. Capture defaults first.";
 
     private readonly MainViewModel _shell;
-    private readonly MapsViewModel _page;
     private readonly MapEntry _map;
     private readonly MapStatus? _status;
     private readonly ScanSnapshot _snapshot;
@@ -52,14 +89,9 @@ public partial class MapPanelViewModel : ObservableObject
 
     private readonly CancellationTokenSource _loads = new();
 
-    /// <summary>True once the strip's thumbnails have been asked for, so opening and closing it reads the files
-    /// once rather than once a click.</summary>
-    private bool _customThumbnailsStarted;
-
-    public MapPanelViewModel(MainViewModel shell, MapsViewModel page, MapEntry map, MapStatus? status, ScanSnapshot snapshot)
+    public MapPanelViewModel(MainViewModel shell, MapEntry map, MapStatus? status, ScanSnapshot snapshot)
     {
         _shell = shell;
-        _page = page;
         _map = map;
         _status = status;
         _snapshot = snapshot;
@@ -68,22 +100,23 @@ public partial class MapPanelViewModel : ObservableObject
         StatusText = BuildStatusText();
         HasDefaultPack = snapshot.DefaultPack is not null;
         ResetHint = HasDefaultPack ? "" : NoDefaultPackText;
-        ShowPlatforms = page.PanelShowsPlatforms;
 
         foreach (var tile in MapChoices.PackBackgrounds(shell, map, status, snapshot))
         {
             _backgroundTiles.Add(tile);
         }
 
-        // Spec 4: every picture in the custom library, offered for this map the way a pack's is. A map with no
-        // background slot has nowhere to put one, so it gets no strip at all.
-        foreach (var tile in MapChoices.CustomBackgrounds(shell, map, snapshot))
+        // Spec 3: every any-map picture, grouped by the pack it lives in and offered for this map the way a
+        // pack's picture is. A map with no background slot has nowhere to put one, so it gets no strip at all.
+        PictureGroups =
+            [.. MapChoices.PictureGroups(shell, map, snapshot).Select(g => new PictureGroupViewModel(g, LoadGroupThumbnailsAsync))];
+        foreach (var tile in PictureGroups.SelectMany(g => g.Tiles))
         {
             _customTiles.Add(tile);
         }
 
         foreach (var tile in MapChoices.Platforms(
-                     shell, map, status, snapshot, SetWidth, SetHeight, () => FilesExpanded = true))
+                     shell, map, status, snapshot, SetWidth, SetHeight, () => FilesOpen = true))
         {
             _platformTiles.Add(tile);
         }
@@ -107,68 +140,28 @@ public partial class MapPanelViewModel : ObservableObject
     public string StatusText { get; }
 
     /// <summary>Default first, then every pack with a picture for this map's first background slot.</summary>
-    public IReadOnlyList<MapPictureTileViewModel> BackgroundTiles => _backgroundTiles;
+    public IReadOnlyList<MapPictureTileViewModel> Backgrounds => _backgroundTiles;
 
-    /// <summary>Spec 4: the custom library, under the packs, for this map's first background slot.</summary>
-    public IReadOnlyList<CustomPictureTileViewModel> CustomTiles => _customTiles;
+    /// <summary>The any-map pictures in the strips the panel draws under the packs: one per pack, then the
+    /// game's own (spec 3).</summary>
+    public IReadOnlyList<PictureGroupViewModel> PictureGroups { get; }
 
-    public IReadOnlyList<PlatformSetTileViewModel> PlatformTiles => _platformTiles;
+    public IReadOnlyList<PlatformSetTileViewModel> Platforms => _platformTiles;
 
-    public IReadOnlyList<PlatformFileViewModel> PlatformFiles => _platformFiles;
+    public IReadOnlyList<PlatformFileViewModel> Files => _platformFiles;
 
     /// <summary>Null until the composite is ready, and then a 1280x720 source (spec 7.2).</summary>
     [ObservableProperty]
     public partial ImageSource? Preview { get; set; }
 
-    /// <summary>Which half of the segment is showing. Remembered on the page, so the next map opens on the same
-    /// one (spec 3.2).</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowBackground), nameof(ShowBackgroundSegment), nameof(ShowPlatformsSegment))]
-    public partial bool ShowPlatforms { get; set; }
-
-    public bool ShowBackground => !ShowPlatforms;
-
-    /// <summary>The two segments bind these rather than ShowPlatforms directly, the same shape the Add Custom
-    /// Image fit radios use: a click on the segment that is already on is ignored instead of turning both off.</summary>
-    public bool ShowBackgroundSegment
-    {
-        get => !ShowPlatforms;
-        set
-        {
-            if (value)
-            {
-                ShowPlatforms = false;
-            }
-        }
-    }
-
-    public bool ShowPlatformsSegment
-    {
-        get => ShowPlatforms;
-        set
-        {
-            if (value)
-            {
-                ShowPlatforms = true;
-            }
-        }
-    }
-
-    /// <summary>Whether the custom pictures strip is open. Closed on every new panel: the pictures under it are
-    /// read only once it is asked for.</summary>
-    [ObservableProperty]
-    public partial bool CustomExpanded { get; set; }
-
-    public string CustomHeader => $"Custom pictures ({_customTiles.Count})";
-
-    /// <summary>False hides the header altogether, so a library with no custom picture shows nothing but the
-    /// Add Custom Image button.</summary>
+    /// <summary>False hides the headers altogether, so a library with no any-map picture shows nothing but the
+    /// Add Image button.</summary>
     public bool HasCustomPictures => _customTiles.Count > 0;
 
     [ObservableProperty]
-    public partial bool FilesExpanded { get; set; }
+    public partial bool FilesOpen { get; set; }
 
-    public string FilesHeader => $"Platform files, {PlatformFiles.Count}";
+    public string FilesHeader => $"Platform files, {Files.Count}";
 
     /// <summary>False disables Reset. Fixed for the life of the panel: a new scan builds a new panel.</summary>
     public bool HasDefaultPack { get; }
@@ -195,9 +188,10 @@ public partial class MapPanelViewModel : ObservableObject
         }
     }
 
-    /// <summary>Fills the pictures, in the order the panel shows them: the preview, then the Background segment
-    /// that opens, then the composites behind the sets. Fire and forget from Maps: every file failure is already
-    /// a fallback rather than an error, so the only thing left to stop for is cancellation.</summary>
+    /// <summary>Fills the pictures, in the order the panel shows them: the preview, then the pack tiles, then the
+    /// composites behind the sets. The picture strips are folded on a new panel, so nothing under them is read
+    /// here. Fire and forget from Maps: every file failure is already a fallback rather than an error, so the
+    /// only thing left to stop for is cancellation.</summary>
     public async Task LoadAsync()
     {
         var ct = _loads.Token;
@@ -205,13 +199,6 @@ public partial class MapPanelViewModel : ObservableObject
         {
             await LoadPreviewAsync(ct);
             await LoadTileThumbnailsAsync(_backgroundTiles, ct);
-
-            // Only when the strip is already open, which it is not on a panel nobody has expanded yet.
-            if (CustomExpanded)
-            {
-                await LoadCustomThumbnailsAsync(ct);
-            }
-
             await LoadPlatformPreviewsAsync(ct);
             await LoadPlatformFilesAsync(ct);
         }
@@ -271,18 +258,7 @@ public partial class MapPanelViewModel : ObservableObject
     private Task AddPictureAsync() =>
         _shell.OpenAddPicturesAsync(new AddPicturesTarget(AddPicturesTargetKind.Map, _map, null));
 
-    partial void OnShowPlatformsChanged(bool value) => _page.PanelShowsPlatforms = value;
-
-    /// <summary>The strip's thumbnails are a file each, so they wait for the first time it is opened.</summary>
-    partial void OnCustomExpandedChanged(bool value)
-    {
-        if (value)
-        {
-            _ = LoadCustomThumbnailsAsync(_loads.Token);
-        }
-    }
-
-    /// <summary>Spec 3.2's one sentence: "Missing 2 files", "Custom picture: sunset.jpg", "Default", or
+    /// <summary>Spec 3.2's one sentence: "Missing 2 files", "sunset, from My Backgrounds", "Default", or
     /// "In game: flowermap background, Default platforms".</summary>
     private string BuildStatusText()
     {
@@ -296,7 +272,13 @@ public partial class MapPanelViewModel : ObservableObject
         var file = slot is null ? null : InGameMatch.File(_status, AssetPath.Background(slot));
         if (file is { State: MapFileState.Custom })
         {
-            return $"Custom picture: {CustomPictureLibrary.NameFor(_snapshot.CustomPictures, slot!)}";
+            // The picture the game is showing names the pack it lives in, which is where the user would look for
+            // it again; a picture no pack holds is in the game and nowhere else (spec 3).
+            var fileName = Path.GetFileName(AssetPath.Background(slot!));
+            var picture = _snapshot.CustomPictures.FirstOrDefault(
+                p => p.InGameSlots.Contains(fileName, StringComparer.OrdinalIgnoreCase));
+            var name = Path.GetFileNameWithoutExtension(picture?.DisplayName ?? fileName);
+            return picture?.PackName is { } pack ? $"{name}, from {pack}" : $"{name}, in game only";
         }
 
         var background = file is { State: MapFileState.Pack, PackNames.Count: > 0 }
@@ -308,7 +290,7 @@ public partial class MapPanelViewModel : ObservableObject
             : $"In game: {background} background, {platforms} platforms";
     }
 
-    /// <summary>Custom beats a pack beats Default, over this map's own folder only.</summary>
+    /// <summary>The game's own art beats a pack beats Default, over this map's own folder only.</summary>
     private string PlatformSource()
     {
         var files = (_status?.Files ?? Array.Empty<MapFileStatus>())
@@ -316,7 +298,7 @@ public partial class MapPanelViewModel : ObservableObject
             .ToList();
         if (files.Any(f => f.State == MapFileState.Custom))
         {
-            return "Custom";
+            return "in game only";
         }
 
         return files.SelectMany(f => f.PackNames).FirstOrDefault() ?? DefaultPack.Name;
@@ -336,20 +318,14 @@ public partial class MapPanelViewModel : ObservableObject
         }
     }
 
-    /// <summary>The strip's pictures, once: a library of two hundred of them costs nothing until it is opened,
-    /// and opening it a second time costs nothing again. Started from the expander as well as from LoadAsync, so
-    /// it catches the cancellation LoadAsync catches for its own loads.</summary>
-    private async Task LoadCustomThumbnailsAsync(CancellationToken ct)
+    /// <summary>One strip's pictures, the first time it is opened: a library of two hundred of them costs nothing
+    /// until the strip holding them is asked for. Started from the strip rather than from LoadAsync, so it
+    /// catches the cancellation LoadAsync catches for its own loads.</summary>
+    private async Task LoadGroupThumbnailsAsync(PictureGroupViewModel group)
     {
-        if (_customThumbnailsStarted)
-        {
-            return;
-        }
-
-        _customThumbnailsStarted = true;
         try
         {
-            await LoadTileThumbnailsAsync(_customTiles, ct);
+            await LoadTileThumbnailsAsync(group.Tiles, _loads.Token);
         }
         catch (OperationCanceledException)
         {

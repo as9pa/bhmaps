@@ -129,11 +129,11 @@ public class MapStatusDetectorTests
         var status = MapStatusDetector.Detect(MapCatalog.FromFolders(tree), tree, packs, cache)["Grove"];
 
         Assert.Equal(MapState.Custom, status.State);
-        Assert.Equal("Custom", status.Text);
+        Assert.Equal("In game only", status.Text);
         Assert.False(status.IsColoured);
         var file = status.Files.Single(f => f.RelativePath == @"Grove\B.png");
         Assert.Equal(MapFileState.Custom, file.State);
-        Assert.Equal("Custom", file.Text);
+        Assert.Equal("In game only", file.Text);
     }
 
     [Fact]
@@ -229,7 +229,7 @@ public class MapStatusDetectorTests
         var custom = MapStatusDetector.Detect(catalog, tree, Array.Empty<Pack>(), cache)["Grove"];
 
         Assert.Equal(MapState.Custom, custom.State);
-        Assert.Equal("Custom", custom.Text);
+        Assert.Equal("In game only", custom.Text);
         Assert.Empty(custom.Files);
     }
 }

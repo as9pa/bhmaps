@@ -64,6 +64,15 @@ public static class SyntheticImage
         return (px[2], px[1], px[0]);
     }
 
+    /// <summary>Like <see cref="PixelAt"/> but keeps the alpha byte.</summary>
+    public static (byte R, byte G, byte B, byte A) PixelRgbaAt(BitmapSource bitmap, int x, int y)
+    {
+        var converted = new FormatConvertedBitmap(bitmap, PixelFormats.Bgra32, null, 0);
+        var px = new byte[4];
+        converted.CopyPixels(new Int32Rect(x, y, 1, 1), px, 4, 0);
+        return (px[2], px[1], px[0], px[3]);
+    }
+
     /// <summary>Mean of (R+G+B)/3 over every pixel, in 0..255.</summary>
     public static double MeanLuminance(BitmapSource bitmap)
     {
@@ -78,6 +87,12 @@ public static class SyntheticImage
         }
 
         return sum / (bitmap.PixelWidth * (double)bitmap.PixelHeight);
+    }
+
+    public static BitmapSource DecodePng(string path)
+    {
+        using var stream = File.OpenRead(path);
+        return new PngBitmapDecoder(stream, BitmapCreateOptions.None, BitmapCacheOption.OnLoad).Frames[0];
     }
 
     public static BitmapSource DecodeJpeg(byte[] bytes)
