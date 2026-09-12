@@ -144,7 +144,7 @@ Backgrounds | Platforms segment is dropped; Combined is the only view and the dr
 
 Owner change O7 (2026-09-11, 18:50): "Select all shown" becomes "Select all" in the Maps chip row and on the
 selection bar ("it should be implied to the user that the select all will only select the things shown"). The
-button's tooltip says "Ticks the maps the chips and search show", and the count line "12 of 67 maps ticked"
+button's tooltip says "Selects the maps the chips and search show", and the count line "12 of 67 maps ticked"
 confirms what happened. The spec's "Select all 12 shown" variant goes with it.
 
 Owner change O8 (2026-09-11, 19:50): "instead of maps ticked it should say maps selected". Every string the user
