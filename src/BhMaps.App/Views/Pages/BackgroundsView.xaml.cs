@@ -1,4 +1,3 @@
-using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using BhMaps.App.Views.Controls;
@@ -12,11 +11,6 @@ public partial class BackgroundsView : UserControl
         InitializeComponent();
     }
 
-    /// <summary>Spec section 13's menu key and Shift+F10, on whatever has focus. TileMenus takes those two keys
-    /// and leaves every other one alone.</summary>
-    private void OnPreviewKeyDown(object sender, KeyEventArgs e) => TileMenus.OnPreviewKeyDown(sender, e);
-
-    /// <summary>The menu button drawn on a tile. The button carries no menu of its own, so TileMenus walks up to
-    /// the tile that does.</summary>
-    private void OnTileMenuButton(object sender, RoutedEventArgs e) => TileMenus.OpenFor(sender);
+    /// <summary>Addendum B's keyboard, shared with the Platforms page so the two cannot answer a key differently.</summary>
+    private void OnPreviewKeyDown(object sender, KeyEventArgs e) => RowKeys.OnPreviewKeyDown(sender, e);
 }

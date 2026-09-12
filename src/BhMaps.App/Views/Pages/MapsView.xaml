@@ -23,50 +23,6 @@
     <converters:NullToVisibilityConverter x:Key="NullToVis" />
     <converters:WidthAtLeastConverter x:Key="WidthAtLeast" />
 
-    <!-- A chip is a ListBoxItem so the list owns which one is on, and the theme's ChipToggle draws it. The toggle
-         is chrome only: hit testing and focus belong to the row, which is what Tab and the arrow keys walk. -->
-    <Style x:Key="ChipRow" TargetType="ListBoxItem">
-      <Setter Property="Margin" Value="0,0,8,0" />
-
-      <!-- Owner change O2: the hand the top bar's tabs show. It belongs on the row rather than on ChipToggle,
-           which carries one already but is IsHitTestVisible=False, so the cursor under the pointer is the row's. -->
-      <Setter Property="Cursor" Value="Hand" />
-      <Setter Property="FocusVisualStyle" Value="{x:Null}" />
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="ListBoxItem">
-            <!-- Transparent, not unset: a Grid with no Background is not hit-testable, and both children below
-                 are IsHitTestVisible=False, so without this the ListBoxItem never sees a mouse click and only UI
-                 Automation, which bypasses hit testing, could select a chip (spec 9). -->
-            <Grid Background="Transparent">
-              <primitives:ToggleButton x:Name="Chip"
-                                       Content="{TemplateBinding Content}"
-                                       Focusable="False"
-                                       IsChecked="{Binding IsSelected, RelativeSource={RelativeSource TemplatedParent}}"
-                                       IsHitTestVisible="False"
-                                       Style="{StaticResource ChipToggle}" />
-
-              <!-- Keyboard focus is visible on every chip (spec 7.8), drawn at the same 60% as the tiles. -->
-              <Border x:Name="Ring"
-                      BorderBrush="{StaticResource TextBrush}"
-                      BorderThickness="1"
-                      CornerRadius="14"
-                      IsHitTestVisible="False"
-                      Opacity="0" />
-            </Grid>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="Chip" Property="Background" Value="{StaticResource Surface2Brush}" />
-              </Trigger>
-              <Trigger Property="IsKeyboardFocused" Value="True">
-                <Setter TargetName="Ring" Property="Opacity" Value="0.6" />
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-
     <!-- The card is a ListBoxItem, so Ctrl and Shift clicks, Space, the arrow keys and Ctrl+A are the control's
          (spec 3.1). A plain click is the page's: it opens the panel and leaves the ticks alone. The gap is the
          zoom's (spec 3.1), read off the page rather than set here, so the two tightest steps can tighten it. -->

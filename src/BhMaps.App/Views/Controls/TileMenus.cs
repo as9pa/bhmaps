@@ -57,4 +57,37 @@ public static class TileMenus
         menu.IsOpen = true;
         return true;
     }
+
+    /// <summary>Set on a button inside a tile template: clicking it opens the menu of the first element above it
+    /// that owns one. An attached property rather than a Click handler, because the row templates live in
+    /// Controls.xaml, which is a resource dictionary and has no code-behind to hold one.</summary>
+    public static readonly DependencyProperty OpensMenuProperty =
+        DependencyProperty.RegisterAttached(
+            "OpensMenu", typeof(bool), typeof(TileMenus), new PropertyMetadata(false, OnOpensMenuChanged));
+
+    public static void SetOpensMenu(DependencyObject element, bool value) =>
+        element.SetValue(OpensMenuProperty, value);
+
+    public static bool GetOpensMenu(DependencyObject element) => (bool)element.GetValue(OpensMenuProperty);
+
+    private static void OnOpensMenuChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is not ButtonBase button)
+        {
+            return;
+        }
+
+        button.Click -= OnMenuButtonClick;
+        if (e.NewValue is true)
+        {
+            button.Click += OnMenuButtonClick;
+        }
+    }
+
+    /// <summary>Handled, so the click does not also reach the tile button under it and apply the picture.</summary>
+    private static void OnMenuButtonClick(object sender, RoutedEventArgs e)
+    {
+        OpenFor(sender);
+        e.Handled = true;
+    }
 }

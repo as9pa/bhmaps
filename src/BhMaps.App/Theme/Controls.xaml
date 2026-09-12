@@ -2,13 +2,16 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:controls="clr-namespace:BhMaps.App.Views.Controls"
                     xmlns:converters="clr-namespace:BhMaps.App.Converters"
-                    xmlns:sys="clr-namespace:System;assembly=System.Runtime">
+                    xmlns:sys="clr-namespace:System;assembly=System.Runtime"
+                    xmlns:vm="clr-namespace:BhMaps.App.ViewModels">
   <ResourceDictionary.MergedDictionaries>
     <!-- Fonts as well as Tokens, so this dictionary resolves its own StaticResource references
          whether it is loaded on its own or merged after them by App.xaml. -->
     <ResourceDictionary Source="Fonts.xaml" />
     <ResourceDictionary Source="Tokens.xaml" />
   </ResourceDictionary.MergedDictionaries>
+
+  <BooleanToVisibilityConverter x:Key="BoolToVis" />
 
   <!-- Implicit, so plain text anywhere in the app is Geist at the body size. Keyed TextBlock
        styles below derive from it with BasedOn; an explicit Style would otherwise replace it. -->
@@ -732,4 +735,268 @@
       </Setter.Value>
     </Setter>
   </Style>
+  <!-- A chip is a ListBoxItem so the list owns which one is on, and ChipToggle above draws it. The toggle is
+       chrome only: hit testing and focus belong to the row, which is what Tab and the arrow keys walk. Moved out
+       of MapsView.xaml when the two rows pages grew chip rows of their own. -->
+  <Style x:Key="ChipRow" TargetType="ListBoxItem">
+    <Setter Property="Margin" Value="0,0,8,0" />
+
+    <!-- Owner change O2: the hand the top bar's tabs show. It belongs on the row rather than on ChipToggle,
+         which carries one already but is IsHitTestVisible=False, so the cursor under the pointer is the row's. -->
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ListBoxItem">
+          <!-- Transparent, not unset: a Grid with no Background is not hit-testable, and both children below are
+               IsHitTestVisible=False, so without this the ListBoxItem never sees a mouse click (spec 9). -->
+          <Grid Background="Transparent">
+            <ToggleButton x:Name="Chip"
+                          Content="{TemplateBinding Content}"
+                          Focusable="False"
+                          IsChecked="{Binding IsSelected, RelativeSource={RelativeSource TemplatedParent}}"
+                          IsHitTestVisible="False"
+                          Style="{StaticResource ChipToggle}" />
+            <Border x:Name="Ring"
+                    BorderBrush="{StaticResource TextBrush}"
+                    BorderThickness="1"
+                    CornerRadius="14"
+                    IsHitTestVisible="False"
+                    Opacity="0" />
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="Chip" Property="Background" Value="{StaticResource Surface2Brush}" />
+            </Trigger>
+            <Trigger Property="IsKeyboardFocused" Value="True">
+              <Setter TargetName="Ring" Property="Opacity" Value="0.6" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- Addendum B: Surface, hairline, Radius 6, padding 6 12. Tighter than a card, because a page of them is
+       meant to be scanned. -->
+  <Style x:Key="RowBorder" TargetType="Border" BasedOn="{StaticResource CardBorder}">
+    <Setter Property="Padding" Value="12,6" />
+    <Setter Property="Margin" Value="0,0,0,8" />
+  </Style>
+
+  <!-- One choice in a row's strip: the picture, the check and the 2 px border when the game is on it, the hover
+       actions, and the caption. A Button, so a click applies in one click (addendum B), Enter and Space do the
+       same from the keyboard, and the focus ring is the control's own. The size is the page's zoom, read off the
+       page rather than set here, so one template serves every step. -->
+  <Style x:Key="RowChoiceTileButton" TargetType="Button">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="Command" Value="{Binding ApplyCommand}" />
+    <Setter Property="ContextMenu" Value="{StaticResource TileMenu}" />
+    <Setter Property="ToolTip" Value="{Binding ToolTipText}" />
+    <Setter Property="AutomationProperties.Name" Value="{Binding Title}" />
+    <Setter Property="VerticalAlignment" Value="Top" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Button">
+          <StackPanel>
+            <Grid Width="{Binding DataContext.ThumbWidth, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                  Height="{Binding DataContext.ThumbHeight, RelativeSource={RelativeSource AncestorType=UserControl}}">
+              <Border Background="{StaticResource TileBrush}" ClipToBounds="True" CornerRadius="{StaticResource Radius}">
+                <Image RenderOptions.BitmapScalingMode="HighQuality" Source="{Binding Thumbnail}" Stretch="UniformToFill" />
+              </Border>
+
+              <!-- The in-game ring, 2 px in Text, over the picture rather than around the tile, so a strip of
+                   tiles stays evenly spaced whichever one the game is on. -->
+              <Border x:Name="Ring"
+                      BorderBrush="{StaticResource TextBrush}"
+                      BorderThickness="2"
+                      CornerRadius="{StaticResource Radius}"
+                      IsHitTestVisible="False"
+                      Opacity="0" />
+
+              <!-- Drawn rather than typed: a glyph would depend on the font having one. -->
+              <Border x:Name="Check"
+                      Margin="4"
+                      HorizontalAlignment="Right"
+                      VerticalAlignment="Top"
+                      Background="{StaticResource BgBrush}"
+                      CornerRadius="4"
+                      Padding="4,3"
+                      ToolTip="In game"
+                      Visibility="Collapsed">
+                <Path Data="M0,3.4 L2.8,6.2 L8,0.6"
+                      Stroke="{StaticResource TextBrush}"
+                      StrokeEndLineCap="Round"
+                      StrokeLineJoin="Round"
+                      StrokeStartLineCap="Round"
+                      StrokeThickness="1.6" />
+              </Border>
+
+              <!-- Opacity rather than Visibility, the map panel's lesson: a collapsed button cannot be tabbed to,
+                   so it would be mouse-only. Revealed by the pointer, by keyboard focus, or by the tile's own
+                   menu being open, so the button that opened the menu is still drawn under it. -->
+              <StackPanel x:Name="Actions"
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Center"
+                          Opacity="0"
+                          Orientation="Horizontal">
+                <TextBlock x:Name="ApplyLabel"
+                           Padding="8,3"
+                           VerticalAlignment="Center"
+                           Background="{StaticResource SurfaceBrush}"
+                           FontSize="11"
+                           Text="Apply"
+                           Visibility="{Binding DataContext.ShowTileApply, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVis}}" />
+                <Button AutomationProperties.Name="More actions"
+                        controls:TileMenus.OpensMenu="True"
+                        Style="{StaticResource TileAction}">
+                  <controls:Icon Geometry="{StaticResource Icon.Dots}" Size="14" />
+                </Button>
+              </StackPanel>
+            </Grid>
+
+            <TextBlock Margin="0,4,0,0"
+                       MaxWidth="{Binding DataContext.ThumbWidth, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                       HorizontalAlignment="Left"
+                       FontSize="11"
+                       Foreground="{StaticResource Text2Brush}"
+                       Text="{Binding Title}"
+                       TextTrimming="CharacterEllipsis" />
+          </StackPanel>
+          <ControlTemplate.Triggers>
+            <DataTrigger Binding="{Binding IsInGame}" Value="True">
+              <Setter TargetName="Ring" Property="Opacity" Value="1" />
+              <Setter TargetName="Check" Property="Visibility" Value="Visible" />
+            </DataTrigger>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="Actions" Property="Opacity" Value="1" />
+            </Trigger>
+            <Trigger Property="IsKeyboardFocusWithin" Value="True">
+              <Setter TargetName="Actions" Property="Opacity" Value="1" />
+              <Setter TargetName="Ring" Property="Opacity" Value="0.6" />
+            </Trigger>
+            <DataTrigger Binding="{Binding ContextMenu.IsOpen, RelativeSource={RelativeSource Self}}" Value="True">
+              <Setter TargetName="Actions" Property="Opacity" Value="1" />
+            </DataTrigger>
+            <Trigger Property="IsEnabled" Value="False">
+              <Setter TargetName="Actions" Property="Opacity" Value="0" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- "Custom (11)" at the end of a folded strip, and "+7" beside one. The same height as a thumbnail, so the
+       line of them is level. -->
+  <Style x:Key="RowMoreTileButton" TargetType="Button" BasedOn="{StaticResource OutlineButton}">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="Padding" Value="8,3" />
+    <Setter Property="VerticalAlignment" Value="Top" />
+    <Setter Property="Height" Value="{Binding DataContext.ThumbHeight, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+  </Style>
+
+  <!-- One tile type per template, each deferring to the one above, because an implicit DataTemplate is matched on
+       the item's own type. -->
+  <DataTemplate DataType="{x:Type vm:MapPictureTileViewModel}">
+    <Button Style="{StaticResource RowChoiceTileButton}" />
+  </DataTemplate>
+
+  <DataTemplate DataType="{x:Type vm:CustomPictureTileViewModel}">
+    <Button Style="{StaticResource RowChoiceTileButton}" />
+  </DataTemplate>
+
+  <DataTemplate DataType="{x:Type vm:RowMoreViewModel}">
+    <Button AutomationProperties.Name="{Binding Text}"
+            Command="{Binding UnfoldCommand}"
+            Content="{Binding Text}"
+            Style="{StaticResource RowMoreTileButton}" />
+  </DataTemplate>
+
+  <!-- Addendum B and C: one row, shared by both rows pages. Name column 168 px, then the strip, with the "+N"
+       tile floating at the strip's right end rather than in a column of its own: a column would take width from
+       the strip, which would change the overflow, which would change the column, which is a layout loop.
+       StripPanel keeps MoreWidth clear for it instead. -->
+  <DataTemplate x:Key="MapRow">
+    <Border controls:RowRealiser.Realise="True" Style="{StaticResource RowBorder}">
+      <!-- A click that reaches the row itself folds it again; a click on a tile is the tile's own and never
+           arrives here (addendum B). -->
+      <Border.InputBindings>
+        <MouseBinding Command="{Binding ToggleFoldCommand}" MouseAction="LeftClick" />
+      </Border.InputBindings>
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="168" />
+          <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <StackPanel Margin="0,0,12,0" VerticalAlignment="Center">
+          <TextBlock FontSize="13"
+                     FontWeight="Medium"
+                     Text="{Binding DisplayName}"
+                     TextTrimming="CharacterEllipsis"
+                     ToolTip="{Binding DisplayName}" />
+
+          <!-- Two tags, because Missing is a style of its own rather than a colour on the ordinary one. Each sits
+               in a wrapper that carries the visibility, so neither theme style is derived from. -->
+          <Grid MaxWidth="156"
+                Margin="0,3,0,0"
+                HorizontalAlignment="Left"
+                Visibility="{Binding ShowTag, Converter={StaticResource BoolToVis}}">
+            <Grid>
+              <Grid.Style>
+                <Style TargetType="Grid">
+                  <Style.Triggers>
+                    <DataTrigger Binding="{Binding IsMissing}" Value="True">
+                      <Setter Property="Visibility" Value="Collapsed" />
+                    </DataTrigger>
+                  </Style.Triggers>
+                </Style>
+              </Grid.Style>
+              <Border Style="{StaticResource StateTagBorder}">
+                <TextBlock Text="{Binding TagText}" TextTrimming="CharacterEllipsis" />
+              </Border>
+            </Grid>
+            <Grid>
+              <Grid.Style>
+                <Style TargetType="Grid">
+                  <Setter Property="Visibility" Value="Collapsed" />
+                  <Style.Triggers>
+                    <DataTrigger Binding="{Binding IsMissing}" Value="True">
+                      <Setter Property="Visibility" Value="Visible" />
+                    </DataTrigger>
+                  </Style.Triggers>
+                </Style>
+              </Grid.Style>
+              <Border Style="{StaticResource MissingTagBorder}">
+                <TextBlock Text="{Binding TagText}" TextTrimming="CharacterEllipsis" />
+              </Border>
+            </Grid>
+          </Grid>
+        </StackPanel>
+
+        <Grid Grid.Column="1">
+          <ItemsControl Focusable="False" ItemsSource="{Binding Choices}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <!-- SetCurrentValue writes Overflow from the measure, so this OneWayToSource binding survives it
+                     and the row learns the number without the view reaching into the panel's name scope. -->
+                <controls:StripPanel IsUnfolded="{Binding IsUnfolded}" Overflow="{Binding Overflow, Mode=OneWayToSource}" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+          </ItemsControl>
+
+          <Button HorizontalAlignment="Right"
+                  VerticalAlignment="Top"
+                  AutomationProperties.Name="{Binding MoreText}"
+                  Command="{Binding UnfoldCommand}"
+                  Content="{Binding MoreText}"
+                  Style="{StaticResource RowMoreTileButton}"
+                  Visibility="{Binding ShowMore, Converter={StaticResource BoolToVis}}" />
+        </Grid>
+      </Grid>
+    </Border>
+  </DataTemplate>
 </ResourceDictionary>

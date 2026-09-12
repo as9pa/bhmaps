@@ -87,6 +87,16 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     public partial PageViewModel? CurrentPage { get; set; }
 
+    /// <summary>Addendum B: unfolded rows fold back when the page is left, so coming back to a rows page shows
+    /// the same thing it shows on a first visit.</summary>
+    partial void OnCurrentPageChanging(PageViewModel? oldValue, PageViewModel? newValue)
+    {
+        if (oldValue is RowsPageViewModel rows)
+        {
+            rows.FoldAll();
+        }
+    }
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsNotBusy), nameof(CanWrite))]
     [NotifyCanExecuteChangedFor(

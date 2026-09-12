@@ -11,7 +11,7 @@
                Fill="{StaticResource Text3Brush}"
                RadiusX="2"
                RadiusY="2" />
-    <Slider AutomationProperties.Name="Columns"
+    <Slider AutomationProperties.Name="{Binding Label, ElementName=Root}"
             Maximum="{Binding Maximum, ElementName=Root}"
             Minimum="{Binding Minimum, ElementName=Root}"
             Style="{StaticResource ZoomSliderStyle}"
