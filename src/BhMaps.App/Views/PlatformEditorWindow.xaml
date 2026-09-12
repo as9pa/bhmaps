@@ -191,6 +191,7 @@
                     Style="{StaticResource PlainButton}" />
             <Button Margin="8,0,0,0"
                     Padding="10,4"
+                    Command="{Binding EditOutsideCommand}"
                     Content="Edit in another app"
                     FocusVisualStyle="{StaticResource DialogFocusRing}"
                     IsEnabled="{Binding CanEditOutside}"

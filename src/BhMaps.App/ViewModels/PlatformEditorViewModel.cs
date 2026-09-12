@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using BhMaps.App.Services;
@@ -43,6 +44,16 @@ public partial class PlatformEditorViewModel : ObservableObject
     /// the background editor's one bitmap (spec 6).</summary>
     private static readonly TimeSpan PreviewInterval = TimeSpan.FromMilliseconds(60);
 
+    /// <summary>The quiet period after a save in another program: a program that writes its file in several
+    /// goes is one render, not one per write.</summary>
+    private static readonly TimeSpan ChangedDelay = TimeSpan.FromMilliseconds(250);
+
+    /// <summary>How long the preview waits out a file another program is part way through writing before it
+    /// gives up and says so: twelve tries at 250 ms is three seconds of a locked or half-written file.</summary>
+    private const int MaxReadRetries = 12;
+
+    private static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(250);
+
     private readonly AppServices _services;
     private readonly IDialogs _dialogs;
     private readonly PlatformEditorRequest _request;
@@ -50,8 +61,14 @@ public partial class PlatformEditorViewModel : ObservableObject
     private readonly string? _backgroundPath;
     private readonly Throttler _preview = new(PreviewInterval);
     private readonly List<(string Path, string PackName)> _workingCopies = [];
+    private readonly Dictionary<string, FileSystemWatcher> _watchers = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Debouncer _changed = new(ChangedDelay);
 
     private long _sequence;
+
+    /// <summary>How many times running the preview has found a watched file unreadable since the last render
+    /// that worked (spec 6).</summary>
+    private int _retries;
 
     /// <summary>True while the shared sliders are writing the ticked rows, or the rows are writing the sliders,
     /// so one value change is one fan-out rather than a loop between the two (spec 4).</summary>
@@ -86,18 +103,35 @@ public partial class PlatformEditorViewModel : ObservableObject
 
         Opacity = 100;
         Hue = 0;
+
+        // The rows of a pack's set are read from a folder the user can change from outside the app, so it is
+        // watched from the moment the editor opens rather than only once a working copy is written (ruling 9).
+        if (request.Pack is { } sourcePack)
+        {
+            foreach (var row in Pieces.Where(p => IsUnder(p.OriginalPath, sourcePack.FullPath)))
+            {
+                if (Path.GetDirectoryName(row.OriginalPath) is { Length: > 0 } setFolder)
+                {
+                    WatchFolder(setFolder);
+                }
+            }
+        }
+
         SchedulePreview();
     }
 
     public event Action<bool>? CloseRequested;
 
-    public IReadOnlyList<string> PackChoices { get; }
+    /// <summary>The packs Save and "Edit in another app" can write into, "New pack..." last. Editing outside
+    /// makes the new pack for real, so the list gains it at that point.</summary>
+    public IReadOnlyList<string> PackChoices { get; private set; }
 
     /// <summary>One row per piece of the set, in the order the file list draws them (spec 3).</summary>
     public IReadOnlyList<PlatformPieceViewModel> Pieces { get; }
 
     /// <summary>The files the editor is holding open for another program to edit, with the pack each one sits in.
-    /// Empty until the working-copy commands land.</summary>
+    /// They stay in the library whichever button closes the window, which is what the shell's Cancel line says
+    /// (ruling 8).</summary>
     public IReadOnlyList<(string Path, string PackName)> WorkingCopies => _workingCopies;
 
     /// <summary>What Save wrote into the library, or null while nothing has been saved.</summary>
@@ -116,12 +150,12 @@ public partial class PlatformEditorViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsNewPack), nameof(PackNameError), nameof(CanSave), nameof(CanEditOutside))]
-    [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SaveCommand), nameof(EditOutsideCommand))]
     public partial string TargetPack { get; set; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PackNameError), nameof(CanSave), nameof(CanEditOutside))]
-    [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SaveCommand), nameof(EditOutsideCommand))]
     public partial string NewPackName { get; set; }
 
     [ObservableProperty]
@@ -215,9 +249,18 @@ public partial class PlatformEditorViewModel : ObservableObject
     public bool CanSave => CanEdit && PackNameError.Length == 0;
 
     /// <summary>Drops the temp set the previews were drawn from, whichever button closed the window. A file the
-    /// render still holds open is not worth a dialog: the folder is under %TEMP% and Windows clears it.</summary>
+    /// render still holds open is not worth a dialog: the folder is under %TEMP% and Windows clears it. The
+    /// working copies themselves stay where they are: they are the pack's files now (ruling 8).</summary>
     public void Cleanup()
     {
+        foreach (var watcher in _watchers.Values)
+        {
+            watcher.EnableRaisingEvents = false;
+            watcher.Dispose();
+        }
+
+        _watchers.Clear();
+        _changed.Cancel();
         _preview.Cancel();
         try
         {
@@ -430,19 +473,232 @@ public partial class PlatformEditorViewModel : ObservableObject
         OnImageChanged();
     }
 
-    /// <summary>Back to the pieces' own art. Task 4 asks the user first when a ticked row holds a working copy,
-    /// because that gives up a file another program may still have open.</summary>
+    /// <summary>Back to the pieces' own art. A ticked row holding a working copy is asked about first, because
+    /// the reset writes over a file in the pack that another program may still have open (spec 6).</summary>
     [RelayCommand(CanExecute = nameof(CanResetImage))]
     private async Task ResetImageAsync()
     {
+        var failed = false;
+        var copies = Pieces.Where(p => p.IsTicked && p.Art == PieceArt.WorkingCopy).ToList();
+        if (copies.Count > 0)
+        {
+            // One pack is a place the user can picture; copies spread over two is only "the library".
+            var where = copies.Select(p => p.WorkingCopyPack).Distinct(StringComparer.OrdinalIgnoreCase).Count() == 1
+                ? copies[0].WorkingCopyPack
+                : "the library";
+            if (!_dialogs.Confirm(
+                "Put the original art back?",
+                copies.Count == 1
+                    ? $"{copies[0].FileName} in {where} was changed in another app. Reset replaces it with the piece's original art."
+                    : $"{copies.Count} files in {where} were changed in another app. Reset replaces them with the pieces' original art."))
+            {
+                // The question was about all of the ticked rows, so a no leaves every one of them alone.
+                return;
+            }
+
+            try
+            {
+                // The file stays the editor's and stays in _workingCopies: what changes is what is in it.
+                await Task.Run(() =>
+                {
+                    foreach (var row in copies)
+                    {
+                        File.Copy(row.OriginalPath, row.WorkingCopyPath!, overwrite: true);
+                    }
+                });
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                ImageError = ex.Message;
+                failed = true;
+            }
+        }
+
         foreach (var row in Pieces.Where(p => p.IsTicked && p.Art != PieceArt.Original).ToList())
         {
             row.ResetArt();
             await RefreshThumbnailAsync(row);
         }
 
-        ImageError = "";
+        if (!failed)
+        {
+            ImageError = "";
+        }
+
         OnImageChanged();
+    }
+
+    /// <summary>Spec 6: every ticked piece is written into the pack as a real file and handed to a program of the
+    /// user's choosing. The copy is what the row reads from afterwards, its folder is watched so a save in that
+    /// program comes back into the preview, and the file stays in the pack whichever button closes the window
+    /// (ruling 8).</summary>
+    [RelayCommand(CanExecute = nameof(CanEditOutside))]
+    private async Task EditOutsideAsync()
+    {
+        if (EnsurePackFolder(out var pack, out var packError) is not { } folder)
+        {
+            ImageError = packError;
+            return;
+        }
+
+        var failed = false;
+        var opened = new List<PlatformPieceViewModel>();
+        foreach (var row in Pieces.Where(p => p.IsTicked).ToList())
+        {
+            var copy = Path.Combine(folder, row.FileName);
+            // A copy already there at the piece's own values is the file to hand over as it stands; anything
+            // else is written out first, because what the user edits has to be what the editor is showing.
+            if (!File.Exists(copy) || row.Art == PieceArt.Replacement || !row.IsDefault)
+            {
+                try
+                {
+                    await Task.Run(() => row.WriteResult(copy));
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or FileFormatException)
+                {
+                    ImageError = ex.Message;
+                    failed = true;
+                    continue;
+                }
+            }
+
+            row.SetWorkingCopy(copy, pack);
+            opened.Add(row);
+            if (!_workingCopies.Any(w => string.Equals(w.Path, copy, StringComparison.OrdinalIgnoreCase)))
+            {
+                _workingCopies.Add((copy, pack));
+            }
+
+            WatchFolder(folder);
+            if (EditorLauncher.OpenWith(copy) is { } reason)
+            {
+                ImageError = reason;
+                failed = true;
+            }
+        }
+
+        if (!failed)
+        {
+            ImageError = "";
+        }
+
+        foreach (var row in opened)
+        {
+            await RefreshThumbnailAsync(row);
+        }
+
+        // The rows that were handed over went back to 100 and 0, because their values are in the file now.
+        _syncing = true;
+        if (Pieces.FirstOrDefault(p => p.IsTicked) is { } first)
+        {
+            Opacity = first.Opacity;
+            Hue = first.Hue;
+        }
+
+        _syncing = false;
+        OnPropertyChanged(nameof(OpacityText));
+        OnPropertyChanged(nameof(HueText));
+        OnImageChanged();
+    }
+
+    /// <summary>The pack folder this map's working copies go in, made if it is not there, or null with
+    /// <paramref name="error"/> set. Save builds the same path, so the two write into the one place.</summary>
+    private string? EnsurePackFolder(out string packName, out string error)
+    {
+        packName = EffectivePackName;
+        error = "";
+        var packRoot = Path.Combine(PackScanner.PacksRoot(_services.LibraryPath), packName);
+        // TryCreate refuses a name another pack already holds, which is not a failure here: a "New pack..." the
+        // user already edited into once is the pack this one goes in too.
+        if (IsNewPack && !Directory.Exists(packRoot) && !PackCreator.TryCreate(_services.LibraryPath, packName, out error))
+        {
+            return null;
+        }
+
+        var folder = Path.Combine(packRoot, _request.Map.FolderName);
+        try
+        {
+            Directory.CreateDirectory(folder);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            error = ex.Message;
+            return null;
+        }
+
+        if (IsNewPack)
+        {
+            // The pack exists now, so the row reads as the pack it is and Save writes there rather than
+            // making a second one.
+            PackChoices = PackChoices
+                .Where(c => c != BackgroundEditorViewModel.NewPackChoice)
+                .Append(packName)
+                .Concat([BackgroundEditorViewModel.NewPackChoice])
+                .ToList();
+            OnPropertyChanged(nameof(PackChoices));
+            TargetPack = packName;
+        }
+
+        return folder;
+    }
+
+    /// <summary>Ruling 9: every library set folder the rows read from is followed from the moment it becomes a
+    /// source, and only those. The game folder is never watched, because the editor never writes into it, and
+    /// the temp set is the preview's own output.</summary>
+    private void WatchFolder(string folder)
+    {
+        var full = Path.GetFullPath(folder);
+        if (_watchers.ContainsKey(full) || IsUnder(full, _services.GamePath) || IsUnder(full, _tempRoot))
+        {
+            return;
+        }
+
+        try
+        {
+            var watcher = new FileSystemWatcher(full, "*.png")
+            {
+                NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.Size,
+                EnableRaisingEvents = true,
+            };
+            watcher.Changed += OnFolderChanged;
+            watcher.Created += OnFolderChanged;
+            watcher.Renamed += OnFolderChanged;
+            _watchers[full] = watcher;
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)
+        {
+            // The copy is in the pack either way; all that is lost is the preview following it on its own.
+        }
+    }
+
+    /// <summary>The watcher's thread is not the UI's, and one save is several writes, so the change is handed
+    /// over and then waited out.</summary>
+    private void OnFolderChanged(object sender, FileSystemEventArgs e) =>
+        Application.Current?.Dispatcher.InvokeAsync(() => _changed.Run(async ct => await ReloadChangedAsync(ct)));
+
+    /// <summary>What a save in another program changes: the rows reading from a watched folder, and the map.</summary>
+    private async Task ReloadChangedAsync(CancellationToken ct)
+    {
+        foreach (var row in Pieces.Where(p => p.Replacement is null && IsWatched(p.SourcePath)))
+        {
+            ct.ThrowIfCancellationRequested();
+            await RefreshThumbnailAsync(row, ct);
+        }
+
+        SchedulePreview();
+    }
+
+    private bool IsWatched(string filePath) =>
+        Path.GetDirectoryName(Path.GetFullPath(filePath)) is { } folder && _watchers.ContainsKey(folder);
+
+    /// <summary>Whether <paramref name="path"/> sits inside <paramref name="root"/>, the folder itself counting
+    /// as inside it.</summary>
+    private static bool IsUnder(string path, string root)
+    {
+        var full = Path.GetFullPath(path);
+        var fullRoot = Path.GetFullPath(root);
+        return full.Equals(fullRoot, StringComparison.OrdinalIgnoreCase)
+            || full.StartsWith(fullRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
     }
 
     private void OnRowPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -490,6 +746,7 @@ public partial class PlatformEditorViewModel : ObservableObject
         NoneCommand.NotifyCanExecuteChanged();
         ReplaceCommand.NotifyCanExecuteChanged();
         ResetImageCommand.NotifyCanExecuteChanged();
+        EditOutsideCommand.NotifyCanExecuteChanged();
     }
 
     /// <summary>A row moved on its own: the shared readings may have gone Mixed, and the map did change.</summary>
@@ -582,6 +839,7 @@ public partial class PlatformEditorViewModel : ObservableObject
         var root = _tempRoot;
         var level = _request.Map.BaseLevel;
         var background = _backgroundPath;
+        var reading = "";
         try
         {
             await Task.Run(
@@ -590,6 +848,7 @@ public partial class PlatformEditorViewModel : ObservableObject
                     foreach (var row in rows)
                     {
                         ct.ThrowIfCancellationRequested();
+                        reading = row.FileName;
                         row.CopyOrWriteResult(Path.Combine(root, row.RelativePath));
                     }
                 },
@@ -605,13 +864,32 @@ public partial class PlatformEditorViewModel : ObservableObject
 
             Preview = bitmap;
             Error = "";
+            _retries = 0;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or FileFormatException or ArgumentException)
         {
-            if (!ct.IsCancellationRequested)
+            if (ct.IsCancellationRequested)
             {
-                Error = "Could not read the platform art: " + ex.Message;
+                return;
             }
+
+            // A file another program is part way through saving is locked or half written, and the watcher has
+            // already asked for this render because of that save. Waiting is the answer, not an error line.
+            if (ex is IOException && _watchers.Count > 0 && _retries < MaxReadRetries)
+            {
+                _retries++;
+                await Task.Delay(RetryDelay, ct);
+                SchedulePreview();
+                return;
+            }
+
+            if (ex is IOException && _watchers.Count > 0)
+            {
+                ImageError = $"Could not read {reading}: {ex.Message}";
+                return;
+            }
+
+            Error = "Could not read the platform art: " + ex.Message;
         }
     }
 }
