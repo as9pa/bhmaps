@@ -11,10 +11,17 @@ using CommunityToolkit.Mvvm.Input;
 namespace BhMaps.App.ViewModels;
 
 /// <summary>What one Save left in the library: the fitted picture, the slot it was fitted for, the maps that slot
-/// belongs to, whether the user asked for it to go into the game as well, and the pack it was saved into, which
-/// is the pack the shell stamps when it applies it. The shell does that part, so the editor never writes into the
-/// game folder.</summary>
-public sealed record BackgroundSave(string PackFile, string Slot, string MapNames, bool ApplyToGame, string PackName);
+/// belongs to, whether the user asked for it to go into the game as well, the pack it was saved into, which is the
+/// pack the shell stamps when it applies it, and whether it was saved for all maps, which makes the apply an apply
+/// to every map rather than to one slot. The shell does that part, so the editor never writes into the game
+/// folder.</summary>
+public sealed record BackgroundSave(
+    string PackFile,
+    string Slot,
+    string MapNames,
+    bool ApplyToGame,
+    string PackName,
+    bool AllMaps);
 
 /// <summary>Spec 7.2: one picture, fitted to one map's background slot. The source is decoded once into a
 /// 640x360 working bitmap and every preview is drawn from it on a 16 ms throttle, so a slider drag moves the
@@ -51,8 +58,11 @@ public partial class BackgroundEditorViewModel : ObservableObject
         _request = request;
         Maps = maps;
         PackChoices = packNames.Concat([NewPackChoice]).ToList();
-        SelectedMap = maps.FirstOrDefault(m => m.Slot.Equals(request.Slot, StringComparison.OrdinalIgnoreCase))
-            ?? maps.FirstOrDefault();
+        // No slot means the source belongs to no map, so All maps is the row that keeps it that way (spec 5).
+        SelectedMap = request.Slot is null
+            ? maps.FirstOrDefault(m => m.IsAllMaps) ?? maps.FirstOrDefault()
+            : maps.FirstOrDefault(m => m.Slot.Equals(request.Slot, StringComparison.OrdinalIgnoreCase))
+                ?? maps.FirstOrDefault();
         Error = "";
         SourceDetail = "";
         PanX = 0.5;
@@ -79,12 +89,12 @@ public partial class BackgroundEditorViewModel : ObservableObject
     public BackgroundSave? Saved { get; private set; }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanSave), nameof(OverwriteHint), nameof(MapLabel))]
+    [NotifyPropertyChangedFor(nameof(CanSave), nameof(OverwriteHint), nameof(MapLabel), nameof(ApplyNowText))]
     [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
     public partial MapSlotChoice? SelectedMap { get; set; }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanSave), nameof(HasSource), nameof(Title), nameof(SourceFileName), nameof(EmptyText))]
+    [NotifyPropertyChangedFor(nameof(CanSave), nameof(HasSource), nameof(Title), nameof(SourceFileName), nameof(EmptyText), nameof(OverwriteHint))]
     [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
     public partial string SourcePath { get; set; }
 
@@ -133,7 +143,8 @@ public partial class BackgroundEditorViewModel : ObservableObject
 
     public bool HasSource => File.Exists(SourcePath);
 
-    public bool HasMaps => Maps.Count > 0;
+    /// <summary>"All maps" is always there, so the question is whether any map is (spec 5).</summary>
+    public bool HasMaps => Maps.Any(m => !m.IsAllMaps);
 
     /// <summary>The Map row's own note: empty while there are maps to pick from (decision C-D8).</summary>
     public string MapLabel => HasMaps ? "" : NoMapsText;
@@ -151,10 +162,13 @@ public partial class BackgroundEditorViewModel : ObservableObject
 
     public string Slot => SelectedMap?.Slot ?? "";
 
+    /// <summary>Spec 5: "Apply to all maps now" under All maps, because the tick then writes every map's slot.</summary>
+    public string ApplyNowText => SelectedMap is { IsAllMaps: true } ? "Apply to all maps now" : "Apply to game now";
+
     /// <summary>Spec 7.2, shown only when Save would replace a file that is already in the pack.</summary>
     public string OverwriteHint =>
-        Slot.Length > 0 && !IsNewPack && File.Exists(PackFilePath())
-            ? $"Replaces {Slot} in {TargetPack}. Pick another pack to keep the original."
+        PackFileName() is { Length: > 0 } name && !IsNewPack && File.Exists(PackFilePath())
+            ? $"Replaces {name} in {TargetPack}. Pick another pack to keep the original."
             : "";
 
     public bool ModeFill
@@ -175,7 +189,7 @@ public partial class BackgroundEditorViewModel : ObservableObject
         set { if (value) { Mode = FitMode.Stretch; } }
     }
 
-    public bool CanSave => HasSource && Slot.Length > 0 && PackNameValidator.IsValid(EffectivePackName, out _);
+    public bool CanSave => HasSource && SelectedMap is not null && PackNameValidator.IsValid(EffectivePackName, out _);
 
     private FitOptions Options => new(Mode, PanX, PanY, DarkenPercent / 100.0);
 
@@ -230,8 +244,11 @@ public partial class BackgroundEditorViewModel : ObservableObject
     {
         var packFile = PackFilePath();
         var slot = Slot;
+        var allMaps = SelectedMap is { IsAllMaps: true };
         if (File.Exists(packFile)
-            && !_dialogs.Confirm("Replace background?", $"{slot} already exists in pack {EffectivePackName}. Replace it?"))
+            && !_dialogs.Confirm(
+                "Replace background?",
+                $"{Path.GetFileNameWithoutExtension(packFile)} already exists in {EffectivePackName}. Replace it?"))
         {
             return;
         }
@@ -244,7 +261,8 @@ public partial class BackgroundEditorViewModel : ObservableObject
             var bytes = await Task.Run(() => BackgroundFitter.Fit(path, options));
             Directory.CreateDirectory(Path.GetDirectoryName(packFile)!);
             await File.WriteAllBytesAsync(packFile, bytes);
-            Saved = new BackgroundSave(packFile, slot, SelectedMap?.DisplayNames ?? slot, ApplyNow, EffectivePackName);
+            Saved = new BackgroundSave(
+                packFile, slot, SelectedMap?.DisplayNames ?? slot, ApplyNow, EffectivePackName, allMaps);
             CloseRequested?.Invoke(true);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or FileFormatException)
@@ -254,7 +272,24 @@ public partial class BackgroundEditorViewModel : ObservableObject
     }
 
     private string PackFilePath() =>
-        Path.Combine(PackScanner.PacksRoot(_services.LibraryPath), EffectivePackName, BackgroundsFolder, Slot);
+        Path.Combine(PackScanner.PacksRoot(_services.LibraryPath), EffectivePackName, BackgroundsFolder, PackFileName());
+
+    /// <summary>The name Save writes under: the map's slot, or under All maps the source's own name, which is what
+    /// makes the file an any-map picture rather than one map's (spec 5). A source already named like a slot gets
+    /// " all maps" so the save cannot become that map's picture by accident.</summary>
+    private string PackFileName()
+    {
+        if (SelectedMap is not { IsAllMaps: true })
+        {
+            return Slot;
+        }
+
+        var name = Path.GetFileNameWithoutExtension(SourcePath);
+        var isSlotName = Maps.Any(
+            m => !m.IsAllMaps
+                && Path.GetFileNameWithoutExtension(m.Slot).Equals(name, StringComparison.OrdinalIgnoreCase));
+        return isSlotName ? $"{name} all maps.jpg" : $"{name}.jpg";
+    }
 
     /// <summary>The Source row: a thumbnail, and the pack and pixel size under the file name. Both are file work,
     /// so both arrive late and neither blocks the preview.</summary>

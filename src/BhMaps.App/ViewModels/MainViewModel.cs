@@ -513,6 +513,19 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
+        if (saved.AllMaps)
+        {
+            // An any-map picture goes on every map, which is the apply a tile's "Apply to all maps" already runs,
+            // count confirm and all (spec 5).
+            await ApplyPictureAsync(
+                saved.PackFile,
+                snapshot.Catalog.Maps,
+                clearTicks: false,
+                Path.GetFileNameWithoutExtension(saved.PackFile),
+                saved.PackName);
+            return;
+        }
+
         var gamePath = Services.GamePath;
         var source = saved.PackFile;
         var slot = saved.Slot;
@@ -529,8 +542,9 @@ public partial class MainViewModel : ObservableObject
         Dialogs.ShowFailures("Some backgrounds could not be applied", failures);
     }
 
-    /// <summary>One entry per background slot the maps name, labelled with every map that shares it (spec 7.2),
-    /// then any slot the game folder has that no map names, labelled with its own file name (decision C-D8).</summary>
+    /// <summary>"All maps" first (spec 5), then one entry per background slot the maps name, labelled with every
+    /// map that shares it (spec 7.2), then any slot the game folder has that no map names, labelled with its own
+    /// file name (decision C-D8).</summary>
     private static IReadOnlyList<MapSlotChoice> MapSlotChoices(ScanSnapshot snapshot)
     {
         var bySlot = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
@@ -555,6 +569,7 @@ public partial class MainViewModel : ObservableObject
             .Select(pair => new MapSlotChoice(pair.Key, string.Join(", ", pair.Value)))
             .OrderBy(c => c.DisplayNames, StringComparer.OrdinalIgnoreCase)
             .ToList();
+        choices.Insert(0, MapSlotChoice.AllMaps);
 
         foreach (var file in snapshot.Tree.FindFolder("Backgrounds")?.Files ?? Array.Empty<GameFile>())
         {
