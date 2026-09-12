@@ -28,9 +28,6 @@ public partial class PlatformsViewModel : RowsPageViewModel
 
     public override string SearchPlaceholder => "Search maps and packs";
 
-    /// <summary>Addendum C: the Maps chip row without "Custom". A platform set is never a custom picture.</summary>
-    protected override bool HasCustomChip => false;
-
     protected override string NoResultsText => $"No map or pack matches '{SearchText}'.";
 
     protected override void SaveZoom(int value)
@@ -49,8 +46,8 @@ public partial class PlatformsViewModel : RowsPageViewModel
         var map = card.Map;
 
         // Show files belongs to the map panel, which is where the file list lives; on a row the menu line would
-        // have nothing to open, so the tile is handed a no-op and its own menu keeps Open folder.
-        var sets = MapChoices.Platforms(Shell, map, status, snapshot, SetWidth, SetHeight, () => { });
+        // have nothing to open, so the tile is handed null and its menu leaves the line out (spec 9).
+        var sets = MapChoices.Platforms(Shell, map, status, snapshot, SetWidth, SetHeight, showFiles: null);
         List<object> alwaysShown = [.. sets.Where(t => t.InGame), .. sets.Where(t => !t.InGame)];
         var (tag, missing) = Tag(map, status);
 
@@ -58,19 +55,16 @@ public partial class PlatformsViewModel : RowsPageViewModel
             map,
             tag,
             missing,
-            isChanged: tag.Length > 0 && !missing,
-            showsCustomPicture: false,
             Haystack(map, sets),
             alwaysShown,
             [],
-            foldedLabel: "",
             [],
             sets,
             ComposeSetAsync);
     }
 
-    /// <summary>Addendum C's state tag, measured over this map's own folder only: Missing beats Custom beats the
-    /// first pack that matched, and Default draws no tag at all.</summary>
+    /// <summary>Addendum C's state tag, measured over this map's own folder only: Missing beats the game's own
+    /// art beats the first pack that matched, and Default draws no tag at all.</summary>
     private static (string Tag, bool Missing) Tag(MapEntry map, MapStatus? status)
     {
         var prefix = map.FolderName + Path.DirectorySeparatorChar;
@@ -84,7 +78,7 @@ public partial class PlatformsViewModel : RowsPageViewModel
 
         if (files.Any(f => f.State == MapFileState.Custom))
         {
-            return ("Custom", false);
+            return ("In game only", false);
         }
 
         return (files.SelectMany(f => f.PackNames).FirstOrDefault() ?? "", false);
