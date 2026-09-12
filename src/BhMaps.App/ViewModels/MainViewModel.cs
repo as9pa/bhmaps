@@ -556,16 +556,27 @@ public partial class MainViewModel : ObservableObject
         var vm = new PlatformEditorViewModel(
             Services, Dialogs, snapshot.Packs.Select(p => p.Name).ToList(), new PlatformEditorRequest(map, pack));
         var window = new PlatformEditorWindow { DataContext = vm, Owner = Application.Current.MainWindow, ShowActivated = !App.Quiet };
+        bool accepted;
         try
         {
-            if (window.ShowDialog() != true)
-            {
-                return;
-            }
+            accepted = window.ShowDialog() == true;
         }
         finally
         {
             vm.Cleanup();
+        }
+
+        if (!accepted)
+        {
+            // Cancel drops what the sliders were showing, but a file handed to another program was written into
+            // the pack when it was handed over and is the pack's now, so the line says where it is (ruling 8).
+            if (vm.WorkingCopies.Count > 0)
+            {
+                await RescanAsync();
+                SetLibraryDone(WorkingCopyDone(vm.WorkingCopies));
+            }
+
+            return;
         }
 
         if (vm.Saved is not { } saved)
@@ -585,6 +596,22 @@ public partial class MainViewModel : ObservableObject
         {
             await ApplySetAsync(target, [map], clearTicks: false);
         }
+    }
+
+    /// <summary>What the editor's Cancel leaves behind: the files it wrote into the library for another program
+    /// to edit, named when there is one and counted when there are more, in the pack they share or in the
+    /// library when they do not share one.</summary>
+    private static string WorkingCopyDone(IReadOnlyList<(string Path, string PackName)> copies)
+    {
+        if (copies.Count == 1)
+        {
+            return $"{Path.GetFileName(copies[0].Path)} stays in {copies[0].PackName}.";
+        }
+
+        var packs = copies.Select(c => c.PackName).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        return packs.Count == 1
+            ? $"{Count(copies.Count, "file")} stay in {packs[0]}."
+            : $"{Count(copies.Count, "file")} stay in the library.";
     }
 
     /// <summary>"All maps" first (spec 5), then one entry per background slot the maps name, labelled with every
