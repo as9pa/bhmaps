@@ -457,19 +457,18 @@ public partial class MainViewModel : ObservableObject
     /// <summary>"1 map" or "3 maps": the done lines count things and every one of them can be one.</summary>
     public static string Count(int n, string noun) => n == 1 ? $"1 {noun}" : $"{n} {noun}s";
 
-    /// <summary>Spec 5.3: the editor fits a picture and saves it into a pack. That is a library write and its own
-    /// business; the "Apply to game now" it offers is a game write, so the pack file it left is copied into the
-    /// slot here, with the boundary, the snapshot and the running-game policy every other one gets.</summary>
+    /// <summary>Spec 7.2: the editor fits a picture and saves it into a pack, which is a library write of its own.
+    /// The "Apply to game now" it offers is a game write, so the pack file it left is copied into the slot here,
+    /// with the boundary, the snapshot and the undo every other write gets.</summary>
     public async Task OpenBackgroundEditorAsync(BackgroundEditorRequest request)
     {
-        if (Snapshot is null)
+        if (Snapshot is not { } snapshot)
         {
             return;
         }
 
-        var slots = Snapshot.Tree.FindFolder("Backgrounds")?.Files.Select(f => f.Name).ToList() ?? new List<string>();
-        var packNames = Snapshot.Packs.Select(p => p.Name).ToList();
-        var vm = new BackgroundEditorViewModel(Services, Dialogs, slots, packNames, request.Slot);
+        var vm = new BackgroundEditorViewModel(
+            Services, Dialogs, MapSlotChoices(snapshot), snapshot.Packs.Select(p => p.Name).ToList(), request);
         var window = new BackgroundEditorWindow { DataContext = vm, Owner = Application.Current.MainWindow };
         if (window.ShowDialog() != true)
         {
@@ -478,7 +477,6 @@ public partial class MainViewModel : ObservableObject
 
         if (vm.Saved is not { ApplyToGame: true } saved)
         {
-            // Saved into the pack and no further, so nothing in the game folder moved and there is nothing to undo.
             await RescanAsync();
             return;
         }
@@ -488,14 +486,52 @@ public partial class MainViewModel : ObservableObject
         var slot = saved.Slot;
         var failures = new List<FileFailure>();
         await RunGameWriteAsync(
-            $"Applying {slot}",
+            $"Applying {Path.GetFileName(source)}",
             BackgroundApplier.TargetPaths([slot]),
             (_, ct) => Task.Run(
                 () => failures.AddRange(BackgroundApplier.Apply(source, gamePath, [slot], null, ct).Failures),
                 ct),
-            $"Background applied to {slot}");
+            $"{Path.GetFileName(source)} applied to {saved.MapNames}");
 
         Dialogs.ShowFailures("Some backgrounds could not be applied", failures);
+    }
+
+    /// <summary>One entry per background slot the maps name, labelled with every map that shares it (spec 7.2),
+    /// then any slot the game folder has that no map names, labelled with its own file name (decision C-D8).</summary>
+    private static IReadOnlyList<MapSlotChoice> MapSlotChoices(ScanSnapshot snapshot)
+    {
+        var bySlot = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var map in snapshot.Catalog.Maps)
+        {
+            foreach (var slot in map.BackgroundSlots)
+            {
+                if (!bySlot.TryGetValue(slot, out var names))
+                {
+                    names = [];
+                    bySlot[slot] = names;
+                }
+
+                if (!names.Contains(map.DisplayName))
+                {
+                    names.Add(map.DisplayName);
+                }
+            }
+        }
+
+        var choices = bySlot
+            .Select(pair => new MapSlotChoice(pair.Key, string.Join(", ", pair.Value)))
+            .OrderBy(c => c.DisplayNames, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        foreach (var file in snapshot.Tree.FindFolder("Backgrounds")?.Files ?? Array.Empty<GameFile>())
+        {
+            if (!bySlot.ContainsKey(file.Name))
+            {
+                choices.Add(new MapSlotChoice(file.Name, file.Name));
+            }
+        }
+
+        return choices;
     }
 
     /// <summary>Spec 6: all of the plans as one long operation, one failure summary, and one rescan at the end
