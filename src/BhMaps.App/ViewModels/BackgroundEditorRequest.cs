@@ -7,4 +7,9 @@ public sealed record BackgroundEditorRequest(string SourcePath, string? PackName
 
 /// <summary>One line of the editor's Map combo: the file name the game expects, and the maps that share it,
 /// joined with ", ". The slot is never the label; the user picks a map (spec 7.2).</summary>
-public sealed record MapSlotChoice(string Slot, string DisplayNames);
+public sealed record MapSlotChoice(string Slot, string DisplayNames)
+{
+    /// <summary>Under DisplayMemberPath a combo still names its row with the item's ToString, so the record has to
+    /// say the map names out loud or a screen reader reads the field dump instead (spec 7.2).</summary>
+    public override string ToString() => DisplayNames;
+}
