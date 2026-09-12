@@ -542,6 +542,51 @@ public partial class MainViewModel : ObservableObject
         Dialogs.ShowFailures("Some backgrounds could not be applied", failures);
     }
 
+    /// <summary>Spec 6: the editor recolours a map's own pieces into a pack, which is a library write of its own.
+    /// The "Apply to game now" it offers is a game write, so the set it left is applied here, with the boundary,
+    /// the snapshot and the undo every other write gets. The rescan comes first either way, because the pack the
+    /// apply needs is one the last scan may never have seen.</summary>
+    public async Task OpenPlatformEditorAsync(MapEntry map, Pack? pack)
+    {
+        if (Snapshot is not { } snapshot)
+        {
+            return;
+        }
+
+        var vm = new PlatformEditorViewModel(
+            Services, Dialogs, snapshot.Packs.Select(p => p.Name).ToList(), new PlatformEditorRequest(map, pack));
+        var window = new PlatformEditorWindow { DataContext = vm, Owner = Application.Current.MainWindow, ShowActivated = !App.Quiet };
+        try
+        {
+            if (window.ShowDialog() != true)
+            {
+                return;
+            }
+        }
+        finally
+        {
+            vm.Cleanup();
+        }
+
+        if (vm.Saved is not { } saved)
+        {
+            return;
+        }
+
+        await RescanAsync();
+        if (!saved.ApplyToGame)
+        {
+            // Saved into the pack and no further, so nothing in the game folder moved and there is nothing to undo.
+            return;
+        }
+
+        if (Snapshot?.Packs.FirstOrDefault(p => p.Name.Equals(saved.PackName, StringComparison.OrdinalIgnoreCase))
+            is { } target)
+        {
+            await ApplySetAsync(target, [map], clearTicks: false);
+        }
+    }
+
     /// <summary>"All maps" first (spec 5), then one entry per background slot the maps name, labelled with every
     /// map that shares it (spec 7.2), then any slot the game folder has that no map names, labelled with its own
     /// file name (decision C-D8).</summary>

@@ -15,12 +15,15 @@ public sealed partial class PlatformSetTileViewModel : ObservableObject
 {
     private readonly MainViewModel _shell;
     private readonly Action _showFiles;
+    private readonly Action _edit;
 
     public PlatformSetTileViewModel(
-        MainViewModel shell, MapEntry map, Pack pack, bool inGame, int width, int height, Action showFiles)
+        MainViewModel shell, MapEntry map, Pack pack, bool inGame, int width, int height, Action showFiles,
+        Action edit)
     {
         _shell = shell;
         _showFiles = showFiles;
+        _edit = edit;
         Map = map;
         Pack = pack;
         InGame = inGame;
@@ -71,7 +74,11 @@ public sealed partial class PlatformSetTileViewModel : ObservableObject
     /// <summary>Rebuilt whenever the ticked count changes, because the ticked line names it and is dropped at zero.</summary>
     public void RebuildMenu(int tickedCount)
     {
-        var items = new List<TileMenuCommand> { new($"Apply to {Map.DisplayName}", ApplyToMapCommand) };
+        var items = new List<TileMenuCommand>
+        {
+            new("Edit", EditCommand),
+            new($"Apply to {Map.DisplayName}", ApplyToMapCommand),
+        };
         if (tickedCount > 0)
         {
             items.Add(new TileMenuCommand(
@@ -89,6 +96,9 @@ public sealed partial class PlatformSetTileViewModel : ObservableObject
 
     [RelayCommand]
     private Task ApplyToTickedAsync() => _shell.ApplySetAsync(Pack, _shell.SelectedMaps, clearTicks: true);
+
+    [RelayCommand]
+    private void Edit() => _edit();
 
     [RelayCommand]
     private void ShowFiles() => _showFiles();
