@@ -549,6 +549,13 @@
                  ScrollViewer.VerticalScrollBarVisibility="Auto"
                  SelectionMode="Extended"
                  Style="{StaticResource MapGrid}">
+          <ListBox.Resources>
+            <!-- The ScrollViewer is inside the ListBox's own template, so the behaviour reaches it through an
+                 implicit style rather than as an attribute (spec 10). -->
+            <Style TargetType="ScrollViewer">
+              <Setter Property="behaviors:SmoothScroll.IsEnabled" Value="True" />
+            </Style>
+          </ListBox.Resources>
           <ListBox.ItemsPanel>
             <ItemsPanelTemplate>
               <!-- Top aligned, or a short list comes out with enormous cards. A UniformGrid does not virtualise,
@@ -814,6 +821,7 @@
           <ScrollViewer Grid.Row="1"
                         Margin="16,4,4,0"
                         HorizontalScrollBarVisibility="Disabled"
+                        behaviors:SmoothScroll.IsEnabled="True"
                         VerticalScrollBarVisibility="Auto">
             <!-- The bottom margin keeps the last row clear of the panel's own edge. -->
             <StackPanel Margin="0,0,12,16">
@@ -961,6 +969,7 @@
                             Margin="8,4,0,0"
                             behaviors:Fold.Animate="True"
                             HorizontalScrollBarVisibility="Disabled"
+                            behaviors:SmoothScroll.IsEnabled="True"
                             VerticalScrollBarVisibility="Auto"
                             Visibility="{Binding FilesOpen, Converter={StaticResource BoolToVis}}">
                 <ItemsControl Focusable="False"

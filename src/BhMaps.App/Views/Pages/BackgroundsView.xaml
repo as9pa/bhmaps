@@ -143,12 +143,16 @@
                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                     ScrollViewer.VerticalScrollBarVisibility="Auto"
                     VirtualizingPanel.IsVirtualizing="True"
+                    VirtualizingPanel.ScrollUnit="Pixel"
                     VirtualizingPanel.VirtualizationMode="Recycling">
         <ItemsControl.Template>
           <!-- An ItemsControl has no ScrollViewer of its own, and without one the VirtualizingStackPanel is
                handed infinite height and realises every row. -->
           <ControlTemplate TargetType="ItemsControl">
-            <ScrollViewer CanContentScroll="True" Focusable="False" Padding="{TemplateBinding Padding}">
+            <ScrollViewer CanContentScroll="True"
+                          Focusable="False"
+                          Padding="{TemplateBinding Padding}"
+                          behaviors:SmoothScroll.IsEnabled="True">
               <ItemsPresenter />
             </ScrollViewer>
           </ControlTemplate>
