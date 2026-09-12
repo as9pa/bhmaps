@@ -99,8 +99,9 @@ stops a long operation.
 - **Packs** is one row per pack: a composed thumbnail of the pack's first map, the pack's name and
   what it holds, as in "3 maps, 12 backgrounds", and a strip of previews of the maps it touches, as
   many as the width allows, with a count for the rest. Apply all is a button on the row; a dots
-  button beside it holds Export, Open folder and Remove. The header has Import folder, Capture
-  defaults and Open library. Clicking a row opens the pack.
+  button beside it holds Export, Open folder and Remove. The header has Import folder, New pack,
+  Capture defaults and Open library. **New pack** asks for a name and makes an empty pack you can
+  fill later from Add Image or the editors. Clicking a row opens the pack.
 - **Pack detail** shows one pack as a single grid of its maps, each composed with the game's art
   where the pack has nothing of its own, with zoom setting the column count. Clicking a tile opens a
   drawer listing that map's files, its background and its platforms, and where each came from. When

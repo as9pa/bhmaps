@@ -76,6 +76,11 @@
         <StackPanel IsEnabled="{Binding DataContext.IsNotBusy, RelativeSource={RelativeSource AncestorType=Window}}" Orientation="Horizontal">
           <Button Command="{Binding ImportCommand}" Content="Import folder" controls:Icon.Glyph="{StaticResource Icon.Plus}" Style="{StaticResource OutlineButton}" />
           <Button Margin="8,0,0,0"
+                  Command="{Binding NewPackCommand}"
+                  Content="New pack"
+                  controls:Icon.Glyph="{StaticResource Icon.Plus}"
+                  Style="{StaticResource OutlineButton}" />
+          <Button Margin="8,0,0,0"
                   Command="{Binding CaptureDefaultsCommand}"
                   Content="Capture defaults"
                   controls:Icon.Glyph="{StaticResource Icon.Refresh}"
@@ -232,6 +237,11 @@
                 Content="Import folder"
                 controls:Icon.Glyph="{StaticResource Icon.Plus}"
                 Style="{StaticResource PrimaryButton}" />
+        <Button Margin="8,0,0,0"
+                Command="{Binding NewPackCommand}"
+                Content="New pack"
+                controls:Icon.Glyph="{StaticResource Icon.Plus}"
+                Style="{StaticResource OutlineButton}" />
         <Button Margin="8,0,0,0"
                 Command="{Binding CaptureDefaultsCommand}"
                 Content="Capture defaults"
