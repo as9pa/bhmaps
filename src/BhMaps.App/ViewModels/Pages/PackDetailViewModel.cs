@@ -6,6 +6,7 @@ using BhMaps.Core.Imaging;
 using BhMaps.Core.Maps;
 using BhMaps.Core.Model;
 using BhMaps.Core.Operations;
+using BhMaps.Core.Settings;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -18,15 +19,9 @@ namespace BhMaps.App.ViewModels.Pages;
 /// <see cref="MainViewModel.NavigateToPack" />, so the title is a pack name rather than a fixed word.</summary>
 public partial class PackDetailViewModel : PageViewModel
 {
-    public const int MinZoom = 2;
+    public const int MinZoom = AppSettings.MinZoom;
 
-    public const int MaxZoom = 10;
-
-    /// <summary>The tile size the markup still reads through x:Static until C7 rewrites the view around Zoom.
-    /// Exactly 16 by 9, so a card preview and a background both fill it. Device independent units, so double.</summary>
-    public const double TileWidth = 304;
-
-    public const double TileHeight = 171;
+    public const int MaxZoom = AppSettings.MaxZoom;
 
     public const string NoPackText = "No pack is open.";
 
@@ -60,7 +55,9 @@ public partial class PackDetailViewModel : PageViewModel
     {
         Items = [];
         TransparentText = "";
-        Zoom = shell.Services.Settings.PackZoom;
+
+        // A stored zoom from another version, or a hand-edited one, is clamped rather than trusted.
+        Zoom = Math.Clamp(shell.Services.Settings.PackZoom, MinZoom, MaxZoom);
     }
 
     /// <summary>The pack the page is showing. Null until the shell navigates to one.</summary>
