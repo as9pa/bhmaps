@@ -9,6 +9,13 @@ public sealed record BackgroundEditorRequest(string SourcePath, string? PackName
 /// joined with ", ". The slot is never the label; the user picks a map (spec 7.2).</summary>
 public sealed record MapSlotChoice(string Slot, string DisplayNames)
 {
+    /// <summary>The first row of the Map combo: no slot, so Save writes the picture under its own name and it
+    /// belongs to every map rather than to one (spec 5).</summary>
+    public static readonly MapSlotChoice AllMaps = new("", "All maps");
+
+    /// <summary>True for the "All maps" row, which is the only row without a slot.</summary>
+    public bool IsAllMaps => Slot.Length == 0;
+
     /// <summary>Under DisplayMemberPath a combo still names its row with the item's ToString, so the record has to
     /// say the map names out loud or a screen reader reads the field dump instead (spec 7.2).</summary>
     public override string ToString() => DisplayNames;
