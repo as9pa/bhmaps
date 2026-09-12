@@ -14,16 +14,16 @@
         <ResourceDictionary Source="Theme/Icons.xaml" />
         <ResourceDictionary Source="Theme/Controls.xaml" />
       </ResourceDictionary.MergedDictionaries>
-      <!-- Home's panel and the Platforms page list the same platform files, so the container style that names a
-           generated row for a screen reader is declared once here rather than copied into both pages. -->
+      <!-- The Maps panel and the pack detail page list the same platform files, so the container style that
+           names a generated row for a screen reader is declared once here rather than copied into both pages. -->
       <Style x:Key="FileContainer" TargetType="ContentPresenter">
         <Setter Property="AutomationProperties.Name" Value="{Binding RelativePath}" />
       </Style>
 
       <!-- One implicit template per page, so the shell's ContentControl picks the view from CurrentPage's type
            (decision D10) and each page task owns its own files. -->
-      <DataTemplate DataType="{x:Type pages:HomeViewModel}">
-        <pageviews:HomeView />
+      <DataTemplate DataType="{x:Type pages:MapsViewModel}">
+        <pageviews:MapsView />
       </DataTemplate>
       <DataTemplate DataType="{x:Type pages:BackgroundsViewModel}">
         <pageviews:BackgroundsView />

@@ -23,7 +23,12 @@
   <Geometry x:Key="Icon.Refresh">M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4 M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4</Geometry>
   <Geometry x:Key="Icon.Trash">M4 7h16 M10 11v6 M14 11v6 M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12 M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3</Geometry>
   <Geometry x:Key="Icon.X">M18 6l-12 12 M6 6l12 12</Geometry>
+  <Geometry x:Key="Icon.Check">M5 12l5 5l9 -9</Geometry>
   <Geometry x:Key="Icon.ChevronDown">M6 9l6 6l6 -6</Geometry>
   <Geometry x:Key="Icon.ChevronRight">M9 6l6 6l-6 6</Geometry>
   <Geometry x:Key="Icon.ChevronLeft">M15 6l-6 6l6 6</Geometry>
+
+  <!-- Three dots, drawn as three zero length strokes: the Icon control caps every stroke round, so each one comes
+       out a 2 unit disc and no fill geometry is needed. -->
+  <Geometry x:Key="Icon.Dots">M5 12h.01 M12 12h.01 M19 12h.01</Geometry>
 </ResourceDictionary>

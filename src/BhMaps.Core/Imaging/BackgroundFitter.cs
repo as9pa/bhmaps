@@ -30,6 +30,36 @@ public static class BackgroundFitter
         return converted;
     }
 
+    /// <summary>The source decoded no larger than a canvas of this size needs: the scale a Cover fit would use,
+    /// which is the largest any mode asks for, and never above 1:1. The editor decodes once into this and renders
+    /// every preview from it (spec 7.2), so a slider drag costs one draw instead of a decode plus a draw.</summary>
+    public static BitmapSource LoadWorkingSource(string sourcePath, int canvasWidth, int canvasHeight)
+    {
+        var source = LoadSource(sourcePath);
+        var scale = Math.Max((double)canvasWidth / source.PixelWidth, (double)canvasHeight / source.PixelHeight);
+        if (scale >= 1.0)
+        {
+            return source;
+        }
+
+        // Drawn rather than transformed, so the downscale takes the same HighQuality path Render takes and the
+        // preview cannot drift from the full-size fit by more than rounding.
+        var width = Math.Max(1, (int)Math.Round(source.PixelWidth * scale));
+        var height = Math.Max(1, (int)Math.Round(source.PixelHeight * scale));
+        var visual = new DrawingVisual();
+        RenderOptions.SetBitmapScalingMode(visual, BitmapScalingMode.HighQuality);
+        using (var dc = visual.RenderOpen())
+        {
+            dc.DrawImage(source, new Rect(0, 0, width, height));
+        }
+
+        var target = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+        target.Render(visual);
+        var converted = new FormatConvertedBitmap(target, PixelFormats.Bgra32, null, 0);
+        converted.Freeze();
+        return converted;
+    }
+
     /// <summary>Where the scaled source lands inside a width x height canvas. Cover rects overflow the canvas; the overflow is clipped when drawn.</summary>
     public static Rect DestinationRect(int srcW, int srcH, FitOptions options, int width, int height)
     {

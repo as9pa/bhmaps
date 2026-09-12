@@ -18,7 +18,6 @@ public partial class SettingsPageViewModel : PageViewModel
         GamePath = shell.Services.GamePath;
         LibraryPath = shell.Services.LibraryPath;
         GameDataStatus = shell.Services.LevelData.StatusSentence;
-        WhileRunning = shell.Services.Settings.WhileRunning;
         Version = ReadVersion();
 
         // Spec 3.5: a startup re-read runs in the background and finishes after this page exists, and nothing
@@ -58,10 +57,6 @@ public partial class SettingsPageViewModel : PageViewModel
     /// <summary>LevelDataService.StatusSentence, which already carries "Read on &lt;date&gt;." (spec 3.5).</summary>
     [ObservableProperty]
     public partial string GameDataStatus { get; set; }
-
-    /// <summary>"restart" or "live", the value settings.json stores. The ComboBox binds its two rows to it.</summary>
-    [ObservableProperty]
-    public partial string WhileRunning { get; set; }
 
     public bool HasGameError => GameError.Length > 0;
 
@@ -152,18 +147,6 @@ public partial class SettingsPageViewModel : PageViewModel
     /// <summary>Spec 6.1. The shell owns the flow so the confirm text and the busy boundary match the Packs page.</summary>
     [RelayCommand]
     private Task CaptureDefaultsAsync() => Shell.CaptureDefaultsAsync();
-
-    /// <summary>The ComboBox writes straight through: a page has no OK button. The guard swallows the write the
-    /// constructor's own assignment would otherwise cause.</summary>
-    partial void OnWhileRunningChanged(string value)
-    {
-        if (value == Services.Settings.WhileRunning)
-        {
-            return;
-        }
-
-        Save(Services.Settings with { WhileRunning = value });
-    }
 
     private void OnLevelDataChanged() => GameDataStatus = Services.LevelData.StatusSentence;
 

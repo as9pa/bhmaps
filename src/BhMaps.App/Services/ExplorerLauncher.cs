@@ -27,4 +27,26 @@ public static class ExplorerLauncher
             return ex.Message;
         }
     }
+
+    /// <summary>Opens the file's folder with the file selected, which is what "Show in folder" means. Null when it
+    /// worked, otherwise why it did not. A missing file is caught first, because explorer handed a path that is
+    /// not there opens Documents instead, which looks like the menu item doing nothing.</summary>
+    public static string? Reveal(string filePath)
+    {
+        if (!File.Exists(filePath))
+        {
+            return $"File does not exist: {filePath}";
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{filePath}\"") { UseShellExecute = true })
+                ?.Dispose();
+            return null;
+        }
+        catch (Exception ex) when (ex is Win32Exception or InvalidOperationException)
+        {
+            return ex.Message;
+        }
+    }
 }

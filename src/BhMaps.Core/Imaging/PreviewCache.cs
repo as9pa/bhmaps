@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Windows.Media.Imaging;
@@ -27,12 +28,24 @@ public sealed class PreviewCache
     /// <summary>&lt;appDataDir&gt;\previews. Created on the first write, so a fresh install has nothing to sweep.</summary>
     public string Root { get; }
 
-    /// <summary>sha256 of level name, size and every input file hash, lowercase hex.</summary>
-    public string KeyFor(string levelName, int width, int height, IReadOnlyList<string> inputs)
+    /// <summary>sha256 of level name, size, the viewport when there is one, and every input file hash, lowercase
+    /// hex. A cropped render and a whole one read the same files, so without the viewport in the key the two
+    /// would collide on one cache file.</summary>
+    public string KeyFor(
+        string levelName, int width, int height, IReadOnlyList<string> inputs, CameraBounds? viewport = null)
     {
         // The inputs stay an ordered list: draw order changes the picture, and one file named by two
         // slots must count twice, so folding them into a set would collide two different renders.
         var text = new StringBuilder(levelName).Append('|').Append(width).Append('x').Append(height);
+        if (viewport is { } v)
+        {
+            text.Append("|v")
+                .Append(v.X.ToString("R", CultureInfo.InvariantCulture)).Append(',')
+                .Append(v.Y.ToString("R", CultureInfo.InvariantCulture)).Append(',')
+                .Append(v.W.ToString("R", CultureInfo.InvariantCulture)).Append(',')
+                .Append(v.H.ToString("R", CultureInfo.InvariantCulture));
+        }
+
         foreach (var input in inputs)
         {
             var info = new FileInfo(input);
@@ -49,10 +62,11 @@ public sealed class PreviewCache
     /// One AssetSources instance may be shared by any number of concurrent calls: this reads it on the caller's
     /// thread and then the render thread reads it again, and AssetSources is safe under both.</summary>
     public async Task<string> GetOrRenderAsync(
-        LevelDesc level, int width, int height, AssetSources sources, CancellationToken ct = default)
+        LevelDesc level, int width, int height, AssetSources sources, CancellationToken ct = default,
+        CameraBounds? viewport = null)
     {
         var inputs = MapCompositor.CollectInputs(level, sources);
-        var key = KeyFor(level.LevelName, width, height, inputs);
+        var key = KeyFor(level.LevelName, width, height, inputs, viewport);
         var path = Path.Combine(Root, key + ".jpg");
         if (File.Exists(path))
         {
@@ -69,7 +83,7 @@ public sealed class PreviewCache
         }
 
         var jpeg = await _queue
-            .RunAsync(() => Encode(MapCompositor.Render(level, width, height, sources)), ct)
+            .RunAsync(() => Encode(MapCompositor.Render(level, width, height, sources, viewport)), ct)
             .ConfigureAwait(false);
 
         Directory.CreateDirectory(Root);

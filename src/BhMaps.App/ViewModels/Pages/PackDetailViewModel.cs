@@ -6,36 +6,26 @@ using BhMaps.Core.Imaging;
 using BhMaps.Core.Maps;
 using BhMaps.Core.Model;
 using BhMaps.Core.Operations;
+using BhMaps.Core.Settings;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
 namespace BhMaps.App.ViewModels.Pages;
 
-/// <summary>Spec 7.5: one pack, whole. The maps it touches put together with the game's art, the backgrounds it
-/// ships, the same maps with the background dropped, and the files in it that change nothing in game. Every row
-/// is shown and nothing is truncated (spec section 2, Packs). The pack comes from
+/// <summary>Spec 7.5: one pack, whole. One grid of every map the pack touches, put together with the game's art,
+/// plus a tile for each background it ships that no map claims, and the files in it that change nothing in game.
+/// A tile opens the drawer, which lists the halves of what the pack holds for that map (addendum F). Every row is
+/// shown and nothing is truncated (spec section 2, Packs). The pack comes from
 /// <see cref="MainViewModel.NavigateToPack" />, so the title is a pack name rather than a fixed word.</summary>
 public partial class PackDetailViewModel : PageViewModel
 {
-    /// <summary>The platform-only composites carry no background, so they are rendered at the size the tile is
-    /// shown at. Pixel counts, so int, unlike the tile size below.</summary>
-    public const int PlatformWidth = 320;
+    public const int MinZoom = AppSettings.MinZoom;
 
-    public const int PlatformHeight = 180;
-
-    /// <summary>One tile size for all three grids, so the page reads as one grid rather than three, and three of
-    /// them fit across the content area of the 1280 window (spec 7.1) with the 12 px gap between them. Exactly
-    /// 16 by 9, so a card preview and a background both fill it. Device independent units, so double: the markup
-    /// sets Width and Height from these.</summary>
-    public const double TileWidth = 304;
-
-    public const double TileHeight = 171;
+    public const int MaxZoom = AppSettings.MaxZoom;
 
     public const string NoPackText = "No pack is open.";
 
     public const string NoMapsText = "This pack has no map folders.";
-
-    public const string NoBackgroundsText = "This pack has no backgrounds.";
 
     /// <summary>The folder a pack keeps its background images in. Every other folder is a map.</summary>
     private const string BackgroundsFolder = "Backgrounds";
@@ -44,6 +34,9 @@ public partial class PackDetailViewModel : PageViewModel
     private const string BackgroundExtension = ".jpg";
 
     private ScanSnapshot? _snapshot;
+
+    /// <summary>The key of the tile the drawer is open on, so a rescan can reopen it on the new snapshot.</summary>
+    private string? _openKey;
 
     /// <summary>Cancels this pack's loads; replaced, never disposed, exactly as PlatformsViewModel does, because
     /// the loads still hold the token.</summary>
@@ -60,10 +53,11 @@ public partial class PackDetailViewModel : PageViewModel
     public PackDetailViewModel(MainViewModel shell)
         : base(shell)
     {
-        PutTogether = [];
-        Backgrounds = [];
-        Platforms = [];
+        Items = [];
         TransparentText = "";
+
+        // A stored zoom from another version, or a hand-edited one, is clamped rather than trusted.
+        Zoom = Math.Clamp(shell.Services.Settings.PackZoom, MinZoom, MaxZoom);
     }
 
     /// <summary>The pack the page is showing. Null until the shell navigates to one.</summary>
@@ -78,16 +72,21 @@ public partial class PackDetailViewModel : PageViewModel
 
     public bool HasPack => Pack is not null;
 
-    /// <summary>Every map the pack touches, composed with the pack's own files over the background the pack
-    /// ships for it, or the game's when it ships none.</summary>
-    public ObservableCollection<PackMapTileViewModel> PutTogether { get; }
+    /// <summary>Columns in the grid, MinZoom to MaxZoom, persisted as packZoom.</summary>
+    [ObservableProperty]
+    public partial int Zoom { get; set; }
 
-    /// <summary>The images in the pack's own Backgrounds folder.</summary>
-    public ObservableCollection<PackBackgroundTileViewModel> Backgrounds { get; }
+    /// <summary>Every map the pack touches, composed with the pack's own files over the background the pack ships
+    /// for it, or the game's when it ships none (spec 5, addendum F).</summary>
+    public ObservableCollection<PackTileViewModel> Items { get; }
 
-    /// <summary>The same maps as <see cref="PutTogether" />, with the background dropped, so the pack's
-    /// platform art is all that is left.</summary>
-    public ObservableCollection<PackMapTileViewModel> Platforms { get; }
+    /// <summary>The tile the keyboard is on. Enter opens the drawer for it.</summary>
+    [ObservableProperty]
+    public partial PackTileViewModel? SelectedTile { get; set; }
+
+    /// <summary>The open drawer, or null when none is open.</summary>
+    [ObservableProperty]
+    public partial PackDrawerViewModel? Drawer { get; set; }
 
     /// <summary>"N files change nothing in game" (spec 7.5), or "" while the pack has none. Written only after
     /// the scan of the pack's PNGs finishes, so nothing flashes on a pack that has none.</summary>
@@ -103,9 +102,8 @@ public partial class PackDetailViewModel : PageViewModel
 
     public string EmptyText => NoPackText;
 
-    public string MapsEmptyText => NoMapsText;
-
-    public string BackgroundsEmptyText => NoBackgroundsText;
+    /// <summary>What the grid says when the pack has nothing to show.</summary>
+    public string EmptyNote => NoMapsText;
 
     /// <summary>Re-resolves the pack by name against the new snapshot and rebuilds every section from it. A pack
     /// that is no longer in the library was removed underneath the page, so the page goes back to the list.</summary>
@@ -121,6 +119,39 @@ public partial class PackDetailViewModel : PageViewModel
             // Spec 6.5: Remove deletes the pack from the library. Its page has nothing left to show.
             Shell.NavigatePacksCommand.Execute(null);
         }
+    }
+
+    /// <summary>Spec 5: a click, or Enter on the focused tile, opens the drawer. A background tile whose slot no
+    /// map names opens a drawer with the file and Open folder and no Apply (decision C-D4).</summary>
+    public void Open(PackTileViewModel? tile)
+    {
+        if (tile is null || _snapshot is not { } snapshot || Pack is not { } pack)
+        {
+            return;
+        }
+
+        Drawer?.Cancel();
+        SelectedTile = tile;
+        _openKey = tile.Key;
+        var preview = tile.Map is { } map
+            ? Items.FirstOrDefault(t => t.Key.Equals(map.FolderName, StringComparison.OrdinalIgnoreCase)) ?? tile
+            : tile;
+        var status = tile.Map is { } m && snapshot.MapStatuses.TryGetValue(m.FolderName, out var found) ? found : null;
+        var drawer = new PackDrawerViewModel(Shell, this, pack, tile.Map, status, preview);
+        Drawer = drawer;
+        _ = drawer.LoadAsync();
+    }
+
+    public void OpenSelected() => Open(SelectedTile);
+
+    /// <summary>A command as well as a method: C7 binds Escape to CloseDrawerCommand, and a KeyBinding whose
+    /// Command resolves to null fails silently.</summary>
+    [RelayCommand]
+    public void CloseDrawer()
+    {
+        Drawer?.Cancel();
+        Drawer = null;
+        _openKey = null;
     }
 
     /// <summary>Spec 6.5, reusing the Packs page's own apply so there is one implementation of it and one
@@ -216,15 +247,24 @@ public partial class PackDetailViewModel : PageViewModel
         }
     }
 
-    /// <summary>Throws away the previous pack's loads and starts this one's. Every section is built from the
-    /// current snapshot, so a rescan and a change of pack take the same path.</summary>
+    partial void OnZoomChanged(int value)
+    {
+        if (Shell.Services.Settings.PackZoom != value)
+        {
+            Shell.Services.UpdateSettings(Shell.Services.Settings with { PackZoom = value });
+        }
+    }
+
+    /// <summary>Throws away the previous pack's loads and starts this one's. The grid is built from the current
+    /// snapshot, so a rescan and a change of pack take the same path.</summary>
     private void Rebuild()
     {
         _cts?.Cancel();
         _cts = new CancellationTokenSource();
-        PutTogether.Clear();
-        Backgrounds.Clear();
-        Platforms.Clear();
+        var reopen = _openKey;
+        CloseDrawer();
+        SelectedTile = null;
+        Items.Clear();
         _transparentFiles = Array.Empty<string>();
         TransparentText = "";
         if (_snapshot is not { } snapshot || Pack is not { } pack)
@@ -234,57 +274,74 @@ public partial class PackDetailViewModel : PageViewModel
 
         foreach (var map in MapsIn(snapshot.Catalog, pack))
         {
-            PutTogether.Add(new PackMapTileViewModel(map, MapCompositor.CardWidth, MapCompositor.CardHeight, dropBackground: false));
-            Platforms.Add(new PackMapTileViewModel(map, PlatformWidth, PlatformHeight, dropBackground: true));
+            Items.Add(new PackTileViewModel(
+                map.FolderName, map.DisplayName, map, null, MapCompositor.CardWidth, MapCompositor.CardHeight));
         }
 
-        // .jpg only: the game's backgrounds are all JPEGs, so a PNG that found its way into the folder fills no
-        // slot and belongs in the transparent-files line below rather than in this grid.
+        // .jpg only: the game's backgrounds are all JPEGs, so a PNG in the folder fills no slot and belongs in
+        // the transparent-files line instead. A background whose slot a map in the grid already covers is drawn
+        // by that map's own tile, so only the orphans get a tile of their own, captioned by file name.
         foreach (var file in pack.FindFolder(BackgroundsFolder)?.Files ?? Array.Empty<GameFile>())
         {
-            if (Path.GetExtension(file.Name).Equals(BackgroundExtension, StringComparison.OrdinalIgnoreCase))
+            if (!Path.GetExtension(file.Name).Equals(BackgroundExtension, StringComparison.OrdinalIgnoreCase))
             {
-                Backgrounds.Add(new PackBackgroundTileViewModel(file));
+                continue;
+            }
+
+            var owner = MapForSlot(snapshot.Catalog, file.Name);
+            if (owner is null)
+            {
+                Items.Add(new PackTileViewModel(
+                    file.Name, file.Name, null, file, MapCompositor.CardWidth, MapCompositor.CardHeight));
+            }
+            else if (!Items.Any(t => t.Key.Equals(owner.FolderName, StringComparison.OrdinalIgnoreCase)))
+            {
+                Items.Add(new PackTileViewModel(
+                    owner.FolderName, owner.DisplayName, owner, null,
+                    MapCompositor.CardWidth, MapCompositor.CardHeight));
             }
         }
 
-        Load([.. PutTogether], [.. Backgrounds], [.. Platforms], pack, _cts.Token);
+        OnPropertyChanged(nameof(Items));
+        Load([.. Items], pack, _cts.Token);
         LoadTransparent(pack, _cts.Token);
+
+        // A rescan follows every write, so the drawer that started the write comes back on the new snapshot.
+        if (reopen is not null)
+        {
+            Open(Items.FirstOrDefault(t => t.Key.Equals(reopen, StringComparison.OrdinalIgnoreCase)));
+        }
     }
+
+    /// <summary>The first map, in display-name order, whose levels name this background slot (decision C-D4).</summary>
+    private static MapEntry? MapForSlot(MapCatalog catalog, string slot) =>
+        catalog.Maps.FirstOrDefault(m => m.BackgroundSlots.Any(s => s.Equals(slot, StringComparison.OrdinalIgnoreCase)));
 
     /// <summary>The maps the pack touches: the catalog maps it has at least one file for. A pack folder that is
     /// not a map, such as a theme folder other maps borrow from (spec 4), is not one of them.</summary>
     private static IEnumerable<MapEntry> MapsIn(MapCatalog catalog, Pack pack) =>
         catalog.Maps.Where(map => pack.FindFolder(map.FolderName) is { Files.Count: > 0 });
 
-    /// <summary>Fills the tiles in view order: the composites, then the backgrounds, then the platform-only
-    /// composites. One at a time, so the single render thread works down the page. Fire and forget, like
-    /// PlatformsViewModel.LoadSelected.</summary>
+    /// <summary>Fills the tiles in view order, one at a time, so the single render thread works down the page.
+    /// Fire and forget, like PlatformsViewModel.LoadSelected.</summary>
     private async void Load(
-        IReadOnlyList<PackMapTileViewModel> putTogether,
-        IReadOnlyList<PackBackgroundTileViewModel> backgrounds,
-        IReadOnlyList<PackMapTileViewModel> platforms,
+        IReadOnlyList<PackTileViewModel> tiles,
         Pack pack,
         CancellationToken ct)
     {
         try
         {
-            foreach (var tile in putTogether)
+            foreach (var tile in tiles)
             {
                 ct.ThrowIfCancellationRequested();
-                tile.Preview = await ComposeAsync(tile, pack, ct);
-            }
-
-            foreach (var tile in backgrounds)
-            {
-                ct.ThrowIfCancellationRequested();
-                tile.Preview = await Shell.Services.Thumbnails.GetAsync(tile.File.FullPath, tile.File.MtimeTicks, ct);
-            }
-
-            foreach (var tile in platforms)
-            {
-                ct.ThrowIfCancellationRequested();
-                tile.Preview = await ComposeAsync(tile, pack, ct);
+                if (tile.Map is not null)
+                {
+                    tile.Preview = await ComposeAsync(tile, pack, ct);
+                }
+                else if (tile.File is { } file)
+                {
+                    tile.Preview = await Shell.Services.Thumbnails.GetAsync(file.FullPath, file.MtimeTicks, ct);
+                }
             }
         }
         catch (OperationCanceledException)
@@ -329,7 +386,7 @@ public partial class PackDetailViewModel : PageViewModel
     /// one STA thread and kept on disk. AssetSources takes the pack as its second source, which means the pack's
     /// background when it ships one and the game's otherwise: what the pack put together looks like in game. A
     /// preview that cannot be composed falls back to a plain file tile; it is a picture, never an error dialog.</summary>
-    private async Task<ImageSource?> ComposeAsync(PackMapTileViewModel tile, Pack pack, CancellationToken ct)
+    private async Task<ImageSource?> ComposeAsync(PackTileViewModel tile, Pack pack, CancellationToken ct)
     {
         // Spec 3.6: with no level data there are no camera bounds and no platform tree, so there is nothing to
         // compose, and the pack's own art is the only picture of the map there is.
@@ -337,13 +394,10 @@ public partial class PackDetailViewModel : PageViewModel
         {
             try
             {
-                var level = tile.DropBackground
-                    ? tile.Map.BaseLevel with { Backgrounds = [] }
-                    : tile.Map.BaseLevel;
                 var sources = new AssetSources(Shell.Services.GamePath, pack.FullPath);
                 var path = await Task.Run(
                     () => Shell.Services.Previews.GetOrRenderAsync(
-                        level, tile.ComposeWidth, tile.ComposeHeight, sources, ct),
+                        tile.Map!.BaseLevel, tile.ComposeWidth, tile.ComposeHeight, sources, ct),
                     ct);
                 if (await Task.Run(() => LoadPreview(path), ct) is { } preview)
                 {
@@ -356,7 +410,7 @@ public partial class PackDetailViewModel : PageViewModel
             }
         }
 
-        var folder = pack.FindFolder(tile.Map.FolderName);
+        var folder = pack.FindFolder(tile.Map!.FolderName);
         var file = folder is null ? null : ThumbnailProvider.PickRepresentative(folder);
         return file is null ? null : await Shell.Services.Thumbnails.GetAsync(file.FullPath, file.MtimeTicks, ct);
     }
@@ -390,47 +444,36 @@ public partial class PackDetailViewModel : PageViewModel
     }
 }
 
-/// <summary>One map the pack touches, drawn either put together or with the background dropped. The two are the
-/// same map at two sizes, so one type serves both grids.</summary>
-public partial class PackMapTileViewModel : ObservableObject
+/// <summary>One tile of pack detail's single grid: a map the pack touches, drawn put together or with the
+/// background dropped, or one of the pack's own background pictures (decision C-D3).</summary>
+public partial class PackTileViewModel : ObservableObject
 {
-    public PackMapTileViewModel(MapEntry map, int composeWidth, int composeHeight, bool dropBackground)
+    public PackTileViewModel(
+        string key, string caption, MapEntry? map, GameFile? file, int composeWidth, int composeHeight)
     {
+        Key = key;
+        Caption = caption;
         Map = map;
+        File = file;
         ComposeWidth = composeWidth;
         ComposeHeight = composeHeight;
-        DropBackground = dropBackground;
     }
 
-    public MapEntry Map { get; }
+    /// <summary>The map's folder name, or the background's file name. What a reopen after a rescan matches on.</summary>
+    public string Key { get; }
 
-    /// <summary>The caption: the map's in-game name, or its folder name without level data (spec 3.6).</summary>
-    public string DisplayName => Map.DisplayName;
+    public string Caption { get; }
 
-    /// <summary>The size the composite is rendered at, which is not the size the tile is shown at.</summary>
+    public MapEntry? Map { get; }
+
+    public GameFile? File { get; }
+
+    /// <summary>No map owns this picture, so the caption is a file name and the markup draws it in Geist Mono.</summary>
+    public bool IsFileTile => Map is null;
+
     public int ComposeWidth { get; }
 
     public int ComposeHeight { get; }
-
-    /// <summary>True for the Platforms grid, where the level's backgrounds are dropped before the render.</summary>
-    public bool DropBackground { get; }
-
-    [ObservableProperty]
-    public partial ImageSource? Preview { get; set; }
-}
-
-/// <summary>One image in the pack's own Backgrounds folder.</summary>
-public partial class PackBackgroundTileViewModel : ObservableObject
-{
-    public PackBackgroundTileViewModel(GameFile file)
-    {
-        File = file;
-    }
-
-    public GameFile File { get; }
-
-    /// <summary>The caption: the file's own name, which is the background slot it fills.</summary>
-    public string Name => File.Name;
 
     [ObservableProperty]
     public partial ImageSource? Preview { get; set; }

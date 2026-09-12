@@ -1,4 +1,5 @@
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using BhMaps.Core.Imaging;
 using BhMaps.Core.Tests.Helpers;
 
@@ -150,5 +151,65 @@ public class BackgroundFitterTests
         Assert.InRange(p.R, 118, 138);
         Assert.InRange(p.G, 118, 138);
         Assert.InRange(p.B, 118, 138);
+    }
+
+    private static double MeanAbsoluteDifference(BitmapSource a, BitmapSource b)
+    {
+        Assert.Equal(a.PixelWidth, b.PixelWidth);
+        Assert.Equal(a.PixelHeight, b.PixelHeight);
+        var stride = a.PixelWidth * 4;
+        var one = new byte[stride * a.PixelHeight];
+        var two = new byte[stride * b.PixelHeight];
+        new FormatConvertedBitmap(a, PixelFormats.Bgra32, null, 0).CopyPixels(one, stride, 0);
+        new FormatConvertedBitmap(b, PixelFormats.Bgra32, null, 0).CopyPixels(two, stride, 0);
+        double sum = 0;
+        var counted = 0;
+        for (var i = 0; i < one.Length; i++)
+        {
+            if (i % 4 == 3)
+            {
+                continue;
+            }
+
+            sum += Math.Abs(one[i] - two[i]);
+            counted++;
+        }
+
+        return sum / counted;
+    }
+
+    [Fact]
+    public void LoadWorkingSource_ScalesDownToWhatTheCanvasNeedsAndNeverUp()
+    {
+        using var tmp = new TempDir();
+        var big = SyntheticImage.SaveQuadrants(tmp.Sub("big.png"), 1600, 900);
+        var small = SyntheticImage.SaveQuadrants(tmp.Sub("small.png"), 100, 50);
+
+        var scaled = BackgroundFitter.LoadWorkingSource(big, 640, 360);
+        var kept = BackgroundFitter.LoadWorkingSource(small, 640, 360);
+
+        Assert.Equal(640, scaled.PixelWidth);
+        Assert.Equal(360, scaled.PixelHeight);
+        Assert.True(scaled.IsFrozen);
+        Assert.Equal(100, kept.PixelWidth);
+        Assert.Equal(50, kept.PixelHeight);
+    }
+
+    [Theory]
+    [InlineData(FitMode.Cover, 0.25)]
+    [InlineData(FitMode.Cover, 0.5)]
+    [InlineData(FitMode.Contain, 0.5)]
+    [InlineData(FitMode.Stretch, 0.5)]
+    public void WorkingSourceFit_MatchesTheFullFitDownscaled(FitMode mode, double panX)
+    {
+        using var tmp = new TempDir();
+        var src = SyntheticImage.SaveQuadrants(tmp.Sub("src.png"), 1600, 900);
+        var options = new FitOptions(mode, PanX: panX, Darken: 0.2);
+
+        var full = BackgroundFitter.Render(src, options, W, H);
+        var reference = BackgroundFitter.Render(full, new FitOptions(FitMode.Stretch), 640, 360);
+        var preview = BackgroundFitter.Render(BackgroundFitter.LoadWorkingSource(src, 640, 360), options, 640, 360);
+
+        Assert.True(MeanAbsoluteDifference(reference, preview) < 6, "preview drifted from the full fit");
     }
 }

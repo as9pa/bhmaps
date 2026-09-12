@@ -16,7 +16,8 @@ public sealed record ScanSnapshot(
     MapCatalog Catalog,
     IReadOnlyDictionary<string, MapStatus> MapStatuses,
     IReadOnlyList<LibraryBackground> Backgrounds,
-    Pack? DefaultPack);
+    Pack? DefaultPack,
+    IReadOnlyList<CustomPicture> CustomPictures);
 
 /// <summary>Composition root state: settings, hash cache, level data, previews, undo, and the scan that ties
 /// them together.</summary>
@@ -35,6 +36,7 @@ public sealed class AppServices : IDisposable
         Renderer = new RenderQueue();
         Previews = new PreviewCache(appDataDir, HashCache, Renderer);
         Undo = new UndoStore(appDataDir);
+        RowThumbnails = new ThumbnailCache(Thumbnails);
     }
 
     public string AppDataDir { get; }
@@ -52,6 +54,10 @@ public sealed class AppServices : IDisposable
     public HashCache HashCache { get; }
 
     public ThumbnailProvider Thumbnails { get; } = new();
+
+    /// <summary>The rows pages' loader over <see cref="Thumbnails" /> (addendum B). One instance for the app, so
+    /// a picture decoded for a Backgrounds row is already decoded when a Platforms row asks for it.</summary>
+    public ThumbnailCache RowThumbnails { get; }
 
     public LevelDataService LevelData { get; }
 
@@ -102,7 +108,10 @@ public sealed class AppServices : IDisposable
             catalog,
             mapStatuses,
             BackgroundLibrary.Build(packs, tree),
-            DefaultPack.Find(packs));
+            DefaultPack.Find(packs),
+
+            // Built here, inside the scan, because it hashes: every page reads the list rather than computing one.
+            CustomPictureLibrary.Build(packs, tree, catalog, HashCache));
     }
 
     /// <summary>Stops the render thread. Called once, from App.Exit.</summary>
