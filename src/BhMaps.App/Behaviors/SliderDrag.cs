@@ -61,6 +61,12 @@ public static class SliderDrag
             slider.Value = value;
         }
 
+        // Setting the value only asks for a new arrange; the thumb is still drawn where it was until layout runs.
+        // The thumb measures every drag from where the pointer was over it at the press, so if it took the press
+        // now it would remember an origin a whole groove away and every move after that would land the same
+        // distance from the pointer. Laying out first puts the thumb under the pointer before it looks.
+        slider.UpdateLayout();
+
         // The thumb is under the pointer now, so the press is given to it and the drag runs as if it had begun
         // there: WPF captures the mouse and every move until the button goes up is its own.
         thumb.RaiseEvent(new MouseButtonEventArgs(e.MouseDevice, e.Timestamp, MouseButton.Left)
