@@ -4,14 +4,15 @@
         xmlns:controls="clr-namespace:BhMaps.App.Views.Controls"
         Title="BhMaps" Width="1280" Height="800" MinWidth="1000" MinHeight="640"
         Background="{StaticResource BgBrush}">
-  <!-- Nothing on a page triggers a rescan, so the keyboard does; Ctrl+1..4 are the four tabs (spec 2.1).
+  <!-- Nothing on a page triggers a rescan, so the keyboard does; Ctrl+1..5 are the five tabs (addendum A).
        Ctrl+K is in the code-behind: it navigates and then focuses, which a command cannot do. -->
   <Window.InputBindings>
     <KeyBinding Key="F5" Command="{Binding RefreshCommand}" />
     <KeyBinding Key="D1" Modifiers="Control" Command="{Binding NavigateMapsCommand}" />
     <KeyBinding Key="D2" Modifiers="Control" Command="{Binding NavigateBackgroundsCommand}" />
-    <KeyBinding Key="D3" Modifiers="Control" Command="{Binding NavigatePacksCommand}" />
-    <KeyBinding Key="D4" Modifiers="Control" Command="{Binding NavigateSettingsCommand}" />
+    <KeyBinding Key="D3" Modifiers="Control" Command="{Binding NavigatePlatformsCommand}" />
+    <KeyBinding Key="D4" Modifiers="Control" Command="{Binding NavigatePacksCommand}" />
+    <KeyBinding Key="D5" Modifiers="Control" Command="{Binding NavigateSettingsCommand}" />
   </Window.InputBindings>
 
   <Grid>
@@ -20,7 +21,7 @@
       <RowDefinition Height="*" />
     </Grid.RowDefinitions>
 
-    <!-- Spec 2.1: brand, four tabs, and the game line at the right. 44 px with a hairline under it. -->
+    <!-- Addendum A: brand, five tabs, and the game line at the right. 44 px with a hairline under it. -->
     <Border Grid.Row="0"
             Background="{StaticResource BgBrush}"
             BorderBrush="{StaticResource LineBrush}"
@@ -37,6 +38,7 @@
         <StackPanel Grid.Column="1" Margin="24,0,0,0" VerticalAlignment="Center" Orientation="Horizontal">
           <Button Command="{Binding NavigateMapsCommand}" Content="Maps" Style="{StaticResource TopBarTab}" Tag="{Binding Maps}" />
           <Button Command="{Binding NavigateBackgroundsCommand}" Content="Backgrounds" Style="{StaticResource TopBarTab}" Tag="{Binding Backgrounds}" />
+          <Button Command="{Binding NavigatePlatformsCommand}" Content="Platforms" Style="{StaticResource TopBarTab}" Tag="{Binding Platforms}" />
           <Button Command="{Binding NavigatePacksCommand}" Content="Packs" Style="{StaticResource TopBarTab}" Tag="{Binding Packs}" />
           <Button Command="{Binding NavigateSettingsCommand}" Content="Settings" Style="{StaticResource TopBarTab}" Tag="{Binding SettingsPage}" />
         </StackPanel>

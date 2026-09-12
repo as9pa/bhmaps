@@ -38,10 +38,11 @@ public partial class MainViewModel : ObservableObject
         _launcher = new GameLauncher();
         Maps = new MapsViewModel(this);
         Backgrounds = new BackgroundsViewModel(this);
+        Platforms = new PlatformsViewModel(this);
         Packs = new PacksViewModel(this);
         PackDetail = new PackDetailViewModel(this);
         SettingsPage = new SettingsPageViewModel(this);
-        _pages = [Maps, Backgrounds, Packs, PackDetail, SettingsPage];
+        _pages = [Maps, Backgrounds, Platforms, Packs, PackDetail, SettingsPage];
         CurrentPage = Maps;
 
         // The startup read usually lands after the first scan, and the catalog that scan built came from the cache
@@ -66,6 +67,9 @@ public partial class MainViewModel : ObservableObject
     public MapsViewModel Maps { get; }
 
     public BackgroundsViewModel Backgrounds { get; }
+
+    /// <summary>Addendum C: the tab the owner asked back, between Backgrounds and Packs.</summary>
+    public PlatformsViewModel Platforms { get; }
 
     public PacksViewModel Packs { get; }
 
@@ -151,6 +155,9 @@ public partial class MainViewModel : ObservableObject
 
     [RelayCommand]
     private void NavigateBackgrounds() => CurrentPage = Backgrounds;
+
+    [RelayCommand]
+    private void NavigatePlatforms() => CurrentPage = Platforms;
 
     [RelayCommand]
     private void NavigatePacks() => CurrentPage = Packs;

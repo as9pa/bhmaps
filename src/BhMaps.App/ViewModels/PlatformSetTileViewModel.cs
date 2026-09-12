@@ -1,3 +1,4 @@
+using System.Windows.Input;
 using System.Windows.Media;
 using BhMaps.App.Services;
 using BhMaps.Core.Maps;
@@ -35,6 +36,19 @@ public sealed partial class PlatformSetTileViewModel : ObservableObject
 
     public string PackName => Pack.Name;
 
+    /// <summary>The caption under the thumbnail, and the tile's automation name. The same member the picture
+    /// tiles carry, so one row template draws both (addendum C).</summary>
+    public string Title => Pack.Name;
+
+    /// <summary>The picture tiles' name for <see cref="InGame" />, for the same reason.</summary>
+    public bool IsInGame => InGame;
+
+    /// <summary>The picture tiles' name for <see cref="Preview" />.</summary>
+    public ImageSource? Thumbnail => Preview;
+
+    /// <summary>What a click on the tile does: one set onto its own map, live (addendum C).</summary>
+    public ICommand ApplyCommand => ApplyToMapCommand;
+
     /// <summary>Addendum C: a set tile's tooltip is the pack it came from, which is also its caption.</summary>
     public string ToolTipText => Pack.Name;
 
@@ -47,6 +61,7 @@ public sealed partial class PlatformSetTileViewModel : ObservableObject
 
     /// <summary>Null until the composite is ready. Always frozen, because it is drawn off the UI thread.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Thumbnail))]
     public partial ImageSource? Preview { get; set; }
 
     /// <summary>The rows of the tile's menu, as the last <see cref="RebuildMenu" /> left them.</summary>
