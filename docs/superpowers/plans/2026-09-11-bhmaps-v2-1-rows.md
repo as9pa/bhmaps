@@ -18,7 +18,7 @@ This plan continues `docs/superpowers/plans/2026-09-11-bhmaps-v2-1.md`, whose Ta
 - Never run the app or tests against the real game folder (C:\Program Files (x86)\Steam\steamapps\common\Brawlhalla), the real library (C:\Users\alexa\files\bh) or the real %APPDATA%\BhMaps. Launch only with all three of `--game`, `--library`, `--appdata` pointing at the dev tree: `C:\Users\alexa\AppData\Local\Temp\claude\C--Users-alexa-projects-bhmaps\4d9e4a5d-5cec-4956-9fc6-2f4e47200cf2\scratchpad\devtree\{game\mapArt,lib,appdata}`. Never launch, close or kill Brawlhalla.
 - Every write to the game folder goes through MainViewModel.RunGameWriteAsync (busy boundary, undo snapshot once per action, failure window). Undo goes through the same wrapper. No restart flow: GameLauncher.RunWriteAsync becomes the write itself; AppSettings loses whileRunning; SettingsStore reads an old value and drops it with a log line.
 - Every done line ends with the shared sentence: "Shows on the next match load." when Brawlhalla is running, "Shows when Brawlhalla starts." otherwise. Multi-map writes keep the confirm that names the count; single-map writes are one click.
-- Copy (spec section 11, as amended by the addendum): tabs Maps, Backgrounds, Platforms, Packs, Settings; game line "Brawlhalla running" / "Brawlhalla not running" + Launch; chip row "Select all" (owner change O7; the tooltip "Ticks the maps the chips and search show"); selection bar "3 of 67 maps selected", "Apply pack", "Apply picture", "Reset to default", "Select all", "Clear"; tile menu "Apply to Brawlhaven", "Apply to the 3 selected maps", "Apply to all maps", "Apply to...", "Edit", "Show in folder", "Show files", "Remove from library", "Save to library"; buttons "Add Custom Image", "Reset this map", "Reset all to default", "Apply all", "Open folder"; first-run line "No packs yet. Import a folder of map art on the Packs page, or add a custom image on Backgrounds."
+- Copy (spec section 11, as amended by the addendum): tabs Maps, Backgrounds, Platforms, Packs, Settings; game line "Brawlhalla running" / "Brawlhalla not running" + Launch; chip row "Select all" (owner change O7; the tooltip "Selects the maps the chips and search show"); selection bar "3 of 67 maps selected", "Apply pack", "Apply picture", "Reset to default", "Select all", "Clear"; tile menu "Apply to Brawlhaven", "Apply to the 3 selected maps", "Apply to all maps", "Apply to...", "Edit", "Show in folder", "Show files", "Remove from library", "Save to library"; buttons "Add Custom Image", "Reset this map", "Reset all to default", "Apply all", "Open folder"; first-run line "No packs yet. Import a folder of map art on the Packs page, or add a custom image on Backgrounds."
 - No em-dashes and no emoji anywhere in the app, docs, commit messages or plan text.
 - Theme: reuse the tokens in src/BhMaps.App/Theme/Tokens.xaml and the style keys in Controls.xaml; no new colours outside Tokens.xaml; Geist / Geist Mono only. `FocusVisualStyle` must be set as a local attribute (never through a style setter); a bare `x:Static` of a `const int` into a double property crashes at startup (use Binding Source with Mode=OneTime).
 - Not changing (spec section 10): composed previews from level data, hashing and status, the packs list, Welcome, Import folder, Undo as one snapshot of the last write, the theme, DialogWindow.
@@ -4329,7 +4329,7 @@ Select-String -Path src\BhMaps.App\**\*.xaml,src\BhMaps.App\**\*.cs -Pattern "Ad
 and add two rows to the end of the table, before the paragraph that begins "AddPicturesViewModel":
 
 ```markdown
-| "Select all shown" / "Select all 12 shown" (chip row) | "Select all", with the tooltip "Ticks the maps the chips and search show" | `MapsView.xaml`, `MapsViewModel.cs` |
+| "Select all shown" / "Select all 12 shown" (chip row) | "Select all", with the tooltip "Selects the maps the chips and search show" | `MapsView.xaml`, `MapsViewModel.cs` |
 | "Select all shown" (selection bar) | "Select all", same tooltip | `MapsView.xaml` |
 ```
 
@@ -4590,7 +4590,7 @@ dotnet test BhMaps.slnx
 
 Expected: 28 task headings in the main plan, no em-dash or en-dash in either plan, nothing left naming the
 segment or the deleted property, 0 warnings, every test green. Then look at the Maps page once on the dev tree:
-the chip row's button reads "Select all", its tooltip reads "Ticks the maps the chips and search show", clicking
+the chip row's button reads "Select all", its tooltip reads "Selects the maps the chips and search show", clicking
 it ticks every card the chips and search show, and the selection bar's line names the count.
 
 Capture: `<SHOTS>\t33-maps-select-all.png`.
