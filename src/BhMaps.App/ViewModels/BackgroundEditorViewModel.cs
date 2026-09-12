@@ -11,9 +11,10 @@ using CommunityToolkit.Mvvm.Input;
 namespace BhMaps.App.ViewModels;
 
 /// <summary>What one Save left in the library: the fitted picture, the slot it was fitted for, the maps that slot
-/// belongs to, and whether the user asked for it to go into the game as well. The shell does that part, so the
-/// editor never writes into the game folder.</summary>
-public sealed record BackgroundSave(string PackFile, string Slot, string MapNames, bool ApplyToGame);
+/// belongs to, whether the user asked for it to go into the game as well, and the pack it was saved into, which
+/// is the pack the shell stamps when it applies it. The shell does that part, so the editor never writes into the
+/// game folder.</summary>
+public sealed record BackgroundSave(string PackFile, string Slot, string MapNames, bool ApplyToGame, string PackName);
 
 /// <summary>Spec 7.2: one picture, fitted to one map's background slot. The source is decoded once into a
 /// 640x360 working bitmap and every preview is drawn from it on a 16 ms throttle, so a slider drag moves the
@@ -243,7 +244,7 @@ public partial class BackgroundEditorViewModel : ObservableObject
             var bytes = await Task.Run(() => BackgroundFitter.Fit(path, options));
             Directory.CreateDirectory(Path.GetDirectoryName(packFile)!);
             await File.WriteAllBytesAsync(packFile, bytes);
-            Saved = new BackgroundSave(packFile, slot, SelectedMap?.DisplayNames ?? slot, ApplyNow);
+            Saved = new BackgroundSave(packFile, slot, SelectedMap?.DisplayNames ?? slot, ApplyNow, EffectivePackName);
             CloseRequested?.Invoke(true);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or FileFormatException)

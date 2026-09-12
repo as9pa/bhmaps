@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Windows.Media;
 using BhMaps.Core.Maps;
 using BhMaps.Core.Model;
+using BhMaps.Core.Status;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace BhMaps.App.ViewModels;
@@ -40,13 +41,20 @@ public sealed partial class PackRowViewModel : ObservableObject
 
     private bool _realised;
 
+    /// <summary>The counts on their own, which is the half of the line that never changes.</summary>
+    private readonly string _counts;
+
+    /// <summary>When the pack was last applied (spec 8), null for a pack never applied. Handed to the row by the
+    /// page, because a row reads no settings of its own.</summary>
+    private DateTimeOffset? _lastApplied;
+
     public PackRowViewModel(Pack pack, IReadOnlyList<MapEntry> maps)
     {
         Pack = pack;
         Maps = maps;
         MapCount = pack.Folders.Count(f => !f.Name.Equals(BackgroundsFolder, StringComparison.OrdinalIgnoreCase));
         BackgroundCount = pack.FindFolder(BackgroundsFolder)?.Files.Count ?? 0;
-        CountsText = $"{Plural(MapCount, "map")}, {Plural(BackgroundCount, "background")}";
+        _counts = $"{Plural(MapCount, "map")}, {Plural(BackgroundCount, "background")}";
         Previews = [.. maps.Take(MaxPreviews).Select(map => new PackPreviewTileViewModel(map))];
         MenuItems = [];
     }
@@ -65,8 +73,12 @@ public sealed partial class PackRowViewModel : ObservableObject
     /// <summary>Files in the pack's Backgrounds folder.</summary>
     public int BackgroundCount { get; }
 
-    /// <summary>The line under the name, as in "1 map, 3 backgrounds".</summary>
-    public string CountsText { get; }
+    /// <summary>The line under the name, as in "1 map, 3 backgrounds", with ", applied 2 min ago" after it once
+    /// the pack has been applied (spec 8).</summary>
+    public string CountsText =>
+        _lastApplied is { } stamp
+            ? $"{_counts}, applied {RelativeTime.Describe(stamp, DateTimeOffset.Now)}"
+            : _counts;
 
     /// <summary>The strip, capped at <see cref="MaxPreviews" />. Filled in when the row comes on screen.</summary>
     public ObservableCollection<PackPreviewTileViewModel> Previews { get; }
@@ -109,6 +121,16 @@ public sealed partial class PackRowViewModel : ObservableObject
         _realised = true;
         return true;
     }
+
+    /// <summary>The stamp the page read out of the settings, or null for a pack never applied.</summary>
+    public void SetLastApplied(DateTimeOffset? stamp)
+    {
+        _lastApplied = stamp;
+        RefreshCountsText();
+    }
+
+    /// <summary>Reads the words again from the same stamp: "just now" becomes "2 min ago" while the page is open.</summary>
+    public void RefreshCountsText() => OnPropertyChanged(nameof(CountsText));
 
     /// <summary>"1 map" but "0 maps" and "3 maps". Shared with the page's confirm text, which counts files.</summary>
     public static string Plural(int count, string noun) => count == 1 ? $"{count} {noun}" : $"{count} {noun}s";

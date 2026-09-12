@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Windows.Media;
+using System.Windows.Threading;
 using BhMaps.App.Services;
 using BhMaps.Core.Imaging;
 using BhMaps.Core.Maps;
@@ -22,6 +23,9 @@ public partial class PacksViewModel : PageViewModel
     /// <summary>What a background is: the game ships every one of its background slots as a JPEG.</summary>
     private const string BackgroundExtension = ".jpg";
 
+    /// <summary>Spec 8: how often "applied just now" is read again, which is as often as it can change.</summary>
+    private static readonly TimeSpan AppliedInterval = TimeSpan.FromSeconds(60);
+
     /// <summary>The snapshot the rows were built from, which the composites are drawn against.</summary>
     private ScanSnapshot? _snapshot;
 
@@ -29,10 +33,18 @@ public partial class PacksViewModel : PageViewModel
     /// PackDetailViewModel does, because those loads still hold the token.</summary>
     private CancellationTokenSource? _cts;
 
+    /// <summary>Re-reads the rows' apply times once a minute. It runs for as long as the window does, because a
+    /// page is not told when it is shown; the tick itself does nothing unless Packs is the page on screen, so a
+    /// window sitting on Maps pays a comparison a minute for it.</summary>
+    private readonly DispatcherTimer _appliedTimer;
+
     public PacksViewModel(MainViewModel shell)
         : base(shell)
     {
         Rows = [];
+        _appliedTimer = new DispatcherTimer { Interval = AppliedInterval };
+        _appliedTimer.Tick += (_, _) => RefreshApplied();
+        _appliedTimer.Start();
     }
 
     public override string Title => "Packs";
@@ -55,14 +67,33 @@ public partial class PacksViewModel : PageViewModel
         _cts = new CancellationTokenSource();
         _snapshot = snapshot;
         Rows.Clear();
+
+        // Spec 8: the packs arrive sorted by the shell, so the row that was just applied is already near the top;
+        // all the page adds is the time each one carries on its counts line.
+        var stamps = Shell.Services.Settings.LastApplied;
         foreach (var pack in snapshot.Packs)
         {
             var row = new PackRowViewModel(pack, MapsIn(snapshot.Catalog, pack));
             row.SetMenu(BuildMenu(row));
+            row.SetLastApplied(stamps.TryGetValue(pack.Name, out var stamp) ? stamp : null);
             Rows.Add(row);
         }
 
         IsEmpty = Rows.Count == 0;
+    }
+
+    /// <summary>The apply times, read again from the stamps the rows already hold.</summary>
+    private void RefreshApplied()
+    {
+        if (!ReferenceEquals(Shell.CurrentPage, this))
+        {
+            return;
+        }
+
+        foreach (var row in Rows)
+        {
+            row.RefreshCountsText();
+        }
     }
 
     /// <summary>Addendum E: a row reads its files when it comes on screen and not before, so a library of forty
@@ -213,7 +244,8 @@ public partial class PacksViewModel : PageViewModel
             $"Applying {pack.Name}",
             pack.RelativePaths,
             (progress, ct) => Task.Run(() => { result = PackApplier.ApplyPack(pack, gamePath, progress, ct); }, ct),
-            $"{pack.Name} applied");
+            $"{pack.Name} applied",
+            packName: pack.Name);
         if (result is not null)
         {
             Shell.Dialogs.ShowFailures("Some files could not be copied", result.Failures);

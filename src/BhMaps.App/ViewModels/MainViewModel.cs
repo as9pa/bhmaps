@@ -361,7 +361,8 @@ public partial class MainViewModel : ObservableObject
                 },
                 ct),
             $"{Count(used, "picture")} applied to {Count(maps.Count, "map")}",
-            clearTicks);
+            clearTicks,
+            packName);
 
         Dialogs.ShowFailures("Some pictures could not be applied", failures);
     }
@@ -374,7 +375,11 @@ public partial class MainViewModel : ObservableObject
     /// file name is the best there is. Whichever it is, the confirm, the busy title and the done line all use the
     /// one name, so the user reads the same word from the first prompt to the last line.</summary>
     public async Task ApplyPictureAsync(
-        string sourcePath, IReadOnlyList<MapEntry> maps, bool clearTicks, string? displayName = null)
+        string sourcePath,
+        IReadOnlyList<MapEntry> maps,
+        bool clearTicks,
+        string? displayName = null,
+        string? packName = null)
     {
         // Without level data a map has no background slots at all, so there is nowhere to write (spec 3.6).
         var targets = maps.Where(m => m.BackgroundSlots.Count > 0).ToList();
@@ -419,7 +424,8 @@ public partial class MainViewModel : ObservableObject
             targets.Count == 1
                 ? $"{name} applied to {targets[0].DisplayName}"
                 : $"{name} applied to {targets.Count} maps",
-            clearTicks);
+            clearTicks,
+            packName);
 
         Dialogs.ShowFailures("Some backgrounds could not be applied", failures);
     }
@@ -466,7 +472,8 @@ public partial class MainViewModel : ObservableObject
             targets.Count == 1
                 ? $"{pack.Name} applied to {targets[0].DisplayName}"
                 : $"{pack.Name} applied to {targets.Count} maps",
-            clearTicks);
+            clearTicks,
+            pack.Name);
 
         Dialogs.ShowFailures("Some files could not be applied", failures);
     }
@@ -509,7 +516,8 @@ public partial class MainViewModel : ObservableObject
             (_, ct) => Task.Run(
                 () => failures.AddRange(BackgroundApplier.Apply(source, gamePath, [slot], null, ct).Failures),
                 ct),
-            $"{Path.GetFileName(source)} applied to {saved.MapNames}");
+            $"{Path.GetFileName(source)} applied to {saved.MapNames}",
+            packName: saved.PackName);
 
         Dialogs.ShowFailures("Some backgrounds could not be applied", failures);
     }
@@ -791,14 +799,17 @@ public partial class MainViewModel : ObservableObject
     /// <summary>One write into the game folder (spec 8): the busy boundary, an undo snapshot of the paths it is
     /// about to touch, a done line the wrapper finishes with the period and the shared sentence, the ticks
     /// cleared when the write was aimed at them, and a rescan. False when the folder was missing, another
-    /// operation held the boundary, or the write was cancelled or failed.</summary>
+    /// operation held the boundary, or the write was cancelled or failed. <paramref name="packName"/> is the pack
+    /// the write came out of, stamped as last applied when it succeeds; null for undo, reset and a picture that
+    /// was only ever in the game folder.</summary>
     public Task<bool> RunGameWriteAsync(
         string label,
         IReadOnlyList<string> undoPaths,
         Func<IProgress<string>, CancellationToken, Task> work,
         string doneText,
-        bool clearTicks = false) =>
-        RunWriteCoreAsync(label, undoPaths, work, doneText, undoable: true, clearTicks);
+        bool clearTicks = false,
+        string? packName = null) =>
+        RunWriteCoreAsync(label, undoPaths, work, doneText, undoable: true, clearTicks, packName);
 
     /// <summary>The one path every game write takes. <paramref name="undoPaths"/> null means take no snapshot,
     /// which is Undo's case and only Undo's: the snapshot it is restoring is the only one there is, and Begin
@@ -809,7 +820,8 @@ public partial class MainViewModel : ObservableObject
         Func<IProgress<string>, CancellationToken, Task> work,
         string doneText,
         bool undoable,
-        bool clearTicks)
+        bool clearTicks,
+        string? packName = null)
     {
         if (GameFolderMissing || IsBusy)
         {
@@ -853,6 +865,18 @@ public partial class MainViewModel : ObservableObject
             // Spec 3.3 (S3): a write aimed at the ticked maps is finished with them. A cancelled or failed write
             // keeps them, which is why this is inside the ok branch.
             ClearSelection();
+        }
+
+        if (ok && packName is not null)
+        {
+            // Spec 8: the stamp is written before the rescan, so the scan this write ends with already sorts the
+            // pack that was applied to the top. A cancelled or failed write leaves the old order standing.
+            var stamps = new Dictionary<string, DateTimeOffset>(
+                Services.Settings.LastApplied, StringComparer.OrdinalIgnoreCase)
+            {
+                [packName] = DateTimeOffset.Now,
+            };
+            Services.UpdateSettings(Services.Settings with { PackLastApplied = stamps });
         }
 
         await RescanAsync();
