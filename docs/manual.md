@@ -8,6 +8,13 @@ and `.jpg` files inside the `mapArt` folder and inside its own library, plus its
 `%APPDATA%\BhMaps`. The game's data files are read and never written, and nothing else in the game
 install is touched.
 
+## What is new in 2.3.1
+
+- When another program deletes a piece you handed it, the editor goes back to the piece's own art and
+  says so above the sliders, instead of keeping a stale preview.
+- The Opacity and Hue readouts are blank while nothing is ticked.
+- Opening a map panel reads each platform file from disk once instead of three times.
+
 ## What is new in 2.3
 
 - The platform editor lists the map's pieces as rows with a tick each. Tick the pieces you want to
