@@ -8,6 +8,18 @@ and `.jpg` files inside the `mapArt` folder and inside its own library, plus its
 `%APPDATA%\BhMaps`. The game's data files are read and never written, and nothing else in the game
 install is touched.
 
+## What is new in 2.2.1
+
+Two fixes to 2.2, nothing new on disk.
+
+- **My Backgrounds counts only your own pictures.** The switch on Backgrounds, the picture groups on
+  the map panel and every place that lists pictures show the files you imported into packs other than
+  Default. The Default pack is a capture of the game's folder, so its files are the game's art; a
+  picture only the game has appears on the rows and panel of the maps showing it and is never counted.
+- **Editor sliders drag from anywhere.** In the background and platform editors, and on the Maps zoom
+  slider, pressing anywhere on the groove moves the thumb there and keeps dragging it while the button
+  is held, instead of only when the press lands on the thumb.
+
 ## What is new in 2.2
 
 Eleven changes, sharing one idea: the app stops inventing categories the user never asked for and
@@ -112,8 +124,8 @@ stops a long operation.
   each with a hairline between them. Background lists the choices two across: Default, then one per
   pack that has a picture for this map in the Packs order, then one folded strip per any-map group,
   one per pack that holds one and a last strip named "In game only" for the picture the game is
-  showing on this map that no pack holds, with Add Image beside the first header. Platforms lists Default and each pack that has a set for this map, drawn over the map's
-  current background, and under them a "Platform files" fold with a count, closed to begin with,
+  showing on this map that no pack holds, with Add Image beside the first header. Platforms lists
+  Default and each pack that has a set for this map, drawn over the map's current background, and under them a "Platform files" fold with a count, closed to begin with,
   listing the pieces that map draws. The choice the game is showing carries a check. Hovering a
   choice shows Apply and a dots button, and the dots or a right-click opens its menu: apply to the
   selected maps, apply to all maps, then Edit and Show in folder for a picture, or Edit, apply to
