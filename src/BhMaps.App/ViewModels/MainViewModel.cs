@@ -1507,7 +1507,7 @@ public partial class MainViewModel : ObservableObject
                                     // there is to it.
                                     session.CaptureThumbnails(
                                         thumbnailsDir,
-                                        thumbnailPlans.Select(planned => planned.Plan.Target?.FileName).OfType<string>());
+                                        thumbnailPlans.SelectMany(planned => planned.Plan.Targets.Select(t => t.FileName)));
                                     if (thumbnailUndoNames is { Count: > 0 })
                                     {
                                         session.CaptureThumbnails(thumbnailsDir, thumbnailUndoNames);
@@ -1571,10 +1571,12 @@ public partial class MainViewModel : ObservableObject
                 (map, ThumbnailWriter.Plan(map, snapshot.Catalog.Maps, Services.GameRoot, Services.AppDataDir)))]
             : [];
 
-    /// <summary>Spec 10.4: the thumbnail step, run after the caller's work succeeded. Each map stands on its own,
-    /// so a keep or a write that fails for one becomes that map's panel note rather than a failure of a write that
-    /// is already done. Returns how many thumbnails it wrote. Off the UI thread: the render is the composite the
-    /// map page builds, and the writes are file copies.</summary>
+    /// <summary>Spec section 8 and 10.4: the thumbnail step, run after the caller's work succeeded. A map is
+    /// rendered once and the same picture is written over every file it owns, so a folder whose levels name two
+    /// or three pictures gets all of them. Each map stands on its own, so a keep or a write that fails for one
+    /// becomes that map's panel note rather than a failure of a write that is already done. Returns how many
+    /// files it wrote. Off the UI thread: the render is the composite the map page builds, and the rest is file
+    /// copying.</summary>
     private int WriteThumbnails(
         IReadOnlyList<(MapEntry Map, ThumbnailPlan Plan)> plans,
         bool reset,
@@ -1584,32 +1586,46 @@ public partial class MainViewModel : ObservableObject
         var written = 0;
         foreach (var (map, plan) in plans)
         {
-            if (plan.Target is not { } target)
+            var note = SkipNote(map, plan);
+            if (plan.Targets.Count == 0)
             {
-                _thumbnailNotes[map.FolderName] = SkipNote(map, plan);
+                _thumbnailNotes[map.FolderName] = note;
                 continue;
             }
 
             progress.Report("Map-select thumbnail " + map.DisplayName);
             try
             {
-                // The game's own picture is kept before the first write over it, so every write can be undone
-                // even after the undo snapshot it was taken with has been replaced.
-                ThumbnailWriter.KeepOriginal(target);
-                if (reset)
+                // One render for the map, however many of its own files it is written over.
+                var composite = reset ? null : ThumbnailWriter.Render(map, gamePath);
+                foreach (var target in plan.Targets)
                 {
-                    if (ThumbnailWriter.RestoreOriginal(target))
+                    // The game's own picture is kept before the first write over it, so every write can be
+                    // undone even after the undo snapshot it was taken with has been replaced. One kept copy
+                    // per file, under that file's own name.
+                    ThumbnailWriter.KeepOriginal(target);
+                    if (composite is null)
                     {
+                        if (ThumbnailWriter.RestoreOriginal(target))
+                        {
+                            written++;
+                        }
+                    }
+                    else
+                    {
+                        ThumbnailWriter.Write(composite, target.TargetPath);
                         written++;
                     }
                 }
+
+                if (note.Length == 0)
+                {
+                    _thumbnailNotes.Remove(map.FolderName);
+                }
                 else
                 {
-                    ThumbnailWriter.Write(ThumbnailWriter.Render(map, gamePath), target.TargetPath);
-                    written++;
+                    _thumbnailNotes[map.FolderName] = note;
                 }
-
-                _thumbnailNotes.Remove(map.FolderName);
             }
             catch (Exception ex)
             {
@@ -1620,14 +1636,46 @@ public partial class MainViewModel : ObservableObject
         return written;
     }
 
-    /// <summary>The panel note for a map whose thumbnail the write could not aim at.</summary>
-    private static string SkipNote(MapEntry map, ThumbnailPlan plan) => plan.Skip switch
+    /// <summary>The panel note for a map the write could not aim every picture of, or "" when it wrote them all.
+    /// A map that owns nothing keeps 2.5's sentence, which the manual quotes; a map that owns some files and not
+    /// others names the ones that were left alone.</summary>
+    private static string SkipNote(MapEntry map, ThumbnailPlan plan)
     {
-        ThumbnailSkip.Shared =>
-            $"Map-select thumbnail not written: {map.DisplayName} shares its picture with {plan.OtherMap}.",
-        ThumbnailSkip.NoFile => $"Map-select thumbnail not written: no file is named for {map.DisplayName}.",
-        _ => "Map-select thumbnail not written: the file is missing from the game folder.",
-    };
+        if (plan.NamesNoFile)
+        {
+            return $"Map-select thumbnail not written: no file is named for {map.DisplayName}.";
+        }
+
+        var shared = plan.Files.Where(f => f.Skip == ThumbnailSkip.Shared).ToList();
+        var missing = plan.Files.Where(f => f.Skip == ThumbnailSkip.Missing).ToList();
+        if (shared.Count == 0 && missing.Count == 0)
+        {
+            return "";
+        }
+
+        if (plan.Targets.Count == 0 && missing.Count == 0)
+        {
+            return $"Map-select thumbnail not written: {map.DisplayName} shares its picture with {shared[0].OtherMap}.";
+        }
+
+        var parts = new List<string>();
+        if (shared.Count > 0)
+        {
+            parts.Add($"{Names(shared)} {(shared.Count == 1 ? "is" : "are")} shared with {shared[0].OtherMap}.");
+        }
+
+        if (missing.Count > 0)
+        {
+            parts.Add($"{Names(missing)} {(missing.Count == 1 ? "is" : "are")} missing from the game folder.");
+        }
+
+        var lead = plan.Targets.Count == 0 ? "Map-select thumbnail not written: " : "Map-select thumbnail: ";
+        return lead + string.Join(" ", parts);
+    }
+
+    /// <summary>The file names of a group of skipped plan entries, in level order.</summary>
+    private static string Names(IReadOnlyList<ThumbnailFilePlan> files) =>
+        string.Join(", ", files.Select(f => f.FileName));
 
     /// <summary>The caller's done fragment with the thumbnail step's own on the end, or the fragment untouched
     /// when the step wrote nothing. The period between them is settled here for the reason DoneLine settles the
