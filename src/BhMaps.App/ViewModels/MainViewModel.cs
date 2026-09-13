@@ -4,6 +4,7 @@ using BhMaps.App.Services;
 using BhMaps.App.ViewModels.Pages;
 using BhMaps.App.Views;
 using BhMaps.Core.Game;
+using BhMaps.Core.LevelData;
 using BhMaps.Core.Maps;
 using BhMaps.Core.Model;
 using BhMaps.Core.Operations;
@@ -501,7 +502,11 @@ public partial class MainViewModel : ObservableObject
         }
 
         var vm = new BackgroundEditorViewModel(
-            Services, Dialogs, MapSlotChoices(snapshot), snapshot.Packs.Select(p => p.Name).ToList(), request);
+            Services,
+            Dialogs,
+            MapSlotChoices(snapshot),
+            snapshot.Packs.Select(p => p.Name).ToList(),
+            request with { SourcePack = BackgroundSourcePack(request, snapshot) });
         var window = new BackgroundEditorWindow { DataContext = vm, Owner = Application.Current.MainWindow, ShowActivated = !App.Quiet };
         if (window.ShowDialog() != true)
         {
@@ -542,6 +547,29 @@ public partial class MainViewModel : ObservableObject
             packName: saved.PackName);
 
         Dialogs.ShowFailures("Some backgrounds could not be applied", failures);
+    }
+
+    /// <summary>Spec 8: the pack whose background record the editor opens on. The tile's own pack when it named
+    /// one, so Edit on a pack picture shows that pack's values; otherwise the first pack the slot's file status
+    /// names that remembers the slot. Null when the request names no slot, because a custom picture belongs to no
+    /// slot and there is nothing to look up.</summary>
+    private static Pack? BackgroundSourcePack(BackgroundEditorRequest request, ScanSnapshot snapshot)
+    {
+        if (request.Slot is not { Length: > 0 } slot)
+        {
+            return null;
+        }
+
+        if (snapshot.Packs.FirstOrDefault(
+            p => p.Name.Equals(request.PackName, StringComparison.OrdinalIgnoreCase)) is { } named)
+        {
+            return named;
+        }
+
+        var map = snapshot.Catalog.Maps.FirstOrDefault(
+            m => m.BackgroundSlots.Any(s => s.Equals(slot, StringComparison.OrdinalIgnoreCase)));
+        var status = map is null ? null : snapshot.MapStatuses.GetValueOrDefault(map.FolderName);
+        return SourcePackFinder.ForBackground(AssetPath.Background(slot), status, snapshot.Packs);
     }
 
     /// <summary>Spec 4.2: pick one map for a picture. Null when the window was cancelled. Applying is the caller's,

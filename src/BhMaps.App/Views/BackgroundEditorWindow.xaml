@@ -161,6 +161,21 @@
                     SelectedItem="{Binding SelectedMap}" />
           <TextBlock Style="{StaticResource ErrorText}" Text="{Binding MapLabel}" />
 
+          <!-- Spec 8: where the values on this panel came from, with the way back to a clean start beside it. -->
+          <StackPanel Orientation="Horizontal" Visibility="{Binding HasValuesFrom, Converter={StaticResource BoolToVis}}">
+            <TextBlock VerticalAlignment="Center"
+                       Style="{StaticResource HintText}"
+                       Text="{Binding ValuesFromText}"
+                       TextTrimming="CharacterEllipsis" />
+            <Button Margin="6,6,0,0"
+                    VerticalAlignment="Center"
+                    AutomationProperties.Name="Start fresh"
+                    Command="{Binding StartFreshCommand}"
+                    Content="Start fresh"
+                    FocusVisualStyle="{StaticResource DialogFocusRing}"
+                    Style="{StaticResource ResetLink}" />
+          </StackPanel>
+
           <TextBlock Style="{StaticResource FieldLabel}" Text="Fit" />
           <!-- MinWidth 0: the theme's radio button reserves 120 px for a form column, and three of those do not
                fit the 360 px panel. Here they are a row of three short labels, so they size to their content. -->
