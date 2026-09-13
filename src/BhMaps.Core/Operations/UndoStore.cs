@@ -4,7 +4,8 @@ using BhMaps.Core.Model;
 namespace BhMaps.Core.Operations;
 
 /// <summary>One undo set on disk: the game files as they were, under &lt;undo&gt;\&lt;stamp&gt;\&lt;Folder&gt;\, plus _absent.txt for the
-/// paths that held no file. Library files live beside them under &lt;undo&gt;\&lt;stamp&gt;\library\, with their own _library_absent.txt.</summary>
+/// paths that held no file. Library files live beside them under &lt;undo&gt;\&lt;stamp&gt;\library\, with their own _library_absent.txt.
+/// Map-select thumbnails live under &lt;undo&gt;\&lt;stamp&gt;\thumbnails\, with their own _thumbnails_absent.txt.</summary>
 public sealed class UndoSession
 {
     internal const string AbsentFileName = "_absent.txt";
@@ -13,9 +14,15 @@ public sealed class UndoSession
 
     internal const string LibraryAbsentFileName = "_library_absent.txt";
 
+    internal const string ThumbnailsFolderName = "thumbnails";
+
+    internal const string ThumbnailsAbsentFileName = "_thumbnails_absent.txt";
+
     private readonly HashSet<string> _captured = new(StringComparer.OrdinalIgnoreCase);
 
     private readonly HashSet<string> _capturedLibrary = new(StringComparer.OrdinalIgnoreCase);
+
+    private readonly HashSet<string> _capturedThumbnails = new(StringComparer.OrdinalIgnoreCase);
 
     internal UndoSession(string path)
     {
@@ -29,12 +36,17 @@ public sealed class UndoSession
         {
             _capturedLibrary.Add(relativePath);
         }
+
+        foreach (var fileName in CapturedThumbnailFiles().Concat(ThumbnailsAbsentPaths()))
+        {
+            _capturedThumbnails.Add(fileName);
+        }
     }
 
     public string Path { get; }
 
-    /// <summary>Relative paths captured so far, both sides: files copied in plus paths recorded as absent.</summary>
-    public int Count => _captured.Count + _capturedLibrary.Count;
+    /// <summary>Relative paths captured so far, every side: files copied in plus paths recorded as absent.</summary>
+    public int Count => _captured.Count + _capturedLibrary.Count + _capturedThumbnails.Count;
 
     /// <summary>Copies the game file into the session. A path with no file is recorded in _absent.txt.</summary>
     public void Capture(string gamePath, string relativePath) =>
@@ -56,6 +68,18 @@ public sealed class UndoSession
         foreach (var relativePath in relativePaths)
         {
             CaptureInto(_capturedLibrary, libraryPath, librarySide, LibraryAbsentFileName, relativePath);
+        }
+    }
+
+    /// <summary>Copies map-select thumbnails (file names under thumbnailsDir) into the session's "thumbnails" side;
+    /// absent ones are listed in _thumbnails_absent.txt so a restore deletes them. First capture of a name wins, as
+    /// on the other sides.</summary>
+    public void CaptureThumbnails(string thumbnailsDir, IEnumerable<string> fileNames)
+    {
+        var thumbnailsSide = System.IO.Path.Combine(Path, ThumbnailsFolderName);
+        foreach (var fileName in fileNames)
+        {
+            CaptureInto(_capturedThumbnails, thumbnailsDir, thumbnailsSide, ThumbnailsAbsentFileName, fileName);
         }
     }
 
@@ -90,14 +114,17 @@ public sealed class UndoSession
     }
 
     /// <summary>Relative paths whose original game bytes are stored in this session, sorted by name. The library
-    /// side and the two absent lists are session bookkeeping, not game files, so they are left out.</summary>
+    /// side, the thumbnails side and the absent lists are session bookkeeping, not game files, so they are left out.</summary>
     internal IReadOnlyList<string> CapturedFiles()
     {
         var librarySide = LibraryFolderName + System.IO.Path.DirectorySeparatorChar;
+        var thumbnailsSide = ThumbnailsFolderName + System.IO.Path.DirectorySeparatorChar;
         return CapturedUnder(Path)
             .Where(r => !r.Equals(AbsentFileName, StringComparison.OrdinalIgnoreCase)
                 && !r.Equals(LibraryAbsentFileName, StringComparison.OrdinalIgnoreCase)
-                && !r.StartsWith(librarySide, StringComparison.OrdinalIgnoreCase))
+                && !r.Equals(ThumbnailsAbsentFileName, StringComparison.OrdinalIgnoreCase)
+                && !r.StartsWith(librarySide, StringComparison.OrdinalIgnoreCase)
+                && !r.StartsWith(thumbnailsSide, StringComparison.OrdinalIgnoreCase))
             .ToList();
     }
 
@@ -105,11 +132,18 @@ public sealed class UndoSession
     internal IReadOnlyList<string> CapturedLibraryFiles() =>
         CapturedUnder(System.IO.Path.Combine(Path, LibraryFolderName));
 
+    /// <summary>File names whose original thumbnail bytes are stored under the session's thumbnails side, sorted by name.</summary>
+    internal IReadOnlyList<string> CapturedThumbnailFiles() =>
+        CapturedUnder(System.IO.Path.Combine(Path, ThumbnailsFolderName));
+
     /// <summary>Relative paths that held no game file when the session began, one per line of _absent.txt.</summary>
     internal IReadOnlyList<string> AbsentPaths() => AbsentPathsIn(AbsentFileName);
 
     /// <summary>Relative paths that held no library file when the session began, one per line of _library_absent.txt.</summary>
     internal IReadOnlyList<string> LibraryAbsentPaths() => AbsentPathsIn(LibraryAbsentFileName);
+
+    /// <summary>File names that held no thumbnail when the session began, one per line of _thumbnails_absent.txt.</summary>
+    internal IReadOnlyList<string> ThumbnailsAbsentPaths() => AbsentPathsIn(ThumbnailsAbsentFileName);
 
     private static IReadOnlyList<string> CapturedUnder(string root)
     {
@@ -177,20 +211,28 @@ public sealed class UndoStore
 
     /// <summary>Copies the game side's captured files back and deletes the ones recorded as absent. Copied counts both.
     /// Never throws per file. A restore with no failures discards the snapshot; one with failures keeps it so the user
-    /// can retry. A library side the session holds is left alone.</summary>
-    public ApplyResult Restore(UndoSession session, string gamePath) => RestoreSides(session, gamePath, libraryPath: null);
+    /// can retry. A library or thumbnails side the session holds is left alone.</summary>
+    public ApplyResult Restore(UndoSession session, string gamePath) =>
+        RestoreSides(session, gamePath, libraryPath: null, thumbnailsDir: null);
 
     /// <summary>Restores the game side under gamePath and, when the session has a library side, the library side
     /// under libraryPath. Clears the session on zero failures.</summary>
     public ApplyResult Restore(UndoSession session, string gamePath, string libraryPath) =>
-        RestoreSides(session, gamePath, libraryPath);
+        Restore(session, gamePath, libraryPath, thumbnailsDir: "");
 
-    private ApplyResult RestoreSides(UndoSession session, string gamePath, string? libraryPath)
+    /// <summary>The three sides at once. An empty thumbnailsDir means the caller wants no thumbnails side, so one the
+    /// session holds stays snapshotted instead of being put back, as a game-only restore leaves the library side.</summary>
+    public ApplyResult Restore(UndoSession session, string gamePath, string libraryPath, string thumbnailsDir) =>
+        RestoreSides(session, gamePath, libraryPath, thumbnailsDir.Length == 0 ? null : thumbnailsDir);
+
+    private ApplyResult RestoreSides(UndoSession session, string gamePath, string? libraryPath, string? thumbnailsDir)
     {
         IReadOnlyList<string> captured;
         IReadOnlyList<string> absent;
         IReadOnlyList<string> libraryCaptured;
         IReadOnlyList<string> libraryAbsent;
+        IReadOnlyList<string> thumbnailsCaptured;
+        IReadOnlyList<string> thumbnailsAbsent;
         try
         {
             captured = session.CapturedFiles();
@@ -198,6 +240,8 @@ public sealed class UndoStore
             // A caller that asked for the game side alone leaves the library side snapshotted, not undone.
             libraryCaptured = libraryPath is null ? Array.Empty<string>() : session.CapturedLibraryFiles();
             libraryAbsent = libraryPath is null ? Array.Empty<string>() : session.LibraryAbsentPaths();
+            thumbnailsCaptured = thumbnailsDir is null ? Array.Empty<string>() : session.CapturedThumbnailFiles();
+            thumbnailsAbsent = thumbnailsDir is null ? Array.Empty<string>() : session.ThumbnailsAbsentPaths();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -228,6 +272,20 @@ public sealed class UndoStore
             foreach (var relativePath in libraryAbsent)
             {
                 DeleteBack(Path.Combine(libraryPath, relativePath), ref restored, failures);
+            }
+        }
+
+        if (thumbnailsDir is not null)
+        {
+            var thumbnailsSide = Path.Combine(session.Path, UndoSession.ThumbnailsFolderName);
+            foreach (var fileName in thumbnailsCaptured)
+            {
+                CopyBack(Path.Combine(thumbnailsSide, fileName), Path.Combine(thumbnailsDir, fileName), ref restored, failures);
+            }
+
+            foreach (var fileName in thumbnailsAbsent)
+            {
+                DeleteBack(Path.Combine(thumbnailsDir, fileName), ref restored, failures);
             }
         }
 

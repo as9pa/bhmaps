@@ -289,4 +289,58 @@ public class UndoStoreTests
         Assert.False(Directory.Exists(session.Path));
         Assert.Null(store.Latest);
     }
+
+    /// <summary>A thumbnails folder holding the game's own A.jpg; B.jpg is absent.</summary>
+    private static string ArrangeThumbnails(TempDir tmp)
+    {
+        var thumbnails = Path.Combine(tmp.Path, "game-root", "images", "thumbnails");
+        Directory.CreateDirectory(thumbnails);
+        File.WriteAllText(Path.Combine(thumbnails, "A.jpg"), "game picture");
+        return thumbnails;
+    }
+
+    [Fact]
+    public void Thumbnails_side_restores_and_deletes()
+    {
+        using var tmp = new TempDir();
+        var (store, game) = Arrange(tmp);
+        var lib = ArrangeLibrary(tmp);
+        var thumbnails = ArrangeThumbnails(tmp);
+        var a = Path.Combine(thumbnails, "A.jpg");
+        var b = Path.Combine(thumbnails, "B.jpg");
+        var session = store.Begin(Stamp);
+        session.CaptureThumbnails(thumbnails, new[] { "A.jpg", "B.jpg" });
+        File.WriteAllText(a, "our thumbnail");
+        File.WriteAllText(b, "written by the operation");
+
+        var result = store.Restore(session, game, lib, thumbnails);
+
+        Assert.Empty(result.Failures);
+        Assert.Equal(2, result.Copied);
+        Assert.Equal("game picture", File.ReadAllText(a));
+        Assert.False(File.Exists(b));
+        Assert.False(Directory.Exists(session.Path));
+    }
+
+    [Fact]
+    public void Restore_without_thumbnails_dir_ignores_that_side()
+    {
+        using var tmp = new TempDir();
+        var (store, game) = Arrange(tmp);
+        var lib = ArrangeLibrary(tmp);
+        var thumbnails = ArrangeThumbnails(tmp);
+        var a = Path.Combine(thumbnails, "A.jpg");
+        var session = store.Begin(Stamp);
+        session.Capture(game, "Grove\\a.png");
+        session.CaptureThumbnails(thumbnails, new[] { "A.jpg" });
+        File.WriteAllText(Path.Combine(game, "Grove", "a.png"), "changed");
+        File.WriteAllText(a, "our thumbnail");
+
+        var result = store.Restore(session, game, lib);
+
+        Assert.Empty(result.Failures);
+        Assert.Equal(1, result.Copied);
+        Assert.Equal("x", File.ReadAllText(Path.Combine(game, "Grove", "a.png")));
+        Assert.Equal("our thumbnail", File.ReadAllText(a));
+    }
 }

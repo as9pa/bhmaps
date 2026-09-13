@@ -223,4 +223,16 @@ public class PackApplierTests
 
         Assert.Equal(new[] { Path.Combine("Swamp", "Mud1.png") }, paths);
     }
+
+    [Fact]
+    public void MapsTouched_ListsFolderAndBackgroundMatches()
+    {
+        using var tmp = new TempDir();
+        var (pack, _) = Arrange(tmp);
+        IReadOnlyList<MapEntry> maps = [Map("BloodMoon"), Map("Swamp", "BG_Sewer.jpg"), Map("Grove")];
+
+        var touched = PackApplier.MapsTouched(pack, maps);
+
+        Assert.Equal(new[] { "BloodMoon", "Swamp" }, touched.Select(m => m.FolderName));
+    }
 }
