@@ -34,6 +34,11 @@ public partial class MainViewModel : ObservableObject
 
     private readonly DispatcherTimer _gameTimer;
     private readonly DispatcherTimer _updateTimer;
+
+    /// <summary>Spec 7.3: the one token every update check runs under, cancelled when the window closes so a
+    /// request still in flight does not outlive it.</summary>
+    private readonly CancellationTokenSource _updateCts = new();
+
     private CancellationTokenSource? _cts;
 
     /// <summary>Set the first time a scan finishes, so the update check is started once a run and no rescan
@@ -1111,6 +1116,12 @@ public partial class MainViewModel : ObservableObject
     /// only thing it can do is set AvailableUpdate and stamp lastUpdateCheck.</summary>
     public async Task CheckForUpdateAsync(bool force)
     {
+        // Check now pressed twice, or pressed while the once-a-run check is still out: one check at a time.
+        if (UpdateChecking)
+        {
+            return;
+        }
+
         if (!force && (!Services.Settings.CheckForUpdates || !DueForCheck(Services.Settings.LastUpdateCheck)))
         {
             return;
@@ -1120,7 +1131,7 @@ public partial class MainViewModel : ObservableObject
         UpdateChecking = true;
         try
         {
-            var release = await Task.Run(() => Services.Updates.CheckAsync(CancellationToken.None));
+            var release = await Task.Run(() => Services.Updates.CheckAsync(_updateCts.Token));
             AvailableUpdate = release;
             UpdateCheckFailed = release is null;
             if (release is not null || force)
@@ -1160,12 +1171,15 @@ public partial class MainViewModel : ObservableObject
         _ = RescanAsync();
     }
 
-    /// <summary>Stops the two timers and drops the level-data subscription. Called once, when the window closes,
-    /// so none of them keeps waking a dispatcher that is on its way out.</summary>
+    /// <summary>Stops the two timers, cancels the update work and drops the level-data subscription. Called once,
+    /// when the window closes, so none of them keeps waking a dispatcher that is on its way out.</summary>
     public void Shutdown()
     {
         _gameTimer.Stop();
         _updateTimer.Stop();
+        _updateCts.Cancel();
+        _updateCts.Dispose();
+        SettingsPage.Shutdown();
         Services.LevelData.Changed -= OnLevelDataChanged;
     }
 

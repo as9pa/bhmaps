@@ -565,6 +565,29 @@
     <Setter Property="behaviors:SliderDrag.IsEnabled" Value="True" />
   </Style>
 
+  <!-- Spec 7.3: the one progress bar in the app, three pixels of it, under the download line. -->
+  <Style x:Key="ThinProgress" TargetType="ProgressBar">
+    <Setter Property="Height" Value="3" />
+    <Setter Property="Background" Value="{StaticResource Line2Brush}" />
+    <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Maximum" Value="1" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ProgressBar">
+          <Grid>
+            <Border Background="{TemplateBinding Background}" CornerRadius="{StaticResource Radius}" />
+            <Border x:Name="PART_Track" />
+            <Border x:Name="PART_Indicator"
+                    HorizontalAlignment="Left"
+                    Background="{TemplateBinding Foreground}"
+                    CornerRadius="{StaticResource Radius}" />
+          </Grid>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
   <Style x:Key="SectionHeaderText" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
     <Setter Property="FontSize" Value="12" />
     <Setter Property="FontWeight" Value="Medium" />
