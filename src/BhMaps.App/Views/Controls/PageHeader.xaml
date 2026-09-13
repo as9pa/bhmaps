@@ -81,6 +81,14 @@
                 IsEnabled="{Binding CanUndo}"
                 Style="{StaticResource PlainButton}"
                 Visibility="{Binding DoneUndoable, Converter={StaticResource BoolToVis}}" />
+
+        <!-- Spec 2.6 4.3: a plain copy has no snapshot behind it and offers the target instead of Undo. -->
+        <Button Margin="8,0,0,0"
+                Command="{Binding DoneActionCommand}"
+                Content="{Binding DoneActionText}"
+                FocusVisualStyle="{StaticResource DialogFocusRing}"
+                Style="{StaticResource PlainButton}"
+                Visibility="{Binding HasDoneAction, Converter={StaticResource BoolToVis}}" />
       </StackPanel>
     </Grid>
 

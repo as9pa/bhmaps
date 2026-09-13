@@ -136,6 +136,17 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     public partial bool DoneUndoable { get; set; }
 
+    /// <summary>The words on the one button a library line may offer instead of Undo, "" for none.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasDoneAction))]
+    public partial string DoneActionText { get; set; } = "";
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasDoneAction))]
+    public partial IRelayCommand? DoneActionCommand { get; set; }
+
+    public bool HasDoneAction => DoneActionText.Length > 0 && DoneActionCommand is not null;
+
     [ObservableProperty]
     public partial bool CanUndo { get; set; }
 
@@ -1043,6 +1054,62 @@ public partial class MainViewModel : ObservableObject
     {
         DoneText = doneText;
         DoneUndoable = false;
+        DoneActionText = "";
+        DoneActionCommand = null;
+    }
+
+    /// <summary>The line a library-only operation leaves when it offers something other than Undo: spec 2.6 4.3's
+    /// "Open {target}" beside a plain copy.</summary>
+    public void SetLibraryDone(string doneText, string actionText, IRelayCommand action)
+    {
+        DoneText = doneText;
+        DoneUndoable = false;
+        DoneActionText = actionText;
+        DoneActionCommand = action;
+    }
+
+    /// <summary>Spec 2.6 4.2: one write that touches the library and not the game. The busy boundary, an undo
+    /// session holding the library paths the work is about to write or remove, a done line with Undo beside it,
+    /// and a rescan. No launcher and no game side: nothing lands in the game folder, so the game may keep
+    /// running and a missing game folder does not stop it.</summary>
+    public async Task<bool> RunLibraryWriteAsync(
+        string label,
+        IReadOnlyList<string> libraryUndoPaths,
+        Func<IProgress<string>, CancellationToken, Task> work,
+        string doneText,
+        IReadOnlyList<string>? writtenFolders = null)
+    {
+        var libraryPath = Services.LibraryPath;
+        var undoable = libraryUndoPaths.Count > 0;
+        var ok = await RunBusyAsync(
+            label,
+            async (progress, ct) =>
+            {
+                if (undoable)
+                {
+                    // The capture is the first step of the work, as it is on the game side: file copying behind a
+                    // progress line, inside the boundary that turns an IO failure into the usual dialog.
+                    progress.Report("Saving undo");
+                    await Task.Run(
+                        () =>
+                        {
+                            var session = Services.Undo.Begin();
+                            session.CaptureLibrary(libraryPath, libraryUndoPaths);
+                        },
+                        ct);
+                }
+
+                await work(progress, ct);
+            });
+
+        // Begin has already replaced the previous snapshot, so a write that failed clears the line with it.
+        DoneText = ok ? doneText : "";
+        DoneUndoable = ok && undoable;
+        DoneActionText = "";
+        DoneActionCommand = null;
+        CanUndo = Services.Undo.Latest is not null;
+        await RescanAsync(writtenFolders);
+        return ok;
     }
 
     /// <summary>Spec 2.2: what a write reports about when it will show. One string, appended by the wrapper, so
