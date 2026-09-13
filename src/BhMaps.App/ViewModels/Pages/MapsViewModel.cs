@@ -581,8 +581,7 @@ public partial class MapsViewModel : PageViewModel
     /// <summary>The chip filter, then the header search box on top of it.</summary>
     private bool Matches(MapCardViewModel card)
     {
-        var search = SearchText;
-        if (search.Length > 0 && !card.DisplayName.Contains(search, StringComparison.OrdinalIgnoreCase))
+        if (!NameFilter.Matches(card.DisplayName, SearchText))
         {
             return false;
         }

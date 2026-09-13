@@ -542,6 +542,75 @@ public partial class MainViewModel : ObservableObject
         Dialogs.ShowFailures("Some backgrounds could not be applied", failures);
     }
 
+    /// <summary>Spec 4.2: pick one map for a picture. Null when the window was cancelled. Applying is the caller's,
+    /// through the path it already uses, so the chooser itself never writes.</summary>
+    public Task<MapEntry?> ChooseMapAsync(string picturePath, string caption)
+    {
+        if (Snapshot is not { } snapshot)
+        {
+            return Task.FromResult<MapEntry?>(null);
+        }
+
+        var rows = new List<ChooserRow>();
+        foreach (var map in snapshot.Catalog.Maps.Where(m => m.BackgroundSlots.Count > 0))
+        {
+            snapshot.MapStatuses.TryGetValue(map.FolderName, out var status);
+            rows.Add(new ChooserRow(map.DisplayName, status?.Text ?? "Default", picturePath, map));
+        }
+
+        var vm = new ChooserViewModel(
+            $"Apply {caption} to a map",
+            "One map. Pick it and the picture is written to the game.",
+            "map",
+            rows)
+        { PrimaryPrefix = "Apply to" };
+        return Task.FromResult(ShowChooser(vm) ? vm.Selected?.Map : null);
+    }
+
+    /// <summary>Spec 4.2: pick one picture for a map. The file, or null when cancelled.</summary>
+    public Task<string?> ChoosePictureAsync(MapEntry map)
+    {
+        if (Snapshot is not { } snapshot)
+        {
+            return Task.FromResult<string?>(null);
+        }
+
+        var rows = new List<ChooserRow>();
+        foreach (var pack in snapshot.Packs.OrderByDescending(
+                     p => p.Name.Equals(BackgroundEditorViewModel.DefaultPackName, StringComparison.OrdinalIgnoreCase)))
+        {
+            foreach (var file in pack.FindFolder("Backgrounds")?.Files ?? Array.Empty<GameFile>())
+            {
+                rows.Add(new ChooserRow(
+                    Path.GetFileNameWithoutExtension(file.Name), pack.Name, file.FullPath, null));
+            }
+        }
+
+        var vm = new ChooserViewModel(
+            $"Apply a picture to {map.DisplayName}",
+            "One picture. Pick it and it is written to the game.",
+            "picture",
+            rows);
+        return Task.FromResult(ShowChooser(vm) ? vm.Selected?.Path : null);
+    }
+
+    /// <summary>The chooser's window, opened the way every other owned window here is. The thumbnails load while it
+    /// is up and are cancelled when it closes.</summary>
+    private bool ShowChooser(ChooserViewModel vm)
+    {
+        var window = new ChooserWindow
+        {
+            DataContext = vm,
+            Owner = Application.Current.MainWindow,
+            ShowActivated = !App.Quiet,
+        };
+        using var cts = new CancellationTokenSource();
+        _ = vm.LoadThumbnailsAsync(Services, cts.Token);
+        var ok = window.ShowDialog() == true;
+        cts.Cancel();
+        return ok;
+    }
+
     /// <summary>Spec 6: the editor recolours a map's own pieces into a pack, which is a library write of its own.
     /// The "Apply to game now" it offers is a game write, so the set it left is applied here, with the boundary,
     /// the snapshot and the undo every other write gets. The rescan comes first either way, because the pack the
