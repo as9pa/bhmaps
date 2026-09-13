@@ -100,6 +100,7 @@ public partial class MapPanelViewModel : ObservableObject
         _snapshot = snapshot;
         DisplayName = map.DisplayName;
         SetsText = string.Join(", ", map.Sets.Select(MapCatalog.LabelFor));
+        ThumbnailNote = shell.ThumbnailNotes.GetValueOrDefault(map.FolderName, "");
         StatusText = BuildStatusText();
         HasDefaultPack = snapshot.DefaultPack is not null;
         ResetHint = HasDefaultPack ? "" : NoDefaultPackText;
@@ -141,6 +142,13 @@ public partial class MapPanelViewModel : ObservableObject
 
     /// <summary>The sets the map is in, labelled the way the chip row labels them.</summary>
     public string SetsText { get; }
+
+    /// <summary>Spec 10.4: why the last write left this map's map-select thumbnail alone, or empty when it wrote
+    /// it or never aimed at it. Fixed for the life of the panel: a new scan builds a new panel.</summary>
+    public string ThumbnailNote { get; }
+
+    /// <summary>False hides the note rather than leaving an empty line under the sets.</summary>
+    public bool HasThumbnailNote => ThumbnailNote.Length > 0;
 
     /// <summary>Spec 3.2: what the game is showing for this map, in one sentence of words.</summary>
     public string StatusText { get; }
@@ -247,7 +255,9 @@ public partial class MapPanelViewModel : ObservableObject
                 },
                 ct),
             $"Reset {DisplayName} to default",
-            libraryUndoPaths: RecordReset.UndoPaths(matched, _shell.Services.LibraryPath));
+            libraryUndoPaths: RecordReset.UndoPaths(matched, _shell.Services.LibraryPath),
+            artMaps: [map],
+            resetThumbnails: true);
 
         if (outcome is not null)
         {

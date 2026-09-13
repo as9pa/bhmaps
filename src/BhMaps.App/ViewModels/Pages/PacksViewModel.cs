@@ -239,13 +239,19 @@ public partial class PacksViewModel : PageViewModel
         }
 
         var gamePath = Shell.Services.GamePath;
+
+        // Spec 10.4: the maps the pack lands in are the maps whose map-select thumbnails the write redraws.
+        IReadOnlyList<MapEntry> artMaps = Shell.Snapshot is { } snapshot
+            ? PackApplier.MapsTouched(pack, snapshot.Catalog.Maps)
+            : [];
         ApplyResult? result = null;
         await Shell.RunGameWriteAsync(
             $"Applying {pack.Name}",
             pack.RelativePaths,
             (progress, ct) => Task.Run(() => { result = PackApplier.ApplyPack(pack, gamePath, progress, ct); }, ct),
             $"{pack.Name} applied",
-            packName: pack.Name);
+            packName: pack.Name,
+            artMaps: artMaps);
         if (result is not null)
         {
             Shell.Dialogs.ShowFailures("Some files could not be copied", result.Failures);
