@@ -142,7 +142,7 @@ line turns red and offers Choose folder, which opens Settings. F5 rescans; Cance
 stops a long operation.
 
 - **Maps** is the grid of maps, and the only page where maps are selected. Chips above the grid
-  filter: All, one per level set, and Selected, which appears once anything is selected. The set
+  filter: All and one per level set. The set
   chips are Ranked 1v1, Ranked 2v2 and
   Tournament when the game's data has the ranked sets, and the standard ones when it does not; the
   other sets the game defines are read but not shown. At the right end of the chip row is Select all,
@@ -199,7 +199,7 @@ stops a long operation.
   Apply and a dots button, and the menu offers to apply the picture to the selected
   maps or to all maps, then Edit and Show in folder, and for a picture in a pack Remove from that
   pack, or Save to My Backgrounds for a picture the game is showing that no pack holds. Search
-  matches map names, pack names and file names. The chips are the ones Maps has, without Selected.
+  matches map names, pack names and file names. The chips are the ones Maps has.
   The zoom slider sets the row height in five steps, the second to begin with. Add Image is in the
   header. Maps are not selected on this page: it has
   no selection boxes and no selection bar, and "apply to the selected maps" means the maps
