@@ -1,6 +1,7 @@
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using BhMaps.Core.Imaging;
+using BhMaps.Core.Packs;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace BhMaps.App.ViewModels;
@@ -69,6 +70,9 @@ public partial class PlatformPieceViewModel : ObservableObject
     /// <summary>The picked file's name, for the Image value line.</summary>
     public string? ReplacementName { get; private set; }
 
+    /// <summary>Full path of the picture Replace loaded for this row; null for own art and working copies.</summary>
+    public string? ReplacementPath { get; private set; }
+
     public string? WorkingCopyPath { get; private set; }
 
     public string? WorkingCopyPack { get; private set; }
@@ -92,10 +96,19 @@ public partial class PlatformPieceViewModel : ObservableObject
         _ => "The piece's own art",
     };
 
-    public void SetReplacement(BitmapSource fitted, string pickedFileName)
+    /// <summary>The record's art kind for this row's current state.</summary>
+    public PlatformArt ArtKind => Art switch
+    {
+        PieceArt.WorkingCopy => PlatformArt.WorkingCopy,
+        PieceArt.Replacement => PlatformArt.EachPiece,
+        _ => PlatformArt.Own,
+    };
+
+    public void SetReplacement(BitmapSource fitted, string pickedFileName, string sourcePath)
     {
         Replacement = fitted;
         ReplacementName = pickedFileName;
+        ReplacementPath = sourcePath;
         Art = PieceArt.Replacement;
         Raise();
     }
@@ -104,6 +117,7 @@ public partial class PlatformPieceViewModel : ObservableObject
     {
         Replacement = null;
         ReplacementName = null;
+        ReplacementPath = null;
         WorkingCopyPath = path;
         WorkingCopyPack = packName;
         Opacity = DefaultOpacity;
@@ -118,6 +132,7 @@ public partial class PlatformPieceViewModel : ObservableObject
     {
         Replacement = null;
         ReplacementName = null;
+        ReplacementPath = null;
         WorkingCopyPath = null;
         WorkingCopyPack = null;
         (Width, Height) = Measure(OriginalPath);
