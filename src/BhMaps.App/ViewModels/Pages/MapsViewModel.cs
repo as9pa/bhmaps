@@ -257,7 +257,9 @@ public partial class MapsViewModel : PageViewModel
                 },
                 ct),
             "Reset every map to default",
-            libraryUndoPaths: RecordReset.UndoPaths(allMatched, Shell.Services.LibraryPath));
+            libraryUndoPaths: RecordReset.UndoPaths(allMatched, Shell.Services.LibraryPath),
+            artMaps: snapshot.Catalog.Maps,
+            resetThumbnails: true);
 
         if (outcome is not null)
         {
@@ -283,7 +285,8 @@ public partial class MapsViewModel : PageViewModel
                 () => { result = PackApplier.ApplyToMaps(pack, maps, gamePath, progress, ct); }, ct),
             $"{pack.Name} applied to {MainViewModel.Count(maps.Count, "map")}",
             clearTicks,
-            pack.Name);
+            pack.Name,
+            artMaps: maps);
 
         if (result is not null)
         {
@@ -371,7 +374,9 @@ public partial class MapsViewModel : PageViewModel
                 ct),
             $"Reset {MainViewModel.Count(maps.Count, "map")} to default",
             clearTicks,
-            libraryUndoPaths: RecordReset.UndoPaths(allMatched, Shell.Services.LibraryPath));
+            libraryUndoPaths: RecordReset.UndoPaths(allMatched, Shell.Services.LibraryPath),
+            artMaps: maps,
+            resetThumbnails: true);
 
         Shell.Dialogs.ShowFailures("Some files could not be reset", failures);
     }

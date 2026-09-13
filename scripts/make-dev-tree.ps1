@@ -62,6 +62,18 @@ if ($RealArt) {
             Where-Object { $_.Name -ne "Default" } |
             ForEach-Object { Copy-Item $_.FullName (Join-Path $devLib "packs") -Recurse -Force }
     }
+
+    # The map-select thumbnails, so the thumbnails switch has something to write over. Which jpg belongs to which
+    # map is named in LevelTypes, which lives inside the encrypted swz; reading it here would be a second
+    # implementation of the app's own, so every thumbnail is copied instead. Read only, like everything above.
+    $srcThumbs = Join-Path $GameRoot "images\thumbnails"
+    $devThumbs = Join-Path $devRoot "images\thumbnails"
+    if (Test-Path $srcThumbs) {
+        New-Item -ItemType Directory -Force $devThumbs | Out-Null
+        Copy-Item (Join-Path $srcThumbs "*.jpg") $devThumbs -Force
+    } else {
+        Write-Warning "No thumbnails folder at $srcThumbs; the thumbnails switch will find nothing to write."
+    }
 }
 
 # A dev run belongs on the map grid, not on the welcome window, so the tree carries a settings file that says the

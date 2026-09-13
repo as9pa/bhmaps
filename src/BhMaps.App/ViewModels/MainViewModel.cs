@@ -24,6 +24,10 @@ public partial class MainViewModel : ObservableObject
     private readonly GameLauncher _launcher;
     private readonly IReadOnlyList<PageViewModel> _pages;
 
+    /// <summary>Spec 10.4: why a map's map-select thumbnail was left alone by the last write that named it, by
+    /// map folder. A write replaces the entry of every map it named: removed when the thumbnail was written.</summary>
+    private readonly Dictionary<string, string> _thumbnailNotes = new(StringComparer.OrdinalIgnoreCase);
+
     private readonly DispatcherTimer _gameTimer;
     private CancellationTokenSource? _cts;
 
@@ -236,7 +240,13 @@ public partial class MainViewModel : ObservableObject
         await RunWriteCoreAsync(
             "Undoing",
             undoPaths: null,
-            (_, ct) => Task.Run(() => { result = Services.Undo.Restore(session, gamePath, libraryPath); }, ct),
+            (_, ct) => Task.Run(
+                () =>
+                {
+                    result = Services.Undo.Restore(
+                        session, gamePath, libraryPath, ThumbnailWriter.ThumbnailsDir(Services.GameRoot));
+                },
+                ct),
             UndoDoneText,
             undoable: false,
             clearTicks: false);
@@ -375,7 +385,8 @@ public partial class MainViewModel : ObservableObject
             packName,
             // The undo paths are all in the shared backgrounds folder, so the maps whose slots were written are
             // named here rather than read back off them (spec 11).
-            writtenFolders: [.. maps.Select(m => m.FolderName)]);
+            writtenFolders: [.. maps.Select(m => m.FolderName)],
+            artMaps: maps);
 
         Dialogs.ShowFailures("Some pictures could not be applied", failures);
     }
@@ -441,7 +452,8 @@ public partial class MainViewModel : ObservableObject
             packName,
             // The undo paths are all in the shared backgrounds folder, so the maps whose slots were written are
             // named here rather than read back off them (spec 11).
-            writtenFolders: [.. targets.Select(m => m.FolderName)]);
+            writtenFolders: [.. targets.Select(m => m.FolderName)],
+            artMaps: targets);
 
         Dialogs.ShowFailures("Some backgrounds could not be applied", failures);
     }
@@ -489,7 +501,8 @@ public partial class MainViewModel : ObservableObject
                 ? $"{pack.Name} applied to {targets[0].DisplayName}"
                 : $"{pack.Name} applied to {targets.Count} maps",
             clearTicks,
-            pack.Name);
+            pack.Name,
+            artMaps: targets);
 
         Dialogs.ShowFailures("Some files could not be applied", failures);
     }
@@ -542,6 +555,9 @@ public partial class MainViewModel : ObservableObject
         var gamePath = Services.GamePath;
         var source = saved.PackFile;
         var slot = saved.Slot;
+        var slotMaps = snapshot.Catalog.Maps
+            .Where(m => m.BackgroundSlots.Contains(slot, StringComparer.OrdinalIgnoreCase))
+            .ToList();
         var failures = new List<FileFailure>();
         await RunGameWriteAsync(
             $"Applying {Path.GetFileName(source)}",
@@ -553,9 +569,8 @@ public partial class MainViewModel : ObservableObject
             packName: saved.PackName,
             // One slot, and the maps that name it are the cards it changes: the backgrounds folder it is written
             // into belongs to no map of its own (spec 11).
-            writtenFolders: [.. snapshot.Catalog.Maps
-                .Where(m => m.BackgroundSlots.Contains(slot, StringComparer.OrdinalIgnoreCase))
-                .Select(m => m.FolderName)]);
+            writtenFolders: [.. slotMaps.Select(m => m.FolderName)],
+            artMaps: slotMaps);
 
         Dialogs.ShowFailures("Some backgrounds could not be applied", failures);
     }
@@ -885,8 +900,43 @@ public partial class MainViewModel : ObservableObject
     }
 
     /// <summary>Spec 10.2: the Settings switch tells the shell it moved, so turning it off puts the game's own
-    /// thumbnails back. Does nothing yet; the next step of the thumbnails work fills it in.</summary>
-    public Task ThumbnailSwitchChangedAsync(bool on) => Task.CompletedTask;
+    /// thumbnails back, through the same wrapper as any other game write. Turning it on writes nothing: a
+    /// thumbnail is only ever written by a write that changed the map's art. The switch fires this unawaited, so
+    /// it turns its own failure into the dialog a write failure gets rather than an unobserved exception.</summary>
+    public async Task ThumbnailSwitchChangedAsync(bool on)
+    {
+        if (on)
+        {
+            return;
+        }
+
+        try
+        {
+            var originalsDir = ThumbnailWriter.OriginalsDir(Services.AppDataDir);
+            var thumbnailsDir = ThumbnailWriter.ThumbnailsDir(Services.GameRoot);
+            var names = ThumbnailWriter.KeptOriginals(originalsDir);
+            if (names.Count == 0)
+            {
+                // Nothing was ever written, so there is nothing to put back and no line to leave.
+                return;
+            }
+
+            await RunWriteCoreAsync(
+                "Restoring map-select thumbnails",
+                [],
+                (_, ct) => Task.Run(() => ThumbnailWriter.RestoreAll(originalsDir, thumbnailsDir), ct),
+                "Map-select thumbnails restored",
+                undoable: true,
+                clearTicks: false,
+                // The setting is already off, so the capture has to be told the names itself: the thumbnails side
+                // of this undo is the whole of what it restores.
+                thumbnailUndoNames: names);
+        }
+        catch (Exception ex)
+        {
+            Dialogs.Error("Something went wrong", ex.Message);
+        }
+    }
 
     /// <summary>Copies the game folder into the Default pack (spec 6.1), asking before replacing one that already
     /// exists. Shared by the Packs and Settings pages so the confirm text and the busy boundary are the same
@@ -1023,7 +1073,9 @@ public partial class MainViewModel : ObservableObject
     /// changes, relative to the library folder, so the undo puts them back with the game files (spec 7).
     /// <paramref name="writtenFolders"/> names the map folders the write lands in, for the rescan it ends with
     /// (spec 11); left null it is read off the undo paths, which is what every write into a map's own folder
-    /// wants.</summary>
+    /// wants. <paramref name="artMaps"/> names the maps whose art the write changes, so their map-select
+    /// thumbnails are written after it when the switch is on (spec 10.4); <paramref name="resetThumbnails"/>
+    /// makes that step put the game's own thumbnail back instead, for a write that resets the art.</summary>
     public Task<bool> RunGameWriteAsync(
         string label,
         IReadOnlyList<string> undoPaths,
@@ -1032,9 +1084,21 @@ public partial class MainViewModel : ObservableObject
         bool clearTicks = false,
         string? packName = null,
         IReadOnlyList<string>? libraryUndoPaths = null,
-        IReadOnlyList<string>? writtenFolders = null) =>
+        IReadOnlyList<string>? writtenFolders = null,
+        IReadOnlyList<MapEntry>? artMaps = null,
+        bool resetThumbnails = false) =>
         RunWriteCoreAsync(
-            label, undoPaths, work, doneText, undoable: true, clearTicks, packName, libraryUndoPaths, writtenFolders);
+            label,
+            undoPaths,
+            work,
+            doneText,
+            undoable: true,
+            clearTicks,
+            packName,
+            libraryUndoPaths,
+            writtenFolders,
+            artMaps,
+            resetThumbnails);
 
     /// <summary>The one path every game write takes. <paramref name="undoPaths"/> null means take no snapshot,
     /// which is Undo's case and only Undo's: the snapshot it is restoring is the only one there is, and Begin
@@ -1048,7 +1112,10 @@ public partial class MainViewModel : ObservableObject
         bool clearTicks,
         string? packName = null,
         IReadOnlyList<string>? libraryUndoPaths = null,
-        IReadOnlyList<string>? writtenFolders = null)
+        IReadOnlyList<string>? writtenFolders = null,
+        IReadOnlyList<MapEntry>? artMaps = null,
+        bool resetThumbnails = false,
+        IReadOnlyList<string>? thumbnailUndoNames = null)
     {
         if (GameFolderMissing || IsBusy)
         {
@@ -1059,6 +1126,9 @@ public partial class MainViewModel : ObservableObject
 
         var gamePath = Services.GamePath;
         var libraryPath = Services.LibraryPath;
+        var thumbnailsDir = ThumbnailWriter.ThumbnailsDir(Services.GameRoot);
+        var thumbnailPlans = ThumbnailPlans(artMaps);
+        var thumbnailWrites = 0;
         var ok = await RunBusyAsync(
             label,
             async (progress, ct) =>
@@ -1084,17 +1154,36 @@ public partial class MainViewModel : ObservableObject
                                     {
                                         session.CaptureLibrary(libraryPath, libraryUndoPaths);
                                     }
+
+                                    // The thumbnails the step below is about to write, plus any the caller named
+                                    // itself: the restore-on-off write is the one whose thumbnails side is all
+                                    // there is to it.
+                                    session.CaptureThumbnails(
+                                        thumbnailsDir,
+                                        thumbnailPlans.Select(planned => planned.Plan.Target?.FileName).OfType<string>());
+                                    if (thumbnailUndoNames is { Count: > 0 })
+                                    {
+                                        session.CaptureThumbnails(thumbnailsDir, thumbnailUndoNames);
+                                    }
                                 },
                                 ct);
                         }
 
                         await work(progress, ct);
+
+                        if (thumbnailPlans.Count > 0)
+                        {
+                            // After the art it is a picture of, and inside the same boundary: a thumbnail written
+                            // from art the write failed to lay down would show something the game never loads.
+                            thumbnailWrites = await Task.Run(
+                                () => WriteThumbnails(thumbnailPlans, resetThumbnails, gamePath, progress), ct);
+                        }
                     });
             });
 
         // Begin has already replaced the previous snapshot, so a write that was cancelled or failed has to clear
         // the done line too; leaving it would describe something Undo no longer restores.
-        DoneText = ok ? DoneLine(doneText, GameRunning) : "";
+        DoneText = ok ? DoneLine(WithThumbnailsDone(doneText, thumbnailWrites), GameRunning) : "";
         DoneUndoable = ok && undoable;
 
         // A restore that fully succeeds discards its snapshot, so what can be undone is always read back from the
@@ -1121,6 +1210,91 @@ public partial class MainViewModel : ObservableObject
 
         await RescanAsync(writtenFolders ?? WrittenFolders(undoPaths));
         return ok;
+    }
+
+    /// <summary>The note a map's panel shows about its map-select thumbnail, by map folder name, or no entry when
+    /// the last write that named the map wrote it.</summary>
+    public IReadOnlyDictionary<string, string> ThumbnailNotes => _thumbnailNotes;
+
+    /// <summary>The thumbnail plan of every map a write names, or nothing at all when the switch is off, the
+    /// write names no maps, or there is no scan to read the other maps' names out of (spec 10.4).</summary>
+    private IReadOnlyList<(MapEntry Map, ThumbnailPlan Plan)> ThumbnailPlans(IReadOnlyList<MapEntry>? artMaps) =>
+        Services.Settings.WriteGameThumbnails && artMaps is { Count: > 0 } && Snapshot is { } snapshot
+            ? [.. artMaps.Select(map =>
+                (map, ThumbnailWriter.Plan(map, snapshot.Catalog.Maps, Services.GameRoot, Services.AppDataDir)))]
+            : [];
+
+    /// <summary>Spec 10.4: the thumbnail step, run after the caller's work succeeded. Each map stands on its own,
+    /// so a keep or a write that fails for one becomes that map's panel note rather than a failure of a write that
+    /// is already done. Returns how many thumbnails it wrote. Off the UI thread: the render is the composite the
+    /// map page builds, and the writes are file copies.</summary>
+    private int WriteThumbnails(
+        IReadOnlyList<(MapEntry Map, ThumbnailPlan Plan)> plans,
+        bool reset,
+        string gamePath,
+        IProgress<string> progress)
+    {
+        var written = 0;
+        foreach (var (map, plan) in plans)
+        {
+            if (plan.Target is not { } target)
+            {
+                _thumbnailNotes[map.FolderName] = SkipNote(map, plan);
+                continue;
+            }
+
+            progress.Report("Map-select thumbnail " + map.DisplayName);
+            try
+            {
+                // The game's own picture is kept before the first write over it, so every write can be undone
+                // even after the undo snapshot it was taken with has been replaced.
+                ThumbnailWriter.KeepOriginal(target);
+                if (reset)
+                {
+                    if (ThumbnailWriter.RestoreOriginal(target))
+                    {
+                        written++;
+                    }
+                }
+                else
+                {
+                    ThumbnailWriter.Write(ThumbnailWriter.Render(map, gamePath), target.TargetPath);
+                    written++;
+                }
+
+                _thumbnailNotes.Remove(map.FolderName);
+            }
+            catch (Exception ex)
+            {
+                _thumbnailNotes[map.FolderName] = $"Map-select thumbnail not written: {ex.Message}";
+            }
+        }
+
+        return written;
+    }
+
+    /// <summary>The panel note for a map whose thumbnail the write could not aim at.</summary>
+    private static string SkipNote(MapEntry map, ThumbnailPlan plan) => plan.Skip switch
+    {
+        ThumbnailSkip.Shared =>
+            $"Map-select thumbnail not written: {map.DisplayName} shares its picture with {plan.OtherMap}.",
+        ThumbnailSkip.NoFile => $"Map-select thumbnail not written: no file is named for {map.DisplayName}.",
+        _ => "Map-select thumbnail not written: the file is missing from the game folder.",
+    };
+
+    /// <summary>The caller's done fragment with the thumbnail step's own on the end, or the fragment untouched
+    /// when the step wrote nothing. The period between them is settled here for the reason DoneLine settles the
+    /// last one: the page does not decide it.</summary>
+    private static string WithThumbnailsDone(string doneText, int thumbnailWrites)
+    {
+        if (thumbnailWrites == 0)
+        {
+            return doneText;
+        }
+
+        var updated = thumbnailWrites == 1 ? "Map-select thumbnail updated." : "Map-select thumbnails updated.";
+        var fragment = doneText.TrimEnd('.');
+        return fragment.Length == 0 ? updated : $"{fragment}. {updated}";
     }
 
     /// <summary>Spec 11: the map folders a write touched, read off the paths it took its undo snapshot of. The

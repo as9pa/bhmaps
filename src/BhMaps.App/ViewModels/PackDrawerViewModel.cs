@@ -143,7 +143,8 @@ public partial class PackDrawerViewModel : ObservableObject
             PackApplier.ApplyToMapsPaths(pack, [map]),
             (progress, ct) => Task.Run(() => { result = PackApplier.ApplyToMaps(pack, [map], gamePath, progress, ct); }, ct),
             $"{pack.Name} applied to {map.DisplayName}",
-            packName: pack.Name);
+            packName: pack.Name,
+            artMaps: [map]);
 
         if (result is not null)
         {

@@ -832,6 +832,11 @@
             <StackPanel VerticalAlignment="Center">
               <TextBlock FontSize="16" FontWeight="SemiBold" Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" />
               <TextBlock Margin="0,2,0,0" Style="{StaticResource QuietNote}" Text="{Binding SetsText}" TextTrimming="CharacterEllipsis" />
+              <TextBlock Margin="0,2,0,0"
+                         Style="{StaticResource QuietNote}"
+                         Text="{Binding ThumbnailNote}"
+                         TextTrimming="CharacterEllipsis"
+                         Visibility="{Binding HasThumbnailNote, Converter={StaticResource BoolToVis}}" />
             </StackPanel>
 
             <Button Grid.Column="1"
