@@ -215,4 +215,78 @@ public class UndoStoreTests
             new[] { "Backgrounds\\BG_Sewer.jpg", "BloodMoon\\A.png", "BloodMoon\\B.png" },
             pack.RelativePaths);
     }
+
+    /// <summary>A library holding one pack with a platform record; the background record of that pack is absent.</summary>
+    private static string ArrangeLibrary(TempDir tmp)
+    {
+        var lib = Path.Combine(tmp.Path, "lib");
+        Directory.CreateDirectory(Path.Combine(lib, "packs", "P"));
+        File.WriteAllText(Path.Combine(lib, "packs", "P", "platforms.bhmaps.json"), "old");
+        return lib;
+    }
+
+    [Fact]
+    public void Library_side_restores_and_deletes()
+    {
+        using var tmp = new TempDir();
+        var (store, game) = Arrange(tmp);
+        var lib = ArrangeLibrary(tmp);
+        var platforms = Path.Combine(lib, "packs", "P", "platforms.bhmaps.json");
+        var backgrounds = Path.Combine(lib, "packs", "P", "backgrounds.bhmaps.json");
+        var session = store.Begin(Stamp);
+        session.CaptureLibrary(lib, new[] { "packs\\P\\platforms.bhmaps.json", "packs\\P\\backgrounds.bhmaps.json" });
+        File.WriteAllText(platforms, "new");
+        File.WriteAllText(backgrounds, "written by the operation");
+
+        var result = store.Restore(session, game, lib);
+
+        Assert.Empty(result.Failures);
+        Assert.Equal(2, result.Copied);
+        Assert.Equal("old", File.ReadAllText(platforms));
+        Assert.False(File.Exists(backgrounds));
+        Assert.False(Directory.Exists(session.Path));
+        Assert.Null(store.Latest);
+    }
+
+    [Fact]
+    public void Game_only_restore_ignores_library_side()
+    {
+        using var tmp = new TempDir();
+        var (store, game) = Arrange(tmp);
+        var lib = ArrangeLibrary(tmp);
+        var platforms = Path.Combine(lib, "packs", "P", "platforms.bhmaps.json");
+        var session = store.Begin(Stamp);
+        session.Capture(game, "Grove\\a.png");
+        session.CaptureLibrary(lib, new[] { "packs\\P\\platforms.bhmaps.json" });
+        File.WriteAllText(Path.Combine(game, "Grove", "a.png"), "changed");
+        File.WriteAllText(platforms, "new");
+
+        var result = store.Restore(session, game);
+
+        Assert.Empty(result.Failures);
+        Assert.Equal(1, result.Copied);
+        Assert.Equal("x", File.ReadAllText(Path.Combine(game, "Grove", "a.png")));
+        Assert.Equal("new", File.ReadAllText(platforms));
+    }
+
+    [Fact]
+    public void Session_without_library_side_restores_as_before()
+    {
+        using var tmp = new TempDir();
+        var (store, game) = Arrange(tmp);
+        var lib = ArrangeLibrary(tmp);
+        var session = store.Begin(Stamp);
+        session.Capture(game, new[] { "Grove\\a.png", "Grove\\gone.png" });
+        File.WriteAllText(Path.Combine(game, "Grove", "a.png"), "y");
+        File.WriteAllText(Path.Combine(game, "Grove", "gone.png"), "written by the operation");
+
+        var result = store.Restore(session, game, lib);
+
+        Assert.Empty(result.Failures);
+        Assert.Equal(2, result.Copied);
+        Assert.Equal("x", File.ReadAllText(Path.Combine(game, "Grove", "a.png")));
+        Assert.False(File.Exists(Path.Combine(game, "Grove", "gone.png")));
+        Assert.False(Directory.Exists(session.Path));
+        Assert.Null(store.Latest);
+    }
 }
