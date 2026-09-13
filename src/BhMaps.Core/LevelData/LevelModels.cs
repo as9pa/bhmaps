@@ -36,7 +36,10 @@ public sealed record LevelDesc(
     IReadOnlyList<LevelBackground> Backgrounds,
     IReadOnlyList<PlatformNode> Platforms);
 
-public sealed record LevelType(string LevelName, string DisplayName, bool DevOnly, bool TestLevel)
+/// <summary><see cref="ThumbnailFile"/> is the map-select picture the game names in ThumbnailPNGFile, kept
+/// verbatim because the game names a .jpg in that field. Null when the level names none.</summary>
+public sealed record LevelType(
+    string LevelName, string DisplayName, bool DevOnly, bool TestLevel, string? ThumbnailFile = null)
 {
     [JsonIgnore]
     public bool Included => !DevOnly && !TestLevel;

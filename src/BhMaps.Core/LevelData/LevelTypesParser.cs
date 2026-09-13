@@ -13,7 +13,8 @@ public static class LevelTypesParser
                 Read(e, "LevelName") ?? "",
                 Read(e, "DisplayName") ?? "",
                 Flag(e, "DevOnly"),
-                Flag(e, "TestLevel")))
+                Flag(e, "TestLevel"),
+                NullIfEmpty(Read(e, "ThumbnailPNGFile"))))
             .ToList();
 
     public static IReadOnlyList<LevelSet> ParseSets(string xml) =>
@@ -28,6 +29,9 @@ public static class LevelTypesParser
     /// <summary>An attribute or a same-named child element, whichever is present.</summary>
     private static string? Read(XElement element, string name) =>
         (string?)element.Attribute(name) ?? element.Element(name)?.Value;
+
+    /// <summary>An absent value and an empty one both mean the level names no file.</summary>
+    private static string? NullIfEmpty(string? value) => string.IsNullOrEmpty(value) ? null : value;
 
     /// <summary>True only for an explicit "true"; a missing or unreadable flag is false.</summary>
     private static bool Flag(XElement element, string name) =>

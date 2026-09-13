@@ -9,7 +9,7 @@ public static class LevelDataCache
 {
     /// <summary>Bumped whenever a parser change makes a model written by an older build wrong. A cache stamped
     /// with any other version is a cache miss, because the stamp alone only notices the game changing.</summary>
-    public const int SchemaVersion = 2;
+    public const int SchemaVersion = 3;
 
     /// <summary>Not indented: this file is a few megabytes.</summary>
     private static readonly JsonSerializerOptions JsonOptions = new()
