@@ -11,6 +11,11 @@ namespace BhMaps.App.Views.Pages;
 
 public partial class MapsView : UserControl
 {
+    /// <summary>The ticked cards as they were when a right press landed on a card, so the menu can put them back:
+    /// the ListBox ticks the card it is pressed on whichever button it was, and spec 4.3 says a right click
+    /// changes neither the ticks nor the panel. Null between menus.</summary>
+    private List<MapCardViewModel>? _ticksBeforeMenu;
+
     public MapsView()
     {
         InitializeComponent();
@@ -155,6 +160,16 @@ public partial class MapsView : UserControl
     /// collide over Escape.</summary>
     private void OnPageKeyDown(object sender, KeyEventArgs e)
     {
+        // The keyboard opens the menu itself rather than through ContextMenuService, so nothing raises
+        // ContextMenuOpening and the card's lines are built here first: a card whose menu was never built would
+        // otherwise open an empty popup (spec 4.3).
+        if (e.Key is Key.Apps or Key.F10 or Key.System
+            && Keyboard.FocusedElement is FrameworkElement { DataContext: MapCardViewModel focused }
+            && DataContext is MapsViewModel owner)
+        {
+            owner.BuildCardMenu(focused);
+        }
+
         TileMenus.OnPreviewKeyDown(sender, e);
         if (e.Handled || e.Key != Key.Escape || DataContext is not MapsViewModel page || page.SearchText.Length == 0)
         {
@@ -170,12 +185,34 @@ public partial class MapsView : UserControl
         }
     }
 
+    /// <summary>The ticks are read here rather than stopped here: handling the press would keep the ListBox from
+    /// ticking the card but would take the context menu with it, so the set is remembered and put back when the
+    /// menu opens instead.</summary>
+    private void OnCardRightButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (DataContext is MapsViewModel page)
+        {
+            _ticksBeforeMenu = page.AllCards.Where(c => c.IsSelected).ToList();
+        }
+    }
+
     /// <summary>Spec 4.3: the card's lines are built when the menu opens, because the target depends on the ticks
-    /// and there are as many cards as the game has maps.</summary>
+    /// and there are as many cards as the game has maps. The ticks the press moved are put back first, so the
+    /// target rule reads the set the user can see.</summary>
     private void OnCardMenuOpening(object sender, ContextMenuEventArgs e)
     {
         if (sender is ListBoxItem { DataContext: MapCardViewModel card } && DataContext is MapsViewModel page)
         {
+            if (_ticksBeforeMenu is { } before)
+            {
+                foreach (var other in page.AllCards)
+                {
+                    other.IsSelected = before.Contains(other);
+                }
+
+                _ticksBeforeMenu = null;
+            }
+
             page.BuildCardMenu(card);
         }
     }
