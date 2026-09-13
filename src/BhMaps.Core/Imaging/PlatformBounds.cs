@@ -16,7 +16,13 @@ public static class PlatformBounds
 
     /// <summary>Null for a level with no camera, or one whose only platforms are seasonal, which the compositor
     /// does not draw either. Then the caller renders the whole level as before.</summary>
-    public static CameraBounds? For(LevelDesc level, double pad, double aspect)
+    public static CameraBounds? For(LevelDesc level, double pad, double aspect) =>
+        For(level, pad, aspect, null);
+
+    /// <summary>Spec 3.2: with a focus set, the box is the union of the focused assets alone, so Ticked only
+    /// frames the ticked pieces. A set that matches no asset leaves the box empty and returns null, which is the
+    /// same "render the whole level" answer a level with no platforms already gives.</summary>
+    public static CameraBounds? For(LevelDesc level, double pad, double aspect, IReadOnlySet<string>? focus)
     {
         var camera = level.Camera;
         if (camera.W <= 0 || camera.H <= 0 || aspect <= 0)
@@ -27,7 +33,7 @@ public static class PlatformBounds
         var box = Rect.Empty;
         foreach (var node in level.Platforms)
         {
-            Union(node, Matrix.Identity, ref box);
+            Union(node, Matrix.Identity, level.AssetDir, focus, ref box);
         }
 
         if (box.IsEmpty)
@@ -73,7 +79,8 @@ public static class PlatformBounds
 
     /// <summary>The same transform order the compositor draws with: scale, then rotate, then translate, each node
     /// inside its parent's. A seasonal node is skipped here because it is skipped there.</summary>
-    private static void Union(PlatformNode node, Matrix parent, ref Rect box)
+    private static void Union(
+        PlatformNode node, Matrix parent, string assetDir, IReadOnlySet<string>? focus, ref Rect box)
     {
         if (node.IsThemed)
         {
@@ -88,6 +95,12 @@ public static class PlatformBounds
 
         foreach (var asset in node.Assets)
         {
+            // A node outside the set still carries its children's transform, so the walk goes on either way.
+            if (focus is not null && !focus.Contains(AssetPath.Resolve(assetDir, asset.AssetName)))
+            {
+                continue;
+            }
+
             // A missing W or H parses as 0 and means "the image's own size", which is not known without decoding
             // the file, so the asset contributes its position alone rather than a guessed rectangle.
             var rect = new Rect(asset.X, asset.Y, Math.Abs(asset.W), Math.Abs(asset.H));
@@ -97,7 +110,7 @@ public static class PlatformBounds
 
         foreach (var child in node.Children)
         {
-            Union(child, matrix, ref box);
+            Union(child, matrix, assetDir, focus, ref box);
         }
     }
 }
