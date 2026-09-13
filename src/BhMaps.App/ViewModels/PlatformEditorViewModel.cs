@@ -19,8 +19,10 @@ namespace BhMaps.App.ViewModels;
 
 /// <summary>What a set tile's Edit hands the editor: the map whose own pieces are recoloured, the pack the
 /// set came from, or null for the set the game is showing (spec 6), and the relative path of the one piece a
-/// panel row asked for, or null for the whole set. Only that one piece opens ticked (spec 7).</summary>
-public sealed record PlatformEditorRequest(MapEntry Map, Pack? Pack, string? OnlyFile = null);
+/// panel row asked for, or null for the whole set. Only that one piece opens ticked (spec 7). SourcePack is the
+/// pack whose record the values are loaded from: the pack itself when there is one, the pack the map's files were
+/// matched to otherwise, and null when no pack remembers this map (spec 5.1).</summary>
+public sealed record PlatformEditorRequest(MapEntry Map, Pack? Pack, string? OnlyFile = null, Pack? SourcePack = null);
 
 /// <summary>What one Save left in the library: the pack it was saved into, which is the pack the shell stamps
 /// when it applies it, the map folder inside that pack, and whether the user asked for it to go into the game as
@@ -40,6 +42,14 @@ public partial class PlatformEditorViewModel : ObservableObject
     /// <summary>Spec 3.2: Ticked only with nothing ticked ghosts the whole map, so the preview says what to do
     /// about it, in the same words TickHintText uses for the sliders.</summary>
     public const string IsolateHintText = "Tick a file to see it on its own.";
+
+    /// <summary>Spec 5.2: the record's values are meant for the untouched art, and the game folder's file is the
+    /// nearest thing to it when the Default pack has nothing.</summary>
+    public const string NoOriginalNoteText = "The untouched art was not found, so the preview starts from the saved file.";
+
+    /// <summary>Spec 5.2: the file the pack holds is not what the record's values were worked out from, so the
+    /// preview is a fair warning rather than a promise.</summary>
+    public const string ChangedOutsideNoteText = "The file changed since, so the preview may differ from the game.";
 
     /// <summary>The widest a row's thumbnail is ever drawn, so a fitted picture is scaled once rather than per
     /// frame the list draws.</summary>
@@ -70,6 +80,17 @@ public partial class PlatformEditorViewModel : ObservableObject
     private readonly Dictionary<string, FileSystemWatcher> _watchers = new(StringComparer.OrdinalIgnoreCase);
     private readonly Debouncer _changed = new(ChangedDelay);
 
+    /// <summary>The record the editor opened with, or null when no pack remembers this map (spec 5.1).</summary>
+    private readonly PlatformEditRecord? _record;
+
+    /// <summary>The rows the record built, with the entry each one came from: what the background load fits,
+    /// hashes and, for Start fresh, puts back (spec 5.2).</summary>
+    private readonly List<(PlatformPieceViewModel Row, PlatformPieceEntry Entry)> _recordRows = [];
+
+    /// <summary>The pictures and hashes the record asked for, running off the UI thread. The first preview waits
+    /// on it, so the map is never drawn from half a record.</summary>
+    private readonly Task _recordArt;
+
     private long _sequence;
 
     /// <summary>How many times running the preview has found a watched file unreadable since the last render
@@ -94,7 +115,8 @@ public partial class PlatformEditorViewModel : ObservableObject
         _dialogs = dialogs;
         _request = request;
         _tempRoot = Path.Combine(Path.GetTempPath(), "BhMaps", "platform-editor", Guid.NewGuid().ToString("N"));
-        Pieces = BuildPieces(services, request);
+        _record = request.SourcePack is { } recordPack ? PlatformEditRecord.Load(recordPack.FullPath) : null;
+        Pieces = BuildPieces();
         foreach (var row in Pieces)
         {
             row.PropertyChanged += OnRowPropertyChanged;
@@ -117,8 +139,26 @@ public partial class PlatformEditorViewModel : ObservableObject
         TargetPack = existingDefault ?? BackgroundEditorViewModel.NewPackChoice;
         NewPackName = existingDefault is null ? BackgroundEditorViewModel.DefaultPackName : "";
 
-        Opacity = 100;
-        Hue = 0;
+        // Spec 5.3: the line names the pack the values came from, and Save goes back to that pack when the list
+        // still has it, because that is the set the user is carrying on with.
+        ValuesFromText = "";
+        if (request.SourcePack is { } valuesFrom && _record?.Map(request.Map.FolderName) is { } saved)
+        {
+            HasValuesFrom = true;
+            ValuesFromText = $"Values from {valuesFrom.Name}, saved {saved.SavedAt.ToLocalTime():d MMM HH:mm}.";
+            if (PackChoices.Any(p => p.Equals(valuesFrom.Name, StringComparison.OrdinalIgnoreCase)))
+            {
+                TargetPack = valuesFrom.Name;
+            }
+        }
+
+        // The sliders open on the first ticked row, which is where a loaded record put its values, and on the
+        // defaults when nothing was loaded, exactly as 2.4 opened. Syncing, so this never fans back out.
+        _syncing = true;
+        var firstTicked = Pieces.FirstOrDefault(p => p.IsTicked);
+        Opacity = firstTicked?.Opacity ?? PlatformPieceViewModel.DefaultOpacity;
+        Hue = firstTicked?.Hue ?? PlatformPieceViewModel.DefaultHue;
+        _syncing = false;
 
         // The rows of a pack's set are read from a folder the user can change from outside the app, so it is
         // watched from the moment the editor opens rather than only once a working copy is written (ruling 9).
@@ -133,6 +173,7 @@ public partial class PlatformEditorViewModel : ObservableObject
             }
         }
 
+        _recordArt = LoadRecordArtAsync();
         SchedulePreview();
     }
 
@@ -190,6 +231,14 @@ public partial class PlatformEditorViewModel : ObservableObject
     /// <summary>Why the picture the user picked could not be read, or empty (spec 5).</summary>
     [ObservableProperty]
     public partial string ImageError { get; set; } = "";
+
+    /// <summary>"Values from Default, saved 12 Sep 22:01." (spec 5.3).</summary>
+    [ObservableProperty]
+    public partial string ValuesFromText { get; set; }
+
+    /// <summary>Whether the Values from line and its Start fresh link are shown (spec 5.3).</summary>
+    [ObservableProperty]
+    public partial bool HasValuesFrom { get; set; }
 
     public string Title => $"Edit platforms, {_request.Map.DisplayName}";
 
@@ -391,25 +440,190 @@ public partial class PlatformEditorViewModel : ObservableObject
         _services.UpdateSettings(_services.Settings with { PlatformPreviewIsolate = value });
     }
 
-    /// <summary>Where each piece is read from: the pack's copy when the pack has one that draws something, the
-    /// game's otherwise, which is the rule every composite already resolves by (spec 6).</summary>
-    private static IReadOnlyList<PlatformPieceViewModel> BuildPieces(AppServices services, PlatformEditorRequest request)
+    /// <summary>Where each piece is read from: the file the record's values were worked out from when a pack
+    /// remembers this map (spec 5.2), and otherwise the pack's copy when the pack has one that draws something
+    /// and the game's when it does not, which is the rule every composite already resolves by (spec 6).</summary>
+    private IReadOnlyList<PlatformPieceViewModel> BuildPieces()
     {
-        var sources = new AssetSources(services.GamePath, request.Pack?.FullPath);
         var pieces = new List<PlatformPieceViewModel>();
-        foreach (var relativePath in request.Map.PlatformFiles.OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
+        foreach (var relativePath in _request.Map.PlatformFiles.OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
         {
-            if (sources.ResolveAsset(relativePath) is { } source)
+            var ticked = _request.OnlyFile is null
+                || string.Equals(relativePath, _request.OnlyFile, StringComparison.OrdinalIgnoreCase);
+            var entry = _record?.Entry(_request.Map.FolderName, relativePath);
+
+            // A working copy is a file another program owns, so its row opens on that file the way 2.4 opened it.
+            if (entry is null || entry.Art == PlatformArt.WorkingCopy)
             {
-                pieces.Add(new PlatformPieceViewModel(
-                    relativePath,
-                    source,
-                    ticked: request.OnlyFile is null
-                        || string.Equals(relativePath, request.OnlyFile, StringComparison.OrdinalIgnoreCase)));
+                if (ResolveAsset(relativePath) is { } source)
+                {
+                    pieces.Add(new PlatformPieceViewModel(relativePath, source, ticked));
+                }
+
+                continue;
+            }
+
+            if (BuildRecordPiece(relativePath, entry, ticked) is { } row)
+            {
+                pieces.Add(row);
             }
         }
 
         return pieces;
+    }
+
+    /// <summary>Spec 5.2: the record's values were worked out from the untouched art, so the row starts from the
+    /// Default pack's copy of the piece, or the game's when the library has no Default pack. Null when neither
+    /// is there, which is the unresolved file 2.4 leaves out of the list.</summary>
+    private PlatformPieceViewModel? BuildRecordPiece(string relativePath, PlatformPieceEntry entry, bool ticked)
+    {
+        var note = "";
+        var original = Path.Combine(PackScanner.PacksRoot(_services.LibraryPath), DefaultPack.Name, relativePath);
+        if (!File.Exists(original))
+        {
+            original = Path.Combine(_services.GamePath, relativePath);
+            note = NoOriginalNoteText;
+        }
+
+        if (!File.Exists(original))
+        {
+            return null;
+        }
+
+        // Part B replaces this branch: one picture cut across every piece is spanned, not repeated.
+        var picture = entry.Art is PlatformArt.EachPiece or PlatformArt.Across ? entry.Picture : null;
+        if (picture is { Length: > 0 } && !File.Exists(picture))
+        {
+            // The picture is gone, so there is nothing to fit: the row shows what the pack holds, as saved.
+            var saved = _request.SourcePack is { } pack ? Path.Combine(pack.FullPath, relativePath) : original;
+            return new PlatformPieceViewModel(relativePath, File.Exists(saved) ? saved : original, ticked)
+            {
+                LoadedFromRecord = true,
+                Note = $"{Path.GetFileName(picture)}, missing. Showing the saved file.",
+            };
+        }
+
+        var row = new PlatformPieceViewModel(relativePath, original, ticked)
+        {
+            LoadedFromRecord = true,
+            Opacity = entry.Opacity ?? PlatformPieceViewModel.DefaultOpacity,
+            Hue = entry.Hue ?? PlatformPieceViewModel.DefaultHue,
+            Note = note,
+        };
+        _recordRows.Add((row, entry));
+        return row;
+    }
+
+    /// <summary>The 2.4 resolution of one piece: the pack the editor was opened with, then the game.</summary>
+    private string? ResolveAsset(string relativePath) =>
+        new AssetSources(_services.GamePath, _request.Pack?.FullPath).ResolveAsset(relativePath);
+
+    /// <summary>Spec 5.2: the pictures the record names are fitted to their pieces and the files the pack holds
+    /// are hashed against what the record was written for, both off the UI thread. The rows only change here,
+    /// when all of that is done, and the preview waits on this task before it draws.</summary>
+    private async Task LoadRecordArtAsync()
+    {
+        if (_recordRows.Count == 0)
+        {
+            return;
+        }
+
+        var packRoot = _request.SourcePack?.FullPath;
+        var rows = _recordRows.Select(r => (r.Row, r.Entry, HasNote: r.Row.Note.Length > 0)).ToList();
+        var reading = "";
+        List<(PlatformPieceViewModel Row, BitmapSource? Fitted, string Picture, string Note)> loaded;
+        try
+        {
+            loaded = await Task.Run(() =>
+            {
+                var results = new List<(PlatformPieceViewModel, BitmapSource?, string, string)>();
+                foreach (var (row, entry, hasNote) in rows)
+                {
+                    // Part B replaces this branch: one picture cut across every piece is spanned, not repeated.
+                    var picture = entry.Art is PlatformArt.EachPiece or PlatformArt.Across ? entry.Picture : null;
+                    BitmapSource? fitted = null;
+                    if (picture is { Length: > 0 } && File.Exists(picture))
+                    {
+                        reading = Path.GetFileName(picture);
+                        fitted = PieceFitter.Fit(
+                            BackgroundFitter.LoadSource(picture), BackgroundFitter.LoadSource(row.OriginalPath));
+                    }
+
+                    results.Add((row, fitted, picture ?? "", ChangedOutsideNote(row, entry, packRoot, hasNote)));
+                }
+
+                return results;
+            });
+        }
+        catch (Exception ex) when (ex is NotSupportedException or FileFormatException or IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            ImageError = $"Could not read {reading}. The pieces are showing their own art.";
+            return;
+        }
+
+        foreach (var (row, fitted, picture, note) in loaded)
+        {
+            if (fitted is not null)
+            {
+                row.SetReplacement(fitted, Path.GetFileName(picture), picture);
+                row.Thumbnail = ThumbnailOf(fitted);
+            }
+
+            if (note.Length > 0)
+            {
+                row.Note = note;
+            }
+        }
+
+        OnImageChanged();
+    }
+
+    /// <summary>Spec 5.2: the pack's file is not the file the record's values were worked out from, so the row
+    /// says the preview may differ. Empty when it matches, when there is nothing to compare, or when the row is
+    /// already saying something else about itself.</summary>
+    private static string ChangedOutsideNote(
+        PlatformPieceViewModel row, PlatformPieceEntry entry, string? packRoot, bool hasNote)
+    {
+        if (hasNote || packRoot is null)
+        {
+            return "";
+        }
+
+        var packFile = Path.Combine(packRoot, row.RelativePath);
+        return File.Exists(packFile)
+            && !FileHasher.Hash(packFile).Equals(entry.Hash, StringComparison.OrdinalIgnoreCase)
+                ? ChangedOutsideNoteText
+                : "";
+    }
+
+    /// <summary>Spec 5.4: the record's values go, and every row is the file and the numbers the editor would have
+    /// opened on with nothing remembered. The rows themselves stay, so the list's bindings hold.</summary>
+    [RelayCommand]
+    private void StartFresh()
+    {
+        _syncing = true;
+        foreach (var row in Pieces)
+        {
+            if (row.LoadedFromRecord && ResolveAsset(row.RelativePath) is { } source)
+            {
+                row.ResetOriginal(source);
+            }
+
+            row.ResetArt();
+            row.Opacity = PlatformPieceViewModel.DefaultOpacity;
+            row.Hue = PlatformPieceViewModel.DefaultHue;
+            row.Note = "";
+        }
+
+        Opacity = PlatformPieceViewModel.DefaultOpacity;
+        Hue = PlatformPieceViewModel.DefaultHue;
+        _syncing = false;
+        HasValuesFrom = false;
+        ImageError = "";
+        OnImageChanged();
+        OnPropertyChanged(nameof(OpacityText));
+        OnPropertyChanged(nameof(HueText));
+        SchedulePreview();
     }
 
     /// <summary>A fitted picture drawn at list size, frozen; a piece no wider than a thumbnail is its own.</summary>
@@ -1023,6 +1237,8 @@ public partial class PlatformEditorViewModel : ObservableObject
         var reading = "";
         try
         {
+            // The record's pictures are what some of the rows are made of, so the first render waits for them.
+            await _recordArt;
             await Task.Run(
                 () =>
                 {

@@ -40,14 +40,22 @@ public partial class PlatformPieceViewModel : ObservableObject
 
     public string FileName { get; }
 
-    public string OriginalPath { get; }
+    public string OriginalPath { get; private set; }
 
     public int Width { get; private set; }
 
     public int Height { get; private set; }
 
+    /// <summary>True for a row the editor opened from a pack's record rather than from the 2.4 resolution, so
+    /// Start fresh knows which rows have an original path to put back (spec 5.4).</summary>
+    public bool LoadedFromRecord { get; internal set; }
+
     [ObservableProperty]
     public partial bool IsTicked { get; set; }
+
+    /// <summary>The line under the readout for what the row could not do: empty hides it (spec 5.2).</summary>
+    [ObservableProperty]
+    public partial string Note { get; set; } = "";
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Readout), nameof(IsDefault))]
@@ -124,6 +132,16 @@ public partial class PlatformPieceViewModel : ObservableObject
         Hue = DefaultHue;
         (Width, Height) = Measure(path);
         Art = PieceArt.WorkingCopy;
+        Raise();
+    }
+
+    /// <summary>Start fresh: the row's own art goes back to the file the 2.4 rules resolve, which is not the
+    /// file a loaded record started it from (spec 5.4).</summary>
+    internal void ResetOriginal(string path)
+    {
+        OriginalPath = path;
+        LoadedFromRecord = false;
+        (Width, Height) = Measure(path);
         Raise();
     }
 
