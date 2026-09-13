@@ -156,17 +156,28 @@ describes things by where they are and what they do. Nothing on disk changes sha
 | Level data cache | `%APPDATA%\BhMaps\leveldata.json` |
 | Composed previews | `%APPDATA%\BhMaps\previews\` |
 | Undo of the last game write | `%APPDATA%\BhMaps\undo\` |
+| Downloaded updates | `%APPDATA%\BhMaps\updates\` |
 | Kept map-select thumbnails | `%APPDATA%\BhMaps\thumbnails-original\` |
 
 The map art folder and the library are chosen in the welcome window and editable in Settings; the
 data files are wherever the game folder is. Only `<library>\packs` is read and written, so anything
 else kept in the library folder is left alone. The settings file holds the two paths, the zoom level
 each page remembers, when each pack was last applied, whether the Backgrounds page is showing your own
-pictures, whether the game's map-select thumbnails are updated, and whether the welcome window has
-been finished. The three caches are speed-ups
+pictures, whether the game's map-select thumbnails are updated, whether the welcome window has been
+finished, whether BhMaps checks for updates when it starts, when it last checked, and any update
+notice you dismissed. The three caches are speed-ups
 only: deleting any of them costs one slower start, and preview files unused for 30 days are deleted
 at startup anyway. The undo folder holds one set at a time, the files the last
 write into the game folder was about to overwrite or delete. The game folder can be any folder shaped like `mapArt`, one level of subfolders holding `.png` and `.jpg` files. Real map names, level sets and composed previews also need the game's four data files in the folder above it; without them the app still runs, with folder names and single-file thumbnails.
+
+Once a day at most, a few seconds after the first scan, BhMaps asks GitHub whether there is a newer
+release. It is one request to `github.com`; nothing about you, your machine or your library is sent,
+and no account or token is involved. A newer release shows as one line in the top bar and on the
+Settings Version row, and nothing is downloaded until you press the button. Turn the whole thing off
+with the Updates row in Settings. An update you download is verified against the release's published
+SHA-256 checksum, kept in `%APPDATA%\BhMaps\updates\`, and swapped in when you close BhMaps. Only the
+self-contained exe can update itself; the framework-dependent zip build shows the release page
+instead.
 
 ## Pages
 
@@ -462,10 +473,11 @@ window instead.
 pwsh -File scripts\publish.ps1
 ```
 
-That writes both release files into `dist\`: a self-contained
-`bhmaps-v<version>-win-x64.exe` that carries its own runtime, and
-`bhmaps-v<version>-win-x64-dotnet.zip`, a framework-dependent build that needs the .NET 10 Desktop
-Runtime on whatever machine runs it.
+That writes three files into `dist\`: a self-contained `bhmaps-v<version>-win-x64.exe` that carries
+its own runtime, `bhmaps-v<version>-win-x64-dotnet.zip`, a framework-dependent build that needs the
+.NET 10 Desktop Runtime on whatever machine runs it, and `SHA256SUMS.txt`, which the app's update
+check verifies a download against, so all three go on the release. The repository has to be public
+for the update check to reach the release at all.
 
 Never point a development run at the real game folder. Build a throwaway copy instead:
 

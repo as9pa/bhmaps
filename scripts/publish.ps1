@@ -15,7 +15,8 @@ New-Item -ItemType Directory -Force $dist | Out-Null
 
 $exeOut = Join-Path $dist "bhmaps-v$version-win-x64.exe"
 $zipOut = Join-Path $dist "bhmaps-v$version-win-x64-dotnet.zip"
-foreach ($f in $exeOut, $zipOut) {
+$sumsOut = Join-Path $dist "SHA256SUMS.txt"
+foreach ($f in $exeOut, $zipOut, $sumsOut) {
     if (Test-Path $f) { Remove-Item -Force $f }
 }
 
@@ -43,7 +44,18 @@ finally {
     }
 }
 
-foreach ($f in $exeOut, $zipOut) {
+# The app verifies its download against this file, so it is a release asset like the other two. sha256sum's own
+# format: lowercase hex, two spaces, the file name with no path.
+$lines = foreach ($f in $exeOut, $zipOut) {
+    $hash = (Get-FileHash -Algorithm SHA256 -Path $f).Hash.ToLowerInvariant()
+    "$hash  $([System.IO.Path]::GetFileName($f))"
+}
+Set-Content -Path $sumsOut -Value $lines -Encoding ascii
+
+foreach ($f in $exeOut, $zipOut, $sumsOut) {
     $mb = [math]::Round((Get-Item $f).Length / 1MB, 1)
     Write-Host "$f  $mb MB"
 }
+
+Write-Host ""
+Write-Host "Upload all three files to the GitHub release. The update check needs SHA256SUMS.txt and a public repo."
