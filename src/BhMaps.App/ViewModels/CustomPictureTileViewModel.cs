@@ -79,6 +79,7 @@ public sealed partial class CustomPictureTileViewModel : PictureTileViewModel
             items.Add(new TileMenuCommand(TickedText(tickedCount), ApplyToTickedCommand));
         }
 
+        items.Add(new TileMenuCommand("Apply to a map...", ApplyToChosenMapCommand));
         items.Add(new TileMenuCommand("Apply to all maps", ApplyToAllCommand));
         items.Add(new TileMenuCommand("Edit", EditCommand));
         items.Add(new TileMenuCommand("Show in folder", ShowInFolderCommand));
@@ -94,6 +95,17 @@ public sealed partial class CustomPictureTileViewModel : PictureTileViewModel
         Map is { } map
             ? Shell.ApplyPictureAsync(FullPath, [map], clearTicks: false, _picture.DisplayName, _picture.PackName)
             : Task.CompletedTask;
+
+    /// <summary>Spec 4.4: the chooser in map mode, then the shell's apply on the one map it returned.</summary>
+    [RelayCommand]
+    private async Task ApplyToChosenMapAsync()
+    {
+        if (await Shell.ChooseMapAsync(FullPath, _picture.DisplayName) is { } map)
+        {
+            await Shell.ApplyPictureAsync(
+                FullPath, [map], clearTicks: false, _picture.DisplayName, _picture.PackName);
+        }
+    }
 
     [RelayCommand]
     private Task ApplyToTickedAsync() =>

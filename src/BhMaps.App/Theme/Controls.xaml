@@ -614,6 +614,40 @@
     </Setter>
     <Setter Property="Command" Value="{Binding Command}" />
     <Setter Property="AutomationProperties.Name" Value="{Binding Text}" />
+
+    <!-- Spec 4.3's flyouts: an item with Children is a submenu, and its own rows are containered by this same
+         style. DynamicResource because a style cannot StaticResource itself. -->
+    <Setter Property="ItemsSource" Value="{Binding Children}" />
+    <Setter Property="ItemContainerStyle" Value="{DynamicResource TileMenuItem}" />
+
+    <!-- Spec 4.3: a pack that holds nothing for the target is offered and refused rather than hidden, so the
+         menu's shape does not change with the target. WPF hides a tooltip on a disabled item without the third. -->
+    <Setter Property="IsEnabled" Value="{Binding IsEnabled}" />
+    <Setter Property="ToolTip" Value="{Binding ToolTip}" />
+    <Setter Property="ToolTipService.ShowOnDisabled" Value="True" />
+
+    <Style.Triggers>
+      <!-- The header line (spec 4.1): the menu's own muted style, not a new style key. Not focusable, so the
+           arrow keys land on the first line that does something. -->
+      <DataTrigger Binding="{Binding Kind}" Value="Header">
+        <Setter Property="FontSize" Value="11.5" />
+        <Setter Property="Foreground" Value="{StaticResource Text3Brush}" />
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="Padding" Value="10,4" />
+      </DataTrigger>
+
+      <DataTrigger Binding="{Binding Kind}" Value="Separator">
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Template">
+          <Setter.Value>
+            <ControlTemplate TargetType="MenuItem">
+              <Border Height="1" Margin="6,4" Background="{StaticResource LineBrush}" />
+            </ControlTemplate>
+          </Setter.Value>
+        </Setter>
+      </DataTrigger>
+    </Style.Triggers>
   </Style>
 
   <!-- One menu for every tile in the app. x:Shared="False" so each StaticResource reference is a fresh instance,
