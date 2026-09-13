@@ -372,7 +372,10 @@ public partial class MainViewModel : ObservableObject
                 ct),
             $"{Count(used, "picture")} applied to {Count(maps.Count, "map")}",
             clearTicks,
-            packName);
+            packName,
+            // The undo paths are all in the shared backgrounds folder, so the maps whose slots were written are
+            // named here rather than read back off them (spec 11).
+            writtenFolders: [.. maps.Select(m => m.FolderName)]);
 
         Dialogs.ShowFailures("Some pictures could not be applied", failures);
     }
@@ -435,7 +438,10 @@ public partial class MainViewModel : ObservableObject
                 ? $"{name} applied to {targets[0].DisplayName}"
                 : $"{name} applied to {targets.Count} maps",
             clearTicks,
-            packName);
+            packName,
+            // The undo paths are all in the shared backgrounds folder, so the maps whose slots were written are
+            // named here rather than read back off them (spec 11).
+            writtenFolders: [.. targets.Select(m => m.FolderName)]);
 
         Dialogs.ShowFailures("Some backgrounds could not be applied", failures);
     }
@@ -544,7 +550,12 @@ public partial class MainViewModel : ObservableObject
                 () => failures.AddRange(BackgroundApplier.Apply(source, gamePath, [slot], null, ct).Failures),
                 ct),
             $"{Path.GetFileName(source)} applied to {saved.MapNames}",
-            packName: saved.PackName);
+            packName: saved.PackName,
+            // One slot, and the maps that name it are the cards it changes: the backgrounds folder it is written
+            // into belongs to no map of its own (spec 11).
+            writtenFolders: [.. snapshot.Catalog.Maps
+                .Where(m => m.BackgroundSlots.Contains(slot, StringComparer.OrdinalIgnoreCase))
+                .Select(m => m.FolderName)]);
 
         Dialogs.ShowFailures("Some backgrounds could not be applied", failures);
     }
@@ -691,7 +702,7 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
-        await RescanAsync();
+        await RescanAsync([.. saved.Maps.Select(m => m.FolderName)]);
         if (!saved.ApplyToGame)
         {
             // Saved into the pack and no further, so nothing in the game folder moved and there is nothing to undo.
@@ -819,8 +830,10 @@ public partial class MainViewModel : ObservableObject
         await RescanAsync();
     }
 
-    /// <summary>Scans, then refreshes every page, not just the current one, so switching pages never shows stale data.</summary>
-    public async Task RescanAsync()
+    /// <summary>Scans, then refreshes every page, not just the current one, so switching pages never shows stale
+    /// data. <paramref name="writtenFolders"/> names the map folders the write that led here touched, so the pages
+    /// showing those maps can put them first (spec 11); null when nothing was written or the caller cannot say.</summary>
+    public async Task RescanAsync(IReadOnlyList<string>? writtenFolders = null)
     {
         // Before the scan, because a missing folder scans to an empty tree rather than throwing, and after it,
         // because the folder can go or come back while the scan is reading it.
@@ -843,7 +856,7 @@ public partial class MainViewModel : ObservableObject
         // Maps rebuilds its cards first, because SelectedMaps reads them and a page's Refresh may ask for it.
         foreach (var page in _pages)
         {
-            page.Refresh(snapshot);
+            page.Refresh(snapshot, writtenFolders);
         }
 
         CanUndo = Services.Undo.Latest is not null;
@@ -1003,7 +1016,10 @@ public partial class MainViewModel : ObservableObject
     /// operation held the boundary, or the write was cancelled or failed. <paramref name="packName"/> is the pack
     /// the write came out of, stamped as last applied when it succeeds; null for undo, reset and a picture that
     /// was only ever in the game folder. <paramref name="libraryUndoPaths"/> names library files the write also
-    /// changes, relative to the library folder, so the undo puts them back with the game files (spec 7).</summary>
+    /// changes, relative to the library folder, so the undo puts them back with the game files (spec 7).
+    /// <paramref name="writtenFolders"/> names the map folders the write lands in, for the rescan it ends with
+    /// (spec 11); left null it is read off the undo paths, which is what every write into a map's own folder
+    /// wants.</summary>
     public Task<bool> RunGameWriteAsync(
         string label,
         IReadOnlyList<string> undoPaths,
@@ -1011,8 +1027,10 @@ public partial class MainViewModel : ObservableObject
         string doneText,
         bool clearTicks = false,
         string? packName = null,
-        IReadOnlyList<string>? libraryUndoPaths = null) =>
-        RunWriteCoreAsync(label, undoPaths, work, doneText, undoable: true, clearTicks, packName, libraryUndoPaths);
+        IReadOnlyList<string>? libraryUndoPaths = null,
+        IReadOnlyList<string>? writtenFolders = null) =>
+        RunWriteCoreAsync(
+            label, undoPaths, work, doneText, undoable: true, clearTicks, packName, libraryUndoPaths, writtenFolders);
 
     /// <summary>The one path every game write takes. <paramref name="undoPaths"/> null means take no snapshot,
     /// which is Undo's case and only Undo's: the snapshot it is restoring is the only one there is, and Begin
@@ -1025,7 +1043,8 @@ public partial class MainViewModel : ObservableObject
         bool undoable,
         bool clearTicks,
         string? packName = null,
-        IReadOnlyList<string>? libraryUndoPaths = null)
+        IReadOnlyList<string>? libraryUndoPaths = null,
+        IReadOnlyList<string>? writtenFolders = null)
     {
         if (GameFolderMissing || IsBusy)
         {
@@ -1096,7 +1115,28 @@ public partial class MainViewModel : ObservableObject
             Services.UpdateSettings(Services.Settings with { PackLastApplied = stamps });
         }
 
-        await RescanAsync();
+        await RescanAsync(writtenFolders ?? WrittenFolders(undoPaths));
         return ok;
+    }
+
+    /// <summary>Spec 11: the map folders a write touched, read off the paths it took its undo snapshot of. The
+    /// backgrounds folder is shared by every map rather than owned by one, so it names no map and is left out;
+    /// the callers that write only backgrounds pass the folders themselves.</summary>
+    private static IReadOnlyList<string> WrittenFolders(IReadOnlyList<string>? undoPaths) =>
+        undoPaths is null
+            ? []
+            : [.. undoPaths
+                .Select(TopFolder)
+                .Where(folder => folder.Length > 0
+                    && !folder.Equals(PictureImporter.BackgroundsFolder, StringComparison.OrdinalIgnoreCase))
+                .Distinct(StringComparer.OrdinalIgnoreCase)];
+
+    /// <summary>The first folder of a relative path, which for a game file is the map's own folder. "" when the
+    /// path names no folder at all.</summary>
+    private static string TopFolder(string relativePath)
+    {
+        var folder = AssetPath.FolderOf(relativePath);
+        var cut = folder.IndexOfAny([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar]);
+        return cut < 0 ? folder : folder[..cut];
     }
 }
