@@ -242,12 +242,11 @@ public partial class MapsViewModel : PageViewModel
         }
     }
 
-    /// <summary>Spec 3.3: the pack, on the ticked maps only.</summary>
-    [RelayCommand]
-    private async Task ApplyPackToTickedAsync(Pack? pack)
+    /// <summary>Spec 4.3: one pack onto the maps given, whoever gave them. The bar hands the ticked set and clears
+    /// the ticks; a card menu hands its own target and leaves the ticks alone.</summary>
+    public async Task ApplyPackToAsync(IReadOnlyList<MapEntry> maps, Pack pack, bool clearTicks)
     {
-        var maps = Shell.SelectedMaps;
-        if (pack is null || maps.Count == 0 || !Confirm($"Apply {pack.Name}", $"Apply {pack.Name}", maps))
+        if (maps.Count == 0 || !Confirm($"Apply {pack.Name}", $"Apply {pack.Name}", maps))
         {
             return;
         }
@@ -260,7 +259,7 @@ public partial class MapsViewModel : PageViewModel
             (progress, ct) => Task.Run(
                 () => { result = PackApplier.ApplyToMaps(pack, maps, gamePath, progress, ct); }, ct),
             $"{pack.Name} applied to {MainViewModel.Count(maps.Count, "map")}",
-            clearTicks: true,
+            clearTicks,
             pack.Name);
 
         if (result is not null)
@@ -269,21 +268,18 @@ public partial class MapsViewModel : PageViewModel
         }
     }
 
-    /// <summary>Spec 3.3: one picture into every ticked map's own slots, through the shell's shared write, so the
-    /// confirm, the undo list and the done line are the same ones a tile menu produces. The last menu row has no
-    /// picture: it opens Add Custom Image with the ticked maps as its target (spec 7.1).</summary>
+    /// <summary>Spec 3.3: the pack, on the ticked maps only.</summary>
     [RelayCommand]
-    private async Task ApplyPictureToTickedAsync(PictureMenuItem? item)
-    {
-        if (item is null)
-        {
-            return;
-        }
+    private Task ApplyPackToTickedAsync(Pack? pack) =>
+        pack is null ? Task.CompletedTask : ApplyPackToAsync(Shell.SelectedMaps, pack, clearTicks: true);
 
+    /// <summary>Spec 4.3: one picture onto the maps given. The last menu row carries no picture: it opens Add Image
+    /// on the same target (spec 7.1).</summary>
+    public async Task ApplyPictureToAsync(IReadOnlyList<MapEntry> maps, PictureMenuItem item, bool clearTicks)
+    {
         if (item.Picture is not { } picture)
         {
-            await Shell.OpenAddPicturesAsync(
-                new AddPicturesTarget(AddPicturesTargetKind.Ticked, null, Shell.SelectedMaps));
+            await Shell.OpenAddPicturesAsync(new AddPicturesTarget(AddPicturesTargetKind.Ticked, null, maps));
             return;
         }
 
@@ -298,14 +294,18 @@ public partial class MapsViewModel : PageViewModel
         }
 
         // The name the menu row was labelled with, so the done line reports the row that was clicked (spec 2.2).
-        await Shell.ApplyPictureAsync(source, Shell.SelectedMaps, clearTicks: true, picture.DisplayName, picture.PackName);
+        await Shell.ApplyPictureAsync(source, maps, clearTicks, picture.DisplayName, picture.PackName);
     }
 
-    /// <summary>Spec 3.3: the ticked maps back to the Default pack, the same reset one map's panel offers.</summary>
-    [RelayCommand(CanExecute = nameof(CanResetTicked))]
-    private async Task ResetTickedAsync()
+    /// <summary>Spec 3.3: one picture into every ticked map's own slots.</summary>
+    [RelayCommand]
+    private Task ApplyPictureToTickedAsync(PictureMenuItem? item) =>
+        item is null ? Task.CompletedTask : ApplyPictureToAsync(Shell.SelectedMaps, item, clearTicks: true);
+
+    /// <summary>Spec 4.3: the maps given, back to the Default pack. One map resets without asking; more than one
+    /// names the count and the maps first.</summary>
+    public async Task ResetAsync(IReadOnlyList<MapEntry> maps, bool clearTicks)
     {
-        var maps = Shell.SelectedMaps;
         if (_snapshot is not { } snapshot || snapshot.DefaultPack is not { } defaultPack || maps.Count == 0
             || !Confirm("Reset to default", "Reset", maps))
         {
@@ -331,12 +331,19 @@ public partial class MapsViewModel : PageViewModel
                 },
                 ct),
             $"Reset {MainViewModel.Count(maps.Count, "map")} to default",
-            clearTicks: true);
+            clearTicks);
 
         Shell.Dialogs.ShowFailures("Some files could not be reset", failures);
     }
 
-    private bool CanResetTicked() => _snapshot?.DefaultPack is not null;
+    /// <summary>Spec 3.3: the ticked maps back to the Default pack.</summary>
+    [RelayCommand(CanExecute = nameof(CanResetTicked))]
+    private Task ResetTickedAsync() => ResetAsync(Shell.SelectedMaps, clearTicks: true);
+
+    /// <summary>True once a scan has found a Default pack, which is the only thing a reset needs.</summary>
+    public bool CanReset => _snapshot?.DefaultPack is not null;
+
+    private bool CanResetTicked() => CanReset;
 
     /// <summary>Spec 3.3: a write to more than one map names the count and the maps first; one map is one click.</summary>
     private bool Confirm(string title, string verb, IReadOnlyList<MapEntry> maps) =>
