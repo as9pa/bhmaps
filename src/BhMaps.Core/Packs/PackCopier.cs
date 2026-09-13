@@ -278,12 +278,16 @@ public static class PackCopier
 
     /// <summary>Spec 3.1: the whole pack folder copied to a free name, which is returned. A copy that fails part
     /// way takes its own half-written folder with it and the exception goes to the caller.</summary>
-    public static string DuplicatePack(string libraryPath, string name)
+    public static string DuplicatePack(string libraryPath, string name) =>
+        DuplicatePack(libraryPath, name, FreeCopyName(libraryPath, name));
+
+    /// <summary>The same copy under a name the caller already has, for a caller that has to name the copy before
+    /// it is made, such as one holding the copy's paths for undo: the folder it named is the folder it gets.</summary>
+    public static string DuplicatePack(string libraryPath, string name, string copyName)
     {
         var packsRoot = Path.Combine(libraryPath, PacksFolderName);
-        var copy = FreeCopyName(libraryPath, name);
         var from = Path.Combine(packsRoot, name);
-        var to = Path.Combine(packsRoot, copy);
+        var to = Path.Combine(packsRoot, copyName);
         try
         {
             foreach (var directory in Directory.EnumerateDirectories(from, "*", SearchOption.AllDirectories))
@@ -311,7 +315,7 @@ public static class PackCopier
             throw;
         }
 
-        return copy;
+        return copyName;
     }
 
     /// <summary>Spec 5.1: each map, then each loose file, in plan order. Cancellation stops between items and
