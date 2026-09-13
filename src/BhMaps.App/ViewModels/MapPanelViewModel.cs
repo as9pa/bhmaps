@@ -230,12 +230,24 @@ public partial class MapPanelViewModel : ObservableObject
         var gamePath = _shell.Services.GamePath;
         var folderName = _map.FolderName;
         var slots = _map.BackgroundSlots;
+        var map = _map;
+
+        // Spec 7: the files go back to default, so the edits the packs the map matches remembered for it go too.
+        _snapshot.MapStatuses.TryGetValue(folderName, out var status);
+        var matched = RecordReset.MatchedPacks(map, status, _snapshot.Packs);
         ResetOutcome? outcome = null;
         await _shell.RunGameWriteAsync(
             $"Resetting {DisplayName}",
             PackApplier.ResetMapPaths(_snapshot.Tree, _map, defaultPack),
-            (_, ct) => Task.Run(() => { outcome = MapReset.ResetMap(gamePath, folderName, slots, defaultPack); }, ct),
-            $"Reset {DisplayName} to default");
+            (_, ct) => Task.Run(
+                () =>
+                {
+                    outcome = MapReset.ResetMap(gamePath, folderName, slots, defaultPack);
+                    RecordReset.Clear(map, matched);
+                },
+                ct),
+            $"Reset {DisplayName} to default",
+            libraryUndoPaths: RecordReset.UndoPaths(matched, _shell.Services.LibraryPath));
 
         if (outcome is not null)
         {
