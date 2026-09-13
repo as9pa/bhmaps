@@ -342,4 +342,18 @@ public class SettingsStoreTests
         SettingsStore.Save(path, loaded);
         Assert.DoesNotContain("packLastApplied", File.ReadAllText(path));
     }
+
+    [Fact]
+    public void SaveThenLoad_RoundTripsThePlatformPreviewMode()
+    {
+        using var tmp = new TempDir();
+        var path = tmp.Sub("settings.json");
+
+        Assert.False(SettingsStore.Load(path).PlatformPreviewIsolate);
+
+        SettingsStore.Save(path, AppSettings.Default with { PlatformPreviewIsolate = true });
+
+        Assert.True(SettingsStore.Load(path).PlatformPreviewIsolate);
+        Assert.Contains("\"platformPreviewIsolate\": true", File.ReadAllText(path));
+    }
 }

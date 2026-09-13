@@ -88,29 +88,58 @@
               </ListBox.ItemsPanel>
               <ListBox.ItemTemplate>
                 <DataTemplate>
-                  <StackPanel>
-                    <Viewbox Stretch="Uniform">
-                      <Grid Width="{Binding Source={x:Static imaging:MapCompositor.CardWidth}, Mode=OneTime}"
-                            Height="{Binding Source={x:Static imaging:MapCompositor.CardHeight}, Mode=OneTime}"
-                            Background="{StaticResource TileBrush}">
-                        <Image RenderOptions.BitmapScalingMode="HighQuality" Source="{Binding Preview}"
-                               Stretch="UniformToFill" />
+                  <!-- Background="Transparent" so a right click on the gap between the picture and the caption
+                       reaches the menu, which the Border carries for the whole tile (spec 4.1). -->
+                  <Border x:Name="Tile"
+                          Background="Transparent"
+                          ContextMenu="{StaticResource TileMenu}"
+                          ContextMenuOpening="OnTileMenuOpening"
+                          Focusable="True"
+                          FocusVisualStyle="{x:Null}">
+                    <StackPanel>
+                      <Grid>
+                        <Viewbox Stretch="Uniform">
+                          <Grid Width="{Binding Source={x:Static imaging:MapCompositor.CardWidth}, Mode=OneTime}"
+                                Height="{Binding Source={x:Static imaging:MapCompositor.CardHeight}, Mode=OneTime}"
+                                Background="{StaticResource TileBrush}">
+                            <Image RenderOptions.BitmapScalingMode="HighQuality" Source="{Binding Preview}"
+                                   Stretch="UniformToFill" />
+                          </Grid>
+                        </Viewbox>
+                        <Button x:Name="MenuButton"
+                                Margin="0,6,6,0"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Top"
+                                AutomationProperties.Name="More actions"
+                                Click="OnTileMenuButton"
+                                Opacity="0"
+                                Style="{StaticResource TileAction}">
+                          <controls:Icon Geometry="{StaticResource Icon.Dots}" Size="14" />
+                        </Button>
                       </Grid>
-                    </Viewbox>
-                    <TextBlock Margin="2,8,2,0" Text="{Binding Caption}" TextTrimming="CharacterEllipsis">
-                      <TextBlock.Style>
-                        <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
-                          <Style.Triggers>
-                            <DataTrigger Binding="{Binding IsFileTile}" Value="True">
-                              <Setter Property="FontFamily" Value="{StaticResource Mono}" />
-                              <Setter Property="FontSize" Value="12" />
-                              <Setter Property="Foreground" Value="{StaticResource Text2Brush}" />
-                            </DataTrigger>
-                          </Style.Triggers>
-                        </Style>
-                      </TextBlock.Style>
-                    </TextBlock>
-                  </StackPanel>
+                      <TextBlock Margin="2,8,2,0" Text="{Binding Caption}" TextTrimming="CharacterEllipsis">
+                        <TextBlock.Style>
+                          <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                            <Style.Triggers>
+                              <DataTrigger Binding="{Binding IsFileTile}" Value="True">
+                                <Setter Property="FontFamily" Value="{StaticResource Mono}" />
+                                <Setter Property="FontSize" Value="12" />
+                                <Setter Property="Foreground" Value="{StaticResource Text2Brush}" />
+                              </DataTrigger>
+                            </Style.Triggers>
+                          </Style>
+                        </TextBlock.Style>
+                      </TextBlock>
+                    </StackPanel>
+                  </Border>
+                  <DataTemplate.Triggers>
+                    <Trigger SourceName="Tile" Property="IsMouseOver" Value="True">
+                      <Setter TargetName="MenuButton" Property="Opacity" Value="1" />
+                    </Trigger>
+                    <Trigger SourceName="Tile" Property="IsKeyboardFocusWithin" Value="True">
+                      <Setter TargetName="MenuButton" Property="Opacity" Value="1" />
+                    </Trigger>
+                  </DataTemplate.Triggers>
                 </DataTemplate>
               </ListBox.ItemTemplate>
             </ListBox>

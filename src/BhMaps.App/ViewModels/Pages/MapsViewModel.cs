@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows;
 using BhMaps.App.Services;
+using BhMaps.Core.LevelData;
 using BhMaps.Core.Maps;
 using BhMaps.Core.Model;
 using BhMaps.Core.Operations;
@@ -242,12 +243,11 @@ public partial class MapsViewModel : PageViewModel
         }
     }
 
-    /// <summary>Spec 3.3: the pack, on the ticked maps only.</summary>
-    [RelayCommand]
-    private async Task ApplyPackToTickedAsync(Pack? pack)
+    /// <summary>Spec 4.3: one pack onto the maps given, whoever gave them. The bar hands the ticked set and clears
+    /// the ticks; a card menu hands its own target and leaves the ticks alone.</summary>
+    public async Task ApplyPackToAsync(IReadOnlyList<MapEntry> maps, Pack pack, bool clearTicks)
     {
-        var maps = Shell.SelectedMaps;
-        if (pack is null || maps.Count == 0 || !Confirm($"Apply {pack.Name}", $"Apply {pack.Name}", maps))
+        if (maps.Count == 0 || !Confirm($"Apply {pack.Name}", $"Apply {pack.Name}", maps))
         {
             return;
         }
@@ -260,7 +260,7 @@ public partial class MapsViewModel : PageViewModel
             (progress, ct) => Task.Run(
                 () => { result = PackApplier.ApplyToMaps(pack, maps, gamePath, progress, ct); }, ct),
             $"{pack.Name} applied to {MainViewModel.Count(maps.Count, "map")}",
-            clearTicks: true,
+            clearTicks,
             pack.Name);
 
         if (result is not null)
@@ -269,21 +269,18 @@ public partial class MapsViewModel : PageViewModel
         }
     }
 
-    /// <summary>Spec 3.3: one picture into every ticked map's own slots, through the shell's shared write, so the
-    /// confirm, the undo list and the done line are the same ones a tile menu produces. The last menu row has no
-    /// picture: it opens Add Custom Image with the ticked maps as its target (spec 7.1).</summary>
+    /// <summary>Spec 3.3: the pack, on the ticked maps only.</summary>
     [RelayCommand]
-    private async Task ApplyPictureToTickedAsync(PictureMenuItem? item)
-    {
-        if (item is null)
-        {
-            return;
-        }
+    private Task ApplyPackToTickedAsync(Pack? pack) =>
+        pack is null ? Task.CompletedTask : ApplyPackToAsync(Shell.SelectedMaps, pack, clearTicks: true);
 
+    /// <summary>Spec 4.3: one picture onto the maps given. The last menu row carries no picture: it opens Add Image
+    /// on the same target (spec 7.1).</summary>
+    public async Task ApplyPictureToAsync(IReadOnlyList<MapEntry> maps, PictureMenuItem item, bool clearTicks)
+    {
         if (item.Picture is not { } picture)
         {
-            await Shell.OpenAddPicturesAsync(
-                new AddPicturesTarget(AddPicturesTargetKind.Ticked, null, Shell.SelectedMaps));
+            await Shell.OpenAddPicturesAsync(new AddPicturesTarget(AddPicturesTargetKind.Ticked, null, maps));
             return;
         }
 
@@ -298,14 +295,18 @@ public partial class MapsViewModel : PageViewModel
         }
 
         // The name the menu row was labelled with, so the done line reports the row that was clicked (spec 2.2).
-        await Shell.ApplyPictureAsync(source, Shell.SelectedMaps, clearTicks: true, picture.DisplayName, picture.PackName);
+        await Shell.ApplyPictureAsync(source, maps, clearTicks, picture.DisplayName, picture.PackName);
     }
 
-    /// <summary>Spec 3.3: the ticked maps back to the Default pack, the same reset one map's panel offers.</summary>
-    [RelayCommand(CanExecute = nameof(CanResetTicked))]
-    private async Task ResetTickedAsync()
+    /// <summary>Spec 3.3: one picture into every ticked map's own slots.</summary>
+    [RelayCommand]
+    private Task ApplyPictureToTickedAsync(PictureMenuItem? item) =>
+        item is null ? Task.CompletedTask : ApplyPictureToAsync(Shell.SelectedMaps, item, clearTicks: true);
+
+    /// <summary>Spec 4.3: the maps given, back to the Default pack. One map resets without asking; more than one
+    /// names the count and the maps first.</summary>
+    public async Task ResetAsync(IReadOnlyList<MapEntry> maps, bool clearTicks)
     {
-        var maps = Shell.SelectedMaps;
         if (_snapshot is not { } snapshot || snapshot.DefaultPack is not { } defaultPack || maps.Count == 0
             || !Confirm("Reset to default", "Reset", maps))
         {
@@ -331,12 +332,19 @@ public partial class MapsViewModel : PageViewModel
                 },
                 ct),
             $"Reset {MainViewModel.Count(maps.Count, "map")} to default",
-            clearTicks: true);
+            clearTicks);
 
         Shell.Dialogs.ShowFailures("Some files could not be reset", failures);
     }
 
-    private bool CanResetTicked() => _snapshot?.DefaultPack is not null;
+    /// <summary>Spec 3.3: the ticked maps back to the Default pack.</summary>
+    [RelayCommand(CanExecute = nameof(CanResetTicked))]
+    private Task ResetTickedAsync() => ResetAsync(Shell.SelectedMaps, clearTicks: true);
+
+    /// <summary>True once a scan has found a Default pack, which is the only thing a reset needs.</summary>
+    public bool CanReset => _snapshot?.DefaultPack is not null;
+
+    private bool CanResetTicked() => CanReset;
 
     /// <summary>Spec 3.3: a write to more than one map names the count and the maps first; one map is one click.</summary>
     private bool Confirm(string title, string verb, IReadOnlyList<MapEntry> maps) =>
@@ -574,8 +582,7 @@ public partial class MapsViewModel : PageViewModel
     /// <summary>The chip filter, then the header search box on top of it.</summary>
     private bool Matches(MapCardViewModel card)
     {
-        var search = SearchText;
-        if (search.Length > 0 && !card.DisplayName.Contains(search, StringComparison.OrdinalIgnoreCase))
+        if (!NameFilter.Matches(card.DisplayName, SearchText))
         {
             return false;
         }
@@ -589,4 +596,116 @@ public partial class MapsViewModel : PageViewModel
         };
     }
 
+    /// <summary>Spec 4.3's target rule: a ticked card with other ticked cards acts on the whole ticked set;
+    /// anything else acts on itself alone. Right click never changes the ticks (spec 9.2, owner answer q2).</summary>
+    private IReadOnlyList<MapEntry> TargetFor(MapCardViewModel card) =>
+        card.IsSelected && Shell.SelectedMapCount > 1 ? Shell.SelectedMaps : [card.Map];
+
+    /// <summary>Spec 4.3: one card's menu, built when it opens. A set target disables the three lines that only
+    /// mean something for one map rather than hiding them, so the menu's shape does not move under the cursor.</summary>
+    public void BuildCardMenu(MapCardViewModel card)
+    {
+        if (_snapshot is not { } snapshot)
+        {
+            card.MenuItems = [];
+            return;
+        }
+
+        var target = TargetFor(card);
+        var single = target.Count == 1;
+        var one = target[0];
+        var setNote = single ? null : "Not for more than one map at a time.";
+
+        var packs = new List<TileMenuCommand>();
+        foreach (var pack in snapshot.Packs)
+        {
+            var has = PackApplier.ApplyToMapsPaths(pack, target).Count > 0;
+            var why = single
+                ? $"Nothing for {one.DisplayName} in this pack"
+                : "Nothing for these maps in this pack";
+            packs.Add(new TileMenuCommand(
+                pack.Name,
+                new AsyncRelayCommand(() => ApplyPackToAsync(target, pack, clearTicks: false)),
+                IsEnabled: has,
+                ToolTip: has ? null : why));
+        }
+
+        // Spec 9.2, owner answer q3: eight My Backgrounds pictures inline, then the chooser, then Add.
+        var pictures = new List<TileMenuCommand>();
+        foreach (var picture in CustomPictures().Take(8))
+        {
+            var item = new PictureMenuItem(picture.DisplayName, picture);
+            pictures.Add(new TileMenuCommand(
+                picture.DisplayName,
+                new AsyncRelayCommand(() => ApplyPictureToAsync(target, item, clearTicks: false))));
+        }
+
+        pictures.Add(new TileMenuCommand(
+            "More pictures...",
+            new AsyncRelayCommand(() => ChoosePictureForAsync(one)),
+            IsEnabled: single,
+            ToolTip: setNote));
+
+        // Owner ruling 8: the Add window is given the one map it would land on, and the ticked set only when the
+        // target is the set, so the window's own target line says what the menu's header said.
+        pictures.Add(new TileMenuCommand(
+            "Add Custom Image...",
+            new AsyncRelayCommand(() => Shell.OpenAddPicturesAsync(
+                single
+                    ? new AddPicturesTarget(AddPicturesTargetKind.Map, one, null)
+                    : new AddPicturesTarget(AddPicturesTargetKind.Ticked, null, target)))));
+
+        var slot = one.BackgroundSlots.FirstOrDefault();
+        card.MenuItems =
+        [
+            TileMenuCommand.Header(single ? one.DisplayName : $"{target.Count} selected maps"),
+            TileMenuCommand.Flyout("Apply pack", packs),
+            TileMenuCommand.Flyout("Apply picture", pictures),
+            TileMenuCommand.Separator(),
+            new TileMenuCommand(
+                "Edit background",
+                new AsyncRelayCommand(() => EditBackgroundAsync(one, slot)),
+                IsEnabled: single && slot is not null,
+                ToolTip: single ? null : setNote),
+            new TileMenuCommand(
+                "Edit platforms",
+                new AsyncRelayCommand(() => Shell.OpenPlatformEditorAsync(one, null)),
+                IsEnabled: single,
+                ToolTip: setNote),
+            TileMenuCommand.Separator(),
+            new TileMenuCommand(
+                "Reset to default",
+                new AsyncRelayCommand(() => ResetAsync(target, clearTicks: false)),
+                IsEnabled: CanReset,
+                ToolTip: CanReset ? null : "There is no Default pack to reset to."),
+            new TileMenuCommand("Show in game folder", new RelayCommand(() => ShowMapFolder(one))),
+        ];
+    }
+
+    /// <summary>Spec 4.3 line 2's last inline row: the chooser in picture mode, then the shell's apply.</summary>
+    private async Task ChoosePictureForAsync(MapEntry map)
+    {
+        if (await Shell.ChoosePictureAsync(map) is { } path)
+        {
+            await Shell.ApplyPictureAsync(
+                path, [map], clearTicks: false, Path.GetFileNameWithoutExtension(path));
+        }
+    }
+
+    /// <summary>Spec 4.3 line 4: the background editor on the game's own copy of the map's first slot, which is
+    /// the only picture a card on its own names (owner ruling 5).</summary>
+    private Task EditBackgroundAsync(MapEntry map, string? slot) =>
+        slot is null
+            ? Task.CompletedTask
+            : Shell.OpenBackgroundEditorAsync(
+                new BackgroundEditorRequest(
+                    Path.Combine(Shell.Services.GamePath, AssetPath.Background(slot)), null, slot));
+
+    private void ShowMapFolder(MapEntry map)
+    {
+        if (ExplorerLauncher.Open(Path.Combine(Shell.Services.GamePath, map.FolderName)) is { } error)
+        {
+            Shell.Dialogs.Error("Could not open the folder", error);
+        }
+    }
 }

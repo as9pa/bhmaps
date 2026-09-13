@@ -132,6 +132,7 @@ public sealed partial class MapPictureTileViewModel : PictureTileViewModel
             items.Add(new TileMenuCommand(TickedText(tickedCount), ApplyToTickedCommand));
         }
 
+        items.Add(new TileMenuCommand("Apply to a map...", ApplyToChosenMapCommand));
         items.Add(new TileMenuCommand("Apply to all maps", ApplyToAllCommand));
         items.Add(new TileMenuCommand("Edit", EditCommand));
         items.Add(new TileMenuCommand("Show in folder", ShowInFolderCommand));
@@ -141,6 +142,16 @@ public sealed partial class MapPictureTileViewModel : PictureTileViewModel
     // Title, not the file name: it is the caption the tile shows, so the done line names what was clicked.
     [RelayCommand]
     private Task ApplyToMapAsync() => Shell.ApplyPictureAsync(FullPath, [Map], clearTicks: false, Title, PackName);
+
+    /// <summary>Spec 4.4: the chooser in map mode, then the shell's apply on the one map it returned.</summary>
+    [RelayCommand]
+    private async Task ApplyToChosenMapAsync()
+    {
+        if (await Shell.ChooseMapAsync(FullPath, Title) is { } map)
+        {
+            await Shell.ApplyPictureAsync(FullPath, [map], clearTicks: false, Title, PackName);
+        }
+    }
 
     [RelayCommand]
     private Task ApplyToTickedAsync() =>

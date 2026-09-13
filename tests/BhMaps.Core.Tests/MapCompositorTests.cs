@@ -228,4 +228,29 @@ public class MapCompositorTests
 
         Assert.Empty(MapCompositor.CollectInputs(level, new AssetSources(tmp.Path)));
     }
+
+    [Fact]
+    public void Render_DrawsAnAssetOutsideTheFocusSetAtGhostOpacity()
+    {
+        using var tmp = new TempDir();
+        Solid(tmp, @"Backgrounds\BG_Grove.jpg", 0, 0, 0);
+        Solid(tmp, @"Grove\a.png", 255, 255, 255);
+        Solid(tmp, @"Grove\b.png", 255, 255, 255);
+        var level = Level(
+            new CameraBounds(0, 0, 100, 100),
+            "BG_Grove.jpg",
+            Node(0, 0, null, new LevelAsset("a.png", 0, 0, 40, 100)),
+            Node(0, 0, null, new LevelAsset("b.png", 60, 0, 40, 100)));
+        var focus = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            AssetPath.Resolve("Grove", "a.png"),
+        };
+
+        var bitmap = MapCompositor.Render(level, 100, 100, new AssetSources(tmp.Path), null, focus);
+
+        var focused = SyntheticImage.PixelAt(bitmap, 20, 50);
+        var ghosted = SyntheticImage.PixelAt(bitmap, 80, 50);
+        Assert.True(focused.R > 240, $"the focused piece was dimmed: {focused}");
+        Assert.InRange(ghosted.R, 25, 52);
+    }
 }

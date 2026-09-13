@@ -33,6 +33,9 @@
       <Setter Property="Cursor" Value="Hand" />
       <Setter Property="AutomationProperties.Name" Value="{Binding DisplayName}" />
       <Setter Property="ToolTip" Value="{Binding ToolTipText}" />
+      <Setter Property="ContextMenu" Value="{StaticResource TileMenu}" />
+      <EventSetter Event="ContextMenuOpening" Handler="OnCardMenuOpening" />
+      <EventSetter Event="PreviewMouseRightButtonDown" Handler="OnCardRightButtonDown" />
       <EventSetter Event="PreviewMouseLeftButtonDown" Handler="OnCardMouseDown" />
       <EventSetter Event="PreviewKeyDown" Handler="OnCardKeyDown" />
     </Style>

@@ -84,6 +84,10 @@ public static class MapCompositor
     public const int PanelWidth = 1280;
     public const int PanelHeight = 720;
 
+    /// <summary>What a piece outside the focus set is drawn at (spec 3.2): visible enough to place the shape,
+    /// faint enough that the focused pieces read as the subject.</summary>
+    public const double GhostOpacity = 0.15;
+
     /// <summary>Every file this render will read, in draw order, background first.
     /// Missing files are omitted.</summary>
     public static IReadOnlyList<string> CollectInputs(LevelDesc level, AssetSources sources)
@@ -117,9 +121,19 @@ public static class MapCompositor
 
     /// <summary>Frozen Bgr24 bitmap. Safe on any thread. Never throws for a missing or bad asset; that asset is
     /// skipped. <paramref name="viewport" /> is the part of the level to draw, in the level's own coordinates,
-    /// and null means the whole camera, which is what every caller but the Platforms page wants (addendum C).</summary>
+    /// and null means the whole camera, which is what every caller but the Platforms page wants (addendum C).
+    /// <paramref name="focus" /> is the set of asset paths relative to the map art root that draw at full
+    /// strength; null means every asset does, which is what every 2.3 caller wants. An asset outside a non-null
+    /// set draws at <paramref name="ghostOpacity" />. Pass a set built with
+    /// <see cref="StringComparer.OrdinalIgnoreCase" />: asset paths come from a file system that ignores case.</summary>
     public static BitmapSource Render(
-        LevelDesc level, int width, int height, AssetSources sources, CameraBounds? viewport = null)
+        LevelDesc level,
+        int width,
+        int height,
+        AssetSources sources,
+        CameraBounds? viewport = null,
+        IReadOnlySet<string>? focus = null,
+        double ghostOpacity = GhostOpacity)
     {
         var camera = viewport ?? level.Camera;
         var tile = new SolidColorBrush(TileColour);
@@ -153,7 +167,7 @@ public static class MapCompositor
                 DrawBackground(dc, level, sources, decoded);
                 foreach (var node in level.Platforms)
                 {
-                    DrawNode(dc, node, level.AssetDir, sources, decoded);
+                    DrawNode(dc, node, level.AssetDir, sources, decoded, focus, ghostOpacity);
                 }
 
                 dc.Pop();
@@ -207,7 +221,14 @@ public static class MapCompositor
         }
     }
 
-    private static void DrawNode(DrawingContext dc, PlatformNode node, string assetDir, AssetSources sources, Dictionary<string, BitmapSource?> decoded)
+    private static void DrawNode(
+        DrawingContext dc,
+        PlatformNode node,
+        string assetDir,
+        AssetSources sources,
+        Dictionary<string, BitmapSource?> decoded,
+        IReadOnlySet<string>? focus,
+        double ghostOpacity)
     {
         if (node.IsThemed)
         {
@@ -227,24 +248,39 @@ public static class MapCompositor
 
         foreach (var asset in node.Assets)
         {
-            DrawAsset(dc, asset, assetDir, sources, decoded);
+            DrawAsset(dc, asset, assetDir, sources, decoded, focus, ghostOpacity);
         }
 
         foreach (var child in node.Children)
         {
-            DrawNode(dc, child, assetDir, sources, decoded);
+            DrawNode(dc, child, assetDir, sources, decoded, focus, ghostOpacity);
         }
 
         dc.Pop();
     }
 
-    private static void DrawAsset(DrawingContext dc, LevelAsset asset, string assetDir, AssetSources sources, Dictionary<string, BitmapSource?> decoded)
+    private static void DrawAsset(
+        DrawingContext dc,
+        LevelAsset asset,
+        string assetDir,
+        AssetSources sources,
+        Dictionary<string, BitmapSource?> decoded,
+        IReadOnlySet<string>? focus,
+        double ghostOpacity)
     {
-        var path = sources.ResolveAsset(AssetPath.Resolve(assetDir, asset.AssetName));
+        var relativePath = AssetPath.Resolve(assetDir, asset.AssetName);
+        var path = sources.ResolveAsset(relativePath);
         var image = path is null ? null : Decode(path, decoded);
         if (image is null)
         {
             return;
+        }
+
+        // Spec 3.2: a piece outside the focus set is a ghost. A null set is every 2.3 caller and ghosts nothing.
+        var ghost = focus is not null && !focus.Contains(relativePath);
+        if (ghost)
+        {
+            dc.PushOpacity(ghostOpacity);
         }
 
         // A missing W or H parses as 0 and means "the image's own size".
@@ -259,6 +295,11 @@ public static class MapCompositor
 
         dc.DrawImage(image, new Rect(asset.X, asset.Y, w, h));
         if (mirrored)
+        {
+            dc.Pop();
+        }
+
+        if (ghost)
         {
             dc.Pop();
         }
