@@ -42,6 +42,24 @@ public class LevelTypesParserTests
     }
 
     [Fact]
+    public void ParseTypes_ReadsThumbnailFileFromAttributeOrChild()
+    {
+        var xml = "<LevelTypes>"
+            + "<LevelType LevelName=\"Brawlhaven\" ThumbnailPNGFile=\"Brawlhaven.jpg\">"
+            + "<DisplayName>Brawlhaven</DisplayName></LevelType>"
+            + "<LevelType LevelName=\"Grove\"><DisplayName>Twilight Grove</DisplayName>"
+            + "<ThumbnailPNGFile>Grove.jpg</ThumbnailPNGFile></LevelType>"
+            + "<LevelType LevelName=\"Enigma\"><DisplayName>Enigma</DisplayName></LevelType>"
+            + "</LevelTypes>";
+
+        var types = LevelTypesParser.ParseTypes(xml);
+
+        Assert.Equal("Brawlhaven.jpg", types[0].ThumbnailFile);
+        Assert.Equal("Grove.jpg", types[1].ThumbnailFile);
+        Assert.Null(types[2].ThumbnailFile);
+    }
+
+    [Fact]
     public void ParseSets_SplitsTheCommaSeparatedLevelList()
     {
         var sets = LevelTypesParser.ParseSets(LevelXml.Sets(("Ranked1v1", "Grove, Blackguard ,Enigma"), ("Empty", "")));
