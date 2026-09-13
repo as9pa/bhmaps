@@ -3,11 +3,13 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using BhMaps.App.Services;
+using BhMaps.Core.Hashing;
 using BhMaps.Core.Imaging;
 using BhMaps.Core.LevelData;
 using BhMaps.Core.Maps;
 using BhMaps.Core.Model;
 using BhMaps.Core.Operations;
+using BhMaps.Core.Packs;
 using BhMaps.Core.Scanning;
 using BhMaps.Core.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -543,7 +545,7 @@ public partial class PlatformEditorViewModel : ObservableObject
         var name = Path.GetFileName(path);
         foreach (var row in ticked)
         {
-            row.SetReplacement(fitted[row], name);
+            row.SetReplacement(fitted[row], name, path);
             row.Thumbnail = ThumbnailOf(fitted[row]);
         }
 
@@ -923,6 +925,10 @@ public partial class PlatformEditorViewModel : ObservableObject
                 {
                     row.CopyOrWriteResult(Path.Combine(packRoot, row.RelativePath));
                 }
+
+                var record = PlatformEditRecord.Load(packRoot);
+                record.SetMap(_request.Map.FolderName, DateTimeOffset.Now, EntriesFor(rows, packRoot));
+                record.Save(packRoot);
             });
             Saved = new PlatformSave(EffectivePackName, destination, ApplyNow);
             CloseRequested?.Invoke(true);
@@ -931,6 +937,36 @@ public partial class PlatformEditorViewModel : ObservableObject
         {
             _dialogs.Error("Could not save the platforms", ex.Message);
         }
+    }
+
+    /// <summary>Builds the record entry set for the rows just written into packRoot (hash from the written file).
+    /// A row whose file is not there was not written, so the record says nothing about it.</summary>
+    internal static Dictionary<string, PlatformPieceEntry> EntriesFor(IReadOnlyList<PlatformPieceViewModel> rows, string packRoot)
+    {
+        var entries = new Dictionary<string, PlatformPieceEntry>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in rows)
+        {
+            var written = Path.Combine(packRoot, row.RelativePath);
+            if (!File.Exists(written))
+            {
+                continue;
+            }
+
+            var entry = new PlatformPieceEntry { Art = row.ArtKind, Hash = FileHasher.Hash(written) };
+            if (entry.Art != PlatformArt.WorkingCopy)
+            {
+                entry.Opacity = row.Opacity;
+                entry.Hue = row.Hue;
+                if (entry.Art == PlatformArt.EachPiece)
+                {
+                    entry.Picture = row.ReplacementPath;
+                }
+            }
+
+            entries[row.RelativePath] = entry;
+        }
+
+        return entries;
     }
 
     /// <summary>Spec 6: 60 ms between renders, newest values win. The stamp is what makes the second half of that
