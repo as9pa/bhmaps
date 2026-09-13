@@ -1079,6 +1079,13 @@ public partial class MainViewModel : ObservableObject
         string doneText,
         IReadOnlyList<string>? writtenFolders = null)
     {
+        if (IsBusy)
+        {
+            // One operation at a time (spec 7.1), refused silently as a game write is. No GameFolderMissing beside
+            // it: nothing lands in the game folder. A refused write must not clear the done line or rescan.
+            return false;
+        }
+
         var libraryPath = Services.LibraryPath;
         var undoable = libraryUndoPaths.Count > 0;
         var ok = await RunBusyAsync(
