@@ -430,8 +430,8 @@ now, and a later apply to one map replaces it there.
   changes to the library, including deleting a pack, cannot be undone.
 - **What the editors remember** is kept in the pack, in two files at its root,
   `platforms.bhmaps.json` and `backgrounds.bhmaps.json`, one entry per map holding the values that
-  editor was saved on. A pack gets one only once something has been saved into it, the `Default` pack
-  never gets one, and Export carries them with the rest of the pack. Reset to default drops the
+  editor was saved on. A pack gets one once something has been saved into it, whichever pack that
+  is, and Export carries them with the rest of the pack. Reset to default drops the
   entries for the maps it resets, and Undo puts them back.
 - **Map-select thumbnails** are the one thing the app writes outside `mapArt`. With the switch in
   Settings on, a write that changes a map's art renders that map at 290 by 164 and writes the JPEG
