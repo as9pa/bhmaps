@@ -170,4 +170,100 @@ public class PackCopierTests
         Assert.Equal("flower-other", File.ReadAllText(Path.Combine(lib, "packs", "flower", "Backgrounds", "BG_Other.jpg")));
         Assert.Null(PlatformEditRecord.Load(source.FullPath).Map("BloodMoon"));
     }
+
+    [Fact]
+    public void MoveMap_copies_then_clears_the_source()
+    {
+        using var tmp = new TempDir();
+        var (lib, source, target) = Arrange(tmp, targetHasMap: false);
+
+        var result = PackCopier.MoveMap(source, target, Catalog().Maps[0], Catalog(), replace: false);
+
+        Assert.False(result.Skipped);
+        Assert.Equal("flower-a", File.ReadAllText(Path.Combine(lib, "packs", "stone", "BloodMoon", "a.png")));
+        Assert.False(Directory.Exists(Path.Combine(lib, "packs", "flower", "BloodMoon")));
+        Assert.False(File.Exists(Path.Combine(lib, "packs", "flower", "Backgrounds", "BG_BloodMoon.jpg")));
+        Assert.Contains(Path.Combine("packs", "flower", "BloodMoon", "a.png"), result.Removed);
+    }
+
+    [Fact]
+    public void MoveMap_that_was_skipped_leaves_the_source_alone()
+    {
+        using var tmp = new TempDir();
+        var (lib, source, target) = Arrange(tmp, targetHasMap: true);
+
+        var result = PackCopier.MoveMap(source, target, Catalog().Maps[0], Catalog(), replace: false);
+
+        Assert.True(result.Skipped);
+        Assert.True(File.Exists(Path.Combine(lib, "packs", "flower", "BloodMoon", "a.png")));
+    }
+
+    [Fact]
+    public void FreeCopyName_counts_up_past_the_names_that_are_taken()
+    {
+        using var tmp = new TempDir();
+        var lib = Path.Combine(tmp.Path, "lib");
+        Directory.CreateDirectory(Path.Combine(lib, "packs", "flower"));
+        Directory.CreateDirectory(Path.Combine(lib, "packs", "Flower copy"));
+        Directory.CreateDirectory(Path.Combine(lib, "packs", "flower copy 2"));
+
+        Assert.Equal("flower copy 3", PackCopier.FreeCopyName(lib, "flower"));
+    }
+
+    [Fact]
+    public void DuplicatePack_copies_the_whole_folder_to_the_free_name()
+    {
+        using var tmp = new TempDir();
+        var (lib, source, _) = Arrange(tmp, targetHasMap: false);
+        File.WriteAllText(Path.Combine(source.FullPath, PlatformEditRecord.FileName), "{\"version\":1,\"maps\":{}}");
+
+        var copy = PackCopier.DuplicatePack(lib, "flower");
+
+        Assert.Equal("flower copy", copy);
+        Assert.Equal("flower-a", File.ReadAllText(Path.Combine(lib, "packs", "flower copy", "BloodMoon", "a.png")));
+        Assert.True(File.Exists(Path.Combine(lib, "packs", "flower copy", PlatformEditRecord.FileName)));
+    }
+
+    [Fact]
+    public void Import_copies_every_map_and_reports_the_ones_it_skipped()
+    {
+        using var tmp = new TempDir();
+        var (lib, source, target) = Arrange(tmp, targetHasMap: true);
+        var progress = new List<string>();
+        var plan = new PackImportPlan(
+            source, target, [Catalog().Maps[0]], [Path.Combine("Backgrounds", "BG_Other.jpg")], Replace: false);
+
+        var result = PackCopier.Import(plan, Catalog(), new SyncProgress(progress), CancellationToken.None);
+
+        Assert.Equal(["Blood Moon"], result.Skipped);
+        Assert.Equal("stone-a", File.ReadAllText(Path.Combine(lib, "packs", "stone", "BloodMoon", "a.png")));
+        Assert.Equal("flower-other", File.ReadAllText(Path.Combine(lib, "packs", "stone", "Backgrounds", "BG_Other.jpg")));
+        Assert.Contains("Importing 1 of 2: Blood Moon", progress);
+    }
+
+    [Fact]
+    public void Import_with_replace_overwrites_what_the_target_had()
+    {
+        using var tmp = new TempDir();
+        var (lib, source, target) = Arrange(tmp, targetHasMap: true);
+        var plan = new PackImportPlan(source, target, [Catalog().Maps[0]], [], Replace: true);
+
+        var result = PackCopier.Import(plan, Catalog(), null, CancellationToken.None);
+
+        Assert.Empty(result.Skipped);
+        Assert.Equal("flower-a", File.ReadAllText(Path.Combine(lib, "packs", "stone", "BloodMoon", "a.png")));
+    }
+
+    [Fact]
+    public void Import_stops_between_items_when_cancelled()
+    {
+        using var tmp = new TempDir();
+        var (_, source, target) = Arrange(tmp, targetHasMap: false);
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        var plan = new PackImportPlan(source, target, [Catalog().Maps[0]], [], Replace: false);
+
+        Assert.Throws<OperationCanceledException>(
+            () => PackCopier.Import(plan, Catalog(), null, cts.Token));
+    }
 }
