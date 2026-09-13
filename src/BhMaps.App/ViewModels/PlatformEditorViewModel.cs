@@ -80,6 +80,13 @@ public partial class PlatformEditorViewModel : ObservableObject
     private readonly Dictionary<string, FileSystemWatcher> _watchers = new(StringComparer.OrdinalIgnoreCase);
     private readonly Debouncer _changed = new(ChangedDelay);
 
+    /// <summary>The cuts the switch and the drag ask for, on the preview's own rate limit (spec 6.2).</summary>
+    private readonly Throttler _recut = new(PreviewInterval);
+
+    /// <summary>The rows whose note this editor's own fitting wrote, so a row already saying something about
+    /// itself keeps that line and only a fit note is written over (spec 5.2).</summary>
+    private readonly HashSet<PlatformPieceViewModel> _fitNoteRows = [];
+
     /// <summary>The record the editor opened with, or null when no pack remembers this map (spec 5.1).</summary>
     private readonly PlatformEditRecord? _record;
 
@@ -104,6 +111,10 @@ public partial class PlatformEditorViewModel : ObservableObject
     /// <summary>True while the ctor is putting the remembered mode on, so opening the editor never writes the
     /// setting back and never schedules a second render (spec 3.5).</summary>
     private bool _restoringMode;
+
+    /// <summary>True while a loaded record is putting its picture, its pan and its switch on, so the three of
+    /// them are one cut at the end rather than one cut each.</summary>
+    private bool _restoringFit;
 
     public PlatformEditorViewModel(
         AppServices services,
@@ -204,6 +215,20 @@ public partial class PlatformEditorViewModel : ObservableObject
 
     [ObservableProperty]
     public partial ImageSource? Preview { get; set; }
+
+    /// <summary>Spec 6.2: true lays one picture across every platform and cuts each piece out of it, false fits
+    /// the same picture to each piece on its own, as 2.4 did. Changing it cuts the ticked rows again.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanPan))]
+    public partial bool FitAcross { get; set; } = true;
+
+    /// <summary>Where the laid picture sits inside the platform box, 0..1 (spec 6.2). The drag on the preview is
+    /// the only thing that moves it.</summary>
+    [ObservableProperty]
+    public partial double PanX { get; set; } = 0.5;
+
+    [ObservableProperty]
+    public partial double PanY { get; set; } = 0.5;
 
     /// <summary>Spec 3.1: true is Ticked only, false is All pieces. Changing it schedules a render and writes the
     /// setting; nothing else is written anywhere.</summary>
@@ -316,6 +341,19 @@ public partial class PlatformEditorViewModel : ObservableObject
 
     public bool CanUseImage => HasTicked;
 
+    /// <summary>The picture Replace loaded, frozen and kept so the switch and the drag cut it again without
+    /// going back to the disk (spec 6.2). Null until a picture is picked or a record names one.</summary>
+    public BitmapSource? LoadedPicture { get; private set; }
+
+    /// <summary>The full path the loaded picture came from, which is what the record writes down.</summary>
+    public string? LoadedPicturePath { get; private set; }
+
+    /// <summary>Whether the fit switch can be used: there is a picture to lay (spec 6.2).</summary>
+    public bool CanUseFit => LoadedPicture is not null;
+
+    /// <summary>Whether dragging the preview moves anything: a laid picture, not one fitted piece by piece.</summary>
+    public bool CanPan => CanUseFit && FitAcross;
+
     public bool CanResetImage => Pieces.Any(p => p.IsTicked && p.Art != PieceArt.Original);
 
     /// <summary>Editing outside writes a working copy into the pack, so it needs a pack name that is good enough
@@ -348,6 +386,7 @@ public partial class PlatformEditorViewModel : ObservableObject
         _watchers.Clear();
         _changed.Cancel();
         _preview.Cancel();
+        _recut.Cancel();
         try
         {
             if (Directory.Exists(_tempRoot))
@@ -426,6 +465,26 @@ public partial class PlatformEditorViewModel : ObservableObject
 
         FanOut(row => row.Hue = value);
         SchedulePreview();
+    }
+
+    /// <summary>The switch and the pan both mean the same thing: cut the ticked rows out of the loaded picture
+    /// again. Nothing is loaded until a Replace or a record, and the record puts all three on at once.</summary>
+    partial void OnFitAcrossChanged(bool value) => ScheduleRecut();
+
+    partial void OnPanXChanged(double value) => ScheduleRecut();
+
+    partial void OnPanYChanged(double value) => ScheduleRecut();
+
+    private void ScheduleRecut()
+    {
+        if (_restoringFit || !CanUseFit)
+        {
+            return;
+        }
+
+        // Spec 6.2: a drag asks for a cut per mouse move, and the cut is the slow part, so the same 60 ms
+        // throttle the preview uses collapses the run and only the newest pan survives.
+        _recut.Run(_ => RecutAsync());
     }
 
     partial void OnIsolatePreviewChanged(bool value)
@@ -539,8 +598,9 @@ public partial class PlatformEditorViewModel : ObservableObject
                 var results = new List<(PlatformPieceViewModel, BitmapSource?, string, string)>();
                 foreach (var (row, entry, hasNote) in rows)
                 {
-                    // Part B replaces this branch: one picture cut across every piece is spanned, not repeated.
-                    var picture = entry.Art is PlatformArt.EachPiece or PlatformArt.Across ? entry.Picture : null;
+                    // An Across row is not fitted here: its picture is laid over the whole stage once, which the
+                    // cut below does for all of them together (spec 6.2).
+                    var picture = entry.Art == PlatformArt.EachPiece ? entry.Picture : null;
                     BitmapSource? fitted = null;
                     if (picture is { Length: > 0 } && File.Exists(picture))
                     {
@@ -575,7 +635,36 @@ public partial class PlatformEditorViewModel : ObservableObject
             }
         }
 
+        await LoadRecordSpanAsync();
         OnImageChanged();
+    }
+
+    /// <summary>Spec 5.2 and 6.2: the record's Across rows are one picture laid across the platforms with the pan
+    /// it was saved with, so the picture, the pan and the switch go on together and one cut covers all of them.
+    /// The rows the record saved as EachPiece keep the fit they were loaded with.</summary>
+    private async Task LoadRecordSpanAsync()
+    {
+        var spanning = _recordRows
+            .Where(r => r.Entry.Art == PlatformArt.Across
+                && r.Entry.Picture is { Length: > 0 } picture
+                && File.Exists(picture))
+            .ToList();
+        if (spanning.Count == 0)
+        {
+            return;
+        }
+
+        var entry = spanning[0].Entry;
+        _restoringFit = true;
+        FitAcross = true;
+        PanX = Math.Clamp(entry.PanX ?? 0.5, 0, 1);
+        PanY = Math.Clamp(entry.PanY ?? 0.5, 0, 1);
+        _restoringFit = false;
+
+        if (await LoadPictureAsync(entry.Picture!))
+        {
+            await RecutAsync(spanning.Select(r => r.Row).ToList());
+        }
     }
 
     /// <summary>Spec 5.2: the pack's file is not the file the record's values were worked out from, so the row
@@ -619,6 +708,7 @@ public partial class PlatformEditorViewModel : ObservableObject
         Hue = PlatformPieceViewModel.DefaultHue;
         _syncing = false;
         HasValuesFrom = false;
+        ClearPicture();
         ImageError = "";
         OnImageChanged();
         OnPropertyChanged(nameof(OpacityText));
@@ -733,17 +823,98 @@ public partial class PlatformEditorViewModel : ObservableObject
             return;
         }
 
-        Dictionary<PlatformPieceViewModel, BitmapSource> fitted;
+        if (!await LoadPictureAsync(path))
+        {
+            return;
+        }
+
+        await RecutAsync(ticked);
+    }
+
+    /// <summary>The picked picture, decoded once off the UI thread and kept for every later cut. False when it
+    /// could not be read, with the line already on the panel.</summary>
+    private async Task<bool> LoadPictureAsync(string path)
+    {
         try
         {
-            fitted = await Task.Run(() =>
+            LoadedPicture = await Task.Run(() => BackgroundFitter.LoadSource(path));
+        }
+        catch (Exception ex) when (ex is NotSupportedException or FileFormatException or IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            ImageError = $"Could not read {Path.GetFileName(path)}. Use a PNG, JPG, BMP, GIF or WebP.";
+            return false;
+        }
+
+        LoadedPicturePath = path;
+        OnPropertyChanged(nameof(CanUseFit));
+        OnPropertyChanged(nameof(CanPan));
+        return true;
+    }
+
+    /// <summary>The picture stops being what any row is made of: the switch has nothing to lay, and no row has a
+    /// fit note left that a later cut could write over.</summary>
+    private void ClearPicture()
+    {
+        LoadedPicture = null;
+        LoadedPicturePath = null;
+        _fitNoteRows.Clear();
+        OnPropertyChanged(nameof(CanUseFit));
+        OnPropertyChanged(nameof(CanPan));
+    }
+
+    /// <summary>Spec 6.2: every row named is cut from the loaded picture again with the switch and the pan as
+    /// they are now. Across, the picture is laid over the platforms' own box once and each row takes the part
+    /// under its largest placement; a row the stage never draws is fitted on its own instead, and says so. The
+    /// cutting is the slow part, so it happens off the UI thread and no row changes until all of them have one.</summary>
+    private async Task RecutAsync(IReadOnlyList<PlatformPieceViewModel>? only = null)
+    {
+        if (LoadedPicture is not { } picture || LoadedPicturePath is not { } path)
+        {
+            return;
+        }
+
+        var rows = only ?? Pieces.Where(p => p.IsTicked).ToList();
+        if (rows.Count == 0)
+        {
+            return;
+        }
+
+        var level = _request.Map.BaseLevel;
+        var box = SpanFitter.Box(level);
+        var across = FitAcross;
+        var pan = new FitOptions(PanX: PanX, PanY: PanY);
+        List<(PlatformPieceViewModel Row, BitmapSource Fitted, bool Across, string Note)> cut;
+        try
+        {
+            cut = await Task.Run(() =>
             {
-                var source = BackgroundFitter.LoadSource(path);
-                var results = new Dictionary<PlatformPieceViewModel, BitmapSource>();
-                foreach (var row in ticked)
+                var results = new List<(PlatformPieceViewModel, BitmapSource, bool, string)>();
+                foreach (var row in rows)
                 {
                     var piece = BackgroundFitter.LoadSource(row.SourcePath);
-                    results[row] = PieceFitter.Fit(source, piece);
+                    if (!across || box is not { } stage)
+                    {
+                        results.Add((row, PieceFitter.Fit(picture, piece), false, ""));
+                        continue;
+                    }
+
+                    var placements = SpanFitter.Placements(level, row.RelativePath, piece.PixelWidth, piece.PixelHeight);
+                    if (placements.Count == 0)
+                    {
+                        results.Add((
+                            row,
+                            PieceFitter.Fit(picture, piece),
+                            false,
+                            $"{row.FileName} not on this stage, fitted on its own."));
+                        continue;
+                    }
+
+                    // The same file drawn twice is one asset with two placements, and the picture can only be cut
+                    // for one of them, so the largest is the one the user is looking at (spec 6.1).
+                    var note = placements.Count > 1
+                        ? $"{row.FileName} drawn {placements.Count} times, cut from the largest."
+                        : "";
+                    results.Add((row, SpanFitter.Cut(picture, stage, pan, SpanFitter.Largest(placements)!, piece), true, note));
                 }
 
                 return results;
@@ -757,13 +928,75 @@ public partial class PlatformEditorViewModel : ObservableObject
 
         ImageError = "";
         var name = Path.GetFileName(path);
-        foreach (var row in ticked)
+        foreach (var (row, fitted, rowAcross, note) in cut)
         {
-            row.SetReplacement(fitted[row], name, path);
-            row.Thumbnail = ThumbnailOf(fitted[row]);
+            row.SetReplacement(fitted, name, path, rowAcross);
+            row.Thumbnail = ThumbnailOf(fitted);
+            SetFitNote(row, note);
         }
 
         OnImageChanged();
+    }
+
+    /// <summary>The line a cut leaves on a row. A row already saying its picture is gone, its untouched art is
+    /// missing or its file changed outside keeps that line: only a fit note is written over (spec 5.2).</summary>
+    private void SetFitNote(PlatformPieceViewModel row, string note)
+    {
+        if (row.Note.Length > 0 && !_fitNoteRows.Contains(row))
+        {
+            return;
+        }
+
+        row.Note = note;
+        if (note.Length > 0)
+        {
+            _fitNoteRows.Add(row);
+        }
+        else
+        {
+            _fitNoteRows.Remove(row);
+        }
+    }
+
+    /// <summary>Spec 6.2: dragging the preview moves the laid picture. The delta arrives in the stage's own
+    /// 1280 by 720 pixels, and a cover fit only has room to move where it hangs over the box, so the delta is
+    /// turned into pan units by that overflow and clamped. A picture with no overflow one way does not move
+    /// that way, and the cut that follows is throttled.</summary>
+    public void DragPan(double dxStagePixels, double dyStagePixels)
+    {
+        var level = _request.Map.BaseLevel;
+        if (LoadedPicture is not { } picture || !FitAcross || SpanFitter.Box(level) is not { } box)
+        {
+            return;
+        }
+
+        var (_, viewport) = FocusFor(level);
+        if ((viewport ?? level.Camera) is not { W: > 0, H: > 0 } camera)
+        {
+            return;
+        }
+
+        // The preview draws the camera's part of the level into the panel, so a stage pixel is that many level
+        // units, and the box the picture is laid in is measured in level units.
+        var dest = BackgroundFitter.DestinationRect(
+            picture.PixelWidth,
+            picture.PixelHeight,
+            new FitOptions(PanX: PanX, PanY: PanY),
+            Math.Max(1, (int)Math.Round(box.Width)),
+            Math.Max(1, (int)Math.Round(box.Height)));
+        var scaleX = MapCompositor.PanelWidth / camera.W;
+        var scaleY = MapCompositor.PanelHeight / camera.H;
+        var overflowX = dest.Width - box.Width;
+        var overflowY = dest.Height - box.Height;
+        if (overflowX > 0)
+        {
+            PanX = Math.Clamp(PanX - (dxStagePixels / scaleX / overflowX), 0, 1);
+        }
+
+        if (overflowY > 0)
+        {
+            PanY = Math.Clamp(PanY - (dyStagePixels / scaleY / overflowY), 0, 1);
+        }
     }
 
     /// <summary>Back to the pieces' own art. A ticked row holding a working copy is asked about first, because
@@ -810,7 +1043,14 @@ public partial class PlatformEditorViewModel : ObservableObject
         foreach (var row in Pieces.Where(p => p.IsTicked && p.Art != PieceArt.Original).ToList())
         {
             row.ResetArt();
+            SetFitNote(row, "");
             await RefreshThumbnailAsync(row);
+        }
+
+        // Nothing is made of the picture any more, so the switch has nothing left to lay (spec 6.2).
+        if (Pieces.All(p => p.Art != PieceArt.Replacement))
+        {
+            ClearPicture();
         }
 
         if (!failed)
@@ -1131,6 +1371,7 @@ public partial class PlatformEditorViewModel : ObservableObject
 
         // Every row, ticked or not: what Save leaves behind is the whole set, not the part being worked on.
         var rows = Pieces;
+        var (panX, panY) = (PanX, PanY);
         try
         {
             await Task.Run(() =>
@@ -1141,7 +1382,7 @@ public partial class PlatformEditorViewModel : ObservableObject
                 }
 
                 var record = PlatformEditRecord.Load(packRoot);
-                record.SetMap(_request.Map.FolderName, DateTimeOffset.Now, EntriesFor(rows, packRoot));
+                record.SetMap(_request.Map.FolderName, DateTimeOffset.Now, EntriesFor(rows, packRoot, panX, panY));
                 record.Save(packRoot);
             });
             Saved = new PlatformSave(EffectivePackName, destination, ApplyNow);
@@ -1154,8 +1395,10 @@ public partial class PlatformEditorViewModel : ObservableObject
     }
 
     /// <summary>Builds the record entry set for the rows just written into packRoot (hash from the written file).
-    /// A row whose file is not there was not written, so the record says nothing about it.</summary>
-    internal static Dictionary<string, PlatformPieceEntry> EntriesFor(IReadOnlyList<PlatformPieceViewModel> rows, string packRoot)
+    /// A row whose file is not there was not written, so the record says nothing about it. The pan belongs to the
+    /// editor rather than to a row, so an Across row writes down the one the picture was laid with (spec 6.2).</summary>
+    internal static Dictionary<string, PlatformPieceEntry> EntriesFor(
+        IReadOnlyList<PlatformPieceViewModel> rows, string packRoot, double panX, double panY)
     {
         var entries = new Dictionary<string, PlatformPieceEntry>(StringComparer.OrdinalIgnoreCase);
         foreach (var row in rows)
@@ -1174,6 +1417,12 @@ public partial class PlatformEditorViewModel : ObservableObject
                 if (entry.Art == PlatformArt.EachPiece)
                 {
                     entry.Picture = row.ReplacementPath;
+                }
+                else if (entry.Art == PlatformArt.Across)
+                {
+                    entry.Picture = row.ReplacementPath;
+                    entry.PanX = panX;
+                    entry.PanY = panY;
                 }
             }
 

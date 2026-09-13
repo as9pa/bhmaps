@@ -10,6 +10,9 @@
     <BooleanToVisibilityConverter x:Key="BoolToVis" />
     <converters:NullToVisibilityConverter x:Key="NullToVis" />
 
+    <!-- Only the fit switch needs it: its second button is on exactly when the property is off. -->
+    <converters:InverseBooleanConverter x:Key="InverseBool" />
+
     <!-- One label style carries the whole panel's vertical rhythm, so a block is a label and its control. -->
     <Style x:Key="FieldLabel" TargetType="TextBlock" BasedOn="{StaticResource SectionHeaderText}">
       <Setter Property="Margin" Value="0,18,0,6" />
@@ -78,9 +81,24 @@
              nothing is resampled twice. -->
         <Viewbox Margin="16" Stretch="Uniform">
           <Border Width="1280" Height="720" Background="{StaticResource BgBrush}">
-            <Image RenderOptions.BitmapScalingMode="HighQuality"
+            <!-- Spec 6.2: dragging the picture that is laid across the platforms. The Image is the composed
+                 stage at its own 1280 by 720, so the code behind only has to undo the Viewbox's scale. -->
+            <Image MouseLeftButtonDown="Preview_MouseLeftButtonDown"
+                   MouseLeftButtonUp="Preview_MouseLeftButtonUp"
+                   MouseMove="Preview_MouseMove"
+                   RenderOptions.BitmapScalingMode="HighQuality"
                    Source="{Binding Preview}"
-                   Stretch="Fill" />
+                   Stretch="Fill">
+              <Image.Style>
+                <Style TargetType="Image">
+                  <Style.Triggers>
+                    <DataTrigger Binding="{Binding CanPan}" Value="True">
+                      <Setter Property="Cursor" Value="SizeAll" />
+                    </DataTrigger>
+                  </Style.Triggers>
+                </Style>
+              </Image.Style>
+            </Image>
           </Border>
         </Viewbox>
 
@@ -307,6 +325,23 @@
                     FocusVisualStyle="{StaticResource DialogFocusRing}"
                     IsEnabled="{Binding CanEditOutside}"
                     Style="{StaticResource PlainButton}" />
+          </StackPanel>
+          <!-- Spec 6.2: one picture laid over the whole stage and cut for each piece, or the same picture fitted
+               to every piece on its own. A radio group rather than two chips, because it is one question. -->
+          <StackPanel Margin="0,8,0,0" IsEnabled="{Binding CanUseFit}" Orientation="Horizontal">
+            <RadioButton AutomationProperties.Name="Across the platforms"
+                         Content="Across the platforms"
+                         FocusVisualStyle="{StaticResource DialogFocusRing}"
+                         GroupName="Fit"
+                         IsChecked="{Binding FitAcross, Mode=TwoWay}"
+                         Style="{StaticResource ChipToggle}" />
+            <RadioButton Margin="8,0,0,0"
+                         AutomationProperties.Name="On each piece"
+                         Content="On each piece"
+                         FocusVisualStyle="{StaticResource DialogFocusRing}"
+                         GroupName="Fit"
+                         IsChecked="{Binding FitAcross, Converter={StaticResource InverseBool}, Mode=TwoWay}"
+                         Style="{StaticResource ChipToggle}" />
           </StackPanel>
           <TextBlock Style="{StaticResource ErrorText}" Text="{Binding ImageError}" />
 
