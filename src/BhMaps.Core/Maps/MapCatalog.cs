@@ -8,7 +8,7 @@ public sealed record UiSet(string Name, string Label);
 
 /// <summary>One map: a mapArt folder with the levels that point at it, ranked so one of them names the map.
 /// <see cref="ThumbnailFile"/> is the map-select picture this map alone owns, null when its levels name more
-/// than one or another map names the same file.</summary>
+/// than one or another map names the same file; <see cref="Candidates"/> holds every file its levels name.</summary>
 public sealed record MapEntry(
     string FolderName,
     string DisplayName,
@@ -17,7 +17,12 @@ public sealed record MapEntry(
     IReadOnlyList<string> Sets,
     IReadOnlyList<string> BackgroundSlots,
     IReadOnlyList<string> PlatformFiles,
-    string? ThumbnailFile = null);
+    string? ThumbnailFile = null,
+    IReadOnlyList<string>? ThumbnailCandidates = null)
+{
+    /// <summary>Every map-select picture this map's included levels name, empty when they name none.</summary>
+    public IReadOnlyList<string> Candidates => ThumbnailCandidates ?? [];
+}
 
 /// <summary>Folds the game's level data onto its mapArt folders. Folders no included level points at are not
 /// maps: they stay out of the catalog, and reset-all and pack operations reach them through the game tree.</summary>
@@ -98,10 +103,11 @@ public sealed class MapCatalog
             .GroupBy(l => l.AssetDir, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        var thumbnails = Thumbnails(folders, included);
+        var candidates = Candidates(folders, included);
+        var thumbnails = Thumbnails(candidates);
 
         var maps = folders
-            .Select(g => Entry(g.Key, g.ToList(), Display, data.Sets, thumbnails[g.Key]))
+            .Select(g => Entry(g.Key, g.ToList(), Display, data.Sets, thumbnails[g.Key], candidates[g.Key]))
             .OrderBy(m => m.DisplayName, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
@@ -138,37 +144,42 @@ public sealed class MapCatalog
     /// all of its levels that name one name that same file and no other folder names it: a file two maps share
     /// or a folder's own levels disagree over belongs to no single map, and writing it would change another
     /// map's thumbnail.</summary>
-    private static Dictionary<string, string?> Thumbnails(
-        IReadOnlyList<IGrouping<string, LevelDesc>> folders,
-        IReadOnlyDictionary<string, LevelType> included)
+    private static Dictionary<string, string?> Thumbnails(Dictionary<string, IReadOnlyList<string>> candidates)
     {
-        var named = folders.ToDictionary(
-            g => g.Key,
-            g => g
-                .Select(l => included[l.LevelName].ThumbnailFile)
-                .Where(f => !string.IsNullOrEmpty(f))
-                .Select(f => f!)
-                .ToHashSet(StringComparer.OrdinalIgnoreCase),
-            StringComparer.OrdinalIgnoreCase);
-
         var owners = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        foreach (var file in named.Values.SelectMany(files => files))
+        foreach (var file in candidates.Values.SelectMany(files => files))
         {
             owners[file] = owners.GetValueOrDefault(file) + 1;
         }
 
-        return named.ToDictionary(
+        return candidates.ToDictionary(
             pair => pair.Key,
-            pair => pair.Value.Count == 1 && owners[pair.Value.First()] == 1 ? pair.Value.First() : null,
+            pair => pair.Value.Count == 1 && owners[pair.Value[0]] == 1 ? pair.Value[0] : null,
             StringComparer.OrdinalIgnoreCase);
     }
+
+    /// <summary>Every map-select picture each folder's included levels name, keyed by folder name. A folder whose
+    /// levels name none gets an empty list.</summary>
+    private static Dictionary<string, IReadOnlyList<string>> Candidates(
+        IReadOnlyList<IGrouping<string, LevelDesc>> folders,
+        IReadOnlyDictionary<string, LevelType> included) =>
+        folders.ToDictionary(
+            g => g.Key,
+            g => (IReadOnlyList<string>)g
+                .Select(l => included[l.LevelName].ThumbnailFile)
+                .Where(f => !string.IsNullOrEmpty(f))
+                .Select(f => f!)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList(),
+            StringComparer.OrdinalIgnoreCase);
 
     private static MapEntry Entry(
         string folder,
         IReadOnlyList<LevelDesc> levels,
         Func<LevelDesc, string> display,
         IReadOnlyList<LevelSet> sets,
-        string? thumbnailFile)
+        string? thumbnailFile,
+        IReadOnlyList<string> candidates)
     {
         var levelNames = levels.Select(l => l.LevelName).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var baseLevel = PickBase(folder, levels, display);
@@ -189,7 +200,8 @@ public sealed class MapCatalog
                 .SelectMany(l => Assets(l.Platforms).Select(a => AssetPath.Resolve(l.AssetDir, a.AssetName)))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList(),
-            thumbnailFile);
+            thumbnailFile,
+            candidates);
     }
 
     private static LevelDesc PickBase(string folder, IReadOnlyList<LevelDesc> levels, Func<LevelDesc, string> display)

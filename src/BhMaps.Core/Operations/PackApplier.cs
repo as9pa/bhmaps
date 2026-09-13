@@ -92,6 +92,16 @@ public static class PackApplier
             .ToList();
     }
 
+    /// <summary>The maps whose folder the pack has files for, or one of whose background slots the pack's Backgrounds
+    /// folder holds. In catalog order.</summary>
+    public static IReadOnlyList<MapEntry> MapsTouched(Pack pack, IReadOnlyList<MapEntry> maps)
+    {
+        var backgrounds = pack.FindFolder(BackgroundsFolder);
+        return maps
+            .Where(map => pack.FindFolder(map.FolderName) is { Files.Count: > 0 } || SlotFiles(backgrounds, map).Any())
+            .ToList();
+    }
+
     /// <summary>The relative paths a reset of one map would write, for the undo snapshot (spec 6.6): the files
     /// that folder holds in the game now, the Default pack's files for it, and the slots that pack can actually
     /// restore. MapReset skips a slot the pack has not got, so nothing outside this list is touched. The map
