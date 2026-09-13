@@ -24,7 +24,6 @@ public partial class MapsViewModel : PageViewModel
     public const int MaxZoom = AppSettings.MaxZoom;
 
     private const string AllChip = "All";
-    private const string TickedChip = "Selected";
 
     /// <summary>Every card the last scan produced. Cards is this list under the chip and the search.</summary>
     private readonly List<MapCardViewModel> _all = [];
@@ -70,9 +69,10 @@ public partial class MapsViewModel : PageViewModel
     [ObservableProperty]
     public partial string SearchText { get; set; }
 
-    /// <summary>"All", the UI set labels, and "Selected" once anything is ticked. Without level data the
-    /// set chips are gone entirely (spec 3.6). An ObservableCollection behind the read-only surface, because the
-    /// row changes when the level data does and when the first map is ticked.</summary>
+    /// <summary>"All" and the UI set labels. Without level data the set chips are gone entirely (spec 3.6). An
+    /// ObservableCollection behind the read-only surface, because the row changes when the level data does.
+    /// Owner change 2026-09-13: the "Selected" chip that used to appear once anything was ticked is gone; the
+    /// selection bar already says how many maps are ticked.</summary>
     public IReadOnlyList<string> Chips => _chips;
 
     [ObservableProperty]
@@ -115,7 +115,6 @@ public partial class MapsViewModel : PageViewModel
             var what = SelectedChip switch
             {
                 AllChip => "map",
-                TickedChip => "selected map",
 
                 // RebuildChips clears the chip ListBox's items, and the ListBox pushes its lost selection back
                 // through this two-way binding, so the getter can run between the null and the chip put back.
@@ -493,12 +492,10 @@ public partial class MapsViewModel : PageViewModel
 
     private void OnShellChanged(object? sender, PropertyChangedEventArgs e)
     {
-        // SelectedMaps is raised alongside this one; reacting to the count alone does the work once. The first
-        // tick is what puts the Selected chip in the row, and the last untick takes it away again. A10 hangs the
-        // selection bar's lines on the same branch.
+        // SelectedMaps is raised alongside this one; reacting to the count alone does the work once. A10 hangs
+        // the selection bar's lines on this branch.
         if (e.PropertyName == nameof(MainViewModel.SelectedMapCount))
         {
-            RebuildChips(_snapshot?.Catalog);
             OnPropertyChanged(nameof(SelectionText));
             OnPropertyChanged(nameof(HasTicks));
 
@@ -551,12 +548,8 @@ public partial class MapsViewModel : PageViewModel
             return;
         }
 
-        // Spec 11: All, the set chips, and Selected once anything is ticked.
+        // All and the set chips.
         List<string> wanted = [AllChip, .. catalog.UiSets.Select(s => s.Label)];
-        if (Shell.SelectedMapCount > 0)
-        {
-            wanted.Add(TickedChip);
-        }
 
         if (_chips.SequenceEqual(wanted))
         {
@@ -567,11 +560,9 @@ public partial class MapsViewModel : PageViewModel
         _uiSets.AddRange(catalog.UiSets);
         var chosen = SelectedChip;
 
-        // Synced in place rather than cleared and refilled. The first tick is what adds the Selected chip, and a
-        // Ctrl+A ticks the whole grid from inside the ListBox's own loop: clearing the row there pushes a null
-        // SelectedChip through the two-way binding, and the ApplyFilter answering it empties and refills Cards
-        // under that loop, which leaves one card ticked out of the set. Adding one chip at the end disturbs
-        // neither the chip ListBox's selection nor Cards.
+        // Synced in place rather than cleared and refilled: clearing the row pushes a null SelectedChip through
+        // the two-way binding, and the ApplyFilter answering it empties and refills Cards, which disturbs the
+        // ticks. Inserting and removing single chips disturbs neither the chip ListBox's selection nor Cards.
         for (var i = _chips.Count - 1; i >= 0; i--)
         {
             if (!wanted.Contains(_chips[i]))
@@ -630,7 +621,6 @@ public partial class MapsViewModel : PageViewModel
         return SelectedChip switch
         {
             AllChip => true,
-            TickedChip => card.IsSelected,
             _ => _uiSets.FirstOrDefault(s => s.Label == SelectedChip) is { } set
                 && card.Map.Sets.Contains(set.Name, StringComparer.OrdinalIgnoreCase),
         };
