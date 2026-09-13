@@ -189,6 +189,10 @@ public partial class MainViewModel : ObservableObject
         CurrentPage = PackDetail;
     }
 
+    /// <summary>Spec 2.6 4.3: the one tile Ctrl+C or Ctrl+X remembered, held by the shell so it survives moving
+    /// between pack pages. Never the Windows clipboard: this carries a pack, a tile and how it was taken.</summary>
+    public PackClipboardItem? PackClipboard { get; set; }
+
     /// <summary>SelectedMaps is computed, so the pages bound to it are told by hand when it changes. Public:
     /// the Maps page raises it when a card is ticked.</summary>
     public void NotifySelectionChanged()

@@ -13,6 +13,9 @@
 
   <UserControl.InputBindings>
     <KeyBinding Key="Escape" Command="{Binding CloseDrawerCommand}" />
+    <KeyBinding Key="C" Modifiers="Control" Command="{Binding CopyTileCommand}" />
+    <KeyBinding Key="X" Modifiers="Control" Command="{Binding CutTileCommand}" />
+    <KeyBinding Key="V" Modifiers="Control" Command="{Binding PasteCommand}" />
   </UserControl.InputBindings>
 
   <DockPanel Margin="24,16,24,24">
@@ -25,6 +28,9 @@
       <controls:PageHeader.Actions>
         <StackPanel IsEnabled="{Binding DataContext.IsNotBusy, RelativeSource={RelativeSource AncestorType=Window}}"
                     Orientation="Horizontal">
+          <TextBlock Margin="0,0,12,0" VerticalAlignment="Center" Foreground="{StaticResource Text3Brush}"
+                     Text="{Binding ClipboardHint}"
+                     Visibility="{Binding HasClipboardHint, Converter={StaticResource BoolToVis}}" />
           <controls:ZoomSlider Margin="0,0,12,0" VerticalAlignment="Center"
                                Maximum="{x:Static pages:PackDetailViewModel.MaxZoom}"
                                Minimum="{x:Static pages:PackDetailViewModel.MinZoom}"
@@ -79,6 +85,8 @@
                   <Setter Property="AutomationProperties.Name" Value="{Binding Caption}" />
                   <Setter Property="Margin" Value="0,0,12,12" />
                   <EventSetter Event="PreviewMouseLeftButtonUp" Handler="Tile_Click" />
+                  <EventSetter Event="MouseEnter" Handler="Tile_MouseEnter" />
+                  <EventSetter Event="MouseLeave" Handler="Tile_MouseLeave" />
                 </Style>
               </ListBox.ItemContainerStyle>
               <ListBox.ItemsPanel>

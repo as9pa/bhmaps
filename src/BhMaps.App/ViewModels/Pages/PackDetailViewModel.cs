@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 using BhMaps.App.Services;
 using BhMaps.Core.Imaging;
 using BhMaps.Core.Maps;
@@ -29,6 +30,13 @@ public partial class PackDetailViewModel : PageViewModel
 
     public const string NoMapsText = "This pack has no map folders.";
 
+    /// <summary>Spec 2.6 4.3: the line the page shows for two seconds when Ctrl+V has nothing to paste.</summary>
+    public const string NothingCopiedText = "Nothing copied yet";
+
+    /// <summary>The line Ctrl+X shows on the Default pack, whose menu offers no Move line either (spec 7.5: the
+    /// Default pack is the game's own files).</summary>
+    public const string NoCutFromDefaultText = "Nothing moves out of the Default pack";
+
     /// <summary>The folder a pack keeps its background images in. Every other folder is a map.</summary>
     private const string BackgroundsFolder = "Backgrounds";
 
@@ -52,11 +60,20 @@ public partial class PackDetailViewModel : PageViewModel
     /// instead of twice.</summary>
     private bool _rebuildOnPackChange = true;
 
+    /// <summary>Takes <see cref="ClipboardHint" /> away again two seconds after it was put up.</summary>
+    private readonly DispatcherTimer _hintTimer = new() { Interval = TimeSpan.FromSeconds(2) };
+
     public PackDetailViewModel(MainViewModel shell)
         : base(shell)
     {
         Items = [];
         TransparentText = "";
+        ClipboardHint = "";
+        _hintTimer.Tick += (_, _) =>
+        {
+            _hintTimer.Stop();
+            ClipboardHint = "";
+        };
 
         // A stored zoom from another version, or a hand-edited one, is clamped rather than trusted.
         Zoom = Math.Clamp(shell.Services.Settings.PackZoom, MinZoom, MaxZoom);
@@ -97,6 +114,18 @@ public partial class PackDetailViewModel : PageViewModel
     public partial string TransparentText { get; set; }
 
     public bool HasTransparent => TransparentText.Length > 0;
+
+    /// <summary>"Wharf cut", or "" while the page has nothing to say. Shown for two seconds beside the zoom
+    /// slider, so Ctrl+C and Ctrl+X say out loud what they took (spec 2.6 4.3).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasClipboardHint))]
+    public partial string ClipboardHint { get; set; }
+
+    public bool HasClipboardHint => ClipboardHint.Length > 0;
+
+    /// <summary>The tile the pointer is over wins; the keyboard-focused tile is the fallback (spec 2.6 4.3). The
+    /// view knows both, so it hands the page the one it wants before the command runs.</summary>
+    public PackTileViewModel? KeyTarget { get; set; }
 
     /// <summary>The shell's own navigation command. PageViewModel.Shell is protected, so the markup cannot reach
     /// Shell.NavigatePacksCommand directly; this one-line property is the smallest way to bind it.</summary>
@@ -334,6 +363,71 @@ public partial class PackDetailViewModel : PageViewModel
         await Shell.RescanAsync();
         return result;
     }
+
+    /// <summary>Ctrl+C and Ctrl+X: the tile is remembered on the shell and the page says so. The Default pack is
+    /// the game's own, so nothing is ever cut out of it, exactly as its menu offers no Move line.</summary>
+    public void CopyTileToClipboard(PackTileViewModel? tile, bool cut)
+    {
+        if (tile is null || Pack is not { } pack)
+        {
+            return;
+        }
+
+        if (cut && pack.Name.Equals(DefaultPack.Name, StringComparison.OrdinalIgnoreCase))
+        {
+            ShowHint(NoCutFromDefaultText);
+            return;
+        }
+
+        Shell.PackClipboard = new PackClipboardItem(pack, tile, cut);
+        var name = tile.Map?.DisplayName ?? tile.Caption;
+        ShowHint(cut ? $"{name} cut" : $"{name} copied");
+    }
+
+    /// <summary>Ctrl+V: what the clipboard holds, into this page's pack. Nothing happens when the clipboard is
+    /// empty but the line, and nothing at all when the source is this pack.</summary>
+    public async Task PasteAsync()
+    {
+        if (Pack is not { } pack)
+        {
+            return;
+        }
+
+        if (Shell.PackClipboard is not { } held)
+        {
+            ShowHint(NothingCopiedText);
+            return;
+        }
+
+        if (held.Source.Name.Equals(pack.Name, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        await PasteIntoAsync(held.Source, held.Tile, held.Cut, pack);
+        if (held.Cut)
+        {
+            Shell.PackClipboard = null;
+        }
+    }
+
+    /// <summary>The line, and the timer that takes it away again. One timer, restarted, so two keys in a row do
+    /// not leave the first line's tick to clear the second's words.</summary>
+    private void ShowHint(string text)
+    {
+        ClipboardHint = text;
+        _hintTimer.Stop();
+        _hintTimer.Start();
+    }
+
+    [RelayCommand]
+    private void CopyTile() => CopyTileToClipboard(KeyTarget ?? SelectedTile, cut: false);
+
+    [RelayCommand]
+    private void CutTile() => CopyTileToClipboard(KeyTarget ?? SelectedTile, cut: true);
+
+    [RelayCommand]
+    private Task Paste() => PasteAsync();
 
     /// <summary>Spec 2.6 section 3 item 7: the map's files in this pack, deleted together, inside a library undo
     /// session so the confirm is the only thing standing between the user and getting them back.</summary>

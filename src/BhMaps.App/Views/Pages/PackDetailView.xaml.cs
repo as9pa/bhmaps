@@ -28,6 +28,26 @@ public partial class PackDetailView : UserControl
         }
     }
 
+    /// <summary>Spec 2.6 4.3: the tile under the pointer is what Ctrl+C, Ctrl+X and the menu act on when there
+    /// is one. Written on the page rather than read from the visual tree when the key arrives, because a key
+    /// binding has no pointer position.</summary>
+    private void Tile_MouseEnter(object sender, MouseEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: PackTileViewModel tile } && Page is { } page)
+        {
+            page.KeyTarget = tile;
+        }
+    }
+
+    private void Tile_MouseLeave(object sender, MouseEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: PackTileViewModel tile } && Page is { } page
+            && ReferenceEquals(page.KeyTarget, tile))
+        {
+            page.KeyTarget = null;
+        }
+    }
+
     /// <summary>The menu button sits over the picture, so the click that opens the menu must not also open the
     /// drawer under it.</summary>
     private static bool IsInsideButton(object? source, FrameworkElement container)
