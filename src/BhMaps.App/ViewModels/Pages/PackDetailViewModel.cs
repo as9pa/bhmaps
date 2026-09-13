@@ -423,6 +423,13 @@ public partial class PackDetailViewModel : PageViewModel
             return;
         }
 
+        if (!HeldStillThere(held))
+        {
+            Shell.PackClipboard = null;
+            ShowHint(NothingCopiedText);
+            return;
+        }
+
         if (held.Source.Name.Equals(pack.Name, StringComparison.OrdinalIgnoreCase))
         {
             return;
@@ -433,6 +440,21 @@ public partial class PackDetailViewModel : PageViewModel
         {
             Shell.PackClipboard = null;
         }
+    }
+
+    /// <summary>Whether what the clipboard holds is still on disk. Ctrl+C a tile, remove that pack on the Packs
+    /// page, then Ctrl+V somewhere else: the copy names a folder that is gone, and without this the copier throws
+    /// and the paste ends in the "Something went wrong" dialog instead of the line that says nothing is copied.</summary>
+    private static bool HeldStillThere(PackClipboardItem held)
+    {
+        if (!Directory.Exists(held.Source.FullPath))
+        {
+            return false;
+        }
+
+        return held.Tile.PicturePath is { } picture
+            ? File.Exists(picture)
+            : held.Tile.FolderPath is { } folder && Directory.Exists(folder);
     }
 
     /// <summary>The line, and the timer that takes it away again. One timer, restarted, so two keys in a row do

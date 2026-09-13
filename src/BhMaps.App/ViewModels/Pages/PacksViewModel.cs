@@ -279,7 +279,9 @@ public partial class PacksViewModel : PageViewModel
     private Task NewPackAsync() => Shell.NewPackAsync();
 
     /// <summary>Spec 6.5: deletes the pack from the library after a confirm that names it. Inside RunBusyAsync so
-    /// the sibling commands are disabled while a folder is going away underneath them (commit 375497e).</summary>
+    /// the sibling commands are disabled while a folder is going away underneath them (commit 375497e). A tile
+    /// copied out of this pack has nowhere to be copied from once the folder is gone, so the clipboard drops it
+    /// rather than hold a source that no longer exists.</summary>
     [RelayCommand]
     private async Task RemoveAsync(PackRowViewModel? row)
     {
@@ -308,6 +310,10 @@ public partial class PacksViewModel : PageViewModel
         else if (ok)
         {
             Shell.SetLibraryDone($"Removed {pack.Name}");
+            if (Shell.PackClipboard is { } held && held.Source.Name.Equals(pack.Name, StringComparison.OrdinalIgnoreCase))
+            {
+                Shell.PackClipboard = null;
+            }
         }
 
         await Shell.RescanAsync();
