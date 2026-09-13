@@ -8,6 +8,24 @@ and `.jpg` files inside the `mapArt` folder and inside its own library, plus its
 `%APPDATA%\BhMaps`. The game's data files are read and never written, and nothing else in the game
 install is touched.
 
+## What is new in 2.4
+
+- The platform editor's preview can follow the ticks. Two chips sit over the preview: **All pieces**
+  draws every piece as before, and **Ticked only** draws the ticked pieces sharp, fades the rest to a
+  faint ghost, and frames the ticked pieces so a small platform fills the picture. The editor
+  remembers which chip you left on; opened from a Platform files row it starts on Ticked only, so
+  the preview shows that one piece.
+- Clicking a Files row's name or thumbnail ticks that piece alone; Ctrl+click adds it to the ticks;
+  Enter or Space on a focused row does the same as a click. The tick box still toggles one piece.
+- Every picture tile in a pack has a menu, from the dots button on hover or a right-click: apply it to
+  the map it belongs to, to the selected maps, to a map chosen from a list, or to all maps, then
+  Edit, Show in folder and Remove from the pack.
+- Every card on Maps has a right-click menu: Apply pack and Apply picture flyouts, Edit background,
+  Edit platforms, Reset to default and Show in game folder. Right-click a selected card and the menu
+  works on the whole selection.
+- A chooser window lists the maps, or your pictures, with a search box, for "Apply to a map..." and
+  "More pictures...".
+
 ## What is new in 2.3.1
 
 - When another program deletes a piece you handed it, the editor goes back to the piece's own art and
@@ -146,6 +164,13 @@ stops a long operation.
   first and names the count. The selection clears after a write that worked, and stays after one that
   failed or was cancelled. Escape closes the panel when one is open, and clears the selection when
   none is.
+- A right-click on a card opens its menu without changing the selection. The menu names the map, or
+  says "N selected maps" when the card is selected along with others: then everything in the menu
+  works on the whole selection. **Apply pack** unfolds the packs, with a pack greyed out when it has
+  nothing for that map; **Apply picture** unfolds your pictures, up to eight, then "More pictures..."
+  for the chooser and "Add Custom Image..."; then **Edit background**, **Edit platforms** (one map
+  only), **Reset to default** and **Show in game folder**. One map applies without asking; more than
+  one asks and names the count, as the bar does.
 - The **map panel** opens on the right and holds everything one map can do: its name and the sets it
   belongs to, a larger preview, a line saying in words what is in game, Reset this map and Open
   folder. Below those it is one list, Background first and then Platforms, under a section header
@@ -199,7 +224,12 @@ stops a long operation.
   fill later from Add Image or the editors. Clicking a row opens the pack.
 - **Pack detail** shows one pack as a single grid of its maps, each composed with the game's art
   where the pack has nothing of its own, with zoom setting the column count. Clicking a tile opens a
-  drawer listing that map's files, its background and its platforms, and where each came from. When
+  drawer listing that map's files, its background and its platforms, and where each came from.
+  Hovering a tile shows a dots button, and the dots or a right-click opens the picture's menu, headed
+  with its file name: **Apply to <map>** for a picture that belongs to one map, **Apply to the N
+  selected maps** when maps are selected on Maps, **Apply to a map...** for the chooser, **Apply to all
+  maps**, then **Edit**, **Show in folder** and **Remove from <pack>**, which deletes the file after a
+  confirm. The Backgrounds page's picture menus gain the same **Apply to a map...** line. When
   the pack holds fully transparent PNGs, a line above the grid says how many of its files change
   nothing in game and offers to remove them. Apply all, Open folder and the way back to the pack list
   are in the header.
@@ -221,6 +251,10 @@ These windows open on top of the pages:
   apply to the map the window was opened from; add and apply to the selected maps; or add and apply
   to every map. Applying goes in order and starts again from the first picture when there are more
   maps than pictures. The pictures it reads are never changed.
+- **Chooser**, from "Apply to a map..." on a picture's menu or "More pictures..." on a map card's
+  menu, is one list with a search box: every map, each with a thumbnail and the art it shows now, or
+  every picture you imported, each with the pack that holds it. The button reads "Apply to <name>"
+  and the list opens on the first row; Escape or Cancel applies nothing.
 - **Import folder** takes several folders at once and makes one pack of each. Every folder's name is
   filled in as its pack name and can be edited; a name that matches a pack already in the library
   adds to that pack after one confirm. The button reads "Import N packs". Inside each folder, every
@@ -245,6 +279,12 @@ These windows open on top of the pages:
   pieces, one row each with a tick, a thumbnail, the file name and that piece's own values; every row
   starts ticked, **All** and **None** above the list change them together, and the header counts
   them, as in "Files, 2 of 6". Opened from a map panel row, only that row's piece is ticked.
+  Clicking a row's thumbnail or name ticks that piece alone, Ctrl+click adds it, and Enter or Space
+  on a focused row does what a click does. Two chips sit over the preview: **All pieces** draws the
+  whole level, and **Ticked only** draws the ticked pieces sharp and the rest as a faint ghost, framed
+  on the ticked pieces with a little room round them; with everything ticked the two look the same,
+  and with nothing ticked the preview says "Tick a file to see it on its own." The editor remembers
+  the chip you left on, except that a map panel row always opens on Ticked only.
   **Image** says what the ticked pieces show: the piece's own art, a picture fitted to it, or Mixed.
   **Replace** takes a PNG, JPG, BMP, GIF or WebP and fits it to each ticked piece, covering and
   centring it and cutting it to the piece's own shape, so the platform keeps its outline. **Edit in
@@ -269,6 +309,22 @@ Confirmations, errors and the list of files an operation could not touch are the
 the app's own theme rather than Windows message boxes. Two failures before the main window exists are
 the exception and use a message box: an error the app did not expect, and a development run given
 `--game` or `--library` without `--appdata`.
+
+### Menus
+
+The words the menus use mean the same thing everywhere:
+
+| Word | Meaning |
+|---|---|
+| Picture | A file you imported into a pack: an Add Image result, an editor save, or a copied file. Files the game owns are never pictures. |
+| Owned picture | A picture in a map's own slot, so it belongs to that map; "Apply to <map>" names it. |
+| Any-map picture | A picture in a slot no map owns; it can go on every map. |
+| Selected maps | The maps selected on Maps. Menus say "the N selected maps" or "N selected maps". |
+| Target | The maps a card menu acts on: the whole selection when the card is selected with others, otherwise that one card. |
+| Chooser | The search-and-pick window behind "Apply to a map..." and "More pictures...". |
+
+There is no universal setting for a picture. "Apply to all maps" writes the picture onto every map
+now, and a later apply to one map replaces it there.
 
 ## How it works
 
