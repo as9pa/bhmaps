@@ -35,6 +35,10 @@ public partial class PlatformEditorViewModel : ObservableObject
     public const string MixedText = "Mixed";
     public const string TickHintText = "Tick a file to edit it.";
 
+    /// <summary>Spec 3.2: Ticked only with nothing ticked ghosts the whole map, so the preview says what to do
+    /// about it, in the same words TickHintText uses for the sliders.</summary>
+    public const string IsolateHintText = "Tick a file to see it on its own.";
+
     /// <summary>The widest a row's thumbnail is ever drawn, so a fitted picture is scaled once rather than per
     /// frame the list draws.</summary>
     private const double ThumbnailWidth = 240.0;
@@ -74,6 +78,10 @@ public partial class PlatformEditorViewModel : ObservableObject
     /// so one value change is one fan-out rather than a loop between the two (spec 4).</summary>
     private bool _syncing;
 
+    /// <summary>True while the ctor is putting the remembered mode on, so opening the editor never writes the
+    /// setting back and never schedules a second render (spec 3.5).</summary>
+    private bool _restoringMode;
+
     public PlatformEditorViewModel(
         AppServices services,
         IDialogs dialogs,
@@ -94,6 +102,12 @@ public partial class PlatformEditorViewModel : ObservableObject
         PackChoices = packNames.Concat([BackgroundEditorViewModel.NewPackChoice]).ToList();
         Error = "";
         ApplyNow = true;
+
+        // Spec 3.4: a panel row's Edit names one file, and that editor opens on it. Spec 3.5: every other way in
+        // opens in the mode the last chip click left behind.
+        _restoringMode = true;
+        IsolatePreview = request.OnlyFile is not null || services.Settings.PlatformPreviewIsolate;
+        _restoringMode = false;
 
         // The background editor's rule: the pack the user would mean is there, or it is a new pack already named.
         var existingDefault = packNames.FirstOrDefault(
@@ -148,6 +162,13 @@ public partial class PlatformEditorViewModel : ObservableObject
     [ObservableProperty]
     public partial ImageSource? Preview { get; set; }
 
+    /// <summary>Spec 3.1: true is Ticked only, false is All pieces. Changing it schedules a render and writes the
+    /// setting; nothing else is written anywhere.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowAllPieces))]
+    [NotifyPropertyChangedFor(nameof(IsolateHint))]
+    public partial bool IsolatePreview { get; set; }
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsNewPack), nameof(PackNameError), nameof(CanSave), nameof(CanEditOutside))]
     [NotifyCanExecuteChangedFor(nameof(SaveCommand), nameof(EditOutsideCommand))]
@@ -182,6 +203,18 @@ public partial class PlatformEditorViewModel : ObservableObject
     public int TickedCount => Pieces.Count(p => p.IsTicked);
 
     public bool HasTicked => TickedCount > 0;
+
+    /// <summary>The All pieces chip's side of the pair, so each chip binds IsSelected two way and the list's own
+    /// single selection keeps exactly one of them on.</summary>
+    public bool ShowAllPieces
+    {
+        get => !IsolatePreview;
+        set => IsolatePreview = !value;
+    }
+
+    /// <summary>Spec 3.2: the scrim line under a fully ghosted preview, and null when there is nothing to say, so
+    /// the window hides it with the same NullToVis converter the empty text already uses.</summary>
+    public string? IsolateHint => IsolatePreview && Pieces.Count > 0 && TickedCount == 0 ? IsolateHintText : null;
 
     /// <summary>The values only move the ticked rows, so there is nothing to adjust while none is ticked.</summary>
     public bool CanAdjust => HasTicked;
@@ -344,6 +377,18 @@ public partial class PlatformEditorViewModel : ObservableObject
         SchedulePreview();
     }
 
+    partial void OnIsolatePreviewChanged(bool value)
+    {
+        if (_restoringMode)
+        {
+            return;
+        }
+
+        // Spec 3.1: the chip re-renders through the existing 60 ms throttle. Spec 3.5: and is remembered.
+        SchedulePreview();
+        _services.UpdateSettings(_services.Settings with { PlatformPreviewIsolate = value });
+    }
+
     /// <summary>Where each piece is read from: the pack's copy when the pack has one that draws something, the
     /// game's otherwise, which is the rule every composite already resolves by (spec 6).</summary>
     private static IReadOnlyList<PlatformPieceViewModel> BuildPieces(AppServices services, PlatformEditorRequest request)
@@ -426,6 +471,36 @@ public partial class PlatformEditorViewModel : ObservableObject
         {
             row.IsTicked = false;
         }
+    }
+
+    /// <summary>Spec 3.3: clicking a row's thumbnail or name ticks that row and unticks the rest. Each write goes
+    /// through the row's own property, so the sliders, the Image line and the header follow exactly as they do
+    /// for All and None.</summary>
+    [RelayCommand]
+    private void Solo(PlatformPieceViewModel? row)
+    {
+        if (row is null)
+        {
+            return;
+        }
+
+        foreach (var other in Pieces)
+        {
+            other.IsTicked = ReferenceEquals(other, row);
+        }
+    }
+
+    /// <summary>Spec 3.3: Ctrl+click adds a row to the ticks and clears nothing. Ticking a ticked row is a no-op
+    /// rather than a toggle: the checkbox is where unticking lives.</summary>
+    [RelayCommand]
+    private void AddTick(PlatformPieceViewModel? row)
+    {
+        if (row is null)
+        {
+            return;
+        }
+
+        row.IsTicked = true;
     }
 
     /// <summary>Spec 5: one picture, fitted to each ticked piece's own shape and held in memory until Save. The
@@ -781,6 +856,14 @@ public partial class PlatformEditorViewModel : ObservableObject
         ReplaceCommand.NotifyCanExecuteChanged();
         ResetImageCommand.NotifyCanExecuteChanged();
         EditOutsideCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(IsolateHint));
+
+        // In All pieces a tick only moves the sliders, as in 2.3. In Ticked only it changes the picture, so the
+        // render is asked for; the 60 ms throttle collapses the run of ticks All, None and Solo produce.
+        if (IsolatePreview)
+        {
+            SchedulePreview();
+        }
     }
 
     /// <summary>A row moved on its own: the shared readings may have gone Mixed, and the map did change.</summary>
@@ -858,6 +941,33 @@ public partial class PlatformEditorViewModel : ObservableObject
         _preview.Run(ct => RenderAsync(stamp, ct));
     }
 
+    /// <summary>Spec 3.2. Not isolating, a map with no pieces, and every piece ticked all render exactly as 2.3
+    /// did: null focus, null viewport, pixel for pixel. Isolating with nothing ticked passes an empty set, which
+    /// ghosts everything, over the full camera. Otherwise the ticked paths are the focus and the frame leans in;
+    /// a frame that comes back null, which is focused pieces with no size, falls back to the full camera too.</summary>
+    private (IReadOnlySet<string>? Focus, CameraBounds? Viewport) FocusFor(LevelDesc level)
+    {
+        if (!IsolatePreview || Pieces.Count == 0)
+        {
+            return (null, null);
+        }
+
+        var ticked = Pieces.Where(p => p.IsTicked).ToList();
+        if (ticked.Count == Pieces.Count)
+        {
+            return (null, null);
+        }
+
+        var focus = new HashSet<string>(ticked.Select(p => p.RelativePath), StringComparer.OrdinalIgnoreCase);
+        if (focus.Count == 0)
+        {
+            return (focus, null);
+        }
+
+        var aspect = (double)MapCompositor.PanelWidth / MapCompositor.PanelHeight;
+        return (focus, PlatformBounds.For(level, PlatformBounds.Pad, aspect, focus));
+    }
+
     /// <summary>Whether a file in the destination is one this editor put there for another program to edit, which
     /// is not the pack's own work and so is not what the Replace question is about.</summary>
     private bool IsWorkingCopy(string fullPath) =>
@@ -873,6 +983,7 @@ public partial class PlatformEditorViewModel : ObservableObject
         var root = _tempRoot;
         var level = _request.Map.BaseLevel;
         var background = _backgroundPath;
+        var (focus, viewport) = FocusFor(level);
         var reading = "";
         try
         {
@@ -890,7 +1001,9 @@ public partial class PlatformEditorViewModel : ObservableObject
 
             var sources = new AssetSources(root, backgroundOverride: background);
             var bitmap = await _services.Renderer.RunAsync(
-                () => MapCompositor.Render(level, MapCompositor.PanelWidth, MapCompositor.PanelHeight, sources), ct);
+                () => MapCompositor.Render(
+                    level, MapCompositor.PanelWidth, MapCompositor.PanelHeight, sources, viewport, focus),
+                ct);
             if (ct.IsCancellationRequested || stamp != _sequence)
             {
                 return;
