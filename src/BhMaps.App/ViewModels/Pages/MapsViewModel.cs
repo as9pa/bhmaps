@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows;
 using BhMaps.App.Services;
+using BhMaps.Core.LevelData;
 using BhMaps.Core.Maps;
 using BhMaps.Core.Model;
 using BhMaps.Core.Operations;
@@ -595,4 +596,116 @@ public partial class MapsViewModel : PageViewModel
         };
     }
 
+    /// <summary>Spec 4.3's target rule: a ticked card with other ticked cards acts on the whole ticked set;
+    /// anything else acts on itself alone. Right click never changes the ticks (spec 9.2, owner answer q2).</summary>
+    private IReadOnlyList<MapEntry> TargetFor(MapCardViewModel card) =>
+        card.IsSelected && Shell.SelectedMapCount > 1 ? Shell.SelectedMaps : [card.Map];
+
+    /// <summary>Spec 4.3: one card's menu, built when it opens. A set target disables the three lines that only
+    /// mean something for one map rather than hiding them, so the menu's shape does not move under the cursor.</summary>
+    public void BuildCardMenu(MapCardViewModel card)
+    {
+        if (_snapshot is not { } snapshot)
+        {
+            card.MenuItems = [];
+            return;
+        }
+
+        var target = TargetFor(card);
+        var single = target.Count == 1;
+        var one = target[0];
+        var setNote = single ? null : "Not for more than one map at a time.";
+
+        var packs = new List<TileMenuCommand>();
+        foreach (var pack in snapshot.Packs)
+        {
+            var has = PackApplier.ApplyToMapsPaths(pack, target).Count > 0;
+            var why = single
+                ? $"Nothing for {one.DisplayName} in this pack"
+                : "Nothing for these maps in this pack";
+            packs.Add(new TileMenuCommand(
+                pack.Name,
+                new AsyncRelayCommand(() => ApplyPackToAsync(target, pack, clearTicks: false)),
+                IsEnabled: has,
+                ToolTip: has ? null : why));
+        }
+
+        // Spec 9.2, owner answer q3: eight My Backgrounds pictures inline, then the chooser, then Add.
+        var pictures = new List<TileMenuCommand>();
+        foreach (var picture in CustomPictures().Take(8))
+        {
+            var item = new PictureMenuItem(picture.DisplayName, picture);
+            pictures.Add(new TileMenuCommand(
+                picture.DisplayName,
+                new AsyncRelayCommand(() => ApplyPictureToAsync(target, item, clearTicks: false))));
+        }
+
+        pictures.Add(new TileMenuCommand(
+            "More pictures...",
+            new AsyncRelayCommand(() => ChoosePictureForAsync(one)),
+            IsEnabled: single,
+            ToolTip: setNote));
+
+        // Owner ruling 8: the Add window is given the one map it would land on, and the ticked set only when the
+        // target is the set, so the window's own target line says what the menu's header said.
+        pictures.Add(new TileMenuCommand(
+            "Add Custom Image...",
+            new AsyncRelayCommand(() => Shell.OpenAddPicturesAsync(
+                single
+                    ? new AddPicturesTarget(AddPicturesTargetKind.Map, one, null)
+                    : new AddPicturesTarget(AddPicturesTargetKind.Ticked, null, target)))));
+
+        var slot = one.BackgroundSlots.FirstOrDefault();
+        card.MenuItems =
+        [
+            TileMenuCommand.Header(single ? one.DisplayName : $"{target.Count} selected maps"),
+            TileMenuCommand.Flyout("Apply pack", packs),
+            TileMenuCommand.Flyout("Apply picture", pictures),
+            TileMenuCommand.Separator(),
+            new TileMenuCommand(
+                "Edit background",
+                new AsyncRelayCommand(() => EditBackgroundAsync(one, slot)),
+                IsEnabled: single && slot is not null,
+                ToolTip: single ? null : setNote),
+            new TileMenuCommand(
+                "Edit platforms",
+                new AsyncRelayCommand(() => Shell.OpenPlatformEditorAsync(one, null)),
+                IsEnabled: single,
+                ToolTip: setNote),
+            TileMenuCommand.Separator(),
+            new TileMenuCommand(
+                "Reset to default",
+                new AsyncRelayCommand(() => ResetAsync(target, clearTicks: false)),
+                IsEnabled: CanReset,
+                ToolTip: CanReset ? null : "There is no Default pack to reset to."),
+            new TileMenuCommand("Show in game folder", new RelayCommand(() => ShowMapFolder(one))),
+        ];
+    }
+
+    /// <summary>Spec 4.3 line 2's last inline row: the chooser in picture mode, then the shell's apply.</summary>
+    private async Task ChoosePictureForAsync(MapEntry map)
+    {
+        if (await Shell.ChoosePictureAsync(map) is { } path)
+        {
+            await Shell.ApplyPictureAsync(
+                path, [map], clearTicks: false, Path.GetFileNameWithoutExtension(path));
+        }
+    }
+
+    /// <summary>Spec 4.3 line 4: the background editor on the game's own copy of the map's first slot, which is
+    /// the only picture a card on its own names (owner ruling 5).</summary>
+    private Task EditBackgroundAsync(MapEntry map, string? slot) =>
+        slot is null
+            ? Task.CompletedTask
+            : Shell.OpenBackgroundEditorAsync(
+                new BackgroundEditorRequest(
+                    Path.Combine(Shell.Services.GamePath, AssetPath.Background(slot)), null, slot));
+
+    private void ShowMapFolder(MapEntry map)
+    {
+        if (ExplorerLauncher.Open(Path.Combine(Shell.Services.GamePath, map.FolderName)) is { } error)
+        {
+            Shell.Dialogs.Error("Could not open the folder", error);
+        }
+    }
 }
