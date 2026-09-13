@@ -230,12 +230,35 @@ public partial class MapsViewModel : PageViewModel
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
+        // Spec 7: every map goes back to default, so every remembered edit for every map goes too.
+        var matched = new Dictionary<string, IReadOnlyList<Pack>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var map in snapshot.Catalog.Maps)
+        {
+            snapshot.MapStatuses.TryGetValue(map.FolderName, out var status);
+            matched[map.FolderName] = RecordReset.MatchedPacks(map, status, snapshot.Packs);
+        }
+
+        var allMatched = matched.Values
+            .SelectMany(packs => packs)
+            .DistinctBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
         ResetOutcome? outcome = null;
         await Shell.RunGameWriteAsync(
             "Resetting all",
             undoPaths,
-            (progress, ct) => Task.Run(() => { outcome = MapReset.ResetAll(gamePath, defaultPack, progress, ct); }, ct),
-            "Reset every map to default");
+            (progress, ct) => Task.Run(
+                () =>
+                {
+                    outcome = MapReset.ResetAll(gamePath, defaultPack, progress, ct);
+                    foreach (var map in snapshot.Catalog.Maps)
+                    {
+                        RecordReset.Clear(map, matched[map.FolderName]);
+                    }
+                },
+                ct),
+            "Reset every map to default",
+            libraryUndoPaths: RecordReset.UndoPaths(allMatched, Shell.Services.LibraryPath));
 
         if (outcome is not null)
         {
