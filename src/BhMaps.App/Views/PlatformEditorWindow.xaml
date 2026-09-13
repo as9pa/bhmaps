@@ -73,6 +73,41 @@
           </Border>
         </Viewbox>
 
+        <!-- Spec 3.1: top left inside the card, on the image's own 16 px margin. A ListBox rather than two
+             ToggleButtons, so the list owns which chip is on; ChipRow draws each item with ChipToggle and carries
+             the focus ring. A map with no platform art has no preview, so the chips go with it. -->
+        <ListBox Margin="16,16,0,0"
+                 HorizontalAlignment="Left"
+                 VerticalAlignment="Top"
+                 Background="Transparent"
+                 BorderThickness="0"
+                 ItemContainerStyle="{StaticResource ChipRow}"
+                 Visibility="{Binding Preview, Converter={StaticResource NullToVis}}">
+          <ListBox.ItemsPanel>
+            <ItemsPanelTemplate>
+              <StackPanel Orientation="Horizontal" />
+            </ItemsPanelTemplate>
+          </ListBox.ItemsPanel>
+          <ListBoxItem AutomationProperties.Name="All pieces"
+                       Content="All pieces"
+                       IsSelected="{Binding ShowAllPieces, Mode=TwoWay}" />
+          <ListBoxItem AutomationProperties.Name="Ticked only"
+                       Content="Ticked only"
+                       IsSelected="{Binding IsolatePreview, Mode=TwoWay}" />
+        </ListBox>
+
+        <!-- Spec 3.2: Ticked only with nothing ticked. The view model returns null when there is nothing to say,
+             so the NullToVis the empty text already uses hides the line. -->
+        <Border Margin="16"
+                Padding="12,6"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Bottom"
+                Background="{StaticResource Surface2Brush}"
+                CornerRadius="{StaticResource Radius}"
+                Visibility="{Binding IsolateHint, Converter={StaticResource NullToVis}}">
+          <TextBlock Foreground="{StaticResource Text2Brush}" Text="{Binding IsolateHint}" />
+        </Border>
+
         <!-- Spec 14: a map with no platform art of its own has nothing to compose and nothing to save. -->
         <TextBlock MaxWidth="420"
                    HorizontalAlignment="Center"
@@ -138,30 +173,72 @@
                             IsChecked="{Binding IsTicked}"
                             Style="{StaticResource CardTick}" />
 
+                  <!-- Spec 3.3: the thumbnail and the name are one click target. Background Transparent, not
+                       unset: a Border with no Background is not hit testable. The Ctrl gesture is listed first so
+                       it is matched before the plain click. -->
                   <Border Grid.Column="1"
-                          Width="48"
-                          Height="27"
-                          VerticalAlignment="Center"
-                          Style="{StaticResource PictureTile}">
-                    <Border CornerRadius="{StaticResource Radius}" RenderOptions.BitmapScalingMode="HighQuality">
-                      <Border.Background>
-                        <ImageBrush ImageSource="{Binding Thumbnail}" Stretch="UniformToFill" />
-                      </Border.Background>
-                    </Border>
+                          Grid.ColumnSpan="3"
+                          Padding="4,3"
+                          AutomationProperties.Name="{Binding FileName}"
+                          CornerRadius="{StaticResource Radius}"
+                          Focusable="True"
+                          FocusVisualStyle="{StaticResource DialogFocusRing}"
+                          ToolTip="{Binding RelativePath}">
+                    <Border.Style>
+                      <Style TargetType="Border">
+                        <Setter Property="Background" Value="Transparent" />
+                        <Style.Triggers>
+                          <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="Background" Value="{StaticResource Surface2Brush}" />
+                          </Trigger>
+                        </Style.Triggers>
+                      </Style>
+                    </Border.Style>
+                    <Border.InputBindings>
+                      <MouseBinding Command="{Binding DataContext.AddTickCommand, RelativeSource={RelativeSource AncestorType={x:Type ItemsControl}}}"
+                                    CommandParameter="{Binding}"
+                                    Gesture="Ctrl+LeftClick" />
+                      <MouseBinding Command="{Binding DataContext.SoloCommand, RelativeSource={RelativeSource AncestorType={x:Type ItemsControl}}}"
+                                    CommandParameter="{Binding}"
+                                    MouseAction="LeftClick" />
+                      <KeyBinding Key="Enter"
+                                  Command="{Binding DataContext.SoloCommand, RelativeSource={RelativeSource AncestorType={x:Type ItemsControl}}}"
+                                  CommandParameter="{Binding}" />
+                      <KeyBinding Key="Space"
+                                  Command="{Binding DataContext.SoloCommand, RelativeSource={RelativeSource AncestorType={x:Type ItemsControl}}}"
+                                  CommandParameter="{Binding}" />
+                    </Border.InputBindings>
+                    <Grid>
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                      </Grid.ColumnDefinitions>
+
+                      <Border Width="48"
+                              Height="27"
+                              VerticalAlignment="Center"
+                              Style="{StaticResource PictureTile}">
+                        <Border CornerRadius="{StaticResource Radius}" RenderOptions.BitmapScalingMode="HighQuality">
+                          <Border.Background>
+                            <ImageBrush ImageSource="{Binding Thumbnail}" Stretch="UniformToFill" />
+                          </Border.Background>
+                        </Border>
+                      </Border>
+
+                      <TextBlock Grid.Column="1"
+                                 Margin="8,0,0,0"
+                                 VerticalAlignment="Center"
+                                 Style="{StaticResource MonoText}"
+                                 Text="{Binding FileName}"
+                                 TextTrimming="CharacterEllipsis" />
+
+                      <TextBlock Grid.Column="2"
+                                 Margin="10,0,0,0"
+                                 Style="{StaticResource Readout}"
+                                 Text="{Binding Readout}" />
+                    </Grid>
                   </Border>
-
-                  <TextBlock Grid.Column="2"
-                             Margin="8,0,0,0"
-                             VerticalAlignment="Center"
-                             Style="{StaticResource MonoText}"
-                             Text="{Binding FileName}"
-                             TextTrimming="CharacterEllipsis"
-                             ToolTip="{Binding RelativePath}" />
-
-                  <TextBlock Grid.Column="3"
-                             Margin="10,0,0,0"
-                             Style="{StaticResource Readout}"
-                             Text="{Binding Readout}" />
                 </Grid>
               </DataTemplate>
             </ItemsControl.ItemTemplate>
