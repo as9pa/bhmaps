@@ -24,6 +24,14 @@ public class MapCatalogTests
 
     private static LevelType Type(string name, string displayName) => new(name, displayName, false, false);
 
+    /// <summary>A catalog holding exactly these maps, built through <see cref="MapCatalog.Build"/> from each
+    /// entry's base level so the entries come back the way the real catalog would make them.</summary>
+    internal static MapCatalog CatalogOf(params MapEntry[] maps) =>
+        MapCatalog.Build(Model(
+            maps.Select(m => m.BaseLevel),
+            maps.Select(m => Type(m.BaseLevel.LevelName, m.DisplayName)),
+            []));
+
     [Fact]
     public void Build_MakesOneMapPerFolderThatALevelPointsAt()
     {
