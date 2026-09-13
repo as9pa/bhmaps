@@ -12,7 +12,15 @@ public sealed record AppSettings(
     IReadOnlyDictionary<string, DateTimeOffset>? PackLastApplied = null,
     bool BackgroundsShowPictures = false,
     bool PlatformPreviewIsolate = false,
-    bool WriteGameThumbnails = false)
+    bool WriteGameThumbnails = false,
+    bool CheckForUpdates = true,
+
+    /// <summary>Spec 7.2: when the last start-up check ran, so the next one waits 24 h. Null means never.</summary>
+    DateTimeOffset? LastUpdateCheck = null,
+
+    /// <summary>Spec 7.3: the tag of a release the user waved away on the top bar. A later release has a
+    /// different tag, so the line comes back on its own.</summary>
+    string? DismissedUpdate = null)
 {
     public const string DefaultGamePath = @"C:\Program Files (x86)\Steam\steamapps\common\Brawlhalla\mapArt";
 

@@ -20,6 +20,7 @@ public static class SettingsStore
         "gamePath", "libraryPath", "firstRunDone", "mapsZoom", "backgroundsRowZoom", "packZoom", "platformsZoom",
         "welcomeDone", "homeZoom", "whileRunning", "backgroundsZoom", "packLastApplied",
         "backgroundsShowPictures", "platformPreviewIsolate", "writeGameThumbnails",
+        "checkForUpdates", "lastUpdateCheck", "dismissedUpdate",
     ];
 
     public static string DefaultAppDataDir =>
@@ -93,7 +94,10 @@ public static class SettingsStore
             Stamps(obj),
             Bool(obj, "backgroundsShowPictures"),
             Bool(obj, "platformPreviewIsolate"),
-            Bool(obj, "writeGameThumbnails"))
+            Bool(obj, "writeGameThumbnails"),
+            Bool(obj, "checkForUpdates", fallback: true),
+            Time(obj, "lastUpdateCheck"),
+            Str(obj, "dismissedUpdate") is { Length: > 0 } tag ? tag : null)
         {
             Unknown = unknown.Count == 0 ? null : unknown,
         };
@@ -115,6 +119,9 @@ public static class SettingsStore
             ["backgroundsShowPictures"] = settings.BackgroundsShowPictures,
             ["platformPreviewIsolate"] = settings.PlatformPreviewIsolate,
             ["writeGameThumbnails"] = settings.WriteGameThumbnails,
+            ["checkForUpdates"] = settings.CheckForUpdates,
+            ["lastUpdateCheck"] = settings.LastUpdateCheck?.ToString("o", CultureInfo.InvariantCulture),
+            ["dismissedUpdate"] = settings.DismissedUpdate,
         };
 
         // Spec 8: a library nobody has applied from writes no key at all, rather than an empty object nobody reads.
@@ -219,6 +226,19 @@ public static class SettingsStore
     /// <summary>False when the key is absent or holds anything other than a JSON boolean.</summary>
     private static bool Bool(JsonObject obj, string key) =>
         obj[key] is JsonValue value && value.TryGetValue<bool>(out var b) && b;
+
+    /// <summary><paramref name="fallback"/> when the key is absent or holds anything other than a JSON boolean,
+    /// so a setting that is on unless it was deliberately turned off stays on through a hand-edited file.</summary>
+    private static bool Bool(JsonObject obj, string key, bool fallback) =>
+        obj[key] is JsonValue value && value.TryGetValue<bool>(out var b) ? b : fallback;
+
+    /// <summary>A round-trip timestamp, or null when the key is absent, null, or not a date this version reads.</summary>
+    private static DateTimeOffset? Time(JsonObject obj, string key) =>
+        obj[key]?.GetValueKind() == JsonValueKind.String
+        && DateTimeOffset.TryParse(
+            obj[key]!.GetValue<string>(), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var stamp)
+            ? stamp
+            : null;
 
     /// <summary><paramref name="fallback"/> when the key is absent or holds anything other than a JSON integer.</summary>
     private static int Int(JsonObject obj, string key, int fallback) =>

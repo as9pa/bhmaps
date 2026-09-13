@@ -93,4 +93,31 @@ public class ReleaseCheckerTests
         // Assembly versions carry a fourth part; 2.6.0.0 is not older than 2.6.0.
         Assert.False(ReleaseChecker.IsNewer(release!, new Version(2, 6, 0, 0)));
     }
+
+    [Fact]
+    public void CheckedWhen_ReadsTodayYesterdayAndADate()
+    {
+        // The wording is a wall clock the user recognises, so the stamps are built as local times: a fixed UTC
+        // instant would read back as a different hour, and sometimes a different day, on a machine off UTC.
+        var now = new DateTimeOffset(new DateTime(2026, 9, 14, 18, 0, 0, DateTimeKind.Local));
+        var earlier = new DateTimeOffset(new DateTime(2026, 9, 14, 15, 40, 0, DateTimeKind.Local));
+        var yesterday = new DateTimeOffset(new DateTime(2026, 9, 13, 15, 40, 0, DateTimeKind.Local));
+        var lastWeek = new DateTimeOffset(new DateTime(2026, 9, 8, 9, 0, 0, DateTimeKind.Local));
+
+        Assert.Equal("never", UpdateText.CheckedWhen(null, now));
+        Assert.Equal("today, 15:40", UpdateText.CheckedWhen(earlier, now));
+        Assert.Equal("yesterday, 15:40", UpdateText.CheckedWhen(yesterday, now));
+        Assert.Equal("8 Sep 2026", UpdateText.CheckedWhen(lastWeek, now));
+    }
+
+    [Fact]
+    public void ReleaseDateAndShortAndMegabytes_MatchTheSpecsCopy()
+    {
+        Assert.Equal(
+            "14 Sep 2026",
+            UpdateText.ReleaseDate(new DateTimeOffset(new DateTime(2026, 9, 14, 10, 30, 0, DateTimeKind.Local))));
+        Assert.Equal("2.6.0", UpdateText.Short(new Version(2, 6, 0, 0)));
+        Assert.Equal("41 of 135 MB", UpdateText.Megabytes(43_000_000, 141_557_760));
+        Assert.Equal("0 of 135 MB", UpdateText.Megabytes(0, 141_557_760));
+    }
 }

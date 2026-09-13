@@ -375,4 +375,71 @@ public class SettingsStoreTests
         Assert.True(SettingsStore.Load(path).WriteGameThumbnails);
         Assert.Contains("\"writeGameThumbnails\": true", File.ReadAllText(path));
     }
+
+    [Fact]
+    public void Load_DefaultsTheUpdateKeysToOnAndNeverChecked()
+    {
+        using var tmp = new TempDir();
+        var path = Path.Combine(tmp.Path, "settings.json");
+        File.WriteAllText(path, "{ \"gamePath\": \"D:\\\\g\", \"libraryPath\": \"D:\\\\l\" }");
+
+        var settings = SettingsStore.Load(path);
+
+        Assert.True(settings.CheckForUpdates);
+        Assert.Null(settings.LastUpdateCheck);
+        Assert.Null(settings.DismissedUpdate);
+    }
+
+    [Fact]
+    public void SaveThenLoad_RoundTripsTheUpdateKeys()
+    {
+        using var tmp = new TempDir();
+        var path = Path.Combine(tmp.Path, "settings.json");
+        var checkedAt = new DateTimeOffset(2026, 9, 14, 15, 40, 0, TimeSpan.Zero);
+        var settings = new AppSettings(@"D:\g", @"D:\l", true)
+        {
+            CheckForUpdates = false,
+            LastUpdateCheck = checkedAt,
+            DismissedUpdate = "v2.6.0",
+        };
+
+        SettingsStore.Save(path, settings);
+        var read = SettingsStore.Load(path);
+
+        Assert.False(read.CheckForUpdates);
+        Assert.Equal(checkedAt, read.LastUpdateCheck);
+        Assert.Equal("v2.6.0", read.DismissedUpdate);
+        var json = File.ReadAllText(path);
+        Assert.Contains("\"checkForUpdates\": false", json);
+        Assert.Contains("\"lastUpdateCheck\"", json);
+        Assert.Contains("\"dismissedUpdate\": \"v2.6.0\"", json);
+    }
+
+    [Fact]
+    public void Save_WritesNullForANeverCheckedFileRatherThanDroppingTheKey()
+    {
+        using var tmp = new TempDir();
+        var path = Path.Combine(tmp.Path, "settings.json");
+
+        SettingsStore.Save(path, new AppSettings(@"D:\g", @"D:\l", true));
+
+        var json = File.ReadAllText(path);
+        Assert.Contains("\"lastUpdateCheck\": null", json);
+        Assert.Contains("\"dismissedUpdate\": null", json);
+        Assert.Contains("\"checkForUpdates\": true", json);
+    }
+
+    [Fact]
+    public void Load_IgnoresAHandEditedUpdateStampRatherThanFailingTheFile()
+    {
+        using var tmp = new TempDir();
+        var path = Path.Combine(tmp.Path, "settings.json");
+        File.WriteAllText(path, "{ \"lastUpdateCheck\": \"soon\", \"checkForUpdates\": \"yes\" }");
+
+        var settings = SettingsStore.Load(path);
+
+        Assert.Null(settings.LastUpdateCheck);
+        Assert.True(settings.CheckForUpdates);
+        Assert.Null(settings.Unknown);
+    }
 }
