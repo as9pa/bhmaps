@@ -884,6 +884,10 @@ public partial class MainViewModel : ObservableObject
         Services.LevelData.Changed -= OnLevelDataChanged;
     }
 
+    /// <summary>Spec 10.2: the Settings switch tells the shell it moved, so turning it off puts the game's own
+    /// thumbnails back. Does nothing yet; the next step of the thumbnails work fills it in.</summary>
+    public Task ThumbnailSwitchChangedAsync(bool on) => Task.CompletedTask;
+
     /// <summary>Copies the game folder into the Default pack (spec 6.1), asking before replacing one that already
     /// exists. Shared by the Packs and Settings pages so the confirm text and the busy boundary are the same
     /// from both. A library-only write: no undo snapshot and no game-running policy.</summary>
