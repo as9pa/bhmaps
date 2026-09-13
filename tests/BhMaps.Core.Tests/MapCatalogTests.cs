@@ -236,23 +236,73 @@ public class MapCatalogTests
         var catalog = MapCatalog.Build(data);
 
         Assert.Null(catalog.ByFolder("X")!.ThumbnailFile);
+        Assert.Empty(catalog.ByFolder("X")!.ThumbnailFiles);
         Assert.Null(catalog.ByFolder("Y")!.ThumbnailFile);
     }
 
     [Fact]
-    public void Build_DropsAThumbnailFileWhenAMapsLevelsDisagree()
+    public void Build_OwnsBothFilesWhenAFoldersTwoLevelsNameDifferentOnes()
     {
         var data = Model(
-            [Level("Grove", "Grove"), Level("SmallGrove", "Grove")],
+            [Level("Fortress", "Fortress"), Level("SmallFortress", "Fortress")],
             [
-                new LevelType("Grove", "Twilight Grove", false, false, "A.jpg"),
-                new LevelType("SmallGrove", "Small Grove", false, false, "B.jpg"),
+                new LevelType("Fortress", "Mammoth Fortress", false, false, "Mammoth.jpg"),
+                new LevelType("SmallFortress", "Small Mammoth Fortress", false, false, "MammothSmall.jpg"),
+            ],
+            []);
+
+        var fortress = MapCatalog.Build(data).ByFolder("Fortress")!;
+
+        Assert.Equal(["Mammoth.jpg", "MammothSmall.jpg"], fortress.ThumbnailFiles);
+        Assert.Equal("Mammoth.jpg", fortress.ThumbnailFile);
+    }
+
+    [Fact]
+    public void Build_OwnsAllThreeFilesOfAThreeLevelFolderInLevelOrder()
+    {
+        var data = Model(
+            [Level("BigGreatHall", "GreatHall"), Level("GreatHall", "GreatHall"), Level("SmallGreatHall", "GreatHall")],
+            [
+                new LevelType("BigGreatHall", "Big Great Hall", false, false, "biggreathall.jpg"),
+                new LevelType("GreatHall", "Great Hall", false, false, "greathall.jpg"),
+                new LevelType("SmallGreatHall", "Small Great Hall", false, false, "smallgreathall.jpg"),
+            ],
+            []);
+
+        var hall = MapCatalog.Build(data).ByFolder("GreatHall")!;
+
+        Assert.Equal(["biggreathall.jpg", "greathall.jpg", "smallgreathall.jpg"], hall.ThumbnailFiles);
+    }
+
+    [Fact]
+    public void Build_LeavesOutOnlyTheFileAnotherFolderAlsoNames()
+    {
+        var data = Model(
+            [Level("X", "X"), Level("SmallX", "X"), Level("Y", "Y")],
+            [
+                new LevelType("X", "X", false, false, "Own.jpg"),
+                new LevelType("SmallX", "Small X", false, false, "Shared.jpg"),
+                new LevelType("Y", "Y", false, false, "Shared.jpg"),
             ],
             []);
 
         var catalog = MapCatalog.Build(data);
 
-        Assert.Null(catalog.ByFolder("Grove")!.ThumbnailFile);
+        Assert.Equal(["Own.jpg"], catalog.ByFolder("X")!.ThumbnailFiles);
+        Assert.Equal(["Own.jpg", "Shared.jpg"], catalog.ByFolder("X")!.Candidates);
+        Assert.Empty(catalog.ByFolder("Y")!.ThumbnailFiles);
+        Assert.Null(catalog.ByFolder("Y")!.ThumbnailFile);
+    }
+
+    [Fact]
+    public void Build_OwnsNothingWhenAMapsLevelsNameNoFile()
+    {
+        var data = Model([Level("Grove", "Grove")], [Type("Grove", "Twilight Grove")], []);
+
+        var grove = MapCatalog.Build(data).ByFolder("Grove")!;
+
+        Assert.Empty(grove.ThumbnailFiles);
+        Assert.Empty(grove.Candidates);
     }
 
     [Fact]

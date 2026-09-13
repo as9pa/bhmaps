@@ -10,7 +10,7 @@ public class ThumbnailWriterTests
 {
     private static MapEntry Map(string folder, string? owned, params string[] candidates) =>
         new(folder, folder, new LevelDesc(folder, folder, new CameraBounds(0, 0, 100, 100), [], []),
-            [], [], [], [], owned, candidates);
+            [], [], [], [], owned is null ? Array.Empty<string>() : [owned], candidates);
 
     private static string Thumbnail(TempDir tmp, string gameRoot, string fileName, string contents)
     {
