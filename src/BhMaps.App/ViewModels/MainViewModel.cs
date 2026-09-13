@@ -645,23 +645,23 @@ public partial class MainViewModel : ObservableObject
     /// The "Apply to game now" it offers is a game write, so the set it left is applied here, with the boundary,
     /// the snapshot and the undo every other write gets. The rescan comes first either way, because the pack the
     /// apply needs is one the last scan may never have seen. <paramref name="onlyFile" /> is the one file the
-    /// editor opens ticked, for the panel row that asked for it (ruling 7).</summary>
-    public async Task OpenPlatformEditorAsync(MapEntry map, Pack? pack, string? onlyFile = null)
+    /// editor opens ticked, for the panel row that asked for it (ruling 7). Spec 9: the editor opens on a set of
+    /// maps, which is one map for every way in but the ticked selection, and one Save writes all of them.</summary>
+    public async Task OpenPlatformEditorAsync(IReadOnlyList<MapEntry> maps, Pack? pack, string? onlyFile = null)
     {
-        if (Snapshot is not { } snapshot)
+        if (Snapshot is not { } snapshot || maps.Count == 0)
         {
             return;
         }
 
-        // Spec 5.1: opened without a pack, the editor still takes its values from the pack the map's files came
-        // from, when that pack remembers this map.
-        var status = snapshot.MapStatuses.GetValueOrDefault(map.FolderName);
-        var source = pack ?? SourcePackFinder.ForPlatforms(map, status, snapshot.Packs);
+        // Spec 5.1: opened without a pack, the editor still takes its values from the pack each map's files came
+        // from, when that pack remembers that map, which is why it is given the statuses and the packs.
         var vm = new PlatformEditorViewModel(
             Services,
             Dialogs,
-            snapshot.Packs.Select(p => p.Name).ToList(),
-            new PlatformEditorRequest(map, pack, onlyFile, source));
+            snapshot.Packs,
+            snapshot.MapStatuses,
+            new PlatformEditorRequest(maps, pack, onlyFile));
         var window = new PlatformEditorWindow { DataContext = vm, Owner = Application.Current.MainWindow, ShowActivated = !App.Quiet };
         bool accepted;
         try
@@ -701,7 +701,7 @@ public partial class MainViewModel : ObservableObject
         if (Snapshot?.Packs.FirstOrDefault(p => p.Name.Equals(saved.PackName, StringComparison.OrdinalIgnoreCase))
             is { } target)
         {
-            await ApplySetAsync(target, [map], clearTicks: false);
+            await ApplySetAsync(target, saved.Maps, clearTicks: false);
         }
     }
 
