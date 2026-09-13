@@ -273,22 +273,7 @@ public partial class PacksViewModel : PageViewModel
     /// do nothing; a taken or unusable name is reported and nothing is created. The new pack has never been
     /// applied, so PackOrder lands it with the rest by name.</summary>
     [RelayCommand]
-    private async Task NewPackAsync()
-    {
-        var name = Shell.Dialogs.PromptText("New pack", "Name", "");
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            return;
-        }
-
-        if (!PackCreator.TryCreate(Shell.Services.LibraryPath, name.Trim(), out var error))
-        {
-            Shell.Dialogs.Error("Could not make the pack", error);
-            return;
-        }
-
-        await Shell.RescanAsync();
-    }
+    private Task NewPackAsync() => Shell.NewPackAsync();
 
     /// <summary>Spec 6.5: deletes the pack from the library after a confirm that names it. Inside RunBusyAsync so
     /// the sibling commands are disabled while a folder is going away underneath them (commit 375497e).</summary>

@@ -661,6 +661,67 @@ public partial class MainViewModel : ObservableObject
         return Task.FromResult(ShowChooser(vm) ? vm.Selected?.Path : null);
     }
 
+    /// <summary>Spec 2.6 4.3: pick one pack, in the map chooser's window. The pack the tile is already in is
+    /// left out, and the last line makes a new one and returns it. Null when the window was cancelled.</summary>
+    public async Task<Pack?> ChoosePackAsync(string title, Pack exclude)
+    {
+        if (Snapshot is not { } snapshot)
+        {
+            return null;
+        }
+
+        var rows = new List<ChooserRow>();
+        foreach (var pack in snapshot.Packs.Where(
+                     p => !p.Name.Equals(exclude.Name, StringComparison.OrdinalIgnoreCase)))
+        {
+            var maps = snapshot.Catalog.Maps.Count(m => pack.FindFolder(m.FolderName) is { Files.Count: > 0 });
+            var backgrounds = pack.FindFolder(PackCopier.BackgroundsFolder)?.Files.Count ?? 0;
+            var lead = (pack.FindFolder(PackCopier.BackgroundsFolder)?.Files ?? Array.Empty<GameFile>())
+                .FirstOrDefault(f => Path.GetExtension(f.Name)
+                    .Equals(PackCopier.BackgroundExtension, StringComparison.OrdinalIgnoreCase));
+            rows.Add(new ChooserRow(
+                pack.Name,
+                $"{Count(maps, "map")}, {Count(backgrounds, "background")}",
+                lead?.FullPath ?? "",
+                null));
+        }
+
+        rows.Add(new ChooserRow("New pack...", "", "", null, isNewPack: true));
+
+        var vm = new ChooserViewModel(title, "One pack. Nothing is written to the game.", "pack", rows)
+        {
+            PrimaryPrefix = "Choose",
+        };
+        if (!ShowChooser(vm) || vm.Selected is not { } chosen)
+        {
+            return null;
+        }
+
+        return chosen.IsNewPack
+            ? await NewPackAsync()
+            : snapshot.Packs.FirstOrDefault(p => p.Name.Equals(chosen.Name, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>Spec 13's new-pack flow, as the Packs page runs it, returning the pack it made so a chooser can
+    /// hand it straight back to the operation that asked for one. Null when the name was empty or refused.</summary>
+    public async Task<Pack?> NewPackAsync()
+    {
+        var name = Dialogs.PromptText("New pack", "Name", "");
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return null;
+        }
+
+        if (!PackCreator.TryCreate(Services.LibraryPath, name.Trim(), out var error))
+        {
+            Dialogs.Error("Could not make the pack", error);
+            return null;
+        }
+
+        await RescanAsync();
+        return FindPack(name.Trim());
+    }
+
     /// <summary>The chooser's window, opened the way every other owned window here is. The thumbnails load while it
     /// is up and are cancelled when it closes.</summary>
     private bool ShowChooser(ChooserViewModel vm)

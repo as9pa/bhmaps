@@ -177,6 +177,14 @@ public partial class PackDetailViewModel : PageViewModel
             AddPictureLines(items, tile, pack, path);
         }
 
+        items.Add(new TileMenuCommand(
+            "Copy to pack...", new AsyncRelayCommand(() => CopyTileAsync(tile, cut: false)), Gesture: "Ctrl+C"));
+        if (!isDefault)
+        {
+            items.Add(new TileMenuCommand(
+                "Move to pack...", new AsyncRelayCommand(() => CopyTileAsync(tile, cut: true)), Gesture: "Ctrl+X"));
+        }
+
         if (tile.PicturePath is not null || tile.FolderPath is not null)
         {
             items.Add(new TileMenuCommand(
@@ -225,6 +233,106 @@ public partial class PackDetailViewModel : PageViewModel
             "Edit",
             new AsyncRelayCommand(
                 () => Shell.OpenBackgroundEditorAsync(new BackgroundEditorRequest(path, pack.Name, slot)))));
+    }
+
+    /// <summary>Spec 2.6 4.3: pick the target, then copy or move the tile into it. A copy that clashes offers
+    /// Replace once; a move is always inside an undo session, a copy only when it replaces something.</summary>
+    private async Task CopyTileAsync(PackTileViewModel tile, bool cut)
+    {
+        if (Pack is not { } pack)
+        {
+            return;
+        }
+
+        var name = tile.Map?.DisplayName ?? tile.Caption;
+        var title = cut ? $"Move {name} to" : $"Copy {name} to";
+        if (await Shell.ChoosePackAsync(title, pack) is { } target)
+        {
+            await PasteIntoAsync(pack, tile, cut, target);
+        }
+    }
+
+    /// <summary>The write itself, shared by the menu lines and by Ctrl+V (spec 2.6 4.3). The first attempt never
+    /// replaces; a Skipped result asks once and repeats with replace on, and that second attempt is captured for
+    /// undo because it overwrites what the target held.</summary>
+    public async Task PasteIntoAsync(Pack source, PackTileViewModel tile, bool cut, Pack target)
+    {
+        if (_snapshot is not { } snapshot
+            || source.Name.Equals(target.Name, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var catalog = snapshot.Catalog;
+        var name = tile.Map?.DisplayName ?? tile.Caption;
+        var relative = tile.PicturePath is { } picture && tile.Map is null
+            ? Path.Combine(PackCopier.BackgroundsFolder, Path.GetFileName(picture))
+            : null;
+        var files = tile.Map is { } map ? PackCopier.MapFiles(source, map, catalog) : [relative!];
+        IReadOnlyList<string> undoPaths =
+            [.. PackCopier.Touched(source, files), .. PackCopier.Touched(target, files)];
+
+        var result = await RunPasteAsync(source, target, tile, catalog, cut, replace: false, name, undoPaths);
+        if (result is { Skipped: true }
+            && Shell.Dialogs.Confirm("Replace", $"{target.Name} already has {name}. Replace it?"))
+        {
+            result = await RunPasteAsync(source, target, tile, catalog, cut, replace: true, name, undoPaths);
+        }
+
+        if (result is not null)
+        {
+            Shell.Dialogs.ShowFailures("Some files could not be copied", result.Failures);
+        }
+    }
+
+    /// <summary>One attempt. A plain copy that replaces nothing writes outside an undo session and offers the
+    /// target instead of Undo (spec 4.2); everything else goes through the library write boundary.</summary>
+    private async Task<PackCopyResult?> RunPasteAsync(
+        Pack source,
+        Pack target,
+        PackTileViewModel tile,
+        MapCatalog catalog,
+        bool cut,
+        bool replace,
+        string name,
+        IReadOnlyList<string> undoPaths)
+    {
+        PackCopyResult? result = null;
+        var verb = cut ? "Moving" : "Copying";
+        var done = cut ? $"{name} moved to {target.Name}" : $"{name} copied to {target.Name}";
+        var relative = tile.Map is null && tile.PicturePath is { } picture
+            ? Path.Combine(PackCopier.BackgroundsFolder, Path.GetFileName(picture))
+            : null;
+
+        Task Work(IProgress<string> progress, CancellationToken ct) => Task.Run(
+            () =>
+            {
+                progress.Report(name);
+                result = tile.Map is { } map
+                    ? cut
+                        ? PackCopier.MoveMap(source, target, map, catalog, replace)
+                        : PackCopier.CopyMap(source, target, map, catalog, replace)
+                    : cut
+                        ? PackCopier.MoveFile(source, target, relative!, replace)
+                        : PackCopier.CopyFile(source, target, relative!, replace);
+            },
+            ct);
+
+        if (cut || replace)
+        {
+            await Shell.RunLibraryWriteAsync($"{verb} {name}", undoPaths, Work, done);
+            return result;
+        }
+
+        var ok = await Shell.RunBusyAsync($"{verb} {name}", Work);
+        if (ok && result is { Skipped: false })
+        {
+            var open = target;
+            Shell.SetLibraryDone(done, $"Open {target.Name}", new RelayCommand(() => Shell.NavigateToPack(open)));
+        }
+
+        await Shell.RescanAsync();
+        return result;
     }
 
     /// <summary>Spec 2.6 section 3 item 7: the map's files in this pack, deleted together, inside a library undo
