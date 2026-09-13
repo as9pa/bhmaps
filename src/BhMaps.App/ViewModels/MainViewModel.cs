@@ -7,6 +7,7 @@ using BhMaps.Core.Game;
 using BhMaps.Core.Maps;
 using BhMaps.Core.Model;
 using BhMaps.Core.Operations;
+using BhMaps.Core.Packs;
 using BhMaps.Core.Scanning;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -623,8 +624,15 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
+        // Spec 5.1: opened without a pack, the editor still takes its values from the pack the map's files came
+        // from, when that pack remembers this map.
+        var status = snapshot.MapStatuses.GetValueOrDefault(map.FolderName);
+        var source = pack ?? SourcePackFinder.ForPlatforms(map, status, snapshot.Packs);
         var vm = new PlatformEditorViewModel(
-            Services, Dialogs, snapshot.Packs.Select(p => p.Name).ToList(), new PlatformEditorRequest(map, pack, onlyFile));
+            Services,
+            Dialogs,
+            snapshot.Packs.Select(p => p.Name).ToList(),
+            new PlatformEditorRequest(map, pack, onlyFile, source));
         var window = new PlatformEditorWindow { DataContext = vm, Owner = Application.Current.MainWindow, ShowActivated = !App.Quiet };
         bool accepted;
         try

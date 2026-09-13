@@ -35,6 +35,17 @@
       <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
+    <!-- A row's own line under its readout, indented to the file name. Its own Text drives the visibility, so a
+         row with nothing to say keeps the list as tight as it was (spec 5.2). -->
+    <Style x:Key="RowNote" TargetType="TextBlock" BasedOn="{StaticResource HintText}">
+      <Setter Property="Margin" Value="56,2,0,0" />
+      <Style.Triggers>
+        <Trigger Property="Text" Value="">
+          <Setter Property="Visibility" Value="Collapsed" />
+        </Trigger>
+      </Style.Triggers>
+    </Style>
+
     <!-- The Reset in a slider's label: a word, not a button, so the label reads as one line. -->
     <Style x:Key="ResetLink" TargetType="Button" BasedOn="{StaticResource PlainButton}">
       <Setter Property="Padding" Value="6,0" />
@@ -133,6 +144,20 @@
           <TextBlock Style="{StaticResource FieldLabel}" Text="Source" />
           <TextBlock Text="{Binding SourceText}" TextTrimming="CharacterEllipsis" />
 
+          <!-- Spec 5.3: where the values on the sliders came from, with the way back to a clean start beside it. -->
+          <StackPanel Orientation="Horizontal" Visibility="{Binding HasValuesFrom, Converter={StaticResource BoolToVis}}">
+            <TextBlock VerticalAlignment="Center"
+                       Style="{StaticResource HintText}"
+                       Text="{Binding ValuesFromText}" />
+            <Button Margin="6,6,0,0"
+                    VerticalAlignment="Center"
+                    AutomationProperties.Name="Start fresh"
+                    Command="{Binding StartFreshCommand}"
+                    Content="Start fresh"
+                    FocusVisualStyle="{StaticResource DialogFocusRing}"
+                    Style="{StaticResource ResetLink}" />
+          </StackPanel>
+
           <!-- The header counts the ticked rows, so All and None belong on its line rather than under the list. -->
           <Grid>
             <Grid.ColumnDefinitions>
@@ -214,6 +239,10 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                       </Grid.ColumnDefinitions>
+                      <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                      </Grid.RowDefinitions>
 
                       <Border Width="48"
                               Height="27"
@@ -237,6 +266,11 @@
                                  Margin="10,0,0,0"
                                  Style="{StaticResource Readout}"
                                  Text="{Binding Readout}" />
+
+                      <TextBlock Grid.Row="1"
+                                 Grid.ColumnSpan="3"
+                                 Style="{StaticResource RowNote}"
+                                 Text="{Binding Note}" />
                     </Grid>
                   </Border>
                 </Grid>
