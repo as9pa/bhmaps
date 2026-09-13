@@ -3,11 +3,13 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using BhMaps.App.Services;
+using BhMaps.Core.Hashing;
 using BhMaps.Core.Imaging;
 using BhMaps.Core.LevelData;
 using BhMaps.Core.Maps;
 using BhMaps.Core.Model;
 using BhMaps.Core.Operations;
+using BhMaps.Core.Packs;
 using BhMaps.Core.Scanning;
 using BhMaps.Core.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -15,15 +17,43 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace BhMaps.App.ViewModels;
 
-/// <summary>What a set tile's Edit hands the editor: the map whose own pieces are recoloured, the pack the
+/// <summary>What a set tile's Edit hands the editor: the maps whose own pieces are recoloured, the pack the
 /// set came from, or null for the set the game is showing (spec 6), and the relative path of the one piece a
-/// panel row asked for, or null for the whole set. Only that one piece opens ticked (spec 7).</summary>
-public sealed record PlatformEditorRequest(MapEntry Map, Pack? Pack, string? OnlyFile = null);
+/// panel row asked for, or null for the whole set. Only that one piece opens ticked (spec 7). SourcePack is the
+/// pack whose record the values are loaded from: the pack itself when there is one, the pack the map's files were
+/// matched to otherwise, and null when no pack remembers this map (spec 5.1).</summary>
+public sealed record PlatformEditorRequest(
+    IReadOnlyList<MapEntry> Maps, Pack? Pack, string? OnlyFile = null, Pack? SourcePack = null)
+{
+    /// <summary>The first map of the set, which is the whole set for every way in that opens on one map.</summary>
+    public MapEntry Map => Maps[0];
+}
 
 /// <summary>What one Save left in the library: the pack it was saved into, which is the pack the shell stamps
-/// when it applies it, the map folder inside that pack, and whether the user asked for it to go into the game as
-/// well. The shell does that part, so the editor never writes into the game folder.</summary>
-public sealed record PlatformSave(string PackName, string SetFolder, bool ApplyToGame);
+/// when it applies it, the folder of the first map it wrote inside that pack, whether the user asked for it to go
+/// into the game as well, and the maps it actually wrote, which is every map of the set unless Cancel stopped the
+/// run part way (spec 9). The shell does the game part, so the editor never writes into the game folder.</summary>
+public sealed record PlatformSave(
+    string PackName, string SetFolder, bool ApplyToGame, IReadOnlyList<MapEntry> Maps);
+
+/// <summary>Spec 9: one map's own side of the editor. The rows, the background the preview sits over and the
+/// record the values came from belong to the map; the picture, the pan, the values and the target pack belong to
+/// the editor and are shared by every map in the set. The three lines that Start fresh and the record write are
+/// settable, because they are what the strip reads back when it comes to this map again.</summary>
+internal sealed record MapSet(MapEntry Map, PlatformEditRecord? Record, Pack? SourcePack, string? BackgroundPath)
+{
+    /// <summary>One row per piece of this map, in the order the file list draws them (spec 3).</summary>
+    public IReadOnlyList<PlatformPieceViewModel> Rows { get; set; } = [];
+
+    /// <summary>"Values from Default, saved 12 Sep 22:01." for this map, or empty (spec 5.3).</summary>
+    public string ValuesFromText { get; set; } = "";
+
+    public bool HasValuesFrom { get; set; }
+
+    /// <summary>The rows this map's record built, with the entry each one came from: what the record art fits,
+    /// hashes and, for Start fresh, puts back (spec 5.2).</summary>
+    public List<(PlatformPieceViewModel Row, PlatformPieceEntry Entry)> RecordRows { get; } = [];
+}
 
 /// <summary>Spec 6: one map's own platform pieces, faded and recoloured by one number each. Every slider change
 /// writes the processed pieces into a temp set and composes the map from it, so the preview is the same render
@@ -38,6 +68,14 @@ public partial class PlatformEditorViewModel : ObservableObject
     /// <summary>Spec 3.2: Ticked only with nothing ticked ghosts the whole map, so the preview says what to do
     /// about it, in the same words TickHintText uses for the sliders.</summary>
     public const string IsolateHintText = "Tick a file to see it on its own.";
+
+    /// <summary>Spec 5.2: the record's values are meant for the untouched art, and the game folder's file is the
+    /// nearest thing to it when the Default pack has nothing.</summary>
+    public const string NoOriginalNoteText = "The untouched art was not found, so the preview starts from the saved file.";
+
+    /// <summary>Spec 5.2: the file the pack holds is not what the record's values were worked out from, so the
+    /// preview is a fair warning rather than a promise.</summary>
+    public const string ChangedOutsideNoteText = "The file changed since, so the preview may differ from the game.";
 
     /// <summary>The widest a row's thumbnail is ever drawn, so a fitted picture is scaled once rather than per
     /// frame the list draws.</summary>
@@ -62,11 +100,24 @@ public partial class PlatformEditorViewModel : ObservableObject
     private readonly IDialogs _dialogs;
     private readonly PlatformEditorRequest _request;
     private readonly string _tempRoot;
-    private readonly string? _backgroundPath;
     private readonly Throttler _preview = new(PreviewInterval);
     private readonly List<(string Path, string PackName)> _workingCopies = [];
     private readonly Dictionary<string, FileSystemWatcher> _watchers = new(StringComparer.OrdinalIgnoreCase);
     private readonly Debouncer _changed = new(ChangedDelay);
+
+    /// <summary>The cuts the switch and the drag ask for, on the preview's own rate limit (spec 6.2).</summary>
+    private readonly Throttler _recut = new(PreviewInterval);
+
+    /// <summary>The rows whose note this editor's own fitting wrote, so a row already saying something about
+    /// itself keeps that line and only a fit note is written over (spec 5.2).</summary>
+    private readonly HashSet<PlatformPieceViewModel> _fitNoteRows = [];
+
+    /// <summary>Spec 9: every map the editor was opened on, in the order the strip walks them.</summary>
+    private readonly IReadOnlyList<MapSet> _sets;
+
+    /// <summary>The pictures and hashes the record asked for, running off the UI thread. The first preview waits
+    /// on it, so the map is never drawn from half a record.</summary>
+    private readonly Task _recordArt;
 
     private long _sequence;
 
@@ -82,24 +133,31 @@ public partial class PlatformEditorViewModel : ObservableObject
     /// setting back and never schedules a second render (spec 3.5).</summary>
     private bool _restoringMode;
 
+    /// <summary>True while a loaded record is putting its picture, its pan and its switch on, so the three of
+    /// them are one cut at the end rather than one cut each.</summary>
+    private bool _restoringFit;
+
+    /// <summary>The run Save is in the middle of, so Cancel can stop it between maps, or null (spec 9).</summary>
+    private CancellationTokenSource? _saveCts;
+
     public PlatformEditorViewModel(
         AppServices services,
         IDialogs dialogs,
-        IReadOnlyList<string> packNames,
+        IReadOnlyList<Pack> packs,
+        IReadOnlyDictionary<string, MapStatus> statuses,
         PlatformEditorRequest request)
     {
         _services = services;
         _dialogs = dialogs;
         _request = request;
         _tempRoot = Path.Combine(Path.GetTempPath(), "BhMaps", "platform-editor", Guid.NewGuid().ToString("N"));
-        Pieces = BuildPieces(services, request);
-        foreach (var row in Pieces)
+        _sets = request.Maps.Select(map => BuildSet(map, packs, statuses)).ToList();
+        foreach (var row in AllRows())
         {
             row.PropertyChanged += OnRowPropertyChanged;
         }
 
-        _backgroundPath = CurrentBackground(services, request.Map);
-        PackChoices = packNames.Concat([BackgroundEditorViewModel.NewPackChoice]).ToList();
+        PackChoices = packs.Select(p => p.Name).Concat([BackgroundEditorViewModel.NewPackChoice]).ToList();
         Error = "";
         ApplyNow = true;
 
@@ -110,19 +168,35 @@ public partial class PlatformEditorViewModel : ObservableObject
         _restoringMode = false;
 
         // The background editor's rule: the pack the user would mean is there, or it is a new pack already named.
-        var existingDefault = packNames.FirstOrDefault(
+        var existingDefault = PackChoices.FirstOrDefault(
             p => p.Equals(BackgroundEditorViewModel.DefaultPackName, StringComparison.OrdinalIgnoreCase));
         TargetPack = existingDefault ?? BackgroundEditorViewModel.NewPackChoice;
         NewPackName = existingDefault is null ? BackgroundEditorViewModel.DefaultPackName : "";
 
-        Opacity = 100;
-        Hue = 0;
+        // Spec 5.3: the line names the pack the values came from, and Save goes back to that pack when the list
+        // still has it, because that is the set the user is carrying on with. With many maps that is the first
+        // map that remembers one, because one Save writes all of them into the one pack (spec 9).
+        ValuesFromText = Current.ValuesFromText;
+        HasValuesFrom = Current.HasValuesFrom;
+        if (_sets.FirstOrDefault(s => s.HasValuesFrom)?.SourcePack is { } valuesFrom
+            && PackChoices.Any(p => p.Equals(valuesFrom.Name, StringComparison.OrdinalIgnoreCase)))
+        {
+            TargetPack = valuesFrom.Name;
+        }
+
+        // The sliders open on the first ticked row, which is where a loaded record put its values, and on the
+        // defaults when nothing was loaded, exactly as 2.4 opened. Syncing, so this never fans back out.
+        _syncing = true;
+        var firstTicked = TickedRows().FirstOrDefault();
+        Opacity = firstTicked?.Opacity ?? PlatformPieceViewModel.DefaultOpacity;
+        Hue = firstTicked?.Hue ?? PlatformPieceViewModel.DefaultHue;
+        _syncing = false;
 
         // The rows of a pack's set are read from a folder the user can change from outside the app, so it is
         // watched from the moment the editor opens rather than only once a working copy is written (ruling 9).
         if (request.Pack is { } sourcePack)
         {
-            foreach (var row in Pieces.Where(p => IsUnder(p.OriginalPath, sourcePack.FullPath)))
+            foreach (var row in AllRows().Where(p => IsUnder(p.OriginalPath, sourcePack.FullPath)))
             {
                 if (Path.GetDirectoryName(row.OriginalPath) is { Length: > 0 } setFolder)
                 {
@@ -131,6 +205,7 @@ public partial class PlatformEditorViewModel : ObservableObject
             }
         }
 
+        _recordArt = LoadRecordArtAsync();
         SchedulePreview();
     }
 
@@ -140,8 +215,9 @@ public partial class PlatformEditorViewModel : ObservableObject
     /// makes the new pack for real, so the list gains it at that point.</summary>
     public IReadOnlyList<string> PackChoices { get; private set; }
 
-    /// <summary>One row per piece of the set, in the order the file list draws them (spec 3).</summary>
-    public IReadOnlyList<PlatformPieceViewModel> Pieces { get; }
+    /// <summary>One row per piece of the map the strip is on, in the order the file list draws them (spec 3).
+    /// Switching maps raises this, so the whole list is read again from the map that is on now (spec 9).</summary>
+    public IReadOnlyList<PlatformPieceViewModel> Pieces => Current.Rows;
 
     /// <summary>The files the editor is holding open for another program to edit, with the pack each one sits in.
     /// They stay in the library whichever button closes the window, which is what the shell's Cancel line says
@@ -150,6 +226,21 @@ public partial class PlatformEditorViewModel : ObservableObject
 
     /// <summary>What Save wrote into the library, or null while nothing has been saved.</summary>
     public PlatformSave? Saved { get; private set; }
+
+    /// <summary>Spec 9: which map of the set the strip is on. Everything one map owns follows it.</summary>
+    [ObservableProperty]
+    public partial int CurrentIndex { get; set; }
+
+    /// <summary>Spec 9: "Saving 3 of 59 maps into Default" while one Save runs, and empty otherwise.</summary>
+    [ObservableProperty]
+    public partial string SaveProgressText { get; set; } = "";
+
+    /// <summary>Spec 9: true while the save loop is running, which is what shows the progress line and its
+    /// Cancel and holds the window's own two buttons.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanSave), nameof(CanCloseWindow))]
+    [NotifyCanExecuteChangedFor(nameof(SaveCommand), nameof(CancelSaveCommand), nameof(PreviousMapCommand), nameof(NextMapCommand))]
+    public partial bool IsSaving { get; set; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(OpacityText))]
@@ -161,6 +252,20 @@ public partial class PlatformEditorViewModel : ObservableObject
 
     [ObservableProperty]
     public partial ImageSource? Preview { get; set; }
+
+    /// <summary>Spec 6.2: true lays one picture across every platform and cuts each piece out of it, false fits
+    /// the same picture to each piece on its own, as 2.4 did. Changing it cuts the ticked rows again.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanPan))]
+    public partial bool FitAcross { get; set; } = true;
+
+    /// <summary>Where the laid picture sits inside the platform box, 0..1 (spec 6.2). The drag on the preview is
+    /// the only thing that moves it.</summary>
+    [ObservableProperty]
+    public partial double PanX { get; set; } = 0.5;
+
+    [ObservableProperty]
+    public partial double PanY { get; set; } = 0.5;
 
     /// <summary>Spec 3.1: true is Ticked only, false is All pieces. Changing it schedules a render and writes the
     /// setting; nothing else is written anywhere.</summary>
@@ -189,7 +294,36 @@ public partial class PlatformEditorViewModel : ObservableObject
     [ObservableProperty]
     public partial string ImageError { get; set; } = "";
 
-    public string Title => $"Edit platforms, {_request.Map.DisplayName}";
+    /// <summary>"Values from Default, saved 12 Sep 22:01." (spec 5.3).</summary>
+    [ObservableProperty]
+    public partial string ValuesFromText { get; set; }
+
+    /// <summary>Whether the Values from line and its Start fresh link are shown (spec 5.3).</summary>
+    [ObservableProperty]
+    public partial bool HasValuesFrom { get; set; }
+
+    public string Title => _sets.Count == 1
+        ? $"Edit platforms, {CurrentMap.DisplayName}"
+        : $"Edit platforms, {MainViewModel.Count(_sets.Count, "map")}";
+
+    /// <summary>The map the strip is on: the one the preview draws, the file list lists and Start fresh acts on.</summary>
+    public MapEntry CurrentMap => Current.Map;
+
+    public string CurrentMapName => Current.Map.DisplayName;
+
+    /// <summary>"2 of 3 maps" (spec 9).</summary>
+    public string MapStripText => $"{CurrentIndex + 1} of {MainViewModel.Count(_sets.Count, "map")}";
+
+    /// <summary>Whether the strip is drawn at all: one map is every other way into the editor (spec 9).</summary>
+    public bool HasManyMaps => _sets.Count > 1;
+
+    public bool CanPreviousMap => !IsSaving && CurrentIndex > 0;
+
+    public bool CanNextMap => !IsSaving && CurrentIndex < _sets.Count - 1;
+
+    /// <summary>The window's own Cancel closes it and drops the run, which a save part way through a set of maps
+    /// must not do: the Cancel that stops that one is the progress line's (spec 9).</summary>
+    public bool CanCloseWindow => !IsSaving;
 
     /// <summary>The set Edit was pressed on: a pack's, or the one the game is showing (spec 6).</summary>
     public string SourceText =>
@@ -265,7 +399,20 @@ public partial class PlatformEditorViewModel : ObservableObject
 
     public bool CanUseImage => HasTicked;
 
-    public bool CanResetImage => Pieces.Any(p => p.IsTicked && p.Art != PieceArt.Original);
+    /// <summary>The picture Replace loaded, frozen and kept so the switch and the drag cut it again without
+    /// going back to the disk (spec 6.2). Null until a picture is picked or a record names one.</summary>
+    public BitmapSource? LoadedPicture { get; private set; }
+
+    /// <summary>The full path the loaded picture came from, which is what the record writes down.</summary>
+    public string? LoadedPicturePath { get; private set; }
+
+    /// <summary>Whether the fit switch can be used: there is a picture to lay (spec 6.2).</summary>
+    public bool CanUseFit => LoadedPicture is not null;
+
+    /// <summary>Whether dragging the preview moves anything: a laid picture, not one fitted piece by piece.</summary>
+    public bool CanPan => CanUseFit && FitAcross;
+
+    public bool CanResetImage => TickedRows().Any(p => p.Art != PieceArt.Original);
 
     /// <summary>Editing outside writes a working copy into the pack, so it needs a pack name that is good enough
     /// to save into.</summary>
@@ -281,7 +428,19 @@ public partial class PlatformEditorViewModel : ObservableObject
     public string PackNameError =>
         IsNewPack && !PackNameValidator.IsValid(EffectivePackName, out var error) ? error : "";
 
-    public bool CanSave => CanEdit && PackNameError.Length == 0;
+    /// <summary>Spec 9: one map with no art of its own does not stop the rest of the set being written, so what
+    /// Save needs is a map in the set that has something to write.</summary>
+    public bool CanSave => _sets.Any(s => s.Rows.Count > 0) && PackNameError.Length == 0 && !IsSaving;
+
+    /// <summary>The map the strip is on: the one the file list lists and the preview draws (spec 9).</summary>
+    private MapSet Current => _sets[CurrentIndex];
+
+    /// <summary>Every row of every map: what the ctor, the watcher and the thumbnails walk (spec 9).</summary>
+    private List<PlatformPieceViewModel> AllRows() => _sets.SelectMany(s => s.Rows).ToList();
+
+    /// <summary>Every ticked row of every map, which is what a value, a picture and a reset act on: the sliders
+    /// and Replace belong to the editor rather than to the map the strip is on (spec 9).</summary>
+    private List<PlatformPieceViewModel> TickedRows() => AllRows().Where(p => p.IsTicked).ToList();
 
     /// <summary>Drops the temp set the previews were drawn from, whichever button closed the window. A file the
     /// render still holds open is not worth a dialog: the folder is under %TEMP% and Windows clears it. The
@@ -297,6 +456,7 @@ public partial class PlatformEditorViewModel : ObservableObject
         _watchers.Clear();
         _changed.Cancel();
         _preview.Cancel();
+        _recut.Cancel();
         try
         {
             if (Directory.Exists(_tempRoot))
@@ -326,7 +486,7 @@ public partial class PlatformEditorViewModel : ObservableObject
     /// files at once.</summary>
     public async Task LoadThumbnailsAsync(CancellationToken ct)
     {
-        foreach (var row in Pieces)
+        foreach (var row in AllRows())
         {
             ct.ThrowIfCancellationRequested();
             await RefreshThumbnailAsync(row, ct);
@@ -354,6 +514,40 @@ public partial class PlatformEditorViewModel : ObservableObject
         }
     }
 
+    [RelayCommand(CanExecute = nameof(CanPreviousMap))]
+    private void PreviousMap() => CurrentIndex--;
+
+    [RelayCommand(CanExecute = nameof(CanNextMap))]
+    private void NextMap() => CurrentIndex++;
+
+    /// <summary>Spec 9: Cancel stops the save run between maps, so the map being written is written whole. The
+    /// maps already written stay in the pack, and the window closes on them.</summary>
+    [RelayCommand(CanExecute = nameof(IsSaving))]
+    private void CancelSave() => _saveCts?.Cancel();
+
+    /// <summary>Spec 9: the strip moved to another map, so everything that map owns is read again: its rows, its
+    /// Values from line, its ticks and its preview. Nothing the editor owns moves, because the picture, the pan,
+    /// the values and the target pack are the set's.</summary>
+    partial void OnCurrentIndexChanged(int value)
+    {
+        ValuesFromText = Current.ValuesFromText;
+        HasValuesFrom = Current.HasValuesFrom;
+        OnPropertyChanged(nameof(Pieces));
+        OnPropertyChanged(nameof(CurrentMap));
+        OnPropertyChanged(nameof(CurrentMapName));
+        OnPropertyChanged(nameof(MapStripText));
+        OnPropertyChanged(nameof(SourceText));
+        OnPropertyChanged(nameof(CanEdit));
+        OnPropertyChanged(nameof(EmptyText));
+        OnPropertyChanged(nameof(FilesHeader));
+        PreviousMapCommand.NotifyCanExecuteChanged();
+        NextMapCommand.NotifyCanExecuteChanged();
+
+        // The sliders and the Image line read the ticks, and this map's are not the last one's.
+        OnTickedChanged();
+        SchedulePreview();
+    }
+
     /// <summary>The sliders move every ticked row, and a row moved on its own moves nothing else (spec 4).</summary>
     partial void OnOpacityChanged(int value)
     {
@@ -377,6 +571,26 @@ public partial class PlatformEditorViewModel : ObservableObject
         SchedulePreview();
     }
 
+    /// <summary>The switch and the pan both mean the same thing: cut the ticked rows out of the loaded picture
+    /// again. Nothing is loaded until a Replace or a record, and the record puts all three on at once.</summary>
+    partial void OnFitAcrossChanged(bool value) => ScheduleRecut();
+
+    partial void OnPanXChanged(double value) => ScheduleRecut();
+
+    partial void OnPanYChanged(double value) => ScheduleRecut();
+
+    private void ScheduleRecut()
+    {
+        if (_restoringFit || !CanUseFit)
+        {
+            return;
+        }
+
+        // Spec 6.2: a drag asks for a cut per mouse move, and the cut is the slow part, so the same 60 ms
+        // throttle the preview uses collapses the run and only the newest pan survives.
+        _recut.Run(_ => RecutAsync());
+    }
+
     partial void OnIsolatePreviewChanged(bool value)
     {
         if (_restoringMode)
@@ -389,25 +603,288 @@ public partial class PlatformEditorViewModel : ObservableObject
         _services.UpdateSettings(_services.Settings with { PlatformPreviewIsolate = value });
     }
 
-    /// <summary>Where each piece is read from: the pack's copy when the pack has one that draws something, the
-    /// game's otherwise, which is the rule every composite already resolves by (spec 6).</summary>
-    private static IReadOnlyList<PlatformPieceViewModel> BuildPieces(AppServices services, PlatformEditorRequest request)
+    /// <summary>Where each piece is read from: the file the record's values were worked out from when a pack
+    /// remembers this map (spec 5.2), and otherwise the pack's copy when the pack has one that draws something
+    /// and the game's when it does not, which is the rule every composite already resolves by (spec 6).</summary>
+    private IReadOnlyList<PlatformPieceViewModel> BuildPieces(MapSet set)
     {
-        var sources = new AssetSources(services.GamePath, request.Pack?.FullPath);
         var pieces = new List<PlatformPieceViewModel>();
-        foreach (var relativePath in request.Map.PlatformFiles.OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
+        foreach (var relativePath in set.Map.PlatformFiles.OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
         {
-            if (sources.ResolveAsset(relativePath) is { } source)
+            var ticked = _request.OnlyFile is null
+                || string.Equals(relativePath, _request.OnlyFile, StringComparison.OrdinalIgnoreCase);
+            var entry = set.Record?.Entry(set.Map.FolderName, relativePath);
+
+            // A working copy is a file another program owns, so its row opens on that file the way 2.4 opened it.
+            if (entry is null || entry.Art == PlatformArt.WorkingCopy)
             {
-                pieces.Add(new PlatformPieceViewModel(
-                    relativePath,
-                    source,
-                    ticked: request.OnlyFile is null
-                        || string.Equals(relativePath, request.OnlyFile, StringComparison.OrdinalIgnoreCase)));
+                if (ResolveAsset(relativePath) is { } source)
+                {
+                    pieces.Add(new PlatformPieceViewModel(relativePath, source, ticked));
+                }
+
+                continue;
+            }
+
+            if (BuildRecordPiece(set, relativePath, entry, ticked) is { } row)
+            {
+                pieces.Add(row);
             }
         }
 
         return pieces;
+    }
+
+    /// <summary>Spec 5.2: the record's values were worked out from the untouched art, so the row starts from the
+    /// Default pack's copy of the piece, or the game's when the library has no Default pack. Null when neither
+    /// is there, which is the unresolved file 2.4 leaves out of the list.</summary>
+    private PlatformPieceViewModel? BuildRecordPiece(
+        MapSet set, string relativePath, PlatformPieceEntry entry, bool ticked)
+    {
+        var note = "";
+        var original = Path.Combine(PackScanner.PacksRoot(_services.LibraryPath), DefaultPack.Name, relativePath);
+        if (!File.Exists(original))
+        {
+            original = Path.Combine(_services.GamePath, relativePath);
+            note = NoOriginalNoteText;
+        }
+
+        if (!File.Exists(original))
+        {
+            return null;
+        }
+
+        // Part B replaces this branch: one picture cut across every piece is spanned, not repeated.
+        var picture = entry.Art is PlatformArt.EachPiece or PlatformArt.Across ? entry.Picture : null;
+        if (picture is { Length: > 0 } && !File.Exists(picture))
+        {
+            // The picture is gone, so there is nothing to fit: the row shows what the pack holds, as saved.
+            var saved = set.SourcePack is { } pack ? Path.Combine(pack.FullPath, relativePath) : original;
+            return new PlatformPieceViewModel(relativePath, File.Exists(saved) ? saved : original, ticked)
+            {
+                LoadedFromRecord = true,
+                Note = $"{Path.GetFileName(picture)}, missing. Showing the saved file.",
+            };
+        }
+
+        var row = new PlatformPieceViewModel(relativePath, original, ticked)
+        {
+            LoadedFromRecord = true,
+            Opacity = entry.Opacity ?? PlatformPieceViewModel.DefaultOpacity,
+            Hue = entry.Hue ?? PlatformPieceViewModel.DefaultHue,
+            Note = note,
+        };
+        set.RecordRows.Add((row, entry));
+        return row;
+    }
+
+    /// <summary>Spec 9: one map's side of the editor, built the way Part A built the only map there was. The pack
+    /// the values come from is the one the editor was opened with, and otherwise the pack this map's own files
+    /// were matched to, which is per map because the maps of a set need not come from one pack (spec 5.1).</summary>
+    private MapSet BuildSet(
+        MapEntry map, IReadOnlyList<Pack> packs, IReadOnlyDictionary<string, MapStatus> statuses)
+    {
+        var sourcePack = _request.Pack
+            ?? _request.SourcePack
+            ?? SourcePackFinder.ForPlatforms(map, statuses.GetValueOrDefault(map.FolderName), packs);
+        var record = sourcePack is { } pack ? PlatformEditRecord.Load(pack.FullPath) : null;
+        var set = new MapSet(map, record, sourcePack, CurrentBackground(_services, map));
+        set.Rows = BuildPieces(set);
+        if (sourcePack is { } from && record?.Map(map.FolderName) is { } saved)
+        {
+            set.HasValuesFrom = true;
+            set.ValuesFromText = $"Values from {from.Name}, saved {saved.SavedAt.ToLocalTime():d MMM HH:mm}.";
+        }
+
+        return set;
+    }
+
+    /// <summary>The 2.4 resolution of one piece: the pack the editor was opened with, then the game.</summary>
+    private string? ResolveAsset(string relativePath) =>
+        new AssetSources(_services.GamePath, _request.Pack?.FullPath).ResolveAsset(relativePath);
+
+    /// <summary>Spec 5.2: the pictures the record names are fitted to their pieces and the files the pack holds
+    /// are hashed against what the record was written for, both off the UI thread. The rows only change here,
+    /// when all of that is done, and the preview waits on this task before it draws.</summary>
+    private async Task LoadRecordArtAsync()
+    {
+        foreach (var set in _sets)
+        {
+            await LoadRecordArtAsync(set);
+        }
+
+        await LoadRecordSpanAsync();
+        OnImageChanged();
+    }
+
+    /// <summary>One map's record art, which is the whole of it for every way in that opens on one map.</summary>
+    private async Task LoadRecordArtAsync(MapSet set)
+    {
+        if (set.RecordRows.Count == 0)
+        {
+            return;
+        }
+
+        var packRoot = set.SourcePack?.FullPath;
+        var rows = set.RecordRows.Select(r => (r.Row, r.Entry, HasNote: r.Row.Note.Length > 0)).ToList();
+        var reading = "";
+        List<(PlatformPieceViewModel Row, BitmapSource? Fitted, string Picture, string Note)> loaded;
+        try
+        {
+            loaded = await Task.Run(() =>
+            {
+                var results = new List<(PlatformPieceViewModel, BitmapSource?, string, string)>();
+                foreach (var (row, entry, hasNote) in rows)
+                {
+                    // An Across row is not fitted here: its picture is laid over the whole stage once, which the
+                    // cut below does for all of them together (spec 6.2).
+                    var picture = entry.Art == PlatformArt.EachPiece ? entry.Picture : null;
+                    BitmapSource? fitted = null;
+                    if (picture is { Length: > 0 } && File.Exists(picture))
+                    {
+                        reading = Path.GetFileName(picture);
+                        fitted = PieceFitter.Fit(
+                            BackgroundFitter.LoadSource(picture), BackgroundFitter.LoadSource(row.OriginalPath));
+                    }
+
+                    results.Add((row, fitted, picture ?? "", ChangedOutsideNote(row, entry, packRoot, hasNote)));
+                }
+
+                return results;
+            });
+        }
+        catch (Exception ex) when (ex is NotSupportedException or FileFormatException or IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            ImageError = $"Could not read {reading}. The pieces are showing their own art.";
+            return;
+        }
+
+        foreach (var (row, fitted, picture, note) in loaded)
+        {
+            if (fitted is not null)
+            {
+                row.SetReplacement(fitted, Path.GetFileName(picture), picture);
+                row.Thumbnail = ThumbnailOf(fitted);
+            }
+
+            if (note.Length > 0)
+            {
+                row.Note = note;
+            }
+        }
+    }
+
+    /// <summary>Spec 5.2 and 6.2: the record's Across rows are one picture laid across the platforms with the pan
+    /// it was saved with, so the picture, the pan and the switch go on together and one cut covers all of them.
+    /// The rows the record saved as EachPiece keep the fit they were loaded with.</summary>
+    private async Task LoadRecordSpanAsync()
+    {
+        var spanning = _sets
+            .SelectMany(s => s.RecordRows)
+            .Where(r => r.Entry.Art == PlatformArt.Across
+                && r.Entry.Picture is { Length: > 0 } picture
+                && File.Exists(picture))
+            .ToList();
+        if (spanning.Count == 0)
+        {
+            return;
+        }
+
+        // The picture and the pan belong to the editor, so the first map of the set that saved one is what the
+        // switch and the drag carry on from (spec 9).
+        var entry = spanning[0].Entry;
+        _restoringFit = true;
+        FitAcross = true;
+        PanX = Math.Clamp(entry.PanX ?? 0.5, 0, 1);
+        PanY = Math.Clamp(entry.PanY ?? 0.5, 0, 1);
+        _restoringFit = false;
+
+        if (!await LoadPictureAsync(entry.Picture!))
+        {
+            return;
+        }
+
+        // A map that saved a different picture keeps the one it saved: what is cut again here is what the record
+        // says, map by map, not the first map's picture laid over the rest of the set.
+        foreach (var group in spanning.GroupBy(r => r.Entry.Picture!, StringComparer.OrdinalIgnoreCase))
+        {
+            var rows = group.Select(r => r.Row).ToList();
+            if (group.Key.Equals(entry.Picture, StringComparison.OrdinalIgnoreCase))
+            {
+                await CutAsync(WorkFor(rows), LoadedPicture!, group.Key);
+            }
+            else if (await LoadSourceAsync(group.Key) is { } picture)
+            {
+                await CutAsync(WorkFor(rows), picture, group.Key);
+            }
+        }
+    }
+
+    /// <summary>A picture a record names, decoded off the UI thread, or null with the line already on the panel.
+    /// The editor's own picture is loaded by LoadPictureAsync; this one is only ever cut with.</summary>
+    private async Task<BitmapSource?> LoadSourceAsync(string path)
+    {
+        try
+        {
+            return await Task.Run(() => BackgroundFitter.LoadSource(path));
+        }
+        catch (Exception ex) when (ex is NotSupportedException or FileFormatException or IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            ImageError = $"Could not read {Path.GetFileName(path)}. The pieces are showing their own art.";
+            return null;
+        }
+    }
+
+    /// <summary>Spec 5.2: the pack's file is not the file the record's values were worked out from, so the row
+    /// says the preview may differ. Empty when it matches, when there is nothing to compare, or when the row is
+    /// already saying something else about itself.</summary>
+    private static string ChangedOutsideNote(
+        PlatformPieceViewModel row, PlatformPieceEntry entry, string? packRoot, bool hasNote)
+    {
+        if (hasNote || packRoot is null)
+        {
+            return "";
+        }
+
+        var packFile = Path.Combine(packRoot, row.RelativePath);
+        return File.Exists(packFile)
+            && !FileHasher.Hash(packFile).Equals(entry.Hash, StringComparison.OrdinalIgnoreCase)
+                ? ChangedOutsideNoteText
+                : "";
+    }
+
+    /// <summary>Spec 5.4: the record's values go, and every row is the file and the numbers the editor would have
+    /// opened on with nothing remembered. The rows themselves stay, so the list's bindings hold.</summary>
+    [RelayCommand]
+    private void StartFresh()
+    {
+        _syncing = true;
+        foreach (var row in Pieces)
+        {
+            if (row.LoadedFromRecord && ResolveAsset(row.RelativePath) is { } source)
+            {
+                row.ResetOriginal(source);
+            }
+
+            row.ResetArt();
+            row.Opacity = PlatformPieceViewModel.DefaultOpacity;
+            row.Hue = PlatformPieceViewModel.DefaultHue;
+            row.Note = "";
+        }
+
+        Opacity = PlatformPieceViewModel.DefaultOpacity;
+        Hue = PlatformPieceViewModel.DefaultHue;
+        _syncing = false;
+
+        // Spec 9: Start fresh is about the map the strip is on, so the line the strip reads back for it goes too.
+        Current.HasValuesFrom = false;
+        HasValuesFrom = false;
+        ClearPicture();
+        ImageError = "";
+        OnImageChanged();
+        OnPropertyChanged(nameof(OpacityText));
+        OnPropertyChanged(nameof(HueText));
+        SchedulePreview();
     }
 
     /// <summary>A fitted picture drawn at list size, frozen; a piece no wider than a thumbnail is its own.</summary>
@@ -508,7 +985,7 @@ public partial class PlatformEditorViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanUseImage))]
     private async Task ReplaceAsync()
     {
-        var ticked = Pieces.Where(p => p.IsTicked).ToList();
+        var ticked = TickedRows();
         var title = ticked.Count == 1
             ? $"Replace {ticked[0].FileName}"
             : $"Replace {MainViewModel.Count(ticked.Count, "file")}";
@@ -517,17 +994,123 @@ public partial class PlatformEditorViewModel : ObservableObject
             return;
         }
 
-        Dictionary<PlatformPieceViewModel, BitmapSource> fitted;
+        if (!await LoadPictureAsync(path))
+        {
+            return;
+        }
+
+        await RecutAsync(ticked);
+    }
+
+    /// <summary>The picked picture, decoded once off the UI thread and kept for every later cut. False when it
+    /// could not be read, with the line already on the panel.</summary>
+    private async Task<bool> LoadPictureAsync(string path)
+    {
         try
         {
-            fitted = await Task.Run(() =>
+            LoadedPicture = await Task.Run(() => BackgroundFitter.LoadSource(path));
+        }
+        catch (Exception ex) when (ex is NotSupportedException or FileFormatException or IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            ImageError = $"Could not read {Path.GetFileName(path)}. Use a PNG, JPG, BMP, GIF or WebP.";
+            return false;
+        }
+
+        LoadedPicturePath = path;
+        OnPropertyChanged(nameof(CanUseFit));
+        OnPropertyChanged(nameof(CanPan));
+        return true;
+    }
+
+    /// <summary>The picture stops being what any row is made of: the switch has nothing to lay, and no row has a
+    /// fit note left that a later cut could write over.</summary>
+    private void ClearPicture()
+    {
+        LoadedPicture = null;
+        LoadedPicturePath = null;
+        _fitNoteRows.Clear();
+        OnPropertyChanged(nameof(CanUseFit));
+        OnPropertyChanged(nameof(CanPan));
+    }
+
+    /// <summary>Spec 6.2: every row named is cut from the loaded picture again with the switch and the pan as
+    /// they are now. Across, the picture is laid over the platforms' own box once and each row takes the part
+    /// under its largest placement; a row the stage never draws is fitted on its own instead, and says so. The
+    /// cutting is the slow part, so it happens off the UI thread and no row changes until all of them have one.</summary>
+    private Task RecutAsync(IReadOnlyList<PlatformPieceViewModel>? only = null) =>
+        LoadedPicture is { } picture && LoadedPicturePath is { } path
+            ? CutAsync(WorkFor(only), picture, path)
+            : Task.CompletedTask;
+
+    /// <summary>The rows each map of the set has to cut: the ones named, gathered map by map, or every ticked row
+    /// of every map. A map with none of them is left out, because the cut is per map's own stage (spec 9).</summary>
+    private List<(MapSet Set, List<PlatformPieceViewModel> Rows)> WorkFor(
+        IReadOnlyList<PlatformPieceViewModel>? only)
+    {
+        var work = new List<(MapSet, List<PlatformPieceViewModel>)>();
+        foreach (var set in _sets)
+        {
+            var rows = only is null
+                ? set.Rows.Where(p => p.IsTicked).ToList()
+                : set.Rows.Where(only.Contains).ToList();
+            if (rows.Count > 0)
             {
-                var source = BackgroundFitter.LoadSource(path);
-                var results = new Dictionary<PlatformPieceViewModel, BitmapSource>();
-                foreach (var row in ticked)
+                work.Add((set, rows));
+            }
+        }
+
+        return work;
+    }
+
+    /// <summary>Spec 9: the cut itself, over each map's own box and each map's own placements, so one picture
+    /// laid across a set of maps is laid across every one of their stages rather than the first one's.</summary>
+    private async Task CutAsync(
+        List<(MapSet Set, List<PlatformPieceViewModel> Rows)> work, BitmapSource picture, string path)
+    {
+        if (work.Count == 0)
+        {
+            return;
+        }
+
+        var across = FitAcross;
+        var pan = new FitOptions(PanX: PanX, PanY: PanY);
+        List<(PlatformPieceViewModel Row, BitmapSource Fitted, bool Across, string Note)> cut;
+        try
+        {
+            cut = await Task.Run(() =>
+            {
+                var results = new List<(PlatformPieceViewModel, BitmapSource, bool, string)>();
+                foreach (var (set, rows) in work)
                 {
-                    var piece = BackgroundFitter.LoadSource(row.SourcePath);
-                    results[row] = PieceFitter.Fit(source, piece);
+                    var level = set.Map.BaseLevel;
+                    var box = SpanFitter.Box(level);
+                    foreach (var row in rows)
+                    {
+                        var piece = BackgroundFitter.LoadSource(row.SourcePath);
+                        if (!across || box is not { } stage)
+                        {
+                            results.Add((row, PieceFitter.Fit(picture, piece), false, ""));
+                            continue;
+                        }
+
+                        var placements = SpanFitter.Placements(level, row.RelativePath, piece.PixelWidth, piece.PixelHeight);
+                        if (placements.Count == 0)
+                        {
+                            results.Add((
+                                row,
+                                PieceFitter.Fit(picture, piece),
+                                false,
+                                $"{row.FileName} not on this stage, fitted on its own."));
+                            continue;
+                        }
+
+                        // The same file drawn twice is one asset with two placements, and the picture can only be
+                        // cut for one of them, so the largest is the one the user is looking at (spec 6.1).
+                        var note = placements.Count > 1
+                            ? $"{row.FileName} drawn {placements.Count} times, cut from the largest."
+                            : "";
+                        results.Add((row, SpanFitter.Cut(picture, stage, pan, SpanFitter.Largest(placements)!, piece), true, note));
+                    }
                 }
 
                 return results;
@@ -541,13 +1124,75 @@ public partial class PlatformEditorViewModel : ObservableObject
 
         ImageError = "";
         var name = Path.GetFileName(path);
-        foreach (var row in ticked)
+        foreach (var (row, fitted, rowAcross, note) in cut)
         {
-            row.SetReplacement(fitted[row], name);
-            row.Thumbnail = ThumbnailOf(fitted[row]);
+            row.SetReplacement(fitted, name, path, rowAcross);
+            row.Thumbnail = ThumbnailOf(fitted);
+            SetFitNote(row, note);
         }
 
         OnImageChanged();
+    }
+
+    /// <summary>The line a cut leaves on a row. A row already saying its picture is gone, its untouched art is
+    /// missing or its file changed outside keeps that line: only a fit note is written over (spec 5.2).</summary>
+    private void SetFitNote(PlatformPieceViewModel row, string note)
+    {
+        if (row.Note.Length > 0 && !_fitNoteRows.Contains(row))
+        {
+            return;
+        }
+
+        row.Note = note;
+        if (note.Length > 0)
+        {
+            _fitNoteRows.Add(row);
+        }
+        else
+        {
+            _fitNoteRows.Remove(row);
+        }
+    }
+
+    /// <summary>Spec 6.2: dragging the preview moves the laid picture. The delta arrives in the stage's own
+    /// 1280 by 720 pixels, and a cover fit only has room to move where it hangs over the box, so the delta is
+    /// turned into pan units by that overflow and clamped. A picture with no overflow one way does not move
+    /// that way, and the cut that follows is throttled.</summary>
+    public void DragPan(double dxStagePixels, double dyStagePixels)
+    {
+        var level = CurrentMap.BaseLevel;
+        if (LoadedPicture is not { } picture || !FitAcross || SpanFitter.Box(level) is not { } box)
+        {
+            return;
+        }
+
+        var (_, viewport) = FocusFor(level);
+        if ((viewport ?? level.Camera) is not { W: > 0, H: > 0 } camera)
+        {
+            return;
+        }
+
+        // The preview draws the camera's part of the level into the panel, so a stage pixel is that many level
+        // units, and the box the picture is laid in is measured in level units.
+        var dest = BackgroundFitter.DestinationRect(
+            picture.PixelWidth,
+            picture.PixelHeight,
+            new FitOptions(PanX: PanX, PanY: PanY),
+            Math.Max(1, (int)Math.Round(box.Width)),
+            Math.Max(1, (int)Math.Round(box.Height)));
+        var scaleX = MapCompositor.PanelWidth / camera.W;
+        var scaleY = MapCompositor.PanelHeight / camera.H;
+        var overflowX = dest.Width - box.Width;
+        var overflowY = dest.Height - box.Height;
+        if (overflowX > 0)
+        {
+            PanX = Math.Clamp(PanX - (dxStagePixels / scaleX / overflowX), 0, 1);
+        }
+
+        if (overflowY > 0)
+        {
+            PanY = Math.Clamp(PanY - (dyStagePixels / scaleY / overflowY), 0, 1);
+        }
     }
 
     /// <summary>Back to the pieces' own art. A ticked row holding a working copy is asked about first, because
@@ -556,7 +1201,7 @@ public partial class PlatformEditorViewModel : ObservableObject
     private async Task ResetImageAsync()
     {
         var failed = false;
-        var copies = Pieces.Where(p => p.IsTicked && p.Art == PieceArt.WorkingCopy).ToList();
+        var copies = TickedRows().Where(p => p.Art == PieceArt.WorkingCopy).ToList();
         if (copies.Count > 0)
         {
             // One pack is a place the user can picture; copies spread over two is only "the library".
@@ -591,10 +1236,17 @@ public partial class PlatformEditorViewModel : ObservableObject
             }
         }
 
-        foreach (var row in Pieces.Where(p => p.IsTicked && p.Art != PieceArt.Original).ToList())
+        foreach (var row in TickedRows().Where(p => p.Art != PieceArt.Original))
         {
             row.ResetArt();
+            SetFitNote(row, "");
             await RefreshThumbnailAsync(row);
+        }
+
+        // Nothing is made of the picture any more, so the switch has nothing left to lay (spec 6.2).
+        if (AllRows().All(p => p.Art != PieceArt.Replacement))
+        {
+            ClearPicture();
         }
 
         if (!failed)
@@ -692,7 +1344,7 @@ public partial class PlatformEditorViewModel : ObservableObject
             return null;
         }
 
-        var folder = Path.Combine(packRoot, _request.Map.FolderName);
+        var folder = Path.Combine(packRoot, CurrentMap.FolderName);
         try
         {
             Directory.CreateDirectory(folder);
@@ -760,7 +1412,7 @@ public partial class PlatformEditorViewModel : ObservableObject
     private async Task ReloadChangedAsync(CancellationToken ct)
     {
         var watched = new List<(PlatformPieceViewModel Row, string FilePath)>();
-        foreach (var row in Pieces)
+        foreach (var row in AllRows())
         {
             if (row.WorkingCopyPath is { } filePath && IsWatched(filePath))
             {
@@ -788,7 +1440,7 @@ public partial class PlatformEditorViewModel : ObservableObject
             OnImageChanged();
         }
 
-        foreach (var row in Pieces.Where(p => p.Replacement is null && IsWatched(p.SourcePath)))
+        foreach (var row in AllRows().Where(p => p.Replacement is null && IsWatched(p.SourcePath)))
         {
             ct.ThrowIfCancellationRequested();
             await RefreshThumbnailAsync(row, ct);
@@ -886,7 +1538,7 @@ public partial class PlatformEditorViewModel : ObservableObject
     private void FanOut(Action<PlatformPieceViewModel> set)
     {
         _syncing = true;
-        foreach (var row in Pieces.Where(p => p.IsTicked))
+        foreach (var row in TickedRows())
         {
             set(row);
         }
@@ -895,42 +1547,128 @@ public partial class PlatformEditorViewModel : ObservableObject
     }
 
     private bool IsMixed(Func<PlatformPieceViewModel, int> value) =>
-        Pieces.Where(p => p.IsTicked).Select(value).Distinct().Count() > 1;
+        TickedRows().Select(value).Distinct().Count() > 1;
 
-    /// <summary>Saves the recoloured set into the pack and nothing else; the "Apply to game now" box is the
-    /// shell's business, because a game write needs the boundary, the snapshot and the undo (spec 8).</summary>
+    /// <summary>Saves the recoloured sets into the pack and nothing else; the "Apply to game now" box is the
+    /// shell's business, because a game write needs the boundary, the snapshot and the undo (spec 8). Spec 9: one
+    /// Save writes every map of the set, one map at a time, and the question is asked once for all of them.
+    /// Cancel is read between maps only, so a map is written whole or not at all.</summary>
     [RelayCommand(CanExecute = nameof(CanSave))]
     private async Task SaveAsync()
     {
         var packRoot = Path.Combine(PackScanner.PacksRoot(_services.LibraryPath), EffectivePackName);
-        var destination = Path.Combine(packRoot, _request.Map.FolderName);
-        if (Directory.Exists(destination)
-            && Directory.EnumerateFiles(destination).Any(f => !IsWorkingCopy(f))
+        var replacing = _sets.Count(s => HasOwnFiles(Path.Combine(packRoot, s.Map.FolderName)));
+        if (replacing > 0
             && !_dialogs.Confirm(
                 "Replace platforms?",
-                $"{EffectivePackName} already has platforms for {_request.Map.DisplayName}. Replace them?"))
+                _sets.Count == 1
+                    ? $"{EffectivePackName} already has platforms for {CurrentMap.DisplayName}. Replace them?"
+                    : $"{EffectivePackName} already has platforms for {MainViewModel.Count(replacing, "map")}."
+                        + " Replace them?"))
         {
             return;
         }
 
-        // Every row, ticked or not: what Save leaves behind is the whole set, not the part being worked on.
-        var rows = Pieces;
+        var (panX, panY) = (PanX, PanY);
+        var written = new List<MapEntry>();
+        using var cts = new CancellationTokenSource();
+        _saveCts = cts;
+        IsSaving = true;
         try
         {
-            await Task.Run(() =>
+            // One record for the run: every map of the set goes into the one pack, and it is written after each
+            // map so a cancelled run leaves the record saying exactly what is in the pack.
+            var record = await Task.Run(() => PlatformEditRecord.Load(packRoot));
+            foreach (var set in _sets)
             {
-                foreach (var row in rows)
+                if (cts.IsCancellationRequested)
                 {
-                    row.CopyOrWriteResult(Path.Combine(packRoot, row.RelativePath));
+                    break;
                 }
-            });
-            Saved = new PlatformSave(EffectivePackName, destination, ApplyNow);
-            CloseRequested?.Invoke(true);
+
+                SaveProgressText =
+                    $"Saving {written.Count + 1} of {MainViewModel.Count(_sets.Count, "map")} into {EffectivePackName}";
+
+                // Every row, ticked or not: what Save leaves behind is the whole set, not the part worked on.
+                var rows = set.Rows;
+                var folder = set.Map.FolderName;
+                await Task.Run(() =>
+                {
+                    foreach (var row in rows)
+                    {
+                        row.CopyOrWriteResult(Path.Combine(packRoot, row.RelativePath));
+                    }
+
+                    record.SetMap(folder, DateTimeOffset.Now, EntriesFor(rows, packRoot, panX, panY));
+                    record.Save(packRoot);
+                });
+                written.Add(set.Map);
+            }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or FileFormatException)
         {
             _dialogs.Error("Could not save the platforms", ex.Message);
+            return;
         }
+        finally
+        {
+            IsSaving = false;
+            SaveProgressText = "";
+            _saveCts = null;
+        }
+
+        if (written.Count == 0)
+        {
+            // Cancelled before the first map was written, so there is nothing in the pack to apply or to say.
+            return;
+        }
+
+        Saved = new PlatformSave(
+            EffectivePackName, Path.Combine(packRoot, written[0].FolderName), ApplyNow, written);
+        CloseRequested?.Invoke(true);
+    }
+
+    /// <summary>Whether a destination folder already holds work of the pack's own, which is what the Replace
+    /// question is about: a working copy this editor put there is not the pack's own work.</summary>
+    private bool HasOwnFiles(string folder) =>
+        Directory.Exists(folder) && Directory.EnumerateFiles(folder).Any(f => !IsWorkingCopy(f));
+
+    /// <summary>Builds the record entry set for the rows just written into packRoot (hash from the written file).
+    /// A row whose file is not there was not written, so the record says nothing about it. The pan belongs to the
+    /// editor rather than to a row, so an Across row writes down the one the picture was laid with (spec 6.2).</summary>
+    internal static Dictionary<string, PlatformPieceEntry> EntriesFor(
+        IReadOnlyList<PlatformPieceViewModel> rows, string packRoot, double panX, double panY)
+    {
+        var entries = new Dictionary<string, PlatformPieceEntry>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in rows)
+        {
+            var written = Path.Combine(packRoot, row.RelativePath);
+            if (!File.Exists(written))
+            {
+                continue;
+            }
+
+            var entry = new PlatformPieceEntry { Art = row.ArtKind, Hash = FileHasher.Hash(written) };
+            if (entry.Art != PlatformArt.WorkingCopy)
+            {
+                entry.Opacity = row.Opacity;
+                entry.Hue = row.Hue;
+                if (entry.Art == PlatformArt.EachPiece)
+                {
+                    entry.Picture = row.ReplacementPath;
+                }
+                else if (entry.Art == PlatformArt.Across)
+                {
+                    entry.Picture = row.ReplacementPath;
+                    entry.PanX = panX;
+                    entry.PanY = panY;
+                }
+            }
+
+            entries[row.RelativePath] = entry;
+        }
+
+        return entries;
     }
 
     /// <summary>Spec 6: 60 ms between renders, newest values win. The stamp is what makes the second half of that
@@ -981,12 +1719,14 @@ public partial class PlatformEditorViewModel : ObservableObject
     {
         var rows = Pieces;
         var root = _tempRoot;
-        var level = _request.Map.BaseLevel;
-        var background = _backgroundPath;
+        var level = CurrentMap.BaseLevel;
+        var background = Current.BackgroundPath;
         var (focus, viewport) = FocusFor(level);
         var reading = "";
         try
         {
+            // The record's pictures are what some of the rows are made of, so the first render waits for them.
+            await _recordArt;
             await Task.Run(
                 () =>
                 {

@@ -30,12 +30,7 @@ public static class PlatformBounds
             return null;
         }
 
-        var box = Rect.Empty;
-        foreach (var node in level.Platforms)
-        {
-            Union(node, Matrix.Identity, level.AssetDir, focus, ref box);
-        }
-
+        var box = Union(level, focus);
         if (box.IsEmpty)
         {
             return null;
@@ -77,10 +72,39 @@ public static class PlatformBounds
         return new CameraBounds(x, y, w, h);
     }
 
+    /// <summary>The plain union of the unthemed platform assets in camera space, with no padding and no aspect
+    /// growth. Empty when the level places none. SpanFitter.Box hands this straight to the caller.</summary>
+    internal static Rect Union(LevelDesc level, IReadOnlySet<string>? focus)
+    {
+        var box = Rect.Empty;
+        foreach (var node in level.Platforms)
+        {
+            Walk(node, Matrix.Identity, (drawn, matrix) =>
+            {
+                foreach (var asset in drawn.Assets)
+                {
+                    // A node outside the set still carries its children's transform, so the walk goes on either way.
+                    if (focus is not null && !focus.Contains(AssetPath.Resolve(level.AssetDir, asset.AssetName)))
+                    {
+                        continue;
+                    }
+
+                    // A missing W or H parses as 0 and means "the image's own size", which is not known without
+                    // decoding the file, so the asset contributes its position alone rather than a guessed
+                    // rectangle.
+                    var rect = new Rect(asset.X, asset.Y, Math.Abs(asset.W), Math.Abs(asset.H));
+                    box.Union(Rect.Transform(rect, matrix));
+                }
+            });
+        }
+
+        return box;
+    }
+
     /// <summary>The same transform order the compositor draws with: scale, then rotate, then translate, each node
-    /// inside its parent's. A seasonal node is skipped here because it is skipped there.</summary>
-    private static void Union(
-        PlatformNode node, Matrix parent, string assetDir, IReadOnlySet<string>? focus, ref Rect box)
+    /// inside its parent's. A seasonal node is skipped here because it is skipped there. SpanFitter.Placements
+    /// walks with this too, so a cut lands exactly where the box put the piece.</summary>
+    internal static void Walk(PlatformNode node, Matrix parent, Action<PlatformNode, Matrix> visit)
     {
         if (node.IsThemed)
         {
@@ -93,24 +117,11 @@ public static class PlatformBounds
         local.Translate(node.X, node.Y);
         var matrix = Matrix.Multiply(local, parent);
 
-        foreach (var asset in node.Assets)
-        {
-            // A node outside the set still carries its children's transform, so the walk goes on either way.
-            if (focus is not null && !focus.Contains(AssetPath.Resolve(assetDir, asset.AssetName)))
-            {
-                continue;
-            }
-
-            // A missing W or H parses as 0 and means "the image's own size", which is not known without decoding
-            // the file, so the asset contributes its position alone rather than a guessed rectangle.
-            var rect = new Rect(asset.X, asset.Y, Math.Abs(asset.W), Math.Abs(asset.H));
-            var transformed = Rect.Transform(rect, matrix);
-            box.Union(transformed);
-        }
+        visit(node, matrix);
 
         foreach (var child in node.Children)
         {
-            Union(child, matrix, assetDir, focus, ref box);
+            Walk(child, matrix, visit);
         }
     }
 }

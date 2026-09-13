@@ -1,8 +1,11 @@
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using BhMaps.App.Services;
+using BhMaps.Core.Hashing;
 using BhMaps.Core.Imaging;
+using BhMaps.Core.LevelData;
 using BhMaps.Core.Operations;
+using BhMaps.Core.Packs;
 using BhMaps.Core.Scanning;
 using BhMaps.Core.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -35,6 +38,10 @@ public partial class BackgroundEditorViewModel : ObservableObject
     public const string NoSourceText = "No picture yet. Drop one here or browse.";
     public const string NoMapsText = "No maps yet. Refresh the game data in Settings.";
     public const string PreviewSizeText = "preview 640 x 360";
+
+    /// <summary>Spec 8: what the Values from line says instead, after the file name, when the picture the saved
+    /// entry names has gone from the library.</summary>
+    public const string PictureGoneText = "missing. Showing the saved file.";
 
     private const string BackgroundsFolder = "Backgrounds";
 
@@ -74,9 +81,14 @@ public partial class BackgroundEditorViewModel : ObservableObject
         var existingDefault = packNames.FirstOrDefault(p => p.Equals(DefaultPackName, StringComparison.OrdinalIgnoreCase));
         TargetPack = requested ?? existingDefault ?? NewPackChoice;
         NewPackName = TargetPack == NewPackChoice ? DefaultPackName : "";
+        ValuesFromText = "";
 
         // Last: the change hook reads everything above it.
         SourcePath = request.SourcePath;
+
+        // Later still: the record's own source has to win over the request's, and its stage over the empty one the
+        // hook above leaves behind.
+        LoadRecord(request);
     }
 
     public event Action<bool>? CloseRequested;
@@ -136,6 +148,14 @@ public partial class BackgroundEditorViewModel : ObservableObject
 
     [ObservableProperty]
     public partial string Error { get; set; }
+
+    /// <summary>"Values from Default, saved 12 Sep 22:03.", or the missing-picture line (spec 8).</summary>
+    [ObservableProperty]
+    public partial string ValuesFromText { get; set; }
+
+    /// <summary>Whether the Values from line and its Start fresh link are shown (spec 8).</summary>
+    [ObservableProperty]
+    public partial bool HasValuesFrom { get; set; }
 
     public string Title => SourceFileName.Length == 0 ? "Edit background" : $"Edit {SourceFileName}";
 
@@ -237,6 +257,114 @@ public partial class BackgroundEditorViewModel : ObservableObject
     [RelayCommand]
     private void ResetDarken() => DarkenPercent = 0;
 
+    /// <summary>Spec 8: the remembered values go and the editor is the one a first save would have opened. A
+    /// request that named a picture keeps it, because that picture is what the user opened.</summary>
+    [RelayCommand]
+    private void StartFresh()
+    {
+        SourcePath = _request.SourcePath;
+        Mode = FitMode.Cover;
+        PanX = 0.5;
+        PanY = 0.5;
+        DarkenPercent = 0;
+        HasValuesFrom = false;
+        ValuesFromText = "";
+
+        // Every value above may already have been the default, in which case no change hook ran and the saved
+        // file would still be on the stage.
+        SchedulePreview();
+    }
+
+    /// <summary>Spec 8: the slot's saved entry opens the editor where the last save left it. The picture it names
+    /// is the source again when it is still in the library; when it has gone the fit, the pan and the darken still
+    /// load and the stage shows the file that was saved, which Save cannot replace until a source is chosen.
+    /// </summary>
+    private void LoadRecord(BackgroundEditorRequest request)
+    {
+        if (request.SourcePack is not { } pack || Slot.Length == 0)
+        {
+            return;
+        }
+
+        var relative = AssetPath.Background(Slot);
+        if (BackgroundEditRecord.Load(pack.FullPath).Entry(relative) is not { } entry)
+        {
+            return;
+        }
+
+        Mode = FromRecord(entry.Mode);
+        PanX = entry.PanX;
+        PanY = entry.PanY;
+        DarkenPercent = entry.Darken;
+        HasValuesFrom = true;
+        ValuesFromText = $"Values from {pack.Name}, saved {entry.SavedAt.ToLocalTime():d MMM HH:mm}.";
+
+        // Save goes back to the pack the values came from, when the list still has it, because that is the set the
+        // user is carrying on with (spec 5.3).
+        if (PackChoices.Any(p => p.Equals(pack.Name, StringComparison.OrdinalIgnoreCase)))
+        {
+            TargetPack = pack.Name;
+        }
+
+        if (request.SourcePath.Length > 0)
+        {
+            // Opened from a picture tile: that picture is the source, whatever the entry remembers.
+            return;
+        }
+
+        if (File.Exists(entry.Picture))
+        {
+            SourcePath = entry.Picture;
+            return;
+        }
+
+        ValuesFromText = $"{Path.GetFileName(entry.Picture)}, {PictureGoneText}";
+        ShowSavedFile(Path.Combine(pack.FullPath, relative));
+    }
+
+    /// <summary>The stage for an entry whose picture has gone: the file that save left in the pack, decoded for the
+    /// preview. async void like the source row, because nothing above the constructor's frame can catch.</summary>
+    private async void ShowSavedFile(string packFile)
+    {
+        if (!File.Exists(packFile))
+        {
+            return;
+        }
+
+        BitmapSource decoded;
+        try
+        {
+            decoded = await Task.Run(() => BackgroundFitter.LoadWorkingSource(packFile, PreviewWidth, PreviewHeight));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or FileFormatException or ArgumentException)
+        {
+            Error = "Could not read the saved background: " + ex.Message;
+            return;
+        }
+
+        // A source picked while the decode ran owns the stage; this one is only what there was without it.
+        if (SourcePath.Length == 0)
+        {
+            Preview = decoded;
+        }
+    }
+
+    /// <summary>The editor's fit and the record's are the same three choices under two names (spec 8).</summary>
+    internal static BackgroundMode ToRecord(FitMode mode) => mode switch
+    {
+        FitMode.Contain => BackgroundMode.Contain,
+        FitMode.Stretch => BackgroundMode.Stretch,
+        _ => BackgroundMode.Cover,
+    };
+
+    /// <summary>The way back, with an unknown value from a newer version reading as the default.</summary>
+    internal static FitMode FromRecord(BackgroundMode mode) => mode switch
+    {
+        BackgroundMode.Contain => FitMode.Contain,
+        BackgroundMode.Stretch => FitMode.Stretch,
+        _ => FitMode.Cover,
+    };
+
     /// <summary>Saves the fitted picture into the pack and nothing else; the "Apply to game now" box is the
     /// shell's business, because a game write needs the boundary, the snapshot and the undo (spec 8).</summary>
     [RelayCommand(CanExecute = nameof(CanSave))]
@@ -255,12 +383,35 @@ public partial class BackgroundEditorViewModel : ObservableObject
 
         var path = SourcePath;
         var options = Options;
+        var darken = DarkenPercent;
+        var packRoot = Path.Combine(PackScanner.PacksRoot(_services.LibraryPath), EffectivePackName);
         try
         {
             // The original, not the working bitmap: Save fits at 2048x1151 (spec 7.2).
             var bytes = await Task.Run(() => BackgroundFitter.Fit(path, options));
             Directory.CreateDirectory(Path.GetDirectoryName(packFile)!);
             await File.WriteAllBytesAsync(packFile, bytes);
+
+            // Spec 8: what the pack remembers about this slot, so the next open is where this save left it. The
+            // key is the pack-relative path, which is the slot's file for a map and the picture's own name under
+            // All maps.
+            await Task.Run(() =>
+            {
+                var record = BackgroundEditRecord.Load(packRoot);
+                record.Set(
+                    Path.GetRelativePath(packRoot, packFile),
+                    new BackgroundSlotEntry
+                    {
+                        SavedAt = DateTimeOffset.Now,
+                        Picture = path,
+                        Mode = ToRecord(options.Mode),
+                        PanX = options.PanX,
+                        PanY = options.PanY,
+                        Darken = darken,
+                        Hash = FileHasher.Hash(packFile),
+                    });
+                record.Save(packRoot);
+            });
             Saved = new BackgroundSave(
                 packFile, slot, SelectedMap?.DisplayNames ?? slot, ApplyNow, EffectivePackName, allMaps);
             CloseRequested?.Invoke(true);

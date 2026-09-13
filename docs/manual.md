@@ -5,8 +5,41 @@ listed under the name the game gives it, above a preview composed the way the ga
 the game's own level data. It keeps a library of *packs*, folders of images that mirror the game's
 `mapArt` tree, and copies them into the game folder on demand. The only files it changes are `.png`
 and `.jpg` files inside the `mapArt` folder and inside its own library, plus its own files in
-`%APPDATA%\BhMaps`. The game's data files are read and never written, and nothing else in the game
-install is touched.
+`%APPDATA%\BhMaps`. With the Map-select thumbnails switch on, which is off until you turn it on, it
+also writes over the `.jpg` files already in the game's `images\thumbnails` folder, and it keeps a
+copy of every original so it can put it back. The game's data files are read and never written, and
+nothing else in the game install is touched.
+
+## What is new in 2.5
+
+- The background editor and the platform editor remember what you saved. Save a picture or a set of
+  platform values into a pack, open that editor on the same map and the same pack again, and it
+  comes back on the values you left: the fit, the pan, the darkening, the opacity, the hue and the
+  picture behind them. A line under the source row says where they came from, as in "Values from
+  Neon", and a **Start fresh** link beside it throws them away and opens on the defaults.
+- **Replace** in the platform editor lays one picture across the platforms. The picture is fitted
+  over all the ticked pieces at once, so a single image runs along the whole level and each platform
+  shows the part of it that platform sits on; dragging the preview moves the picture under them. A
+  switch beside Image chooses between **Across the platforms**, which is what a replace now does, and
+  **On each piece**, which fits a separate copy to every ticked piece the way 2.4 did.
+- **Edit platforms** works on a selection of maps. Select maps on Maps, open the platform editor, and
+  a strip under the title moves between them with **Previous map** and **Next map**, PageUp and
+  PageDown, and a count reading "2 of 3 maps". The values you set carry to every map in the
+  selection, and one **Save** writes them all, with a line saying how far it has got, as in "Saving 3
+  of 59 maps into Default", and a **Cancel save** button that stops between maps and leaves the maps
+  already written as they are.
+- **Reset to default** also clears what the editors remembered for the maps it resets, so they open
+  fresh afterwards, and **Undo** puts that memory back along with the files.
+- Settings has a **Map-select thumbnails** switch, off until you turn it on. With it on, a write that
+  changes a map's art also renders that map at 290 by 164 and writes the picture over the map's own
+  thumbnail in `<game>\images\thumbnails`, so the map select screen shows the art you put on. The
+  original thumbnail is kept in `%APPDATA%\BhMaps\thumbnails-original`, and Reset to default, Undo
+  and turning the switch off again put it back. A map whose thumbnail is shared with another map,
+  one that names no thumbnail, and one whose file is not there are left alone, and the map panel says
+  which of those it is.
+- A card no longer shows its old picture for a moment after a write. The cards of the maps a write
+  touched reload their previews before the rest of the grid refreshes, so what you see is what was
+  just written.
 
 ## What is new in 2.4
 
@@ -115,6 +148,7 @@ describes things by where they are and what they do. Nothing on disk changes sha
 | --- | --- |
 | Game map art, read and written | `C:\Program Files (x86)\Steam\steamapps\common\Brawlhalla\mapArt` |
 | Game data files, read only | `BrawlhallaAir.swf`, `Dynamic.swz`, `Init.swz` and `Game.swz`, in the folder above `mapArt` |
+| Game map-select thumbnails, written only with the switch on | `C:\Program Files (x86)\Steam\steamapps\common\Brawlhalla\images\thumbnails` |
 | Pack library | `Documents\BhMaps` by default, changeable in Settings |
 | Packs inside the library | `<library>\packs\<pack name>\<GameFolder>\<file>` |
 | Settings | `%APPDATA%\BhMaps\settings.json` |
@@ -122,12 +156,14 @@ describes things by where they are and what they do. Nothing on disk changes sha
 | Level data cache | `%APPDATA%\BhMaps\leveldata.json` |
 | Composed previews | `%APPDATA%\BhMaps\previews\` |
 | Undo of the last game write | `%APPDATA%\BhMaps\undo\` |
+| Kept map-select thumbnails | `%APPDATA%\BhMaps\thumbnails-original\` |
 
 The map art folder and the library are chosen in the welcome window and editable in Settings; the
 data files are wherever the game folder is. Only `<library>\packs` is read and written, so anything
 else kept in the library folder is left alone. The settings file holds the two paths, the zoom level
 each page remembers, when each pack was last applied, whether the Backgrounds page is showing your own
-pictures, and whether the welcome window has been finished. The three caches are speed-ups
+pictures, whether the game's map-select thumbnails are updated, and whether the welcome window has
+been finished. The three caches are speed-ups
 only: deleting any of them costs one slower start, and preview files unused for 30 days are deleted
 at startup anyway. The undo folder holds one set at a time, the files the last
 write into the game folder was about to overwrite or delete. The game folder can be any folder shaped like `mapArt`, one level of subfolders holding `.png` and `.jpg` files. Real map names, level sets and composed previews also need the game's four data files in the folder above it; without them the app still runs, with folder names and single-file thumbnails.
@@ -142,7 +178,7 @@ line turns red and offers Choose folder, which opens Settings. F5 rescans; Cance
 stops a long operation.
 
 - **Maps** is the grid of maps, and the only page where maps are selected. Chips above the grid
-  filter: All, one per level set, and Selected, which appears once anything is selected. The set
+  filter: All and one per level set. The set
   chips are Ranked 1v1, Ranked 2v2 and
   Tournament when the game's data has the ranked sets, and the standard ones when it does not; the
   other sets the game defines are read but not shown. At the right end of the chip row is Select all,
@@ -199,7 +235,7 @@ stops a long operation.
   Apply and a dots button, and the menu offers to apply the picture to the selected
   maps or to all maps, then Edit and Show in folder, and for a picture in a pack Remove from that
   pack, or Save to My Backgrounds for a picture the game is showing that no pack holds. Search
-  matches map names, pack names and file names. The chips are the ones Maps has, without Selected.
+  matches map names, pack names and file names. The chips are the ones Maps has.
   The zoom slider sets the row height in five steps, the second to begin with. Add Image is in the
   header. Maps are not selected on this page: it has
   no selection boxes and no selection bar, and "apply to the selected maps" means the maps
@@ -236,8 +272,9 @@ stops a long operation.
 - **Settings** is one line per setting: the game folder and the library, each with Change and Open;
   the game data, with the date it was last read and Refresh now; Capture defaults; one line about
   applying, which says that changes are written straight into the game folder with Brawlhalla open or
-  closed and show on the next match load, and that Undo puts back the files of the last write; and
-  the version. There is no OK button, so every row saves as it is changed.
+  closed and show on the next match load, and that Undo puts back the files of the last write;
+  **Map-select thumbnails**, a checkbox reading **Also update the game's map-select thumbnails** that
+  starts off and, turned off again, puts every kept original thumbnail back; and the version. There is no OK button, so every row saves as it is changed.
 
 These windows open on top of the pages:
 
@@ -270,12 +307,19 @@ These windows open on top of the pages:
   in the same step. All maps is what an any-map picture opens on, and the map it belongs to is what a
   pack picture opens on. It saves into a pack, the picture's own to begin with, under a note saying
   which file it replaces and that choosing another pack keeps the original, and it can write the
-  result into the game in the same step. Opened from Add Image with no picture, the source row is
+  result into the game in the same step. When that pack already holds values saved for this map, the
+  editor opens on them and a line reads "Values from Neon", with a **Start fresh** link beside it
+  that puts the defaults back. Opened from Add Image with no picture, the source row is
   where a picture is dropped or browsed for.
 - The **platform editor**, from a platform set tile's **Edit** or from **Edit** on a Platform files
   row of the map panel, changes a map's platform pieces without redrawing them by hand. Its title
   names the map, as in "Edit platforms, Apocalypse", and the source row says which pack the pieces
-  come from and how many there are, or "In game" for the art the game has. **Files** lists the
+  come from and how many there are, or "In game" for the art the game has. Opened with maps selected
+  on Maps, it works on the whole selection: a strip under the title has **Previous map** and **Next
+  map**, PageUp and PageDown, and a count reading "2 of 3 maps", and the values you set carry to
+  every map in it. When the pack under Save into pack already holds values saved for this map, a line
+  reads "Values from Default" and a **Start fresh** link beside it drops them and puts the defaults
+  back. **Files** lists the
   pieces, one row each with a tick, a thumbnail, the file name and that piece's own values; every row
   starts ticked, **All** and **None** above the list change them together, and the header counts
   them, as in "Files, 2 of 6". Opened from a map panel row, only that row's piece is ticked.
@@ -286,8 +330,12 @@ These windows open on top of the pages:
   and with nothing ticked the preview says "Tick a file to see it on its own." The editor remembers
   the chip you left on, except that a map panel row always opens on Ticked only.
   **Image** says what the ticked pieces show: the piece's own art, a picture fitted to it, or Mixed.
-  **Replace** takes a PNG, JPG, BMP, GIF or WebP and fits it to each ticked piece, covering and
-  centring it and cutting it to the piece's own shape, so the platform keeps its outline. **Edit in
+  **Replace** takes a PNG, JPG, BMP, GIF or WebP and lays it over the ticked pieces, cut to each
+  piece's own shape so the platforms keep their outlines. A switch beside Image says how it is laid
+  on: **Across the platforms**, which is what it starts on, fits one copy of the picture over all the
+  ticked pieces at once, so each platform shows the part of the picture it sits on, and dragging the
+  preview moves the picture under them; **On each piece** fits a separate copy to every ticked piece,
+  covering and centring it. **Edit in
   another app** writes each ticked piece into the pack named under Save into pack and opens it with
   the Windows "Open with" dialog; the preview follows what that program saves, and Cancel leaves
   those files in the pack. **Reset** beside Image puts the piece's own art back, asking first over a
@@ -296,7 +344,9 @@ These windows open on top of the pages:
   its own reset, the readout says Mixed when ticked pieces disagree, and the preview recomposes as
   the slider moves. **Save into pack** takes an existing pack or a new one and writes the ticked
   pieces, copying a piece left at its own art and default values as it is, and **Apply to game now**
-  writes the result over the map's own art in the same step. A map with no platform art of its own
+  writes the result over the map's own art in the same step. On a selection of maps one Save writes
+  every map in it, one after another, with a progress line reading "Saving 3 of 59 maps into Default"
+  and a **Cancel save** button that stops between maps. A map with no platform art of its own
   says so and has nothing to edit.
 
 Every change is written straight into the game folder, whether Brawlhalla is open or closed, and
@@ -378,6 +428,18 @@ now, and a later apply to one map replaces it there.
   `%APPDATA%\BhMaps\undo\` first, before the write starts. Restoring puts those files back and
   deletes the ones that were not there before. Only writes into the game folder get a snapshot;
   changes to the library, including deleting a pack, cannot be undone.
+- **What the editors remember** is kept in the pack, in two files at its root,
+  `platforms.bhmaps.json` and `backgrounds.bhmaps.json`, one entry per map holding the values that
+  editor was saved on. A pack gets one once something has been saved into it, whichever pack that
+  is, and Export carries them with the rest of the pack. Reset to default drops the
+  entries for the maps it resets, and Undo puts them back.
+- **Map-select thumbnails** are the one thing the app writes outside `mapArt`. With the switch in
+  Settings on, a write that changes a map's art renders that map at 290 by 164 and writes the JPEG
+  over the map's own file in the game's `images\thumbnails` folder, under the name the level data
+  gives that map. The first time a thumbnail is written over, the original is copied into
+  `%APPDATA%\BhMaps\thumbnails-original`, and that copy is what Reset to default, Undo and turning
+  the switch off put back. A thumbnail two maps share, a map that names none, and a file that is not
+  there are all skipped, so one map's picture is never written over another map's thumbnail.
 
 A write goes into the game folder whether Brawlhalla is running or not; the app never closes or
 starts the game to make a change. A change made while the game is up shows on the next match load,

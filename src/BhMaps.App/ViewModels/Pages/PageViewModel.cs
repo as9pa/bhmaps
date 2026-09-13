@@ -18,4 +18,8 @@ public abstract partial class PageViewModel : ObservableObject
 
     /// <summary>Called after every scan. Rebuild the page's collections here.</summary>
     public abstract void Refresh(ScanSnapshot snapshot);
+
+    /// <summary>Spec 11: the same refresh, told which map folders the write that led to the scan touched. Only the
+    /// page that shows those maps has anything to do with them, so every other page falls through.</summary>
+    public virtual void Refresh(ScanSnapshot snapshot, IReadOnlyList<string>? writtenFolders) => Refresh(snapshot);
 }

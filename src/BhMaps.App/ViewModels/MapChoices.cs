@@ -103,7 +103,7 @@ public static class MapChoices
         {
             tiles.Add(new PlatformSetTileViewModel(
                 shell, map, pack, InGameMatch.SetInGame(pack, map.FolderName, status), width, height, showFiles,
-                () => _ = shell.OpenPlatformEditorAsync(map, pack)));
+                () => _ = shell.OpenPlatformEditorAsync([map], pack)));
         }
 
         return tiles;

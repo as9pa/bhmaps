@@ -100,6 +100,7 @@ public partial class MapPanelViewModel : ObservableObject
         _snapshot = snapshot;
         DisplayName = map.DisplayName;
         SetsText = string.Join(", ", map.Sets.Select(MapCatalog.LabelFor));
+        ThumbnailNote = shell.ThumbnailNotes.GetValueOrDefault(map.FolderName, "");
         StatusText = BuildStatusText();
         HasDefaultPack = snapshot.DefaultPack is not null;
         ResetHint = HasDefaultPack ? "" : NoDefaultPackText;
@@ -131,7 +132,7 @@ public partial class MapPanelViewModel : ObservableObject
             var file = relativePath;
             _platformFiles.Add(new PlatformFileViewModel(
                 file, InGameMatch.File(status, file)?.Text ?? "", ChangesNothing: false, Thumbnail: null,
-                CanEdit: false, EditCommand: new RelayCommand(() => _ = shell.OpenPlatformEditorAsync(map, pack: null, onlyFile: file))));
+                CanEdit: false, EditCommand: new RelayCommand(() => _ = shell.OpenPlatformEditorAsync([map], pack: null, onlyFile: file))));
         }
 
         RebuildMenus(shell.SelectedMapCount);
@@ -141,6 +142,13 @@ public partial class MapPanelViewModel : ObservableObject
 
     /// <summary>The sets the map is in, labelled the way the chip row labels them.</summary>
     public string SetsText { get; }
+
+    /// <summary>Spec 10.4: why the last write left this map's map-select thumbnail alone, or empty when it wrote
+    /// it or never aimed at it. Fixed for the life of the panel: a new scan builds a new panel.</summary>
+    public string ThumbnailNote { get; }
+
+    /// <summary>False hides the note rather than leaving an empty line under the sets.</summary>
+    public bool HasThumbnailNote => ThumbnailNote.Length > 0;
 
     /// <summary>Spec 3.2: what the game is showing for this map, in one sentence of words.</summary>
     public string StatusText { get; }
@@ -230,12 +238,26 @@ public partial class MapPanelViewModel : ObservableObject
         var gamePath = _shell.Services.GamePath;
         var folderName = _map.FolderName;
         var slots = _map.BackgroundSlots;
+        var map = _map;
+
+        // Spec 7: the files go back to default, so the edits the packs the map matches remembered for it go too.
+        _snapshot.MapStatuses.TryGetValue(folderName, out var status);
+        var matched = RecordReset.MatchedPacks(map, status, _snapshot.Packs);
         ResetOutcome? outcome = null;
         await _shell.RunGameWriteAsync(
             $"Resetting {DisplayName}",
             PackApplier.ResetMapPaths(_snapshot.Tree, _map, defaultPack),
-            (_, ct) => Task.Run(() => { outcome = MapReset.ResetMap(gamePath, folderName, slots, defaultPack); }, ct),
-            $"Reset {DisplayName} to default");
+            (_, ct) => Task.Run(
+                () =>
+                {
+                    outcome = MapReset.ResetMap(gamePath, folderName, slots, defaultPack);
+                    RecordReset.Clear(map, matched);
+                },
+                ct),
+            $"Reset {DisplayName} to default",
+            libraryUndoPaths: RecordReset.UndoPaths(matched, _shell.Services.LibraryPath),
+            artMaps: [map],
+            resetThumbnails: true);
 
         if (outcome is not null)
         {

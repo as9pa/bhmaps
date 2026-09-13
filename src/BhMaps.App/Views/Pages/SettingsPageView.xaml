@@ -68,6 +68,7 @@
             <RowDefinition Height="Auto" MinHeight="56" />
             <RowDefinition Height="Auto" MinHeight="56" />
             <RowDefinition Height="Auto" MinHeight="56" />
+            <RowDefinition Height="Auto" MinHeight="56" />
           </Grid.RowDefinitions>
 
           <!-- Game folder -->
@@ -142,10 +143,26 @@
                     Style="{StaticResource OutlineButton}" />
           </StackPanel>
 
-          <!-- Applying. One line of prose (spec 6): there is nothing left to choose. -->
+          <!-- Map-select thumbnails. Spec 10.2: off by default, and the line under the switch says what turning
+               it off puts back, because the game's own thumbnails are what is being written over. -->
           <Border Grid.Row="4" Style="{StaticResource SettingRule}" />
-          <TextBlock Grid.Row="4" Grid.Column="0" Style="{StaticResource SettingLabel}" Text="Applying" />
-          <TextBlock Grid.Row="4"
+          <TextBlock Grid.Row="4" Grid.Column="0" Style="{StaticResource SettingLabel}" Text="Map-select thumbnails" />
+          <StackPanel Grid.Row="4" Grid.Column="1" Style="{StaticResource SettingCell}">
+            <CheckBox AutomationProperties.Name="Also update the game's map-select thumbnails"
+                      Content="Also update the game's map-select thumbnails"
+                      FocusVisualStyle="{StaticResource DialogFocusRing}"
+                      Foreground="{StaticResource TextBrush}"
+                      IsChecked="{Binding WriteGameThumbnails}" />
+            <TextBlock Margin="0,6,0,0"
+                       Foreground="{StaticResource Text2Brush}"
+                       Text="When on, a game write that changes a map's art also writes the map's picture over its thumbnail in the game's images\thumbnails folder. The original is kept and comes back with Reset or when this is turned off."
+                       TextWrapping="Wrap" />
+          </StackPanel>
+
+          <!-- Applying. One line of prose (spec 6): there is nothing left to choose. -->
+          <Border Grid.Row="5" Style="{StaticResource SettingRule}" />
+          <TextBlock Grid.Row="5" Grid.Column="0" Style="{StaticResource SettingLabel}" Text="Applying" />
+          <TextBlock Grid.Row="5"
                      Grid.Column="1"
                      Margin="0,10"
                      VerticalAlignment="Center"
@@ -154,8 +171,8 @@
                      TextWrapping="Wrap" />
 
           <!-- Version -->
-          <TextBlock Grid.Row="5" Grid.Column="0" Style="{StaticResource SettingLabel}" Text="Version" />
-          <TextBlock Grid.Row="5"
+          <TextBlock Grid.Row="6" Grid.Column="0" Style="{StaticResource SettingLabel}" Text="Version" />
+          <TextBlock Grid.Row="6"
                      Grid.Column="1"
                      Margin="0,10"
                      VerticalAlignment="Center"

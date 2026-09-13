@@ -356,4 +356,23 @@ public class SettingsStoreTests
         Assert.True(SettingsStore.Load(path).PlatformPreviewIsolate);
         Assert.Contains("\"platformPreviewIsolate\": true", File.ReadAllText(path));
     }
+
+    [Fact]
+    public void WriteGameThumbnails_RoundTripsAndDefaultsOff()
+    {
+        using var tmp = new TempDir();
+        var path = tmp.Sub("settings.json");
+
+        // Spec 10.2: the switch is opt-in, so a file written before it existed loads off.
+        File.WriteAllText(path, "{ \"welcomeDone\": true }");
+        var older = SettingsStore.Load(path);
+        Assert.True(older.WelcomeDone);
+        Assert.False(older.WriteGameThumbnails);
+        Assert.False(AppSettings.Default.WriteGameThumbnails);
+
+        SettingsStore.Save(path, AppSettings.Default with { WriteGameThumbnails = true });
+
+        Assert.True(SettingsStore.Load(path).WriteGameThumbnails);
+        Assert.Contains("\"writeGameThumbnails\": true", File.ReadAllText(path));
+    }
 }

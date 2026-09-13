@@ -199,6 +199,55 @@ public class MapCatalogTests
     }
 
     [Fact]
+    public void Build_NamesTheThumbnailFileWhenOneMapOwnsIt()
+    {
+        var data = Model(
+            [Level("Grove", "Grove"), Level("SmallGrove", "Grove")],
+            [
+                new LevelType("Grove", "Twilight Grove", false, false, "A.jpg"),
+                new LevelType("SmallGrove", "Small Grove", false, false, "A.jpg"),
+            ],
+            []);
+
+        var catalog = MapCatalog.Build(data);
+
+        Assert.Equal("A.jpg", catalog.ByFolder("Grove")!.ThumbnailFile);
+    }
+
+    [Fact]
+    public void Build_DropsAThumbnailFileTwoMapsShare()
+    {
+        var data = Model(
+            [Level("X", "X"), Level("Y", "Y")],
+            [
+                new LevelType("X", "X", false, false, "Shared.jpg"),
+                new LevelType("Y", "Y", false, false, "Shared.jpg"),
+            ],
+            []);
+
+        var catalog = MapCatalog.Build(data);
+
+        Assert.Null(catalog.ByFolder("X")!.ThumbnailFile);
+        Assert.Null(catalog.ByFolder("Y")!.ThumbnailFile);
+    }
+
+    [Fact]
+    public void Build_DropsAThumbnailFileWhenAMapsLevelsDisagree()
+    {
+        var data = Model(
+            [Level("Grove", "Grove"), Level("SmallGrove", "Grove")],
+            [
+                new LevelType("Grove", "Twilight Grove", false, false, "A.jpg"),
+                new LevelType("SmallGrove", "Small Grove", false, false, "B.jpg"),
+            ],
+            []);
+
+        var catalog = MapCatalog.Build(data);
+
+        Assert.Null(catalog.ByFolder("Grove")!.ThumbnailFile);
+    }
+
+    [Fact]
     public void FromFolders_BuildsAFolderOnlyCatalogWhenLevelDataIsUnavailable()
     {
         using var tmp = new TempDir();

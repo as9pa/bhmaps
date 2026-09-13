@@ -24,7 +24,6 @@ public partial class MapsViewModel : PageViewModel
     public const int MaxZoom = AppSettings.MaxZoom;
 
     private const string AllChip = "All";
-    private const string TickedChip = "Selected";
 
     /// <summary>Every card the last scan produced. Cards is this list under the chip and the search.</summary>
     private readonly List<MapCardViewModel> _all = [];
@@ -70,9 +69,10 @@ public partial class MapsViewModel : PageViewModel
     [ObservableProperty]
     public partial string SearchText { get; set; }
 
-    /// <summary>"All", the UI set labels, and "Selected" once anything is ticked. Without level data the
-    /// set chips are gone entirely (spec 3.6). An ObservableCollection behind the read-only surface, because the
-    /// row changes when the level data does and when the first map is ticked.</summary>
+    /// <summary>"All" and the UI set labels. Without level data the set chips are gone entirely (spec 3.6). An
+    /// ObservableCollection behind the read-only surface, because the row changes when the level data does.
+    /// Owner change 2026-09-13: the "Selected" chip that used to appear once anything was ticked is gone; the
+    /// selection bar already says how many maps are ticked.</summary>
     public IReadOnlyList<string> Chips => _chips;
 
     [ObservableProperty]
@@ -115,7 +115,6 @@ public partial class MapsViewModel : PageViewModel
             var what = SelectedChip switch
             {
                 AllChip => "map",
-                TickedChip => "selected map",
 
                 // RebuildChips clears the chip ListBox's items, and the ListBox pushes its lost selection back
                 // through this two-way binding, so the getter can run between the null and the chip put back.
@@ -230,12 +229,37 @@ public partial class MapsViewModel : PageViewModel
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
+        // Spec 7: every map goes back to default, so every remembered edit for every map goes too.
+        var matched = new Dictionary<string, IReadOnlyList<Pack>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var map in snapshot.Catalog.Maps)
+        {
+            snapshot.MapStatuses.TryGetValue(map.FolderName, out var status);
+            matched[map.FolderName] = RecordReset.MatchedPacks(map, status, snapshot.Packs);
+        }
+
+        var allMatched = matched.Values
+            .SelectMany(packs => packs)
+            .DistinctBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
         ResetOutcome? outcome = null;
         await Shell.RunGameWriteAsync(
             "Resetting all",
             undoPaths,
-            (progress, ct) => Task.Run(() => { outcome = MapReset.ResetAll(gamePath, defaultPack, progress, ct); }, ct),
-            "Reset every map to default");
+            (progress, ct) => Task.Run(
+                () =>
+                {
+                    outcome = MapReset.ResetAll(gamePath, defaultPack, progress, ct);
+                    foreach (var map in snapshot.Catalog.Maps)
+                    {
+                        RecordReset.Clear(map, matched[map.FolderName]);
+                    }
+                },
+                ct),
+            "Reset every map to default",
+            libraryUndoPaths: RecordReset.UndoPaths(allMatched, Shell.Services.LibraryPath),
+            artMaps: snapshot.Catalog.Maps,
+            resetThumbnails: true);
 
         if (outcome is not null)
         {
@@ -261,7 +285,8 @@ public partial class MapsViewModel : PageViewModel
                 () => { result = PackApplier.ApplyToMaps(pack, maps, gamePath, progress, ct); }, ct),
             $"{pack.Name} applied to {MainViewModel.Count(maps.Count, "map")}",
             clearTicks,
-            pack.Name);
+            pack.Name,
+            artMaps: maps);
 
         if (result is not null)
         {
@@ -315,6 +340,21 @@ public partial class MapsViewModel : PageViewModel
 
         var gamePath = Shell.Services.GamePath;
         var failures = new List<FileFailure>();
+
+        // Spec 7: each map's files go back to default, so the edits the packs that map matches remembered for it
+        // go too. The packs are read from the scan the reset started from, once per map.
+        var matched = new Dictionary<string, IReadOnlyList<Pack>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var map in maps)
+        {
+            snapshot.MapStatuses.TryGetValue(map.FolderName, out var status);
+            matched[map.FolderName] = RecordReset.MatchedPacks(map, status, snapshot.Packs);
+        }
+
+        var allMatched = matched.Values
+            .SelectMany(packs => packs)
+            .DistinctBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
         await Shell.RunGameWriteAsync(
             "Resetting",
             maps.SelectMany(m => PackApplier.ResetMapPaths(snapshot.Tree, m, defaultPack))
@@ -328,11 +368,15 @@ public partial class MapsViewModel : PageViewModel
                         progress.Report(map.DisplayName);
                         failures.AddRange(
                             MapReset.ResetMap(gamePath, map.FolderName, map.BackgroundSlots, defaultPack).Failures);
+                        RecordReset.Clear(map, matched[map.FolderName]);
                     }
                 },
                 ct),
             $"Reset {MainViewModel.Count(maps.Count, "map")} to default",
-            clearTicks);
+            clearTicks,
+            libraryUndoPaths: RecordReset.UndoPaths(allMatched, Shell.Services.LibraryPath),
+            artMaps: maps,
+            resetThumbnails: true);
 
         Shell.Dialogs.ShowFailures("Some files could not be reset", failures);
     }
@@ -353,7 +397,9 @@ public partial class MapsViewModel : PageViewModel
             title,
             $"{verb} to these {maps.Count} maps?\n\n{string.Join(", ", maps.Select(m => m.DisplayName))}");
 
-    public override void Refresh(ScanSnapshot snapshot)
+    public override void Refresh(ScanSnapshot snapshot) => Refresh(snapshot, null);
+
+    public override void Refresh(ScanSnapshot snapshot, IReadOnlyList<string>? writtenFolders)
     {
         _snapshot = snapshot;
 
@@ -393,7 +439,16 @@ public partial class MapsViewModel : PageViewModel
             ? null
             : _all.FirstOrDefault(c => c.FolderName.Equals(opened, StringComparison.OrdinalIgnoreCase));
 
-        _ = LoadPreviewsAsync([.. _all], snapshot.Catalog.HasLevelData, _previews.Token);
+        // Spec 11: a new card shows nothing until its preview lands, so the maps the write touched are loaded
+        // before the rest of the alphabet and stop showing what was there before the write that much sooner.
+        var byFolder = new Dictionary<string, MapCardViewModel>(StringComparer.OrdinalIgnoreCase);
+        foreach (var card in _all)
+        {
+            byFolder[card.FolderName] = card;
+        }
+
+        var order = LoadOrder.Prioritise([.. _all.Select(c => c.FolderName)], writtenFolders);
+        _ = LoadPreviewsAsync([.. order.Select(folder => byFolder[folder])], snapshot.Catalog.HasLevelData, _previews.Token);
 
         // Spec 3.3: the two menus the selection bar opens, rebuilt from the scan they describe. The Add Custom
         // Image row is last and is always there, so the menu is never empty.
@@ -453,12 +508,10 @@ public partial class MapsViewModel : PageViewModel
 
     private void OnShellChanged(object? sender, PropertyChangedEventArgs e)
     {
-        // SelectedMaps is raised alongside this one; reacting to the count alone does the work once. The first
-        // tick is what puts the Selected chip in the row, and the last untick takes it away again. A10 hangs the
-        // selection bar's lines on the same branch.
+        // SelectedMaps is raised alongside this one; reacting to the count alone does the work once. A10 hangs
+        // the selection bar's lines on this branch.
         if (e.PropertyName == nameof(MainViewModel.SelectedMapCount))
         {
-            RebuildChips(_snapshot?.Catalog);
             OnPropertyChanged(nameof(SelectionText));
             OnPropertyChanged(nameof(HasTicks));
 
@@ -478,8 +531,9 @@ public partial class MapsViewModel : PageViewModel
     /// <summary>The library's custom pictures, as the last scan built them (spec 4). Empty before the first scan.</summary>
     private IReadOnlyList<CustomPicture> CustomPictures() => _snapshot?.CustomPictures ?? [];
 
-    /// <summary>Fills the cards one at a time. The render queue serialises the composites anyway, and going in
-    /// display order means the cards the grid shows first are the ones that fill first. Fire and forget: the card
+    /// <summary>Fills the cards one at a time, in the order given: the maps a write touched first (spec 11), then
+    /// display order, so the cards the grid shows first are the ones that fill first. The render queue serialises
+    /// the composites anyway, so one at a time costs nothing. Fire and forget: the card
     /// turns its own file failures into a fallback, so the only thing left to stop for is cancellation.</summary>
     private async Task LoadPreviewsAsync(IReadOnlyList<MapCardViewModel> cards, bool hasLevelData, CancellationToken ct)
     {
@@ -511,12 +565,8 @@ public partial class MapsViewModel : PageViewModel
             return;
         }
 
-        // Spec 11: All, the set chips, and Selected once anything is ticked.
+        // All and the set chips.
         List<string> wanted = [AllChip, .. catalog.UiSets.Select(s => s.Label)];
-        if (Shell.SelectedMapCount > 0)
-        {
-            wanted.Add(TickedChip);
-        }
 
         if (_chips.SequenceEqual(wanted))
         {
@@ -527,11 +577,9 @@ public partial class MapsViewModel : PageViewModel
         _uiSets.AddRange(catalog.UiSets);
         var chosen = SelectedChip;
 
-        // Synced in place rather than cleared and refilled. The first tick is what adds the Selected chip, and a
-        // Ctrl+A ticks the whole grid from inside the ListBox's own loop: clearing the row there pushes a null
-        // SelectedChip through the two-way binding, and the ApplyFilter answering it empties and refills Cards
-        // under that loop, which leaves one card ticked out of the set. Adding one chip at the end disturbs
-        // neither the chip ListBox's selection nor Cards.
+        // Synced in place rather than cleared and refilled: clearing the row pushes a null SelectedChip through
+        // the two-way binding, and the ApplyFilter answering it empties and refills Cards, which disturbs the
+        // ticks. Inserting and removing single chips disturbs neither the chip ListBox's selection nor Cards.
         for (var i = _chips.Count - 1; i >= 0; i--)
         {
             if (!wanted.Contains(_chips[i]))
@@ -590,7 +638,6 @@ public partial class MapsViewModel : PageViewModel
         return SelectedChip switch
         {
             AllChip => true,
-            TickedChip => card.IsSelected,
             _ => _uiSets.FirstOrDefault(s => s.Label == SelectedChip) is { } set
                 && card.Map.Sets.Contains(set.Name, StringComparer.OrdinalIgnoreCase),
         };
@@ -667,11 +714,10 @@ public partial class MapsViewModel : PageViewModel
                 new AsyncRelayCommand(() => EditBackgroundAsync(one, slot)),
                 IsEnabled: single && slot is not null,
                 ToolTip: single ? null : setNote),
+            // Spec 9: the editor takes the whole ticked set, so the row is on whatever the menu's header named.
             new TileMenuCommand(
                 "Edit platforms",
-                new AsyncRelayCommand(() => Shell.OpenPlatformEditorAsync(one, null)),
-                IsEnabled: single,
-                ToolTip: setNote),
+                new AsyncRelayCommand(() => Shell.OpenPlatformEditorAsync(target, null))),
             TileMenuCommand.Separator(),
             new TileMenuCommand(
                 "Reset to default",

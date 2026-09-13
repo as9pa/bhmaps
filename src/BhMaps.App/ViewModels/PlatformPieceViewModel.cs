@@ -1,6 +1,7 @@
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using BhMaps.Core.Imaging;
+using BhMaps.Core.Packs;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace BhMaps.App.ViewModels;
@@ -39,14 +40,22 @@ public partial class PlatformPieceViewModel : ObservableObject
 
     public string FileName { get; }
 
-    public string OriginalPath { get; }
+    public string OriginalPath { get; private set; }
 
     public int Width { get; private set; }
 
     public int Height { get; private set; }
 
+    /// <summary>True for a row the editor opened from a pack's record rather than from the 2.4 resolution, so
+    /// Start fresh knows which rows have an original path to put back (spec 5.4).</summary>
+    public bool LoadedFromRecord { get; internal set; }
+
     [ObservableProperty]
     public partial bool IsTicked { get; set; }
+
+    /// <summary>The line under the readout for what the row could not do: empty hides it (spec 5.2).</summary>
+    [ObservableProperty]
+    public partial string Note { get; set; } = "";
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Readout), nameof(IsDefault))]
@@ -68,6 +77,13 @@ public partial class PlatformPieceViewModel : ObservableObject
 
     /// <summary>The picked file's name, for the Image value line.</summary>
     public string? ReplacementName { get; private set; }
+
+    /// <summary>Full path of the picture Replace loaded for this row; null for own art and working copies.</summary>
+    public string? ReplacementPath { get; private set; }
+
+    /// <summary>True when the replacement was cut from one picture laid across the whole stage rather than
+    /// fitted to this piece on its own (spec 6.2).</summary>
+    public bool Across { get; private set; }
 
     public string? WorkingCopyPath { get; private set; }
 
@@ -92,10 +108,25 @@ public partial class PlatformPieceViewModel : ObservableObject
         _ => "The piece's own art",
     };
 
-    public void SetReplacement(BitmapSource fitted, string pickedFileName)
+    /// <summary>The record's art kind for this row's current state.</summary>
+    public PlatformArt ArtKind => Art switch
+    {
+        PieceArt.WorkingCopy => PlatformArt.WorkingCopy,
+        PieceArt.Replacement => Across ? PlatformArt.Across : PlatformArt.EachPiece,
+        _ => PlatformArt.Own,
+    };
+
+    public void SetReplacement(BitmapSource fitted, string pickedFileName, string sourcePath) =>
+        SetReplacement(fitted, pickedFileName, sourcePath, across: false);
+
+    /// <summary>The picture this row is showing now, and whether it was cut from the picture laid across the
+    /// platforms, which is what the record writes down (spec 6.2).</summary>
+    public void SetReplacement(BitmapSource fitted, string pickedFileName, string sourcePath, bool across)
     {
         Replacement = fitted;
         ReplacementName = pickedFileName;
+        ReplacementPath = sourcePath;
+        Across = across;
         Art = PieceArt.Replacement;
         Raise();
     }
@@ -104,6 +135,8 @@ public partial class PlatformPieceViewModel : ObservableObject
     {
         Replacement = null;
         ReplacementName = null;
+        ReplacementPath = null;
+        Across = false;
         WorkingCopyPath = path;
         WorkingCopyPack = packName;
         Opacity = DefaultOpacity;
@@ -113,11 +146,23 @@ public partial class PlatformPieceViewModel : ObservableObject
         Raise();
     }
 
+    /// <summary>Start fresh: the row's own art goes back to the file the 2.4 rules resolve, which is not the
+    /// file a loaded record started it from (spec 5.4).</summary>
+    internal void ResetOriginal(string path)
+    {
+        OriginalPath = path;
+        LoadedFromRecord = false;
+        (Width, Height) = Measure(path);
+        Raise();
+    }
+
     /// <summary>Back to the piece's own art. Values are not touched (spec 4).</summary>
     public void ResetArt()
     {
         Replacement = null;
         ReplacementName = null;
+        ReplacementPath = null;
+        Across = false;
         WorkingCopyPath = null;
         WorkingCopyPack = null;
         (Width, Height) = Measure(OriginalPath);
