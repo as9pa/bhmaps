@@ -148,7 +148,7 @@ Shown under the row's readout, one at a time, in this priority: Picture gone, Or
 `BhMaps.Core\Imaging\SpanFitter.cs`:
 
 - `SpanFitter.Placements(LevelDesc level, string relativePath)` returns every placed rectangle of the piece as `(Matrix Transform, Rect Local)` in camera space, walking `level.Platforms` with the same matrix chain `PlatformBounds.Union` uses (scale, then rotate, then translate, child times parent), skipping themed nodes, matching `AssetPath.Resolve(level.AssetDir, asset.AssetName)` to `relativePath` ordinal ignoring case.
-- `SpanFitter.Box(LevelDesc level)` is the platform box: `PlatformBounds.For(level, pad: 0, aspect: 0)`, no aspect fitting.
+- `SpanFitter.Box(LevelDesc level)` is the platform box: `SpanFitter.Box(level)`, the plain union of the unthemed platform rectangles with no padding and no aspect growth (`PlatformBounds.For` returns null for aspect 0, so the box has its own method sharing the same matrix walk), no aspect fitting.
 - `SpanFitter.Cut(BitmapSource picture, Rect box, FitOptions pan, Matrix placement, Rect local, BitmapSource piece)` returns a frozen Bgra32 bitmap the size of `piece`: the picture is cover fitted into `box` with `BackgroundFitter.DestinationRect(picture.PixelWidth, picture.PixelHeight, pan, box.Width, box.Height)`; every pixel of the piece maps through the placement matrix into camera space, then into picture space, and samples the picture (bilinear through a `DrawingVisual` with the inverse transform, no hand loops); the result is multiplied by the piece's alpha as `PieceFitter.Fit` already does.
 - `SpanFitter.Largest(placements)` picks the instance with the largest transformed area.
 - When a piece has no placement it is not SpanFitter's job: the caller falls back to `PieceFitter.Fit`.
