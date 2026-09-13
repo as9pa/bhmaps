@@ -45,8 +45,9 @@ public sealed partial class ChooserViewModel : ObservableObject
         Subtitle = subtitle;
         _noun = noun;
         _all = rows;
-        SearchText = "";
+        // Rows first: the SearchText setter runs OnSearchTextChanged, which refills Rows.
         Rows = [.. rows];
+        SearchText = "";
     }
 
     /// <summary>"Apply BG_Dojo.jpg to a map" or "Apply a picture to Brawlhaven". The window's UIA name too.</summary>
