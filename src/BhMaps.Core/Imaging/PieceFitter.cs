@@ -31,7 +31,20 @@ public static class PieceFitter
         var pixels = new byte[stride * height];
         new FormatConvertedBitmap(target, PixelFormats.Bgra32, null, 0).CopyPixels(pixels, stride, 0);
 
-        var mask = new byte[stride * height];
+        MaskBy(pixels, piece);
+
+        var result = new WriteableBitmap(width, height, piece.DpiX, piece.DpiY, PixelFormats.Bgra32, null);
+        result.WritePixels(new Int32Rect(0, 0, width, height), pixels, stride, 0);
+        result.Freeze();
+        return result;
+    }
+
+    /// <summary>Multiplies the piece's alpha into <paramref name="pixels"/>, a Bgra32 buffer the piece's own size,
+    /// and hands the same array back. SpanFitter cuts its own pixels and then masks them the same way.</summary>
+    internal static byte[] MaskBy(byte[] pixels, BitmapSource piece)
+    {
+        var stride = piece.PixelWidth * 4;
+        var mask = new byte[stride * piece.PixelHeight];
         var pieceBgra = piece.Format == PixelFormats.Bgra32
             ? piece
             : new FormatConvertedBitmap(piece, PixelFormats.Bgra32, null, 0);
@@ -42,10 +55,7 @@ public static class PieceFitter
             pixels[i] = (byte)Math.Round(mask[i] * pixels[i] / 255.0, MidpointRounding.AwayFromZero);
         }
 
-        var result = new WriteableBitmap(width, height, piece.DpiX, piece.DpiY, PixelFormats.Bgra32, null);
-        result.WritePixels(new Int32Rect(0, 0, width, height), pixels, stride, 0);
-        result.Freeze();
-        return result;
+        return pixels;
     }
 
     /// <summary>Both decoded from disk (frozen Bgra32, stream closed) and fitted.</summary>
