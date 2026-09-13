@@ -10,8 +10,8 @@ Requires Windows 10 or 11, 64-bit, and Brawlhalla installed through Steam.
 
 | [Releases](https://github.com/as9pa/bhmaps/releases) | Size | Needs .NET? |
 |---|---|---|
-| `bhmaps-v2.4.0-win-x64.exe` | ~135 MB | No, the runtime is inside |
-| `bhmaps-v2.4.0-win-x64-dotnet.zip` | ~0.7 MB | Yes, [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) |
+| `bhmaps-v2.5.0-win-x64.exe` | ~135 MB | No, the runtime is inside |
+| `bhmaps-v2.5.0-win-x64-dotnet.zip` | ~0.7 MB | Yes, [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) |
 
 Take the `.exe` unless you already have .NET 10 installed. Windows may warn on first run because the
 exe is unsigned: choose "More info", then "Run anyway".
@@ -36,14 +36,21 @@ Brawlhalla open or closed, and show on the next match load.
   crops, pans and darkens one picture into a map's background slot, for one map or for all of them.
 - The platform editor fades a map's platforms with an Opacity slider and recolours them with a Hue
   slider, over a live preview that can show only the ticked pieces, and saves the result into a pack.
+  Replace lays one picture across the platforms, dragged into place, and a selection of maps is
+  edited together and written by one Save.
+- Both editors remember what was saved into a pack: reopening one on the same map and pack brings
+  back its fit, pan, opacity and hue, with a Start fresh link to drop them and begin again.
 - Right-click any picture in a pack to put it on one map, the selected maps, a map picked from a
   list, or every map; right-click any map card to apply a pack or picture, edit it or reset it.
 - The My Backgrounds switch on Backgrounds shows your own pictures on every row at once, or hides
   them all while you compare packs.
 - Select maps on Maps to apply a pack or a picture to all of them at once, from the selection bar or
   from any choice's menu.
+- Map-select thumbnails, switched on in Settings, put each map's new art on the game's map select
+  screen as well, keeping the original so a reset, an Undo or switching it off puts it back.
 - Undo puts back whatever the last write into the game folder overwrote or deleted.
-- Only `.png` and `.jpg` files inside `mapArt` are ever changed; the game's data files are read only.
+- Only `.png` and `.jpg` files inside `mapArt` are ever changed, plus the map-select thumbnails when
+  that switch is on; the game's data files are read only.
 
 ## Files
 
