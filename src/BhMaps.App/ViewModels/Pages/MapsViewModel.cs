@@ -392,7 +392,9 @@ public partial class MapsViewModel : PageViewModel
             title,
             $"{verb} to these {maps.Count} maps?\n\n{string.Join(", ", maps.Select(m => m.DisplayName))}");
 
-    public override void Refresh(ScanSnapshot snapshot)
+    public override void Refresh(ScanSnapshot snapshot) => Refresh(snapshot, null);
+
+    public override void Refresh(ScanSnapshot snapshot, IReadOnlyList<string>? writtenFolders)
     {
         _snapshot = snapshot;
 
@@ -432,7 +434,16 @@ public partial class MapsViewModel : PageViewModel
             ? null
             : _all.FirstOrDefault(c => c.FolderName.Equals(opened, StringComparison.OrdinalIgnoreCase));
 
-        _ = LoadPreviewsAsync([.. _all], snapshot.Catalog.HasLevelData, _previews.Token);
+        // Spec 11: a new card shows nothing until its preview lands, so the maps the write touched are loaded
+        // before the rest of the alphabet and stop showing what was there before the write that much sooner.
+        var byFolder = new Dictionary<string, MapCardViewModel>(StringComparer.OrdinalIgnoreCase);
+        foreach (var card in _all)
+        {
+            byFolder[card.FolderName] = card;
+        }
+
+        var order = LoadOrder.Prioritise([.. _all.Select(c => c.FolderName)], writtenFolders);
+        _ = LoadPreviewsAsync([.. order.Select(folder => byFolder[folder])], snapshot.Catalog.HasLevelData, _previews.Token);
 
         // Spec 3.3: the two menus the selection bar opens, rebuilt from the scan they describe. The Add Custom
         // Image row is last and is always there, so the menu is never empty.
@@ -515,8 +526,9 @@ public partial class MapsViewModel : PageViewModel
     /// <summary>The library's custom pictures, as the last scan built them (spec 4). Empty before the first scan.</summary>
     private IReadOnlyList<CustomPicture> CustomPictures() => _snapshot?.CustomPictures ?? [];
 
-    /// <summary>Fills the cards one at a time. The render queue serialises the composites anyway, and going in
-    /// display order means the cards the grid shows first are the ones that fill first. Fire and forget: the card
+    /// <summary>Fills the cards one at a time, in the order given: the maps a write touched first (spec 11), then
+    /// display order, so the cards the grid shows first are the ones that fill first. The render queue serialises
+    /// the composites anyway, so one at a time costs nothing. Fire and forget: the card
     /// turns its own file failures into a fallback, so the only thing left to stop for is cancellation.</summary>
     private async Task LoadPreviewsAsync(IReadOnlyList<MapCardViewModel> cards, bool hasLevelData, CancellationToken ct)
     {
