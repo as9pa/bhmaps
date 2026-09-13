@@ -244,6 +244,25 @@ public class PackCopierTests
     }
 
     [Fact]
+    public void DuplicatePaths_names_every_file_the_copy_takes_under_the_copy_name()
+    {
+        using var tmp = new TempDir();
+        var (lib, source, _) = Arrange(tmp, targetHasMap: false);
+        File.WriteAllText(Path.Combine(source.FullPath, "BloodMoon", "Thumbs.db"), "not an image");
+
+        var paths = PackCopier.DuplicatePaths(lib, "flower", "flower copy");
+
+        Assert.Contains(Path.Combine("packs", "flower copy", "BloodMoon", "Thumbs.db"), paths);
+        Assert.Contains(Path.Combine("packs", "flower copy", "BloodMoon", "a.png"), paths);
+        Assert.Equal("flower copy", PackCopier.DuplicatePack(lib, "flower"));
+        Assert.Equal(
+            paths.OrderBy(p => p, StringComparer.OrdinalIgnoreCase),
+            Directory.EnumerateFiles(Path.Combine(lib, "packs", "flower copy"), "*", SearchOption.AllDirectories)
+                .Select(f => Path.GetRelativePath(lib, f))
+                .OrderBy(p => p, StringComparer.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void Import_copies_every_map_and_reports_the_ones_it_skipped()
     {
         using var tmp = new TempDir();

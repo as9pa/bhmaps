@@ -346,8 +346,8 @@ public partial class PacksViewModel : PageViewModel
 
     /// <summary>Spec 2.6 3.1: the pack folder copied to "{name} copy", off the UI thread. The copy's paths are
     /// captured as absent before it is made, so Undo deletes exactly the files the copy laid down and prunes the
-    /// folders they needed. The name is picked once and handed to the copy, so the paths held for Undo and the
-    /// folder that is written can never name different packs.</summary>
+    /// folders they needed. The name is picked once and handed to the copy, and the paths come off the source tree
+    /// the copy itself reads, so what Undo holds and what is written can never differ by a name or by a file.</summary>
     [RelayCommand]
     private async Task DuplicateAsync(PackRowViewModel? row)
     {
@@ -359,10 +359,7 @@ public partial class PacksViewModel : PageViewModel
         var pack = row.Pack;
         var libraryPath = Shell.Services.LibraryPath;
         var copyName = PackCopier.FreeCopyName(libraryPath, pack.Name);
-        var undoPaths = pack.RelativePaths
-            .Concat([PlatformEditRecord.FileName, BackgroundEditRecord.FileName])
-            .Select(r => Path.Combine(PackCopier.PacksFolderName, copyName, r))
-            .ToList();
+        var undoPaths = PackCopier.DuplicatePaths(libraryPath, pack.Name, copyName);
         string? error = null;
         await Shell.RunLibraryWriteAsync(
             $"Duplicating {pack.Name}",

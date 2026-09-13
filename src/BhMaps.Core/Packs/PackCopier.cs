@@ -276,6 +276,23 @@ public static class PackCopier
         return candidate;
     }
 
+    /// <summary>Every file a duplicate would copy, pack-relative and in enumeration order. The one rule the copy
+    /// and the paths held for Undo are both read from, so neither can name a file the other does not: a pack holds
+    /// more than its images, and Thumbs.db left behind by Undo is a folder left behind with it.</summary>
+    private static IEnumerable<string> DuplicateSources(string from) =>
+        Directory.EnumerateFiles(from, "*", SearchOption.AllDirectories).Select(f => Path.GetRelativePath(from, f));
+
+    /// <summary>Spec 4.2: the library-relative path of every file a duplicate lays down under
+    /// <paramref name="copyName" />, for the undo session the caller opens before the copy is made. The whole
+    /// source tree, edit records and all, because that is what the copy takes. A pack that is not there has none.</summary>
+    public static IReadOnlyList<string> DuplicatePaths(string libraryPath, string name, string copyName)
+    {
+        var from = Path.Combine(libraryPath, PacksFolderName, name);
+        return Directory.Exists(from)
+            ? [.. DuplicateSources(from).Select(r => Path.Combine(PacksFolderName, copyName, r))]
+            : [];
+    }
+
     /// <summary>Spec 3.1: the whole pack folder copied to a free name, which is returned. A copy that fails part
     /// way takes its own half-written folder with it and the exception goes to the caller.</summary>
     public static string DuplicatePack(string libraryPath, string name) =>
@@ -296,9 +313,9 @@ public static class PackCopier
             }
 
             Directory.CreateDirectory(to);
-            foreach (var file in Directory.EnumerateFiles(from, "*", SearchOption.AllDirectories))
+            foreach (var relativePath in DuplicateSources(from))
             {
-                File.Copy(file, Path.Combine(to, Path.GetRelativePath(from, file)), overwrite: false);
+                File.Copy(Path.Combine(from, relativePath), Path.Combine(to, relativePath), overwrite: false);
             }
         }
         catch
