@@ -743,6 +743,83 @@ public partial class MainViewModel : ObservableObject
         return ok;
     }
 
+    /// <summary>Spec 2.6 section 5: one pack's maps and pictures into another, off the UI thread, inside a
+    /// library undo session holding every path the plan will write or replace.</summary>
+    public async Task ImportFromPackAsync(Pack target)
+    {
+        if (Snapshot is not { } snapshot)
+        {
+            return;
+        }
+
+        var sources = snapshot.Packs
+            .Where(p => !p.Name.Equals(target.Name, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (sources.Count == 0)
+        {
+            return;
+        }
+
+        var vm = new ImportFromPackViewModel(this, target, sources);
+        var window = new ImportFromPackWindow
+        {
+            DataContext = vm,
+            Owner = Application.Current.MainWindow,
+            ShowActivated = !App.Quiet,
+        };
+        bool accepted;
+        try
+        {
+            accepted = window.ShowDialog() == true;
+        }
+        finally
+        {
+            // The thumbnails the window started decoding stop with it.
+            vm.Cleanup();
+        }
+
+        if (!accepted || vm.BuildPlan() is not { } plan)
+        {
+            return;
+        }
+
+        var catalog = snapshot.Catalog;
+        var files = plan.Maps
+            .SelectMany(m => PackCopier.MapFiles(plan.Source, m, catalog))
+            .Concat(plan.LooseFiles)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        PackImportResult? result = null;
+        var ok = await RunLibraryWriteAsync(
+            $"Importing into {target.Name}",
+            PackCopier.Touched(target, files),
+            (progress, ct) => Task.Run(() => { result = PackCopier.Import(plan, catalog, progress, ct); }, ct),
+            $"Importing into {target.Name}");
+        if (!ok)
+        {
+            return;
+        }
+
+        // The line names what the import did, which is only known once the work is over, so it is written over
+        // the placeholder the write boundary left rather than handed to it.
+        DoneText = ImportDone(result, plan, target);
+        if (result is not null)
+        {
+            Dialogs.ShowFailures("Some files could not be imported", result.Failures);
+        }
+    }
+
+    /// <summary>Spec 5.2's done line: the count, or the count with the first failure named.</summary>
+    private static string ImportDone(PackImportResult? result, PackImportPlan plan, Pack target)
+    {
+        var wanted = plan.Maps.Count + plan.LooseFiles.Count;
+        var skipped = result?.Skipped.Count ?? 0;
+        var done = wanted - skipped;
+        return result?.Failures.Count > 0
+            ? $"{done} of {wanted} imported. {Path.GetFileName(result.Failures[0].Path)}: {result.Failures[0].Error}"
+            : $"{Count(done, "map")} imported into {target.Name}";
+    }
+
     /// <summary>Spec 6: the editor recolours a map's own pieces into a pack, which is a library write of its own.
     /// The "Apply to game now" it offers is a game write, so the set it left is applied here, with the boundary,
     /// the snapshot and the undo every other write gets. The rescan comes first either way, because the pack the

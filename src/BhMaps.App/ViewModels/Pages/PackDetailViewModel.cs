@@ -30,6 +30,9 @@ public partial class PackDetailViewModel : PageViewModel
 
     public const string NoMapsText = "This pack has no map folders.";
 
+    /// <summary>Spec 5.3: the tip on the disabled Import from pack button.</summary>
+    public const string NoOtherPackText = "No other pack to import from";
+
     /// <summary>Spec 2.6 4.3: the line the page shows for two seconds when Ctrl+V has nothing to paste.</summary>
     public const string NothingCopiedText = "Nothing copied yet";
 
@@ -83,9 +86,16 @@ public partial class PackDetailViewModel : PageViewModel
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Title))]
     [NotifyPropertyChangedFor(nameof(HasPack))]
+    [NotifyPropertyChangedFor(nameof(CanImportFromPack))]
     [NotifyCanExecuteChangedFor(nameof(ApplyAllCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ImportFromPackCommand))]
     [NotifyCanExecuteChangedFor(nameof(OpenFolderCommand))]
     public partial Pack? Pack { get; set; }
+
+    /// <summary>Spec 5.3: nothing to import from when the library holds only this pack.</summary>
+    public bool CanImportFromPack =>
+        Pack is { } pack && _snapshot is { } snapshot
+        && snapshot.Packs.Any(p => !p.Name.Equals(pack.Name, StringComparison.OrdinalIgnoreCase));
 
     public override string Title => Pack?.Name ?? "Pack";
 
@@ -150,6 +160,10 @@ public partial class PackDetailViewModel : PageViewModel
             // Spec 6.5: Remove deletes the pack from the library. Its page has nothing left to show.
             Shell.NavigatePacksCommand.Execute(null);
         }
+
+        // The new snapshot, not the pack, is what decides whether there is another pack to import from.
+        OnPropertyChanged(nameof(CanImportFromPack));
+        ImportFromPackCommand.NotifyCanExecuteChanged();
     }
 
     /// <summary>Spec 5: a click, or Enter on the focused tile, opens the drawer. A background tile whose slot no
@@ -419,6 +433,11 @@ public partial class PackDetailViewModel : PageViewModel
         _hintTimer.Stop();
         _hintTimer.Start();
     }
+
+    /// <summary>Spec 5.3: the window picks what comes over and the shell writes it, as every library write is.</summary>
+    [RelayCommand(CanExecute = nameof(CanImportFromPack))]
+    private Task ImportFromPackAsync() =>
+        Pack is { } pack ? Shell.ImportFromPackAsync(pack) : Task.CompletedTask;
 
     [RelayCommand]
     private void CopyTile() => CopyTileToClipboard(KeyTarget ?? SelectedTile, cut: false);
