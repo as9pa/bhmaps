@@ -239,7 +239,7 @@ public partial class PlatformEditorViewModel : ObservableObject
     /// Cancel and holds the window's own two buttons.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanSave), nameof(CanCloseWindow))]
-    [NotifyCanExecuteChangedFor(nameof(SaveCommand), nameof(CancelSaveCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SaveCommand), nameof(CancelSaveCommand), nameof(PreviousMapCommand), nameof(NextMapCommand))]
     public partial bool IsSaving { get; set; }
 
     [ObservableProperty]
@@ -317,9 +317,9 @@ public partial class PlatformEditorViewModel : ObservableObject
     /// <summary>Whether the strip is drawn at all: one map is every other way into the editor (spec 9).</summary>
     public bool HasManyMaps => _sets.Count > 1;
 
-    public bool CanPreviousMap => CurrentIndex > 0;
+    public bool CanPreviousMap => !IsSaving && CurrentIndex > 0;
 
-    public bool CanNextMap => CurrentIndex < _sets.Count - 1;
+    public bool CanNextMap => !IsSaving && CurrentIndex < _sets.Count - 1;
 
     /// <summary>The window's own Cancel closes it and drops the run, which a save part way through a set of maps
     /// must not do: the Cancel that stops that one is the progress line's (spec 9).</summary>
