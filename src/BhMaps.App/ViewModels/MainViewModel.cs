@@ -10,6 +10,7 @@ using BhMaps.Core.Model;
 using BhMaps.Core.Operations;
 using BhMaps.Core.Packs;
 using BhMaps.Core.Scanning;
+using BhMaps.Core.Update;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -21,6 +22,9 @@ public partial class MainViewModel : ObservableObject
 {
     private static readonly TimeSpan GamePollInterval = TimeSpan.FromSeconds(3);
 
+    /// <summary>Spec 7.3: how long after the first scan the one update check of the run starts.</summary>
+    private static readonly TimeSpan UpdateCheckDelay = TimeSpan.FromSeconds(5);
+
     private readonly GameLauncher _launcher;
     private readonly IReadOnlyList<PageViewModel> _pages;
 
@@ -29,7 +33,12 @@ public partial class MainViewModel : ObservableObject
     private readonly Dictionary<string, string> _thumbnailNotes = new(StringComparer.OrdinalIgnoreCase);
 
     private readonly DispatcherTimer _gameTimer;
+    private readonly DispatcherTimer _updateTimer;
     private CancellationTokenSource? _cts;
+
+    /// <summary>Set the first time a scan finishes, so the update check is started once a run and no rescan
+    /// starts another.</summary>
+    private bool _updateCheckStarted;
 
     /// <summary>Set when the game data lands while a scan is running, so the rescan it needs happens once the
     /// busy boundary clears instead of being dropped.</summary>
@@ -61,6 +70,14 @@ public partial class MainViewModel : ObservableObject
         _gameTimer = new DispatcherTimer { Interval = GamePollInterval };
         _gameTimer.Tick += (_, _) => GameRunning = GameProcess.IsRunning();
         _gameTimer.Start();
+
+        // One shot: the tick stops the timer and starts the check.
+        _updateTimer = new DispatcherTimer { Interval = UpdateCheckDelay };
+        _updateTimer.Tick += (_, _) =>
+        {
+            _updateTimer.Stop();
+            _ = CheckForUpdateAsync(force: false);
+        };
     }
 
     public AppServices Services { get; }
@@ -150,6 +167,27 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     public partial bool CanUndo { get; set; }
 
+    /// <summary>Spec 7.3: the latest release the last check found, or null when nothing has been found yet. Set
+    /// off the UI thread's work but assigned on it, because the top bar binds to it.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowUpdateLine))]
+    public partial ReleaseInfo? AvailableUpdate { get; set; }
+
+    /// <summary>Whether a check is running right now. The Settings row reads it; the top bar does not.</summary>
+    [ObservableProperty]
+    public partial bool UpdateChecking { get; set; }
+
+    /// <summary>Whether the last check came back with nothing, which is every failure there is (spec 7.1).</summary>
+    [ObservableProperty]
+    public partial bool UpdateCheckFailed { get; set; }
+
+    /// <summary>The top bar line shows only for a release newer than this build whose tag has not been waved
+    /// away. A later release carries a different tag, so the line comes back on its own.</summary>
+    public bool ShowUpdateLine =>
+        AvailableUpdate is { } release
+        && ReleaseChecker.IsNewer(release, Services.AppVersion)
+        && !string.Equals(release.TagName, Services.Settings.DismissedUpdate, StringComparison.OrdinalIgnoreCase);
+
     /// <summary>Folder name of the map most recently opened on Maps, or null before any. Maps sets it; part B's
     /// panel reads it back.</summary>
     [ObservableProperty]
@@ -181,6 +219,32 @@ public partial class MainViewModel : ObservableObject
 
     [RelayCommand]
     private void NavigateSettings() => CurrentPage = SettingsPage;
+
+    /// <summary>Spec 7.3: the dismiss x remembers the tag, so this release never asks again and the next one
+    /// does. Saving is best effort: a settings file that cannot be written is not worth a dialog here.</summary>
+    [RelayCommand]
+    private void DismissUpdate()
+    {
+        if (AvailableUpdate is not { } release)
+        {
+            return;
+        }
+
+        try
+        {
+            Services.UpdateSettings(Services.Settings with { DismissedUpdate = release.TagName });
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            System.Diagnostics.Trace.WriteLine($"BhMaps: the dismissed update was not saved: {ex.Message}");
+        }
+
+        OnPropertyChanged(nameof(ShowUpdateLine));
+    }
+
+    /// <summary>The line itself is the way to the Settings row that offers the download. Nothing downloads here.</summary>
+    [RelayCommand]
+    private void OpenUpdate() => CurrentPage = SettingsPage;
 
     /// <summary>Opens the pack detail page on one pack (spec 7.5).</summary>
     public void NavigateToPack(Pack pack)
@@ -1032,7 +1096,55 @@ public partial class MainViewModel : ObservableObject
         }
 
         CanUndo = Services.Undo.Latest is not null;
+
+        // Spec 7.3: once a run, 5 s after the first scan finished, off the UI thread and blocking nothing. A
+        // timer rather than an await, so the scan's caller is not held by it.
+        if (!_updateCheckStarted)
+        {
+            _updateCheckStarted = true;
+            _updateTimer.Start();
+        }
     }
+
+    /// <summary>Spec 7.3: the check itself. Off unless the setting is on; at most once a day unless the Settings
+    /// page's Check now button forces it. Never throws, never shows a dialog, never downloads, never blocks: the
+    /// only thing it can do is set AvailableUpdate and stamp lastUpdateCheck.</summary>
+    public async Task CheckForUpdateAsync(bool force)
+    {
+        if (!force && (!Services.Settings.CheckForUpdates || !DueForCheck(Services.Settings.LastUpdateCheck)))
+        {
+            return;
+        }
+
+        UpdateCheckFailed = false;
+        UpdateChecking = true;
+        try
+        {
+            var release = await Task.Run(() => Services.Updates.CheckAsync(CancellationToken.None));
+            AvailableUpdate = release;
+            UpdateCheckFailed = release is null;
+            if (release is not null || force)
+            {
+                try
+                {
+                    Services.UpdateSettings(Services.Settings with { LastUpdateCheck = DateTimeOffset.UtcNow });
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    System.Diagnostics.Trace.WriteLine($"BhMaps: the update stamp was not saved: {ex.Message}");
+                }
+            }
+        }
+        finally
+        {
+            UpdateChecking = false;
+            SettingsPage.RefreshUpdateRow();
+        }
+    }
+
+    /// <summary>Null, or older than a day. A stamp in the future (a clock that moved) counts as due.</summary>
+    private static bool DueForCheck(DateTimeOffset? last) =>
+        last is not { } then || DateTimeOffset.UtcNow - then >= TimeSpan.FromHours(24) || then > DateTimeOffset.UtcNow;
 
     /// <summary>Spec 3.5: the game data has been read, so the catalog the last scan built from the cache, or from
     /// nothing, is out of date. A read that lands mid-scan is remembered rather than started on top of it, and
@@ -1048,11 +1160,12 @@ public partial class MainViewModel : ObservableObject
         _ = RescanAsync();
     }
 
-    /// <summary>Stops the game poll and drops the level-data subscription. Called once, when the window closes, so
-    /// neither keeps waking a dispatcher that is on its way out.</summary>
+    /// <summary>Stops the two timers and drops the level-data subscription. Called once, when the window closes,
+    /// so none of them keeps waking a dispatcher that is on its way out.</summary>
     public void Shutdown()
     {
         _gameTimer.Stop();
+        _updateTimer.Stop();
         Services.LevelData.Changed -= OnLevelDataChanged;
     }
 

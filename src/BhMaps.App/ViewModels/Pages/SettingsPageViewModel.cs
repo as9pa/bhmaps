@@ -86,6 +86,12 @@ public partial class SettingsPageViewModel : PageViewModel
         _refreshing = false;
     }
 
+    /// <summary>Spec 7.3: the shell calls this when a check finishes, so the Version row can say what it found
+    /// without waiting for a scan. Task 6 completes it; there is no update row to refresh yet.</summary>
+    public void RefreshUpdateRow()
+    {
+    }
+
     /// <summary>There is no OK button, so the switch saves as it changes. Turning it off puts back the thumbnails
     /// already written, which the shell owns because the undo of a write does.</summary>
     partial void OnWriteGameThumbnailsChanged(bool value)
