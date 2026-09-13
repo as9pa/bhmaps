@@ -697,11 +697,10 @@ public partial class MapsViewModel : PageViewModel
                 new AsyncRelayCommand(() => EditBackgroundAsync(one, slot)),
                 IsEnabled: single && slot is not null,
                 ToolTip: single ? null : setNote),
+            // Spec 9: the editor takes the whole ticked set, so the row is on whatever the menu's header named.
             new TileMenuCommand(
                 "Edit platforms",
-                new AsyncRelayCommand(() => Shell.OpenPlatformEditorAsync(one, null)),
-                IsEnabled: single,
-                ToolTip: setNote),
+                new AsyncRelayCommand(() => Shell.OpenPlatformEditorAsync(target, null))),
             TileMenuCommand.Separator(),
             new TileMenuCommand(
                 "Reset to default",

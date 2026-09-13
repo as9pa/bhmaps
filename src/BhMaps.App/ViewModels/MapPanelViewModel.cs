@@ -131,7 +131,7 @@ public partial class MapPanelViewModel : ObservableObject
             var file = relativePath;
             _platformFiles.Add(new PlatformFileViewModel(
                 file, InGameMatch.File(status, file)?.Text ?? "", ChangesNothing: false, Thumbnail: null,
-                CanEdit: false, EditCommand: new RelayCommand(() => _ = shell.OpenPlatformEditorAsync(map, pack: null, onlyFile: file))));
+                CanEdit: false, EditCommand: new RelayCommand(() => _ = shell.OpenPlatformEditorAsync([map], pack: null, onlyFile: file))));
         }
 
         RebuildMenus(shell.SelectedMapCount);
