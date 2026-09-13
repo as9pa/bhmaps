@@ -154,7 +154,7 @@
                       Foreground="{StaticResource TextBrush}"
                       IsChecked="{Binding WriteGameThumbnails}" />
             <TextBlock Margin="0,6,0,0"
-                       Style="{StaticResource SettingValue}"
+                       Foreground="{StaticResource Text2Brush}"
                        Text="When on, a game write that changes a map's art also writes the map's picture over its thumbnail in the game's images\thumbnails folder. The original is kept and comes back with Reset or when this is turned off."
                        TextWrapping="Wrap" />
           </StackPanel>
