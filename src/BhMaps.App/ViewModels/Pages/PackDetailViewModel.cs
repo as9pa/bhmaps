@@ -653,6 +653,10 @@ public partial class PackDetailViewModel : PageViewModel
         var reopen = _openKey;
         CloseDrawer();
         SelectedTile = null;
+
+        // The pointer is over nothing the new grid holds: a tile left over from the previous pack would pair the
+        // wrong pack with it on the next Ctrl+C, and MouseLeave never comes for a container that is gone.
+        KeyTarget = null;
         Items.Clear();
         _transparentFiles = Array.Empty<string>();
         TransparentText = "";
