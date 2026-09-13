@@ -18,7 +18,7 @@ public class UpdateInstallerTests
 
         Assert.Equal(Path.Combine(updates, "apply-update.cmd"), script);
         Assert.Contains("tasklist /FI \"PID eq 4321\"", text);
-        Assert.Contains("timeout /t 1", text);
+        Assert.Contains("ping -n 2 127.0.0.1", text);
         Assert.Contains($"\"{running}\"", text);
         Assert.Contains($"\"{newExe}\"", text);
         Assert.Contains($"\"{running}.old\"", text);
@@ -66,13 +66,35 @@ public class UpdateInstallerTests
     }
 
     [Fact]
-    public void CanSwap_FalseWhenTheRuntimeLivesOutsideTheAppFolder()
+    public void CanSwap_FalseWhenTheRuntimeIsASharedFrameworkInstall()
     {
         using var tmp = new TempDir();
         var exe = Path.Combine(tmp.Path, "BhMaps.exe");
         File.WriteAllText(exe, "");
 
         Assert.False(UpdateInstaller.CanSwap(exe, @"C:\Program Files\dotnet\shared\Microsoft.NETCore.App\10.0.0\", tmp.Path));
+    }
+
+    [Fact]
+    public void CanSwap_TrueWhenTheSingleFileRuntimeExtractedUnderTemp()
+    {
+        // The shipped build is single-file self-contained: it unpacks its runtime under %TEMP%\.net, so the runtime
+        // folder is nowhere near the exe and the app can still swap itself.
+        using var tmp = new TempDir();
+        var exe = Path.Combine(tmp.Path, "BhMaps.exe");
+        File.WriteAllText(exe, "");
+
+        Assert.True(UpdateInstaller.CanSwap(exe, @"C:\Users\x\AppData\Local\Temp\.net\BhMaps\abc123\", tmp.Path));
+    }
+
+    [Fact]
+    public void CanSwap_TrueWhenTheRuntimeSitsBesideTheExe()
+    {
+        using var tmp = new TempDir();
+        var app = tmp.Sub("app", "BhMaps.exe");
+        File.WriteAllText(app, "");
+
+        Assert.True(UpdateInstaller.CanSwap(app, Path.Combine(tmp.Path, "app"), Path.Combine(tmp.Path, "elsewhere")));
     }
 
     [Fact]

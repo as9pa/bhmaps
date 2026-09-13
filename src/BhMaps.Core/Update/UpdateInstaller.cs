@@ -21,6 +21,8 @@ public static class UpdateInstaller
         var oldExe = runningExe + OldSuffix;
         var id = pid.ToString(CultureInfo.InvariantCulture);
 
+        // ping is the wait, not timeout: the script is started with no console of its own, and timeout fails
+        // outright without one. Two pings to the loopback address are about one second.
         var text =
             "@echo off\r\n"
             + "setlocal\r\n"
@@ -28,7 +30,7 @@ public static class UpdateInstaller
             + ":wait\r\n"
             + $"tasklist /FI \"PID eq {id}\" | find \"{id}\" >nul\r\n"
             + "if not errorlevel 1 (\r\n"
-            + "  timeout /t 1 /nobreak >nul\r\n"
+            + "  ping -n 2 127.0.0.1 >nul\r\n"
             + "  goto wait\r\n"
             + ")\r\n"
             + $"if exist \"{oldExe}\" del /f /q \"{oldExe}\" >nul 2>&1\r\n"
@@ -56,17 +58,24 @@ public static class UpdateInstaller
     public static bool CanSwap(string exePath) =>
         CanSwap(exePath, RuntimeEnvironment.GetRuntimeDirectory(), AppContext.BaseDirectory);
 
-    /// <summary>The testable half. Self-contained means the runtime the app is running on lives inside the app's
-    /// own folder; the framework-dependent build finds it under Program Files instead.</summary>
+    /// <summary>The testable half. The test is for the framework-dependent build, not for the self-contained one:
+    /// the shipped exe is single-file self-contained, so its runtime extracts to a folder under %TEMP%\.net and is
+    /// nowhere near the app. Only the framework-dependent build runs on a shared framework install, and only that
+    /// one cannot be swapped by moving a single file. <paramref name="baseDir"/> is the app's own folder; the rule
+    /// no longer reads it, and it stays because the caller has it and a future rule may need it again.</summary>
     internal static bool CanSwap(string exePath, string runtimeDir, string baseDir)
     {
+        _ = baseDir;
+
         var folder = Path.GetDirectoryName(exePath);
         if (string.IsNullOrEmpty(folder) || !Directory.Exists(folder))
         {
             return false;
         }
 
-        if (!Normalize(runtimeDir).StartsWith(Normalize(baseDir), StringComparison.OrdinalIgnoreCase))
+        var sep = Path.DirectorySeparatorChar;
+        var sharedFramework = $"{sep}dotnet{sep}shared{sep}Microsoft.NETCore.App{sep}";
+        if (Normalize(runtimeDir).Contains(sharedFramework, StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
@@ -75,12 +84,25 @@ public static class UpdateInstaller
         try
         {
             File.WriteAllText(probe, "");
-            File.Delete(probe);
             return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             return false;
+        }
+        finally
+        {
+            try
+            {
+                if (File.Exists(probe))
+                {
+                    File.Delete(probe);
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // A probe that cannot be removed is not a reason to refuse the update; it is an empty file.
+            }
         }
     }
 
