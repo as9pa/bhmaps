@@ -315,6 +315,21 @@ public partial class MapsViewModel : PageViewModel
 
         var gamePath = Shell.Services.GamePath;
         var failures = new List<FileFailure>();
+
+        // Spec 7: each map's files go back to default, so the edits the packs that map matches remembered for it
+        // go too. The packs are read from the scan the reset started from, once per map.
+        var matched = new Dictionary<string, IReadOnlyList<Pack>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var map in maps)
+        {
+            snapshot.MapStatuses.TryGetValue(map.FolderName, out var status);
+            matched[map.FolderName] = RecordReset.MatchedPacks(map, status, snapshot.Packs);
+        }
+
+        var allMatched = matched.Values
+            .SelectMany(packs => packs)
+            .DistinctBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
         await Shell.RunGameWriteAsync(
             "Resetting",
             maps.SelectMany(m => PackApplier.ResetMapPaths(snapshot.Tree, m, defaultPack))
@@ -328,11 +343,13 @@ public partial class MapsViewModel : PageViewModel
                         progress.Report(map.DisplayName);
                         failures.AddRange(
                             MapReset.ResetMap(gamePath, map.FolderName, map.BackgroundSlots, defaultPack).Failures);
+                        RecordReset.Clear(map, matched[map.FolderName]);
                     }
                 },
                 ct),
             $"Reset {MainViewModel.Count(maps.Count, "map")} to default",
-            clearTicks);
+            clearTicks,
+            libraryUndoPaths: RecordReset.UndoPaths(allMatched, Shell.Services.LibraryPath));
 
         Shell.Dialogs.ShowFailures("Some files could not be reset", failures);
     }

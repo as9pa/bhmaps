@@ -230,11 +230,12 @@ public partial class MainViewModel : ObservableObject
         }
 
         var gamePath = Services.GamePath;
+        var libraryPath = Services.LibraryPath;
         ApplyResult? result = null;
         await RunWriteCoreAsync(
             "Undoing",
             undoPaths: null,
-            (_, ct) => Task.Run(() => { result = Services.Undo.Restore(session, gamePath); }, ct),
+            (_, ct) => Task.Run(() => { result = Services.Undo.Restore(session, gamePath, libraryPath); }, ct),
             UndoDoneText,
             undoable: false,
             clearTicks: false);
@@ -973,15 +974,17 @@ public partial class MainViewModel : ObservableObject
     /// cleared when the write was aimed at them, and a rescan. False when the folder was missing, another
     /// operation held the boundary, or the write was cancelled or failed. <paramref name="packName"/> is the pack
     /// the write came out of, stamped as last applied when it succeeds; null for undo, reset and a picture that
-    /// was only ever in the game folder.</summary>
+    /// was only ever in the game folder. <paramref name="libraryUndoPaths"/> names library files the write also
+    /// changes, relative to the library folder, so the undo puts them back with the game files (spec 7).</summary>
     public Task<bool> RunGameWriteAsync(
         string label,
         IReadOnlyList<string> undoPaths,
         Func<IProgress<string>, CancellationToken, Task> work,
         string doneText,
         bool clearTicks = false,
-        string? packName = null) =>
-        RunWriteCoreAsync(label, undoPaths, work, doneText, undoable: true, clearTicks, packName);
+        string? packName = null,
+        IReadOnlyList<string>? libraryUndoPaths = null) =>
+        RunWriteCoreAsync(label, undoPaths, work, doneText, undoable: true, clearTicks, packName, libraryUndoPaths);
 
     /// <summary>The one path every game write takes. <paramref name="undoPaths"/> null means take no snapshot,
     /// which is Undo's case and only Undo's: the snapshot it is restoring is the only one there is, and Begin
@@ -993,7 +996,8 @@ public partial class MainViewModel : ObservableObject
         string doneText,
         bool undoable,
         bool clearTicks,
-        string? packName = null)
+        string? packName = null,
+        IReadOnlyList<string>? libraryUndoPaths = null)
     {
         if (GameFolderMissing || IsBusy)
         {
@@ -1003,6 +1007,7 @@ public partial class MainViewModel : ObservableObject
         }
 
         var gamePath = Services.GamePath;
+        var libraryPath = Services.LibraryPath;
         var ok = await RunBusyAsync(
             label,
             async (progress, ct) =>
@@ -1017,7 +1022,19 @@ public partial class MainViewModel : ObservableObject
                             // so it belongs off the UI thread, behind a progress line, and inside the boundary that
                             // turns an IO failure into the same dialog any other write failure gets.
                             progress.Report("Saving undo");
-                            await Task.Run(() => Services.Undo.Begin().Capture(gamePath, undoPaths), ct);
+                            await Task.Run(
+                                () =>
+                                {
+                                    // One session holds both sides: the library records a write clears go back
+                                    // with the game files it cleared them for, in the same undo.
+                                    var session = Services.Undo.Begin();
+                                    session.Capture(gamePath, undoPaths);
+                                    if (libraryUndoPaths is { Count: > 0 })
+                                    {
+                                        session.CaptureLibrary(libraryPath, libraryUndoPaths);
+                                    }
+                                },
+                                ct);
                         }
 
                         await work(progress, ct);
