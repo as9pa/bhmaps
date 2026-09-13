@@ -66,18 +66,14 @@ public partial class PackDetailView : UserControl
         }
     }
 
-    /// <summary>Spec 4.1: the lines are built here, not when the ticks change, so the ticked line names the count
-    /// the user can see and no tile is rebuilt that is never opened.</summary>
+    /// <summary>Spec 2.6 section 3: the lines are built here, not when the ticks change, so the ticked line names
+    /// the count the user can see. Every tile has a menu now, so nothing is handled away.</summary>
     private void OnTileMenuOpening(object sender, ContextMenuEventArgs e)
     {
         if (sender is FrameworkElement { DataContext: PackTileViewModel tile }
             && DataContext is PackDetailViewModel page)
         {
             page.BuildTileMenu(tile);
-            if (tile.MenuItems.Count == 0)
-            {
-                e.Handled = true;
-            }
         }
     }
 
@@ -88,10 +84,6 @@ public partial class PackDetailView : UserControl
         if (sender is FrameworkElement { DataContext: PackTileViewModel tile })
         {
             Page?.BuildTileMenu(tile);
-            if (tile.MenuItems.Count == 0)
-            {
-                return;
-            }
         }
 
         TileMenus.OpenFor(sender);

@@ -592,6 +592,13 @@
     <Setter Property="Padding" Value="4" />
   </Style>
 
+  <!-- For a menu whose rows are not TileMenuCommand: the header is the words themselves, drawn the same way and
+       still not through AccessText. A style based on TileMenuItem that sets its own Header sets this beside it,
+       because TileMenuItem's own template reads Text and Gesture off the line. -->
+  <DataTemplate x:Key="TileMenuPlainHeader">
+    <TextBlock Text="{Binding}" />
+  </DataTemplate>
+
   <!-- Header and Command are setters rather than per item markup, so one ItemsSource of TileMenuCommand drives
        every tile's menu and a page never writes a MenuItem by hand. A literal MenuItem that sets its own Header
        still wins: a local value beats a style setter. -->
@@ -600,15 +607,24 @@
     <Setter Property="FontSize" Value="13" />
     <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
     <Setter Property="Padding" Value="10,6" />
-    <Setter Property="Header" Value="{Binding Text}" />
+    <Setter Property="Header" Value="{Binding}" />
 
     <!-- A file or pack name reads exactly as typed. Without a template the header string is drawn through
          AccessText, which eats the underscore in "BG_Dojo.jpg" and underlines the D instead; no menu in spec
-         section 11 offers an access key, so no menu needs one. The template's DataContext is the header itself. -->
+         section 11 offers an access key, so no menu needs one. The header is the line itself, so the template
+         can draw its gesture beside its words. -->
     <Setter Property="HeaderTemplate">
       <Setter.Value>
         <DataTemplate>
-          <TextBlock Text="{Binding}" />
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="{Binding Text}" />
+            <TextBlock Grid.Column="1" Margin="24,0,0,0" Foreground="{StaticResource Text3Brush}"
+                       Text="{Binding Gesture}" />
+          </Grid>
         </DataTemplate>
       </Setter.Value>
     </Setter>

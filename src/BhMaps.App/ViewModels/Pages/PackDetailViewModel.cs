@@ -6,6 +6,7 @@ using BhMaps.Core.Imaging;
 using BhMaps.Core.Maps;
 using BhMaps.Core.Model;
 using BhMaps.Core.Operations;
+using BhMaps.Core.Packs;
 using BhMaps.Core.Scanning;
 using BhMaps.Core.Settings;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -145,28 +146,67 @@ public partial class PackDetailViewModel : PageViewModel
 
     public void OpenSelected() => Open(SelectedTile);
 
-    /// <summary>Spec 4.1: the lines of one picture tile's menu, in the spec's order, each present only when its
-    /// condition holds. Built when the menu opens, so the ticked count is the one the user can see.</summary>
+    /// <summary>Spec 2.6 section 3: every tile has a menu. A map tile leads with the map, a file tile with the
+    /// file name, and both end with the line that takes the tile out of the pack. Built when the menu opens, so
+    /// the ticked count is the one the user can see.</summary>
     public void BuildTileMenu(PackTileViewModel tile)
     {
-        if (tile.PicturePath is not { } path || Pack is not { } pack)
+        if (Pack is not { } pack)
         {
             tile.MenuItems = [];
             return;
         }
 
+        var isDefault = pack.Name.Equals(DefaultPack.Name, StringComparison.OrdinalIgnoreCase);
+        var items = new List<TileMenuCommand>();
+        if (tile.Map is { } owner)
+        {
+            items.Add(TileMenuCommand.Header(owner.DisplayName));
+            items.Add(new TileMenuCommand(
+                $"Apply to {owner.DisplayName}",
+                new AsyncRelayCommand(() => Shell.ApplySetAsync(pack, [owner], clearTicks: false)),
+                IsEnabled: Shell.CanWrite));
+        }
+        else
+        {
+            items.Add(TileMenuCommand.Header(tile.Caption));
+        }
+
+        if (tile.PicturePath is { } path)
+        {
+            AddPictureLines(items, tile, pack, path);
+        }
+
+        if (tile.PicturePath is not null || tile.FolderPath is not null)
+        {
+            items.Add(new TileMenuCommand(
+                "Show in folder", new RelayCommand(() => ShowInFolder(tile.PicturePath ?? tile.FolderPath!))));
+        }
+
+        if (tile.Map is { } removable && !isDefault)
+        {
+            items.Add(TileMenuCommand.Separator());
+            items.Add(new TileMenuCommand(
+                $"Remove from {pack.Name}", new AsyncRelayCommand(() => RemoveMapFromPackAsync(removable))));
+        }
+        else if (tile.Map is null && tile.PicturePath is { } file)
+        {
+            items.Add(TileMenuCommand.Separator());
+            items.Add(new TileMenuCommand(
+                $"Remove from {pack.Name}",
+                new AsyncRelayCommand(() => RemoveFromPackAsync(file, Path.GetFileName(file)))));
+        }
+
+        tile.MenuItems = items;
+    }
+
+    /// <summary>The 2.5 picture lines, in their order: the ticked apply, the chooser, every map, then Edit. The
+    /// per-map apply of 2.5 is gone: on a map tile Apply to {map} above it already names that map.</summary>
+    private void AddPictureLines(List<TileMenuCommand> items, PackTileViewModel tile, Pack pack, string path)
+    {
         var name = Path.GetFileName(path);
         var ticked = Shell.SelectedMapCount;
         var slot = tile.Map?.BackgroundSlots.FirstOrDefault();
-        var items = new List<TileMenuCommand> { TileMenuCommand.Header(name) };
-
-        if (tile.Map is { } owner)
-        {
-            items.Add(new TileMenuCommand(
-                $"Apply to {owner.DisplayName}",
-                new AsyncRelayCommand(() => Shell.ApplyPictureAsync(path, [owner], false, name, pack.Name))));
-        }
-
         if (ticked > 0)
         {
             var text = ticked == 1 ? "Apply to the 1 selected map" : $"Apply to the {ticked} selected maps";
@@ -185,10 +225,36 @@ public partial class PackDetailViewModel : PageViewModel
             "Edit",
             new AsyncRelayCommand(
                 () => Shell.OpenBackgroundEditorAsync(new BackgroundEditorRequest(path, pack.Name, slot)))));
-        items.Add(new TileMenuCommand("Show in folder", new RelayCommand(() => ShowInFolder(path))));
-        items.Add(new TileMenuCommand(
-            $"Remove from {pack.Name}", new AsyncRelayCommand(() => RemoveFromPackAsync(path, name))));
-        tile.MenuItems = items;
+    }
+
+    /// <summary>Spec 2.6 section 3 item 7: the map's files in this pack, deleted together, inside a library undo
+    /// session so the confirm is the only thing standing between the user and getting them back.</summary>
+    private async Task RemoveMapFromPackAsync(MapEntry map)
+    {
+        if (Pack is not { } pack || _snapshot is not { } snapshot)
+        {
+            return;
+        }
+
+        var count = PackCopier.MapFiles(pack, map, snapshot.Catalog).Count;
+        if (!Shell.Dialogs.Confirm(
+                $"Remove from {pack.Name}?",
+                $"{map.DisplayName} and its {PackRowViewModel.Plural(count, "file")} are removed from {pack.Name}. The game keeps whatever is applied until you apply something else."))
+        {
+            return;
+        }
+
+        var catalog = snapshot.Catalog;
+        PackCopyResult? result = null;
+        await Shell.RunLibraryWriteAsync(
+            $"Removing {map.DisplayName}",
+            PackCopier.Touched(pack, PackCopier.MapFiles(pack, map, catalog)),
+            (_, ct) => Task.Run(() => { result = PackCopier.RemoveMap(pack, map, catalog); }, ct),
+            $"{map.DisplayName} removed from {pack.Name}");
+        if (result is not null)
+        {
+            Shell.Dialogs.ShowFailures("Some files could not be removed", result.Failures);
+        }
     }
 
     /// <summary>Spec 4.1 line 3: the chooser, then the shell's apply on the one map it returned. No confirm,
@@ -396,7 +462,8 @@ public partial class PackDetailViewModel : PageViewModel
         foreach (var map in MapsIn(snapshot.Catalog, pack))
         {
             Items.Add(new PackTileViewModel(
-                map.FolderName, map.DisplayName, map, null, MapCompositor.CardWidth, MapCompositor.CardHeight));
+                map.FolderName, map.DisplayName, map, null, MapCompositor.CardWidth, MapCompositor.CardHeight)
+            { FolderPath = pack.FindFolder(map.FolderName)?.FullPath });
         }
 
         // .jpg only: the game's backgrounds are all JPEGs, so a PNG in the folder fills no slot and belongs in
@@ -409,7 +476,7 @@ public partial class PackDetailViewModel : PageViewModel
                 continue;
             }
 
-            var owner = MapForSlot(snapshot.Catalog, file.Name);
+            var owner = PackCopier.MapForSlot(snapshot.Catalog, file.Name);
             if (owner is null)
             {
                 Items.Add(new PackTileViewModel(
@@ -424,7 +491,8 @@ public partial class PackDetailViewModel : PageViewModel
                 {
                     tile = new PackTileViewModel(
                         owner.FolderName, owner.DisplayName, owner, null,
-                        MapCompositor.CardWidth, MapCompositor.CardHeight);
+                        MapCompositor.CardWidth, MapCompositor.CardHeight)
+                    { FolderPath = pack.FindFolder(owner.FolderName)?.FullPath };
                     Items.Add(tile);
                 }
 
@@ -442,10 +510,6 @@ public partial class PackDetailViewModel : PageViewModel
             Open(Items.FirstOrDefault(t => t.Key.Equals(reopen, StringComparison.OrdinalIgnoreCase)));
         }
     }
-
-    /// <summary>The first map, in display-name order, whose levels name this background slot (decision C-D4).</summary>
-    private static MapEntry? MapForSlot(MapCatalog catalog, string slot) =>
-        catalog.Maps.FirstOrDefault(m => m.BackgroundSlots.Any(s => s.Equals(slot, StringComparison.OrdinalIgnoreCase)));
 
     /// <summary>The maps the pack touches: the catalog maps it has at least one file for. A pack folder that is
     /// not a map, such as a theme folder other maps borrow from (spec 4), is not one of them.</summary>
@@ -615,6 +679,10 @@ public partial class PackTileViewModel : ObservableObject
     public partial IReadOnlyList<TileMenuCommand> MenuItems { get; set; } = [];
 
     /// <summary>The picture the tile is about: the pack's own file for an orphan, or the pack's copy of the map's
-    /// background slot. Null on a tile whose map the pack has no background for, and then the tile has no menu.</summary>
+    /// background slot. Null on a tile whose map the pack has no background for.</summary>
     public string? PicturePath { get; set; }
+
+    /// <summary>The map's folder inside the pack, so Show in folder on a map tile has something to open. Null on
+    /// a file tile, whose picture is what Show in folder reveals.</summary>
+    public string? FolderPath { get; set; }
 }
