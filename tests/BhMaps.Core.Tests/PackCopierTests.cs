@@ -199,6 +199,25 @@ public class PackCopierTests
     }
 
     [Fact]
+    public void MoveMap_that_could_not_copy_every_file_leaves_the_source_alone()
+    {
+        using var tmp = new TempDir();
+        var (lib, source, target) = Arrange(tmp, targetHasMap: false);
+
+        // A folder standing where b.png has to land: the copy of that one file fails, the others land.
+        Directory.CreateDirectory(Path.Combine(lib, "packs", "stone", "BloodMoon", "b.png"));
+
+        var result = PackCopier.MoveMap(source, target, Catalog().Maps[0], Catalog(), replace: false);
+
+        Assert.False(result.Skipped);
+        Assert.Single(result.Failures);
+        Assert.Empty(result.Removed);
+        Assert.True(File.Exists(Path.Combine(lib, "packs", "flower", "BloodMoon", "a.png")));
+        Assert.True(File.Exists(Path.Combine(lib, "packs", "flower", "BloodMoon", "b.png")));
+        Assert.True(File.Exists(Path.Combine(lib, "packs", "flower", "Backgrounds", "BG_BloodMoon.jpg")));
+    }
+
+    [Fact]
     public void FreeCopyName_counts_up_past_the_names_that_are_taken()
     {
         using var tmp = new TempDir();

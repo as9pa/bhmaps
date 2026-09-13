@@ -207,11 +207,13 @@ public static class PackCopier
         return new PackCopyResult([], removed, false, failures);
     }
 
-    /// <summary>Spec 4.1: CopyMap, then the source's copy of the same files. A skipped copy moves nothing.</summary>
+    /// <summary>Spec 4.1: CopyMap, then the source's copy of the same files. A copy that was skipped, wrote nothing,
+    /// or could not place every file moves nothing: clearing the source after a partial copy would delete the files
+    /// that never reached the target. The copy result is returned as it stands, its Failures the report.</summary>
     public static PackCopyResult MoveMap(Pack source, Pack target, MapEntry map, MapCatalog catalog, bool replace)
     {
         var copied = CopyMap(source, target, map, catalog, replace);
-        if (copied.Skipped || copied.Written.Count == 0)
+        if (copied.Skipped || copied.Written.Count == 0 || copied.Failures.Count > 0)
         {
             return copied;
         }
@@ -224,11 +226,12 @@ public static class PackCopier
         };
     }
 
-    /// <summary>Spec 4.1: CopyFile, then the source's file and its entry.</summary>
+    /// <summary>Spec 4.1: CopyFile, then the source's file and its entry. A copy that was skipped, wrote nothing or
+    /// failed leaves the source alone, on the same rule as MoveMap.</summary>
     public static PackCopyResult MoveFile(Pack source, Pack target, string relativePath, bool replace)
     {
         var copied = CopyFile(source, target, relativePath, replace);
-        if (copied.Skipped || copied.Written.Count == 0)
+        if (copied.Skipped || copied.Written.Count == 0 || copied.Failures.Count > 0)
         {
             return copied;
         }
