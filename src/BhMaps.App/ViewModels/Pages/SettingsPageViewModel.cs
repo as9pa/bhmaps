@@ -10,15 +10,22 @@ namespace BhMaps.App.ViewModels.Pages;
 /// settings.json the moment it changes and rescans when the change moves what the app is looking at.</summary>
 public partial class SettingsPageViewModel : PageViewModel
 {
+    /// <summary>True while this page is writing the saved values into its own rows, so a row's setter does not
+    /// save back the value it was just handed.</summary>
+    private bool _refreshing;
+
     public SettingsPageViewModel(MainViewModel shell)
         : base(shell)
     {
+        _refreshing = true;
         GameError = "";
         LibraryError = "";
         GamePath = shell.Services.GamePath;
         LibraryPath = shell.Services.LibraryPath;
         GameDataStatus = shell.Services.LevelData.StatusSentence;
+        WriteGameThumbnails = shell.Services.Settings.WriteGameThumbnails;
         Version = ReadVersion();
+        _refreshing = false;
 
         // Spec 3.5: a startup re-read runs in the background and finishes after this page exists, and nothing
         // rescans behind it, so the sentence has to follow the service rather than only the scan.
@@ -58,6 +65,11 @@ public partial class SettingsPageViewModel : PageViewModel
     [ObservableProperty]
     public partial string GameDataStatus { get; set; }
 
+    /// <summary>Spec 10.2: writing the game's map-select thumbnails is opt-in, so this is off unless the settings
+    /// file says otherwise.</summary>
+    [ObservableProperty]
+    public partial bool WriteGameThumbnails { get; set; }
+
     public bool HasGameError => GameError.Length > 0;
 
     public bool HasLibraryError => LibraryError.Length > 0;
@@ -66,9 +78,33 @@ public partial class SettingsPageViewModel : PageViewModel
 
     public override void Refresh(ScanSnapshot snapshot)
     {
+        _refreshing = true;
         GamePath = Services.GamePath;
         LibraryPath = Services.LibraryPath;
         GameDataStatus = Services.LevelData.StatusSentence;
+        WriteGameThumbnails = Services.Settings.WriteGameThumbnails;
+        _refreshing = false;
+    }
+
+    /// <summary>There is no OK button, so the switch saves as it changes. Turning it off puts back the thumbnails
+    /// already written, which the shell owns because the undo of a write does.</summary>
+    partial void OnWriteGameThumbnailsChanged(bool value)
+    {
+        if (_refreshing || Services.Settings.WriteGameThumbnails == value)
+        {
+            return;
+        }
+
+        if (!Save(Services.Settings with { WriteGameThumbnails = value }))
+        {
+            // Nothing was saved, so the row goes back to what the settings file still says.
+            _refreshing = true;
+            WriteGameThumbnails = Services.Settings.WriteGameThumbnails;
+            _refreshing = false;
+            return;
+        }
+
+        _ = Shell.ThumbnailSwitchChangedAsync(value);
     }
 
     /// <summary>Pick, validate, save, re-read the game's data, rescan. A path that does not pass stays on the row
