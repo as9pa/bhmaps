@@ -6,6 +6,7 @@ using BhMaps.Core.Imaging;
 using BhMaps.Core.Maps;
 using BhMaps.Core.Model;
 using BhMaps.Core.Operations;
+using BhMaps.Core.Scanning;
 using BhMaps.Core.Settings;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -143,6 +144,126 @@ public partial class PackDetailViewModel : PageViewModel
     }
 
     public void OpenSelected() => Open(SelectedTile);
+
+    /// <summary>Spec 4.1: the lines of one picture tile's menu, in the spec's order, each present only when its
+    /// condition holds. Built when the menu opens, so the ticked count is the one the user can see.</summary>
+    public void BuildTileMenu(PackTileViewModel tile)
+    {
+        if (tile.PicturePath is not { } path || Pack is not { } pack)
+        {
+            tile.MenuItems = [];
+            return;
+        }
+
+        var name = Path.GetFileName(path);
+        var ticked = Shell.SelectedMapCount;
+        var slot = tile.Map?.BackgroundSlots.FirstOrDefault();
+        var items = new List<TileMenuCommand> { TileMenuCommand.Header(name) };
+
+        if (tile.Map is { } owner)
+        {
+            items.Add(new TileMenuCommand(
+                $"Apply to {owner.DisplayName}",
+                new AsyncRelayCommand(() => Shell.ApplyPictureAsync(path, [owner], false, name, pack.Name))));
+        }
+
+        if (ticked > 0)
+        {
+            var text = ticked == 1 ? "Apply to the 1 selected map" : $"Apply to the {ticked} selected maps";
+            items.Add(new TileMenuCommand(
+                text,
+                new AsyncRelayCommand(
+                    () => Shell.ApplyPictureAsync(path, Shell.SelectedMaps, true, name, pack.Name))));
+        }
+
+        items.Add(new TileMenuCommand(
+            "Apply to a map...", new AsyncRelayCommand(() => ApplyToChosenMapAsync(path, name, pack.Name))));
+        items.Add(new TileMenuCommand(
+            "Apply to all maps", new AsyncRelayCommand(() => ApplyToAllMapsAsync(path, name, pack.Name))));
+        items.Add(TileMenuCommand.Separator());
+        items.Add(new TileMenuCommand(
+            "Edit",
+            new AsyncRelayCommand(
+                () => Shell.OpenBackgroundEditorAsync(new BackgroundEditorRequest(path, pack.Name, slot)))));
+        items.Add(new TileMenuCommand("Show in folder", new RelayCommand(() => ShowInFolder(path))));
+        items.Add(new TileMenuCommand(
+            $"Remove from {pack.Name}", new AsyncRelayCommand(() => RemoveFromPackAsync(path, name))));
+        tile.MenuItems = items;
+    }
+
+    /// <summary>Spec 4.1 line 3: the chooser, then the shell's apply on the one map it returned. No confirm,
+    /// because one map is one click (spec 4.2).</summary>
+    private async Task ApplyToChosenMapAsync(string path, string name, string packName)
+    {
+        if (await Shell.ChooseMapAsync(path, name) is { } map)
+        {
+            await Shell.ApplyPictureAsync(path, [map], clearTicks: false, name, packName);
+        }
+    }
+
+    /// <summary>Spec 4.1 line 4: the shell's own apply over every map, which brings the
+    /// "Apply {name} to these {N} maps?" confirm, the undo snapshot and the done line with it.</summary>
+    private Task ApplyToAllMapsAsync(string path, string name, string packName) =>
+        Shell.Snapshot is { } snapshot
+            ? Shell.ApplyPictureAsync(path, snapshot.Catalog.Maps, clearTicks: false, name, packName)
+            : Task.CompletedTask;
+
+    private void ShowInFolder(string path)
+    {
+        if (ExplorerLauncher.Reveal(path) is { } error)
+        {
+            Shell.Dialogs.Error("Could not show the file", error);
+        }
+    }
+
+    /// <summary>Spec 4.1 line 8: the file leaves the pack the way Remove from library takes it out of My
+    /// Backgrounds. A library write, so RunBusyAsync and SetLibraryDone, never RunGameWriteAsync, and the
+    /// packs-root guard is why this is not one File.Delete.</summary>
+    private async Task RemoveFromPackAsync(string path, string name)
+    {
+        if (Pack is not { } pack
+            || !Shell.Dialogs.Confirm(
+                $"Remove from {pack.Name}?",
+                $"{name} is removed from {pack.Name}. The game keeps whatever is applied until you apply something else."))
+        {
+            return;
+        }
+
+        var packsRoot = PackScanner.PacksRoot(Shell.Services.LibraryPath);
+        var failures = new List<FileFailure>();
+        var ok = await Shell.RunBusyAsync(
+            $"Removing {name}",
+            (_, ct) => Task.Run(
+                () =>
+                {
+                    ct.ThrowIfCancellationRequested();
+                    if (!Path.GetFullPath(path).StartsWith(
+                            Path.GetFullPath(packsRoot) + Path.DirectorySeparatorChar,
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        failures.Add(new FileFailure(path, "Not a file in the library."));
+                        return;
+                    }
+
+                    try
+                    {
+                        File.Delete(path);
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    {
+                        failures.Add(new FileFailure(path, ex.Message));
+                    }
+                },
+                ct));
+
+        Shell.Dialogs.ShowFailures("Some files could not be removed", failures);
+        if (ok && failures.Count == 0)
+        {
+            Shell.SetLibraryDone($"Removed {name} from {pack.Name}");
+        }
+
+        await Shell.RescanAsync();
+    }
 
     /// <summary>A command as well as a method: C7 binds Escape to CloseDrawerCommand, and a KeyBinding whose
     /// Command resolves to null fails silently.</summary>
@@ -292,13 +413,22 @@ public partial class PackDetailViewModel : PageViewModel
             if (owner is null)
             {
                 Items.Add(new PackTileViewModel(
-                    file.Name, file.Name, null, file, MapCompositor.CardWidth, MapCompositor.CardHeight));
+                    file.Name, file.Name, null, file, MapCompositor.CardWidth, MapCompositor.CardHeight)
+                { PicturePath = file.FullPath });
             }
-            else if (!Items.Any(t => t.Key.Equals(owner.FolderName, StringComparison.OrdinalIgnoreCase)))
+            else
             {
-                Items.Add(new PackTileViewModel(
-                    owner.FolderName, owner.DisplayName, owner, null,
-                    MapCompositor.CardWidth, MapCompositor.CardHeight));
+                var tile = Items.FirstOrDefault(
+                    t => t.Key.Equals(owner.FolderName, StringComparison.OrdinalIgnoreCase));
+                if (tile is null)
+                {
+                    tile = new PackTileViewModel(
+                        owner.FolderName, owner.DisplayName, owner, null,
+                        MapCompositor.CardWidth, MapCompositor.CardHeight);
+                    Items.Add(tile);
+                }
+
+                tile.PicturePath = file.FullPath;
             }
         }
 
@@ -477,4 +607,14 @@ public partial class PackTileViewModel : ObservableObject
 
     [ObservableProperty]
     public partial ImageSource? Preview { get; set; }
+
+    /// <summary>The lines of this tile's menu (spec 4.1), filled by PackDetailViewModel.BuildTileMenu when the
+    /// menu opens. Built then and not before, because the ticked line names a count that changes on another page
+    /// and there is one of these per tile.</summary>
+    [ObservableProperty]
+    public partial IReadOnlyList<TileMenuCommand> MenuItems { get; set; } = [];
+
+    /// <summary>The picture the tile is about: the pack's own file for an orphan, or the pack's copy of the map's
+    /// background slot. Null on a tile whose map the pack has no background for, and then the tile has no menu.</summary>
+    public string? PicturePath { get; set; }
 }

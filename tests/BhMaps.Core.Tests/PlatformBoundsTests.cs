@@ -76,6 +76,42 @@ public class PlatformBoundsTests
         Assert.Null(PlatformBounds.For(level, 0.12, Aspect));
     }
 
+    [Fact]
+    public void For_WithAFocusSetBoxesOnlyTheFocusedAssets()
+    {
+        var level = new LevelDesc(
+            "Test", "Test", new CameraBounds(0, 0, 4000, 2000), [],
+            [Named(1000, 1000, "a.png"), Named(3000, 1000, "b.png")]);
+        var focus = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            AssetPath.Resolve("Test", "a.png"),
+        };
+
+        var bounds = PlatformBounds.For(level, 0, Aspect, focus);
+
+        // Only the first node is in the set, so the box is 1000..1100 rather than 1000..3100.
+        Assert.NotNull(bounds);
+        Assert.True(
+            bounds!.X + bounds.W < 2000,
+            $"the unfocused asset was boxed too: {bounds.X}..{bounds.X + bounds.W}");
+        Assert.InRange(bounds.X + (bounds.W / 2), 1040, 1060);
+    }
+
+    [Fact]
+    public void For_WithAFocusSetThatMatchesNothingFallsBackToTheFullCamera()
+    {
+        var level = new LevelDesc(
+            "Test", "Test", new CameraBounds(0, 0, 4000, 2000), [], [Named(1000, 1000, "a.png")]);
+
+        var bounds = PlatformBounds.For(level, 0, Aspect, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+
+        // Null is the caller's signal to render the whole level, which is what nothing ticked has to do.
+        Assert.Null(bounds);
+    }
+
+    private static PlatformNode Named(double x, double y, string assetName) =>
+        new(x, y, 1, 1, 1, 0, null, [new LevelAsset(assetName, 0, 0, 100, 100)], []);
+
     private static LevelDesc Level(CameraBounds camera, params PlatformNode[] platforms) =>
         new("Test", "Test", camera, [], platforms);
 

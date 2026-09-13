@@ -19,7 +19,7 @@ public static class SettingsStore
     [
         "gamePath", "libraryPath", "firstRunDone", "mapsZoom", "backgroundsRowZoom", "packZoom", "platformsZoom",
         "welcomeDone", "homeZoom", "whileRunning", "backgroundsZoom", "packLastApplied",
-        "backgroundsShowPictures",
+        "backgroundsShowPictures", "platformPreviewIsolate",
     ];
 
     public static string DefaultAppDataDir =>
@@ -91,7 +91,8 @@ public static class SettingsStore
             Bool(obj, "welcomeDone"),
             Math.Clamp(Int(obj, "platformsZoom", 3), AppSettings.MinRowZoom, AppSettings.MaxRowZoom),
             Stamps(obj),
-            Bool(obj, "backgroundsShowPictures"))
+            Bool(obj, "backgroundsShowPictures"),
+            Bool(obj, "platformPreviewIsolate"))
         {
             Unknown = unknown.Count == 0 ? null : unknown,
         };
@@ -111,6 +112,7 @@ public static class SettingsStore
             ["platformsZoom"] = settings.PlatformsZoom,
             ["welcomeDone"] = settings.WelcomeDone,
             ["backgroundsShowPictures"] = settings.BackgroundsShowPictures,
+            ["platformPreviewIsolate"] = settings.PlatformPreviewIsolate,
         };
 
         // Spec 8: a library nobody has applied from writes no key at all, rather than an empty object nobody reads.
