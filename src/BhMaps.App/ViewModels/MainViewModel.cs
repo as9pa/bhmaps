@@ -784,8 +784,12 @@ public partial class MainViewModel : ObservableObject
         }
 
         var catalog = snapshot.Catalog;
+        // Replace removes what the target holds for a map before the source's files land, and that is not always
+        // the same set, so the target's own files are captured as well. A loose picture has the same pack-relative
+        // path in both packs, and capturing a path the target does not have costs nothing.
         var files = plan.Maps
-            .SelectMany(m => PackCopier.MapFiles(plan.Source, m, catalog))
+            .SelectMany(m => PackCopier.MapFiles(plan.Source, m, catalog)
+                .Concat(PackCopier.MapFiles(plan.Target, m, catalog)))
             .Concat(plan.LooseFiles)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();

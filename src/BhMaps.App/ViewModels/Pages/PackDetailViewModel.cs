@@ -312,8 +312,18 @@ public partial class PackDetailViewModel : PageViewModel
             ? Path.Combine(PackCopier.BackgroundsFolder, Path.GetFileName(picture))
             : null;
         var files = tile.Map is { } map ? PackCopier.MapFiles(source, map, catalog) : [relative!];
+
+        // Replacing a map removes the files the target holds for it, which need not be the ones the source is
+        // handing over, so those are captured too. A picture tile is one path, the same in either pack.
+        IReadOnlyList<string> replaced = tile.Map is { } existing
+            ? PackCopier.MapFiles(target, existing, catalog)
+            : files;
         IReadOnlyList<string> undoPaths =
-            [.. PackCopier.Touched(source, files), .. PackCopier.Touched(target, files)];
+        [
+            .. PackCopier.Touched(source, files)
+                .Concat(PackCopier.Touched(target, [.. files, .. replaced]))
+                .Distinct(StringComparer.OrdinalIgnoreCase),
+        ];
 
         var result = await RunPasteAsync(source, target, tile, catalog, cut, replace: false, name, undoPaths);
         if (result is { Skipped: true }
