@@ -65,6 +65,13 @@ public partial class MapCardViewModel : ObservableObject
     [ObservableProperty]
     public partial bool IsSelected { get; set; }
 
+    /// <summary>Spec 4.3: the lines of this card's menu, filled by MapsViewModel.BuildCardMenu when the menu
+    /// opens. The building lives on the page, not here, because the lines need the packs, the pictures and the
+    /// ticked set, and because building one card's menu per open is cheaper than rebuilding every card's on
+    /// every tick.</summary>
+    [ObservableProperty]
+    public partial IReadOnlyList<TileMenuCommand> MenuItems { get; set; } = [];
+
     /// <summary>Composes the card preview, falling back to the v1 single-file thumbnail without level data or when
     /// the composite could not be drawn (spec 3.6). Called on the UI thread; every file touch happens off it.</summary>
     public async Task LoadPreviewAsync(AppServices services, bool hasLevelData, CancellationToken ct)

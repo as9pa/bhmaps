@@ -170,6 +170,16 @@ public partial class MapsView : UserControl
         }
     }
 
+    /// <summary>Spec 4.3: the card's lines are built when the menu opens, because the target depends on the ticks
+    /// and there are as many cards as the game has maps.</summary>
+    private void OnCardMenuOpening(object sender, ContextMenuEventArgs e)
+    {
+        if (sender is ListBoxItem { DataContext: MapCardViewModel card } && DataContext is MapsViewModel page)
+        {
+            page.BuildCardMenu(card);
+        }
+    }
+
     /// <summary>The three-dot button on a panel tile. The button carries no menu of its own, so TileMenus walks
     /// up to the tile that does.</summary>
     private void OnTileMenuButton(object sender, RoutedEventArgs e) => TileMenus.OpenFor(sender);
