@@ -81,6 +81,10 @@ public partial class PlatformPieceViewModel : ObservableObject
     /// <summary>Full path of the picture Replace loaded for this row; null for own art and working copies.</summary>
     public string? ReplacementPath { get; private set; }
 
+    /// <summary>True when the replacement was cut from one picture laid across the whole stage rather than
+    /// fitted to this piece on its own (spec 6.2).</summary>
+    public bool Across { get; private set; }
+
     public string? WorkingCopyPath { get; private set; }
 
     public string? WorkingCopyPack { get; private set; }
@@ -108,15 +112,21 @@ public partial class PlatformPieceViewModel : ObservableObject
     public PlatformArt ArtKind => Art switch
     {
         PieceArt.WorkingCopy => PlatformArt.WorkingCopy,
-        PieceArt.Replacement => PlatformArt.EachPiece,
+        PieceArt.Replacement => Across ? PlatformArt.Across : PlatformArt.EachPiece,
         _ => PlatformArt.Own,
     };
 
-    public void SetReplacement(BitmapSource fitted, string pickedFileName, string sourcePath)
+    public void SetReplacement(BitmapSource fitted, string pickedFileName, string sourcePath) =>
+        SetReplacement(fitted, pickedFileName, sourcePath, across: false);
+
+    /// <summary>The picture this row is showing now, and whether it was cut from the picture laid across the
+    /// platforms, which is what the record writes down (spec 6.2).</summary>
+    public void SetReplacement(BitmapSource fitted, string pickedFileName, string sourcePath, bool across)
     {
         Replacement = fitted;
         ReplacementName = pickedFileName;
         ReplacementPath = sourcePath;
+        Across = across;
         Art = PieceArt.Replacement;
         Raise();
     }
@@ -126,6 +136,7 @@ public partial class PlatformPieceViewModel : ObservableObject
         Replacement = null;
         ReplacementName = null;
         ReplacementPath = null;
+        Across = false;
         WorkingCopyPath = path;
         WorkingCopyPack = packName;
         Opacity = DefaultOpacity;
@@ -151,6 +162,7 @@ public partial class PlatformPieceViewModel : ObservableObject
         Replacement = null;
         ReplacementName = null;
         ReplacementPath = null;
+        Across = false;
         WorkingCopyPath = null;
         WorkingCopyPack = null;
         (Width, Height) = Measure(OriginalPath);
