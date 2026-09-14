@@ -10,6 +10,41 @@ also writes over the `.jpg` files already in the game's `images\thumbnails` fold
 copy of every original so it can put it back. The game's data files are read and never written, and
 nothing else in the game install is touched.
 
+## What is new in 2.6
+
+- **Every tile in a pack has a menu**, map tiles included. The dots button on a tile, or a right-click,
+  opens it, headed with the map's name: **Apply to <map>**, **Copy to pack...**, **Move to pack...**,
+  **Show in folder** and **Remove from <pack>**. A tile that also has a picture of its own keeps the
+  picture lines it had in 2.5.
+- **Copy to pack...** and **Move to pack...** move a map or a picture between packs. Both ask which
+  pack with a small list that ends in **New pack...**, and both carry the map's folder, its pictures in
+  the pack's Backgrounds folder and what the editors remembered for it. If the pack you picked already
+  has that map, a confirm asks **"<pack> already has <name>. Replace it?"** A copy is not undoable and
+  its done line offers **Open <pack>** instead; a move always is.
+- **Ctrl+C**, **Ctrl+X** and **Ctrl+V** do the same on a pack page. Ctrl+C or Ctrl+X takes the tile
+  under the pointer, or the one the keyboard is on, and Ctrl+V pastes it into whichever pack you are
+  looking at. Pasting into the pack it came from does nothing; Ctrl+V with nothing held says
+  **Nothing copied yet**.
+- **Import from pack**, a button in the pack header and **Import from another pack...** in the Packs
+  menu, copies another pack's maps in one go. Pick the pack to take from, then **All <n> maps** or
+  **Choose maps** with a tick list, where a map the pack already has reads **already here** and starts
+  unticked. **Replace maps <pack> already has** is off until you turn it on. The button counts what it
+  will do, as in **Import 7 maps**, and the import can be cancelled; what was copied stays.
+- **Duplicate** in the Packs menu copies a whole pack under the next free name, as in "Neon copy",
+  with no name to type. Undo removes the copy.
+- **BhMaps checks for a new release** once a day, when it starts, and says so with a **New update
+  available** line in the top bar that goes to Settings, with an x beside it that dismisses that
+  release. The Settings Version row offers **Update to 2.6.0** and **What changed**; the update
+  downloads the new exe, checks it against the release's checksums and swaps it in when you close
+  BhMaps. Nothing downloads or restarts on its own. The new **Updates** row turns the check off with
+  **Check for updates when BhMaps starts** and has a **Check now** button. It is one request a day to
+  github.com, and nothing about you or your library is sent.
+- **Map-select thumbnails are written for far more maps.** A map whose mapArt folder holds several
+  levels naming different pictures, which is most of the ranked "Small" maps, used to be skipped
+  altogether. It now gets its picture written over every one of those files, so Small Mammoth
+  Fortress, Small Great Hall, Small Wasteland and the rest change in the map select screen along with
+  the maps that always worked. A file that two different maps' folders name is still left alone.
+
 ## What is new in 2.5
 
 - The background editor and the platform editor remember what you saved. Save a picture or a set of
@@ -184,7 +219,9 @@ instead.
 The top bar carries the app's name, then the five tabs: Maps, Backgrounds, Platforms, Packs and
 Settings. Ctrl+1 to Ctrl+5 switch between them, and Ctrl+K goes to Maps and puts the cursor in its
 search box. On the right is the game line, reading "Brawlhalla running", or "Brawlhalla not running"
-beside a Launch button that asks Steam to start the game. When the game folder cannot be found the
+beside a Launch button that asks Steam to start the game. When a newer release is out, a **New update
+available** line sits before the game line; clicking it opens Settings and the small x beside it hides
+it until the release after that. When the game folder cannot be found the
 line turns red and offers Choose folder, which opens Settings. F5 rescans; Cancel in a page header
 stops a long operation.
 
@@ -266,17 +303,20 @@ stops a long operation.
   maps it touches, as many as the width allows, with a count for the rest. `Default` comes first,
   then the packs that have been applied, the most recent first, then the ones never applied, by
   name; every list of packs in the app follows that order. Apply all is a button on the row; a dots
-  button beside it holds Export, Open folder and Remove. The header has Import folder, New pack,
+  button beside it holds **Duplicate**, **Import from another pack...**, Export, Open folder and
+  Remove; `Default` has no Remove. The header has Import folder, New pack,
   Capture defaults and Open library. **New pack** asks for a name and makes an empty pack you can
   fill later from Add Image or the editors. Clicking a row opens the pack.
 - **Pack detail** shows one pack as a single grid of its maps, each composed with the game's art
   where the pack has nothing of its own, with zoom setting the column count. Clicking a tile opens a
   drawer listing that map's files, its background and its platforms, and where each came from.
-  Hovering a tile shows a dots button, and the dots or a right-click opens the picture's menu, headed
-  with its file name: **Apply to <map>** for a picture that belongs to one map, **Apply to the N
-  selected maps** when maps are selected on Maps, **Apply to a map...** for the chooser, **Apply to all
-  maps**, then **Edit**, **Show in folder** and **Remove from <pack>**, which deletes the file after a
-  confirm. The Backgrounds page's picture menus gain the same **Apply to a map...** line. When
+  Hovering a tile shows a dots button, and the dots or a right-click opens the
+  menu. A map's tile is headed with the map's name and holds **Apply to <map>**, **Copy to pack...**
+  (Ctrl+C), **Move to pack...** (Ctrl+X), **Show in folder** and **Remove from <pack>**; a picture's
+  tile is headed with its file name and keeps 2.5's lines, with Copy and Move added after **Edit**.
+  Ctrl+V pastes whatever was copied or cut into the pack you are looking at. **Import from pack** in
+  the header opens the import dialog. The Backgrounds page's picture menus gain the same **Apply to a
+  map...** line. When
   the pack holds fully transparent PNGs, a line above the grid says how many of its files change
   nothing in game and offers to remove them. Apply all, Open folder and the way back to the pack list
   are in the header.
@@ -285,7 +325,10 @@ stops a long operation.
   applying, which says that changes are written straight into the game folder with Brawlhalla open or
   closed and show on the next match load, and that Undo puts back the files of the last write;
   **Map-select thumbnails**, a checkbox reading **Also update the game's map-select thumbnails** that
-  starts off and, turned off again, puts every kept original thumbnail back; and the version. There is no OK button, so every row saves as it is changed.
+  starts off and, turned off again, puts every kept original thumbnail back; **Updates**, a checkbox
+  reading **Check for updates when BhMaps starts** with a **Check now** button and a line saying when
+  it last checked; and the version, which says whether a newer release is out and offers **Update to
+  <version>** and **What changed**. There is no OK button, so every row saves as it is changed.
 
 These windows open on top of the pages:
 
@@ -446,11 +489,22 @@ now, and a later apply to one map replaces it there.
   entries for the maps it resets, and Undo puts them back.
 - **Map-select thumbnails** are the one thing the app writes outside `mapArt`. With the switch in
   Settings on, a write that changes a map's art renders that map at 290 by 164 and writes the JPEG
-  over the map's own file in the game's `images\thumbnails` folder, under the name the level data
-  gives that map. The first time a thumbnail is written over, the original is copied into
-  `%APPDATA%\BhMaps\thumbnails-original`, and that copy is what Reset to default, Undo and turning
-  the switch off put back. A thumbnail two maps share, a map that names none, and a file that is not
-  there are all skipped, so one map's picture is never written over another map's thumbnail.
+  over every picture in the game's `images\thumbnails` folder that the map's own levels name and no
+  other map's folder names. A map's folder often holds more than one level, the ranked "Small" one
+  beside the casual one, and those levels usually name different pictures; all of them are that map's
+  and all of them are written. The first time a file is written over, the original is copied into
+  `%APPDATA%\BhMaps\thumbnails-original` under that file's own name, and those copies are what Reset
+  to default, Undo and turning the switch off put back. A picture two different maps' folders both
+  name is skipped, so one map's art is never written over another map's thumbnail, and the map panel
+  says which file was left alone and why.
+- **Updates** are read from the GitHub releases page of the project, once a day at most, when BhMaps
+  starts and only when the check is on. The request carries nothing but the app's version; no account,
+  no token and nothing about your library. When the newest release is newer than the running version,
+  Settings offers to download its `.exe` into `%APPDATA%\BhMaps\updates`, checks it against the
+  release's `SHA256SUMS.txt` and refuses it on a mismatch. Installing it is a small script that waits
+  for BhMaps to close, swaps the new exe over the old one and starts it again, so nothing is replaced
+  while the app is running. If the install folder cannot be written to, the button opens the release
+  page instead.
 
 A write goes into the game folder whether Brawlhalla is running or not; the app never closes or
 starts the game to make a change. A change made while the game is up shows on the next match load,
@@ -559,3 +613,9 @@ Formatting and layout:
   that reason is indistinguishable from one the game does not have.
 - Replace fits a picture to the whole piece; there is no pan or zoom. Edit in another app opens the
   Windows Open with dialog; the program you pick must save PNG in place.
+- A map-select picture that two different maps' mapArt folders both name is left alone, because
+  writing it would change the other map's thumbnail too. The map panel says so.
+- The update swap needs the folder BhMaps runs from to be writable and the build to be the
+  self-contained `.exe`. The `-dotnet.zip` build, and an install under `Program Files`, get the
+  release page instead of a download.
+- Copying a map into another pack is not undoable; moving, importing, removing and duplicating are.
