@@ -21,7 +21,11 @@ public sealed record TileMenuCommand(
     IReadOnlyList<TileMenuCommand>? Children = null,
     bool IsEnabled = true,
     string? ToolTip = null,
-    TileMenuKind Kind = TileMenuKind.Item)
+    TileMenuKind Kind = TileMenuKind.Item,
+
+    /// <summary>Spec 2.6 section 3: the key the line answers to, drawn muted on the right. Null on a line with
+    /// no key.</summary>
+    string? Gesture = null)
 {
     /// <summary>The muted first line naming the file, the map or the count (spec 4.1, spec 4.3).</summary>
     public static TileMenuCommand Header(string text) =>

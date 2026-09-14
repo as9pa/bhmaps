@@ -1,3 +1,5 @@
+using System.Net.Http;
+using System.Reflection;
 using System.Windows;
 using BhMaps.App.Services;
 using BhMaps.App.ViewModels;
@@ -31,7 +33,16 @@ public partial class App : Application
             return;
         }
 
-        var services = new AppServices(parsed.AppData ?? SettingsStore.DefaultAppDataDir, parsed.Game, parsed.Library);
+        // Spec 7.1: one HttpClient for the life of the app, created here because only the App knows its own
+        // version for the User-Agent. No timeout on the client itself: UpdateClient puts 10 s on the check, and a
+        // 135 MB download must not be cut off by the check's limit. No credential of any kind is ever set.
+        var version = Assembly.GetEntryAssembly()?.GetName().Version ?? new Version(0, 0, 0);
+        var http = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
+        http.DefaultRequestHeaders.UserAgent.ParseAdd($"BhMaps/{version.Major}.{version.Minor}.{version.Build}");
+        http.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
+
+        var services = new AppServices(
+            parsed.AppData ?? SettingsStore.DefaultAppDataDir, parsed.Game, parsed.Library, http);
         Exit += (_, _) => services.Dispose();
         var dialogs = new WpfDialogs();
 

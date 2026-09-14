@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using BhMaps.Core.Model;
 
@@ -273,6 +274,11 @@ public sealed class UndoStore
             {
                 DeleteBack(Path.Combine(libraryPath, relativePath), ref restored, failures);
             }
+
+            // A library file that was absent when the session began was made by the write this restore is
+            // undoing, and so were the folders it needed. Pruning them upwards is what makes undo of a duplicate
+            // or an import leave the library the shape it was, rather than a pack folder with nothing in it.
+            PruneEmptyFolders(libraryPath, libraryAbsent);
         }
 
         if (thumbnailsDir is not null)
@@ -318,6 +324,45 @@ public sealed class UndoStore
             }
         }
     }
+
+    /// <summary>Deletes the folders of these relative paths, and their parents, while they are empty and still
+    /// inside root. Stops one level below root: a folder sitting directly in the library, "packs" above all, is the
+    /// library's own shape rather than something the undone write made, so it stays even when it empties. A folder
+    /// we cannot delete stops that path and nothing else.</summary>
+    private static void PruneEmptyFolders(string root, IReadOnlyList<string> relativePaths)
+    {
+        var stop = Path.GetFullPath(root);
+        foreach (var relativePath in relativePaths)
+        {
+            var directory = Path.GetDirectoryName(Path.GetFullPath(Path.Combine(root, relativePath)));
+            while (IsBelow(directory, stop)
+                && IsBelow(Path.GetDirectoryName(directory), stop)
+                && Directory.Exists(directory))
+            {
+                try
+                {
+                    if (Directory.EnumerateFileSystemEntries(directory).Any())
+                    {
+                        break;
+                    }
+
+                    Directory.Delete(directory);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    break;
+                }
+
+                directory = Path.GetDirectoryName(directory);
+            }
+        }
+    }
+
+    /// <summary>Whether directory is a real folder somewhere under root, root itself excluded.</summary>
+    private static bool IsBelow([NotNullWhen(true)] string? directory, string root) =>
+        directory is not null
+        && !directory.Equals(root, StringComparison.OrdinalIgnoreCase)
+        && directory.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
 
     private string FreePath(string stamp)
     {

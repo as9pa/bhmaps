@@ -343,4 +343,46 @@ public class UndoStoreTests
         Assert.Equal("x", File.ReadAllText(Path.Combine(game, "Grove", "a.png")));
         Assert.Equal("our thumbnail", File.ReadAllText(a));
     }
+
+    [Fact]
+    public void Restore_deletes_a_library_file_that_was_absent_and_the_folder_it_left_empty()
+    {
+        using var tmp = new TempDir();
+        var library = Path.Combine(tmp.Path, "lib");
+        var game = Path.Combine(tmp.Path, "game");
+        Directory.CreateDirectory(game);
+        var store = new UndoStore(Path.Combine(tmp.Path, "appdata"));
+        var relative = Path.Combine("packs", "flower copy", "BloodMoon", "a.png");
+        var session = store.Begin();
+        session.CaptureLibrary(library, [relative]);
+        Directory.CreateDirectory(Path.Combine(library, "packs", "flower copy", "BloodMoon"));
+        File.WriteAllText(Path.Combine(library, relative), "copied");
+
+        var result = store.Restore(session, game, library);
+
+        Assert.Empty(result.Failures);
+        Assert.False(File.Exists(Path.Combine(library, relative)));
+        Assert.False(Directory.Exists(Path.Combine(library, "packs", "flower copy")));
+        Assert.True(Directory.Exists(Path.Combine(library, "packs")));
+    }
+
+    [Fact]
+    public void Restore_keeps_a_folder_that_still_holds_a_file()
+    {
+        using var tmp = new TempDir();
+        var library = Path.Combine(tmp.Path, "lib");
+        var game = Path.Combine(tmp.Path, "game");
+        Directory.CreateDirectory(game);
+        var store = new UndoStore(Path.Combine(tmp.Path, "appdata"));
+        var relative = Path.Combine("packs", "stone", "BloodMoon", "a.png");
+        var session = store.Begin();
+        session.CaptureLibrary(library, [relative]);
+        Directory.CreateDirectory(Path.Combine(library, "packs", "stone", "BloodMoon"));
+        File.WriteAllText(Path.Combine(library, relative), "copied");
+        File.WriteAllText(Path.Combine(library, "packs", "stone", "BloodMoon", "kept.png"), "kept");
+
+        store.Restore(session, game, library);
+
+        Assert.True(Directory.Exists(Path.Combine(library, "packs", "stone", "BloodMoon")));
+    }
 }

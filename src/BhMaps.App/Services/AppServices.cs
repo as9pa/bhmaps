@@ -1,3 +1,5 @@
+using System.Net.Http;
+using System.Reflection;
 using BhMaps.Core.Hashing;
 using BhMaps.Core.Imaging;
 using BhMaps.Core.Maps;
@@ -6,6 +8,7 @@ using BhMaps.Core.Operations;
 using BhMaps.Core.Scanning;
 using BhMaps.Core.Settings;
 using BhMaps.Core.Status;
+using BhMaps.Core.Update;
 
 namespace BhMaps.App.Services;
 
@@ -23,8 +26,11 @@ public sealed record ScanSnapshot(
 /// them together.</summary>
 public sealed class AppServices : IDisposable
 {
-    public AppServices(string appDataDir, string? gameOverride, string? libraryOverride)
+    private readonly HttpClient _http;
+
+    public AppServices(string appDataDir, string? gameOverride, string? libraryOverride, HttpClient http)
     {
+        _http = http;
         AppDataDir = appDataDir;
         SettingsPath = Path.Combine(appDataDir, "settings.json");
         HashCachePath = Path.Combine(appDataDir, "hashcache.json");
@@ -37,6 +43,12 @@ public sealed class AppServices : IDisposable
         Previews = new PreviewCache(appDataDir, HashCache, Renderer);
         Undo = new UndoStore(appDataDir);
         RowThumbnails = new ThumbnailCache(Thumbnails);
+        Updates = new UpdateClient(http);
+
+        // Nothing creates this folder here: UpdateClient.DownloadAsync makes it on the first real download, so a
+        // user who never updates never gets it.
+        UpdatesDir = Path.Combine(appDataDir, "updates");
+        AppVersion = Assembly.GetEntryAssembly()?.GetName().Version ?? new Version(0, 0, 0);
     }
 
     /// <summary>Spec 4.1: Windows' own animation switch, read once, statically, because the behaviours that
@@ -71,6 +83,16 @@ public sealed class AppServices : IDisposable
     public PreviewCache Previews { get; }
 
     public UndoStore Undo { get; }
+
+    /// <summary>Spec 7.1: the check and the download, over the one HttpClient the App owns.</summary>
+    public UpdateClient Updates { get; }
+
+    /// <summary>Where a downloaded exe lands. Created by the download, not by start-up.</summary>
+    public string UpdatesDir { get; }
+
+    /// <summary>This build's version, 0.0.0 when the entry assembly has none, which is what every release
+    /// comparison is made against.</summary>
+    public Version AppVersion { get; }
 
     /// <summary>A command-line override wins over the saved setting.</summary>
     public string GamePath => GameOverride ?? Settings.GamePath;
@@ -139,6 +161,10 @@ public sealed class AppServices : IDisposable
         }
     }
 
-    /// <summary>Stops the render thread. Called once, from App.Exit.</summary>
-    public void Dispose() => Renderer.Dispose();
+    /// <summary>Stops the render thread and drops the HttpClient. Called once, from App.Exit.</summary>
+    public void Dispose()
+    {
+        Renderer.Dispose();
+        _http.Dispose();
+    }
 }

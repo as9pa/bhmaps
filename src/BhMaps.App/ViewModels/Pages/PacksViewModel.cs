@@ -6,6 +6,7 @@ using BhMaps.Core.Imaging;
 using BhMaps.Core.Maps;
 using BhMaps.Core.Model;
 using BhMaps.Core.Operations;
+using BhMaps.Core.Packs;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -194,6 +195,8 @@ public partial class PacksViewModel : PageViewModel
     /// destructive one, and the pointer should not have to pass over it to reach another line.</summary>
     private IReadOnlyList<TileMenuCommand> BuildMenu(PackRowViewModel row) =>
     [
+        new TileMenuCommand("Duplicate", new RelayCommand(() => DuplicateCommand.Execute(row))),
+        new TileMenuCommand("Import from another pack...", new RelayCommand(() => ImportIntoCommand.Execute(row))),
         new TileMenuCommand("Export", new RelayCommand(() => ExportCommand.Execute(row))),
         new TileMenuCommand("Open folder", new RelayCommand(() => OpenFolderCommand.Execute(row))),
         new TileMenuCommand("Remove", new RelayCommand(() => RemoveCommand.Execute(row))),
@@ -273,25 +276,12 @@ public partial class PacksViewModel : PageViewModel
     /// do nothing; a taken or unusable name is reported and nothing is created. The new pack has never been
     /// applied, so PackOrder lands it with the rest by name.</summary>
     [RelayCommand]
-    private async Task NewPackAsync()
-    {
-        var name = Shell.Dialogs.PromptText("New pack", "Name", "");
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            return;
-        }
-
-        if (!PackCreator.TryCreate(Shell.Services.LibraryPath, name.Trim(), out var error))
-        {
-            Shell.Dialogs.Error("Could not make the pack", error);
-            return;
-        }
-
-        await Shell.RescanAsync();
-    }
+    private Task NewPackAsync() => Shell.NewPackAsync();
 
     /// <summary>Spec 6.5: deletes the pack from the library after a confirm that names it. Inside RunBusyAsync so
-    /// the sibling commands are disabled while a folder is going away underneath them (commit 375497e).</summary>
+    /// the sibling commands are disabled while a folder is going away underneath them (commit 375497e). A tile
+    /// copied out of this pack has nowhere to be copied from once the folder is gone, so the clipboard drops it
+    /// rather than hold a source that no longer exists.</summary>
     [RelayCommand]
     private async Task RemoveAsync(PackRowViewModel? row)
     {
@@ -320,6 +310,10 @@ public partial class PacksViewModel : PageViewModel
         else if (ok)
         {
             Shell.SetLibraryDone($"Removed {pack.Name}");
+            if (Shell.PackClipboard is { } held && held.Source.Name.Equals(pack.Name, StringComparison.OrdinalIgnoreCase))
+            {
+                Shell.PackClipboard = null;
+            }
         }
 
         await Shell.RescanAsync();
@@ -355,6 +349,54 @@ public partial class PacksViewModel : PageViewModel
             Shell.SetLibraryDone($"Exported {pack.Name}");
         }
     }
+
+    /// <summary>Spec 2.6 3.1: the pack folder copied to "{name} copy", off the UI thread. The copy's paths are
+    /// captured as absent before it is made, so Undo deletes exactly the files the copy laid down and prunes the
+    /// folders they needed. The name is picked once and handed to the copy, and the paths come off the source tree
+    /// the copy itself reads, so what Undo holds and what is written can never differ by a name or by a file.</summary>
+    [RelayCommand]
+    private async Task DuplicateAsync(PackRowViewModel? row)
+    {
+        if (row is null)
+        {
+            return;
+        }
+
+        var pack = row.Pack;
+        var libraryPath = Shell.Services.LibraryPath;
+        var copyName = PackCopier.FreeCopyName(libraryPath, pack.Name);
+        var undoPaths = PackCopier.DuplicatePaths(libraryPath, pack.Name, copyName);
+        string? error = null;
+        await Shell.RunLibraryWriteAsync(
+            $"Duplicating {pack.Name}",
+            undoPaths,
+            (_, ct) => Task.Run(
+                () =>
+                {
+                    try
+                    {
+                        PackCopier.DuplicatePack(libraryPath, pack.Name, copyName);
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    {
+                        error = ex.Message;
+                    }
+                },
+                ct),
+            $"{pack.Name} duplicated as {copyName}");
+        if (error is not null)
+        {
+            // The copy took its own half-written folder with it, so there is nothing to undo and nothing to say
+            // but what went wrong: the line the write boundary left is written over, as an import's is.
+            Shell.SetLibraryDone($"Could not duplicate {pack.Name}");
+            Shell.Dialogs.Error("Could not duplicate pack", $"Could not duplicate {pack.Name}: {error}");
+        }
+    }
+
+    /// <summary>Spec 2.6 3.2: the same dialog the pack detail header opens, aimed at this row's pack.</summary>
+    [RelayCommand]
+    private Task ImportIntoAsync(PackRowViewModel? row) =>
+        row is null ? Task.CompletedTask : Shell.ImportFromPackAsync(row.Pack);
 
     [RelayCommand]
     private void OpenFolder(PackRowViewModel? row)

@@ -8,7 +8,7 @@ namespace BhMaps.Core.Tests;
 
 public class ThumbnailWriterTests
 {
-    private static MapEntry Map(string folder, string? owned, params string[] candidates) =>
+    private static MapEntry Map(string folder, IReadOnlyList<string> owned, params string[] candidates) =>
         new(folder, folder, new LevelDesc(folder, folder, new CameraBounds(0, 0, 100, 100), [], []),
             [], [], [], [], owned, candidates);
 
@@ -21,45 +21,81 @@ public class ThumbnailWriterTests
     }
 
     [Fact]
-    public void Plan_ReturnsTheTargetWhenTheFileExists()
+    public void Plan_ReturnsATargetForEveryFileTheMapOwns()
     {
         using var tmp = new TempDir();
         var gameRoot = Path.Combine(tmp.Path, "game");
         var appData = Path.Combine(tmp.Path, "appdata");
-        var target = Thumbnail(tmp, "game", "A.jpg", "game picture");
-        var map = Map("Grove", "A.jpg", "A.jpg");
+        var big = Thumbnail(tmp, "game", "Mammoth.jpg", "big picture");
+        var small = Thumbnail(tmp, "game", "MammothSmall.jpg", "small picture");
+        var map = Map("Fortress", ["Mammoth.jpg", "MammothSmall.jpg"], "Mammoth.jpg", "MammothSmall.jpg");
 
         var plan = ThumbnailWriter.Plan(map, [map], gameRoot, appData);
 
-        Assert.Equal(ThumbnailSkip.None, plan.Skip);
-        Assert.Null(plan.OtherMap);
-        Assert.Equal("A.jpg", plan.Target!.FileName);
-        Assert.Equal(target, plan.Target.TargetPath);
-        Assert.Equal(Path.Combine(appData, "thumbnails-original", "A.jpg"), plan.Target.OriginalPath);
+        Assert.False(plan.NamesNoFile);
+        Assert.Equal(["Mammoth.jpg", "MammothSmall.jpg"], plan.Files.Select(f => f.FileName));
+        Assert.All(plan.Files, f => Assert.Equal(ThumbnailSkip.None, f.Skip));
+        Assert.Equal([big, small], plan.Targets.Select(t => t.TargetPath));
+        Assert.Equal(
+            [
+                Path.Combine(appData, "thumbnails-original", "Mammoth.jpg"),
+                Path.Combine(appData, "thumbnails-original", "MammothSmall.jpg"),
+            ],
+            plan.Targets.Select(t => t.OriginalPath));
     }
 
     [Fact]
-    public void Plan_SkipsMissingSharedAndNoFile()
+    public void Plan_KeepsTheFilesThatExistAndNotesAMissingOne()
     {
         using var tmp = new TempDir();
         var gameRoot = Path.Combine(tmp.Path, "game");
         var appData = Path.Combine(tmp.Path, "appdata");
-        var missing = Map("Grove", "Grove.jpg", "Grove.jpg");
-        var shared = Map("Sewer", null, "Both.jpg");
-        var sharing = Map("Swamp", null, "Both.jpg");
-        var noFile = Map("Bombsketball", null);
-        IReadOnlyList<MapEntry> all = [missing, shared, sharing, noFile];
+        Thumbnail(tmp, "game", "wasteland.jpg", "game picture");
+        var map = Map(
+            "Seven",
+            ["wasteland.jpg", "wastelandshowdown.jpg"],
+            "wasteland.jpg",
+            "wastelandshowdown.jpg");
 
-        Assert.Equal(ThumbnailSkip.Missing, ThumbnailWriter.Plan(missing, all, gameRoot, appData).Skip);
+        var plan = ThumbnailWriter.Plan(map, [map], gameRoot, appData);
 
-        var sharedPlan = ThumbnailWriter.Plan(shared, all, gameRoot, appData);
-        Assert.Equal(ThumbnailSkip.Shared, sharedPlan.Skip);
-        Assert.Null(sharedPlan.Target);
-        Assert.Equal("Swamp", sharedPlan.OtherMap);
+        Assert.Single(plan.Targets);
+        Assert.Equal("wasteland.jpg", plan.Targets[0].FileName);
+        Assert.Equal(ThumbnailSkip.Missing, plan.Files[1].Skip);
+        Assert.Null(plan.Files[1].Target);
+        Assert.Null(plan.Files[1].OtherMap);
+    }
 
-        var noFilePlan = ThumbnailWriter.Plan(noFile, all, gameRoot, appData);
-        Assert.Equal(ThumbnailSkip.NoFile, noFilePlan.Skip);
-        Assert.Null(noFilePlan.OtherMap);
+    [Fact]
+    public void Plan_SkipsOnlyTheCandidateAnotherMapAlsoNames()
+    {
+        using var tmp = new TempDir();
+        var gameRoot = Path.Combine(tmp.Path, "game");
+        var appData = Path.Combine(tmp.Path, "appdata");
+        Thumbnail(tmp, "game", "Own.jpg", "own picture");
+        Thumbnail(tmp, "game", "Both.jpg", "shared picture");
+        var sewer = Map("Sewer", ["Own.jpg"], "Own.jpg", "Both.jpg");
+        var swamp = Map("Swamp", [], "Both.jpg");
+
+        var plan = ThumbnailWriter.Plan(sewer, [sewer, swamp], gameRoot, appData);
+
+        Assert.Single(plan.Targets);
+        Assert.Equal("Own.jpg", plan.Targets[0].FileName);
+        Assert.Equal(ThumbnailSkip.Shared, plan.Files[1].Skip);
+        Assert.Equal("Swamp", plan.Files[1].OtherMap);
+    }
+
+    [Fact]
+    public void Plan_NamesNoFileWhenTheMapsLevelsNameNone()
+    {
+        using var tmp = new TempDir();
+        var map = Map("Bombsketball", []);
+
+        var plan = ThumbnailWriter.Plan(map, [map], Path.Combine(tmp.Path, "game"), Path.Combine(tmp.Path, "appdata"));
+
+        Assert.True(plan.NamesNoFile);
+        Assert.Empty(plan.Files);
+        Assert.Empty(plan.Targets);
     }
 
     [Fact]

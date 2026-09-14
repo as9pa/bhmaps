@@ -10,6 +10,7 @@ using BhMaps.Core.Model;
 using BhMaps.Core.Operations;
 using BhMaps.Core.Packs;
 using BhMaps.Core.Scanning;
+using BhMaps.Core.Update;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -21,6 +22,9 @@ public partial class MainViewModel : ObservableObject
 {
     private static readonly TimeSpan GamePollInterval = TimeSpan.FromSeconds(3);
 
+    /// <summary>Spec 7.3: how long after the first scan the one update check of the run starts.</summary>
+    private static readonly TimeSpan UpdateCheckDelay = TimeSpan.FromSeconds(5);
+
     private readonly GameLauncher _launcher;
     private readonly IReadOnlyList<PageViewModel> _pages;
 
@@ -29,7 +33,17 @@ public partial class MainViewModel : ObservableObject
     private readonly Dictionary<string, string> _thumbnailNotes = new(StringComparer.OrdinalIgnoreCase);
 
     private readonly DispatcherTimer _gameTimer;
+    private readonly DispatcherTimer _updateTimer;
+
+    /// <summary>Spec 7.3: the one token every update check runs under, cancelled when the window closes so a
+    /// request still in flight does not outlive it.</summary>
+    private readonly CancellationTokenSource _updateCts = new();
+
     private CancellationTokenSource? _cts;
+
+    /// <summary>Set the first time a scan finishes, so the update check is started once a run and no rescan
+    /// starts another.</summary>
+    private bool _updateCheckStarted;
 
     /// <summary>Set when the game data lands while a scan is running, so the rescan it needs happens once the
     /// busy boundary clears instead of being dropped.</summary>
@@ -61,6 +75,14 @@ public partial class MainViewModel : ObservableObject
         _gameTimer = new DispatcherTimer { Interval = GamePollInterval };
         _gameTimer.Tick += (_, _) => GameRunning = GameProcess.IsRunning();
         _gameTimer.Start();
+
+        // One shot: the tick stops the timer and starts the check.
+        _updateTimer = new DispatcherTimer { Interval = UpdateCheckDelay };
+        _updateTimer.Tick += (_, _) =>
+        {
+            _updateTimer.Stop();
+            _ = CheckForUpdateAsync(force: false);
+        };
     }
 
     public AppServices Services { get; }
@@ -136,8 +158,40 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     public partial bool DoneUndoable { get; set; }
 
+    /// <summary>The words on the one button a library line may offer instead of Undo, "" for none.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasDoneAction))]
+    public partial string DoneActionText { get; set; } = "";
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasDoneAction))]
+    public partial IRelayCommand? DoneActionCommand { get; set; }
+
+    public bool HasDoneAction => DoneActionText.Length > 0 && DoneActionCommand is not null;
+
     [ObservableProperty]
     public partial bool CanUndo { get; set; }
+
+    /// <summary>Spec 7.3: the latest release the last check found, or null when nothing has been found yet. Set
+    /// off the UI thread's work but assigned on it, because the top bar binds to it.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowUpdateLine))]
+    public partial ReleaseInfo? AvailableUpdate { get; set; }
+
+    /// <summary>Whether a check is running right now. The Settings row reads it; the top bar does not.</summary>
+    [ObservableProperty]
+    public partial bool UpdateChecking { get; set; }
+
+    /// <summary>Whether the last check came back with nothing, which is every failure there is (spec 7.1).</summary>
+    [ObservableProperty]
+    public partial bool UpdateCheckFailed { get; set; }
+
+    /// <summary>The top bar line shows only for a release newer than this build whose tag has not been waved
+    /// away. A later release carries a different tag, so the line comes back on its own.</summary>
+    public bool ShowUpdateLine =>
+        AvailableUpdate is { } release
+        && ReleaseChecker.IsNewer(release, Services.AppVersion)
+        && !string.Equals(release.TagName, Services.Settings.DismissedUpdate, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Folder name of the map most recently opened on Maps, or null before any. Maps sets it; part B's
     /// panel reads it back.</summary>
@@ -171,12 +225,42 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void NavigateSettings() => CurrentPage = SettingsPage;
 
+    /// <summary>Spec 7.3: the dismiss x remembers the tag, so this release never asks again and the next one
+    /// does. Saving is best effort: a settings file that cannot be written is not worth a dialog here.</summary>
+    [RelayCommand]
+    private void DismissUpdate()
+    {
+        if (AvailableUpdate is not { } release)
+        {
+            return;
+        }
+
+        try
+        {
+            Services.UpdateSettings(Services.Settings with { DismissedUpdate = release.TagName });
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            System.Diagnostics.Trace.WriteLine($"BhMaps: the dismissed update was not saved: {ex.Message}");
+        }
+
+        OnPropertyChanged(nameof(ShowUpdateLine));
+    }
+
+    /// <summary>The line itself is the way to the Settings row that offers the download. Nothing downloads here.</summary>
+    [RelayCommand]
+    private void OpenUpdate() => CurrentPage = SettingsPage;
+
     /// <summary>Opens the pack detail page on one pack (spec 7.5).</summary>
     public void NavigateToPack(Pack pack)
     {
         PackDetail.Pack = pack;
         CurrentPage = PackDetail;
     }
+
+    /// <summary>Spec 2.6 4.3: the one tile Ctrl+C or Ctrl+X remembered, held by the shell so it survives moving
+    /// between pack pages. Never the Windows clipboard: this carries a pack, a tile and how it was taken.</summary>
+    public PackClipboardItem? PackClipboard { get; set; }
 
     /// <summary>SelectedMaps is computed, so the pages bound to it are told by hand when it changes. Public:
     /// the Maps page raises it when a card is ticked.</summary>
@@ -650,6 +734,67 @@ public partial class MainViewModel : ObservableObject
         return Task.FromResult(ShowChooser(vm) ? vm.Selected?.Path : null);
     }
 
+    /// <summary>Spec 2.6 4.3: pick one pack, in the map chooser's window. The pack the tile is already in is
+    /// left out, and the last line makes a new one and returns it. Null when the window was cancelled.</summary>
+    public async Task<Pack?> ChoosePackAsync(string title, Pack exclude)
+    {
+        if (Snapshot is not { } snapshot)
+        {
+            return null;
+        }
+
+        var rows = new List<ChooserRow>();
+        foreach (var pack in snapshot.Packs.Where(
+                     p => !p.Name.Equals(exclude.Name, StringComparison.OrdinalIgnoreCase)))
+        {
+            var maps = snapshot.Catalog.Maps.Count(m => pack.FindFolder(m.FolderName) is { Files.Count: > 0 });
+            var backgrounds = pack.FindFolder(PackCopier.BackgroundsFolder)?.Files.Count ?? 0;
+            var lead = (pack.FindFolder(PackCopier.BackgroundsFolder)?.Files ?? Array.Empty<GameFile>())
+                .FirstOrDefault(f => Path.GetExtension(f.Name)
+                    .Equals(PackCopier.BackgroundExtension, StringComparison.OrdinalIgnoreCase));
+            rows.Add(new ChooserRow(
+                pack.Name,
+                $"{Count(maps, "map")}, {Count(backgrounds, "background")}",
+                lead?.FullPath ?? "",
+                null));
+        }
+
+        rows.Add(new ChooserRow("New pack...", "", "", null, isNewPack: true));
+
+        var vm = new ChooserViewModel(title, "One pack. Nothing is written to the game.", "pack", rows)
+        {
+            PrimaryPrefix = "Choose",
+        };
+        if (!ShowChooser(vm) || vm.Selected is not { } chosen)
+        {
+            return null;
+        }
+
+        return chosen.IsNewPack
+            ? await NewPackAsync()
+            : snapshot.Packs.FirstOrDefault(p => p.Name.Equals(chosen.Name, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>Spec 13's new-pack flow, as the Packs page runs it, returning the pack it made so a chooser can
+    /// hand it straight back to the operation that asked for one. Null when the name was empty or refused.</summary>
+    public async Task<Pack?> NewPackAsync()
+    {
+        var name = Dialogs.PromptText("New pack", "Name", "");
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return null;
+        }
+
+        if (!PackCreator.TryCreate(Services.LibraryPath, name.Trim(), out var error))
+        {
+            Dialogs.Error("Could not make the pack", error);
+            return null;
+        }
+
+        await RescanAsync();
+        return FindPack(name.Trim());
+    }
+
     /// <summary>The chooser's window, opened the way every other owned window here is. The thumbnails load while it
     /// is up and are cancelled when it closes.</summary>
     private bool ShowChooser(ChooserViewModel vm)
@@ -665,6 +810,87 @@ public partial class MainViewModel : ObservableObject
         var ok = window.ShowDialog() == true;
         cts.Cancel();
         return ok;
+    }
+
+    /// <summary>Spec 2.6 section 5: one pack's maps and pictures into another, off the UI thread, inside a
+    /// library undo session holding every path the plan will write or replace.</summary>
+    public async Task ImportFromPackAsync(Pack target)
+    {
+        if (Snapshot is not { } snapshot)
+        {
+            return;
+        }
+
+        var sources = snapshot.Packs
+            .Where(p => !p.Name.Equals(target.Name, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (sources.Count == 0)
+        {
+            return;
+        }
+
+        var vm = new ImportFromPackViewModel(this, target, sources);
+        var window = new ImportFromPackWindow
+        {
+            DataContext = vm,
+            Owner = Application.Current.MainWindow,
+            ShowActivated = !App.Quiet,
+        };
+        bool accepted;
+        try
+        {
+            accepted = window.ShowDialog() == true;
+        }
+        finally
+        {
+            // The thumbnails the window started decoding stop with it.
+            vm.Cleanup();
+        }
+
+        if (!accepted || vm.BuildPlan() is not { } plan)
+        {
+            return;
+        }
+
+        var catalog = snapshot.Catalog;
+        // Replace removes what the target holds for a map before the source's files land, and that is not always
+        // the same set, so the target's own files are captured as well. A loose picture has the same pack-relative
+        // path in both packs, and capturing a path the target does not have costs nothing.
+        var files = plan.Maps
+            .SelectMany(m => PackCopier.MapFiles(plan.Source, m, catalog)
+                .Concat(PackCopier.MapFiles(plan.Target, m, catalog)))
+            .Concat(plan.LooseFiles)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        PackImportResult? result = null;
+        var ok = await RunLibraryWriteAsync(
+            $"Importing into {target.Name}",
+            PackCopier.Touched(target, files),
+            (progress, ct) => Task.Run(() => { result = PackCopier.Import(plan, catalog, progress, ct); }, ct),
+            $"Importing into {target.Name}");
+        if (!ok)
+        {
+            return;
+        }
+
+        // The line names what the import did, which is only known once the work is over, so it is written over
+        // the placeholder the write boundary left rather than handed to it.
+        DoneText = ImportDone(result, plan, target);
+        if (result is not null)
+        {
+            Dialogs.ShowFailures("Some files could not be imported", result.Failures);
+        }
+    }
+
+    /// <summary>Spec 5.2's done line: the count, or the count with the first failure named.</summary>
+    private static string ImportDone(PackImportResult? result, PackImportPlan plan, Pack target)
+    {
+        var wanted = plan.Maps.Count + plan.LooseFiles.Count;
+        var skipped = result?.Skipped.Count ?? 0;
+        var done = wanted - skipped;
+        return result?.Failures.Count > 0
+            ? $"{done} of {wanted} imported. {Path.GetFileName(result.Failures[0].Path)}: {result.Failures[0].Error}"
+            : $"{Count(done, "map")} imported into {target.Name}";
     }
 
     /// <summary>Spec 6: the editor recolours a map's own pieces into a pack, which is a library write of its own.
@@ -875,7 +1101,61 @@ public partial class MainViewModel : ObservableObject
         }
 
         CanUndo = Services.Undo.Latest is not null;
+
+        // Spec 7.3: once a run, 5 s after the first scan finished, off the UI thread and blocking nothing. A
+        // timer rather than an await, so the scan's caller is not held by it.
+        if (!_updateCheckStarted)
+        {
+            _updateCheckStarted = true;
+            _updateTimer.Start();
+        }
     }
+
+    /// <summary>Spec 7.3: the check itself. Off unless the setting is on; at most once a day unless the Settings
+    /// page's Check now button forces it. Never throws, never shows a dialog, never downloads, never blocks: the
+    /// only thing it can do is set AvailableUpdate and stamp lastUpdateCheck.</summary>
+    public async Task CheckForUpdateAsync(bool force)
+    {
+        // Check now pressed twice, or pressed while the once-a-run check is still out: one check at a time.
+        if (UpdateChecking)
+        {
+            return;
+        }
+
+        if (!force && (!Services.Settings.CheckForUpdates || !DueForCheck(Services.Settings.LastUpdateCheck)))
+        {
+            return;
+        }
+
+        UpdateCheckFailed = false;
+        UpdateChecking = true;
+        try
+        {
+            var release = await Task.Run(() => Services.Updates.CheckAsync(_updateCts.Token));
+            AvailableUpdate = release;
+            UpdateCheckFailed = release is null;
+            if (release is not null || force)
+            {
+                try
+                {
+                    Services.UpdateSettings(Services.Settings with { LastUpdateCheck = DateTimeOffset.UtcNow });
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    System.Diagnostics.Trace.WriteLine($"BhMaps: the update stamp was not saved: {ex.Message}");
+                }
+            }
+        }
+        finally
+        {
+            UpdateChecking = false;
+            SettingsPage.RefreshUpdateRow();
+        }
+    }
+
+    /// <summary>Null, or older than a day. A stamp in the future (a clock that moved) counts as due.</summary>
+    private static bool DueForCheck(DateTimeOffset? last) =>
+        last is not { } then || DateTimeOffset.UtcNow - then >= TimeSpan.FromHours(24) || then > DateTimeOffset.UtcNow;
 
     /// <summary>Spec 3.5: the game data has been read, so the catalog the last scan built from the cache, or from
     /// nothing, is out of date. A read that lands mid-scan is remembered rather than started on top of it, and
@@ -891,11 +1171,15 @@ public partial class MainViewModel : ObservableObject
         _ = RescanAsync();
     }
 
-    /// <summary>Stops the game poll and drops the level-data subscription. Called once, when the window closes, so
-    /// neither keeps waking a dispatcher that is on its way out.</summary>
+    /// <summary>Stops the two timers, cancels the update work and drops the level-data subscription. Called once,
+    /// when the window closes, so none of them keeps waking a dispatcher that is on its way out.</summary>
     public void Shutdown()
     {
         _gameTimer.Stop();
+        _updateTimer.Stop();
+        _updateCts.Cancel();
+        _updateCts.Dispose();
+        SettingsPage.Shutdown();
         Services.LevelData.Changed -= OnLevelDataChanged;
     }
 
@@ -1043,6 +1327,69 @@ public partial class MainViewModel : ObservableObject
     {
         DoneText = doneText;
         DoneUndoable = false;
+        DoneActionText = "";
+        DoneActionCommand = null;
+    }
+
+    /// <summary>The line a library-only operation leaves when it offers something other than Undo: spec 2.6 4.3's
+    /// "Open {target}" beside a plain copy.</summary>
+    public void SetLibraryDone(string doneText, string actionText, IRelayCommand action)
+    {
+        DoneText = doneText;
+        DoneUndoable = false;
+        DoneActionText = actionText;
+        DoneActionCommand = action;
+    }
+
+    /// <summary>Spec 2.6 4.2: one write that touches the library and not the game. The busy boundary, an undo
+    /// session holding the library paths the work is about to write or remove, a done line with Undo beside it,
+    /// and a rescan. No launcher and no game side: nothing lands in the game folder, so the game may keep
+    /// running and a missing game folder does not stop it.</summary>
+    public async Task<bool> RunLibraryWriteAsync(
+        string label,
+        IReadOnlyList<string> libraryUndoPaths,
+        Func<IProgress<string>, CancellationToken, Task> work,
+        string doneText,
+        IReadOnlyList<string>? writtenFolders = null)
+    {
+        if (IsBusy)
+        {
+            // One operation at a time (spec 7.1), refused silently as a game write is. No GameFolderMissing beside
+            // it: nothing lands in the game folder. A refused write must not clear the done line or rescan.
+            return false;
+        }
+
+        var libraryPath = Services.LibraryPath;
+        var undoable = libraryUndoPaths.Count > 0;
+        var ok = await RunBusyAsync(
+            label,
+            async (progress, ct) =>
+            {
+                if (undoable)
+                {
+                    // The capture is the first step of the work, as it is on the game side: file copying behind a
+                    // progress line, inside the boundary that turns an IO failure into the usual dialog.
+                    progress.Report("Saving undo");
+                    await Task.Run(
+                        () =>
+                        {
+                            var session = Services.Undo.Begin();
+                            session.CaptureLibrary(libraryPath, libraryUndoPaths);
+                        },
+                        ct);
+                }
+
+                await work(progress, ct);
+            });
+
+        // Begin has already replaced the previous snapshot, so a write that failed clears the line with it.
+        DoneText = ok ? doneText : "";
+        DoneUndoable = ok && undoable;
+        DoneActionText = "";
+        DoneActionCommand = null;
+        CanUndo = Services.Undo.Latest is not null;
+        await RescanAsync(writtenFolders);
+        return ok;
     }
 
     /// <summary>Spec 2.2: what a write reports about when it will show. One string, appended by the wrapper, so
@@ -1160,7 +1507,7 @@ public partial class MainViewModel : ObservableObject
                                     // there is to it.
                                     session.CaptureThumbnails(
                                         thumbnailsDir,
-                                        thumbnailPlans.Select(planned => planned.Plan.Target?.FileName).OfType<string>());
+                                        thumbnailPlans.SelectMany(planned => planned.Plan.Targets.Select(t => t.FileName)));
                                     if (thumbnailUndoNames is { Count: > 0 })
                                     {
                                         session.CaptureThumbnails(thumbnailsDir, thumbnailUndoNames);
@@ -1224,10 +1571,12 @@ public partial class MainViewModel : ObservableObject
                 (map, ThumbnailWriter.Plan(map, snapshot.Catalog.Maps, Services.GameRoot, Services.AppDataDir)))]
             : [];
 
-    /// <summary>Spec 10.4: the thumbnail step, run after the caller's work succeeded. Each map stands on its own,
-    /// so a keep or a write that fails for one becomes that map's panel note rather than a failure of a write that
-    /// is already done. Returns how many thumbnails it wrote. Off the UI thread: the render is the composite the
-    /// map page builds, and the writes are file copies.</summary>
+    /// <summary>Spec section 8 and 10.4: the thumbnail step, run after the caller's work succeeded. A map is
+    /// rendered once and the same picture is written over every file it owns, so a folder whose levels name two
+    /// or three pictures gets all of them. Each map stands on its own, so a keep or a write that fails for one
+    /// becomes that map's panel note rather than a failure of a write that is already done. Returns how many
+    /// files it wrote. Off the UI thread: the render is the composite the map page builds, and the rest is file
+    /// copying.</summary>
     private int WriteThumbnails(
         IReadOnlyList<(MapEntry Map, ThumbnailPlan Plan)> plans,
         bool reset,
@@ -1237,32 +1586,46 @@ public partial class MainViewModel : ObservableObject
         var written = 0;
         foreach (var (map, plan) in plans)
         {
-            if (plan.Target is not { } target)
+            var note = SkipNote(map, plan);
+            if (plan.Targets.Count == 0)
             {
-                _thumbnailNotes[map.FolderName] = SkipNote(map, plan);
+                _thumbnailNotes[map.FolderName] = note;
                 continue;
             }
 
             progress.Report("Map-select thumbnail " + map.DisplayName);
             try
             {
-                // The game's own picture is kept before the first write over it, so every write can be undone
-                // even after the undo snapshot it was taken with has been replaced.
-                ThumbnailWriter.KeepOriginal(target);
-                if (reset)
+                // One render for the map, however many of its own files it is written over.
+                var composite = reset ? null : ThumbnailWriter.Render(map, gamePath);
+                foreach (var target in plan.Targets)
                 {
-                    if (ThumbnailWriter.RestoreOriginal(target))
+                    // The game's own picture is kept before the first write over it, so every write can be
+                    // undone even after the undo snapshot it was taken with has been replaced. One kept copy
+                    // per file, under that file's own name.
+                    ThumbnailWriter.KeepOriginal(target);
+                    if (composite is null)
                     {
+                        if (ThumbnailWriter.RestoreOriginal(target))
+                        {
+                            written++;
+                        }
+                    }
+                    else
+                    {
+                        ThumbnailWriter.Write(composite, target.TargetPath);
                         written++;
                     }
                 }
+
+                if (note.Length == 0)
+                {
+                    _thumbnailNotes.Remove(map.FolderName);
+                }
                 else
                 {
-                    ThumbnailWriter.Write(ThumbnailWriter.Render(map, gamePath), target.TargetPath);
-                    written++;
+                    _thumbnailNotes[map.FolderName] = note;
                 }
-
-                _thumbnailNotes.Remove(map.FolderName);
             }
             catch (Exception ex)
             {
@@ -1273,14 +1636,65 @@ public partial class MainViewModel : ObservableObject
         return written;
     }
 
-    /// <summary>The panel note for a map whose thumbnail the write could not aim at.</summary>
-    private static string SkipNote(MapEntry map, ThumbnailPlan plan) => plan.Skip switch
+    /// <summary>The panel note for a map the write could not aim every picture of, or "" when it wrote them all.
+    /// A map that owns nothing keeps 2.5's sentence, which the manual quotes; a map that owns some files and not
+    /// others names the ones that were left alone.</summary>
+    private static string SkipNote(MapEntry map, ThumbnailPlan plan)
     {
-        ThumbnailSkip.Shared =>
-            $"Map-select thumbnail not written: {map.DisplayName} shares its picture with {plan.OtherMap}.",
-        ThumbnailSkip.NoFile => $"Map-select thumbnail not written: no file is named for {map.DisplayName}.",
-        _ => "Map-select thumbnail not written: the file is missing from the game folder.",
-    };
+        if (plan.NamesNoFile)
+        {
+            return $"Map-select thumbnail not written: no file is named for {map.DisplayName}.";
+        }
+
+        var shared = plan.Files.Where(f => f.Skip == ThumbnailSkip.Shared).ToList();
+        var missing = plan.Files.Where(f => f.Skip == ThumbnailSkip.Missing).ToList();
+        if (shared.Count == 0 && missing.Count == 0)
+        {
+            return "";
+        }
+
+        if (plan.Targets.Count == 0 && missing.Count == 0)
+        {
+            return $"Map-select thumbnail not written: {map.DisplayName} shares its picture with {SharedWith(shared)}.";
+        }
+
+        var parts = new List<string>();
+        if (shared.Count > 0)
+        {
+            parts.Add($"{Names(shared)} {(shared.Count == 1 ? "is" : "are")} shared with {SharedWith(shared)}.");
+        }
+
+        if (missing.Count > 0)
+        {
+            parts.Add($"{Names(missing)} {(missing.Count == 1 ? "is" : "are")} missing from the game folder.");
+        }
+
+        var lead = plan.Targets.Count == 0 ? "Map-select thumbnail not written: " : "Map-select thumbnail: ";
+        return lead + string.Join(" ", parts);
+    }
+
+    /// <summary>The file names of a group of skipped plan entries, in level order.</summary>
+    private static string Names(IReadOnlyList<ThumbnailFilePlan> files) =>
+        string.Join(", ", files.Select(f => f.FileName));
+
+    /// <summary>The other maps a shared group's pictures belong to, each named once in the order it turns up and
+    /// read as a list. A group whose entries name no other map falls back to "another map", so the sentence still
+    /// reads.</summary>
+    private static string SharedWith(IReadOnlyList<ThumbnailFilePlan> files)
+    {
+        var names = files
+            .Where(f => !string.IsNullOrWhiteSpace(f.OtherMap))
+            .Select(f => f.OtherMap!)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        return names.Count switch
+        {
+            0 => "another map",
+            1 => names[0],
+            _ => $"{string.Join(", ", names.Take(names.Count - 1))} and {names[^1]}",
+        };
+    }
 
     /// <summary>The caller's done fragment with the thumbnail step's own on the end, or the fragment untouched
     /// when the step wrote nothing. The period between them is settled here for the reason DoneLine settles the

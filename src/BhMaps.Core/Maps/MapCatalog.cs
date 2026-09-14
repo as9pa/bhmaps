@@ -7,8 +7,11 @@ namespace BhMaps.Core.Maps;
 public sealed record UiSet(string Name, string Label);
 
 /// <summary>One map: a mapArt folder with the levels that point at it, ranked so one of them names the map.
-/// <see cref="ThumbnailFile"/> is the map-select picture this map alone owns, null when its levels name more
-/// than one or another map names the same file; <see cref="Candidates"/> holds every file its levels name.</summary>
+/// <see cref="ThumbnailFiles"/> are the map-select pictures this map owns outright, in level order: a folder
+/// owns every file its included levels name that no other folder's levels also name, so a folder whose levels
+/// name two or three different pictures owns all of them. <see cref="Candidates"/> holds every file its levels
+/// name, owned or not, and <see cref="ThumbnailFile"/> is the first owned one for callers that want a single
+/// name.</summary>
 public sealed record MapEntry(
     string FolderName,
     string DisplayName,
@@ -17,11 +20,17 @@ public sealed record MapEntry(
     IReadOnlyList<string> Sets,
     IReadOnlyList<string> BackgroundSlots,
     IReadOnlyList<string> PlatformFiles,
-    string? ThumbnailFile = null,
+    IReadOnlyList<string>? OwnedThumbnails = null,
     IReadOnlyList<string>? ThumbnailCandidates = null)
 {
+    /// <summary>The map-select pictures this map owns outright, in level order, empty when it owns none.</summary>
+    public IReadOnlyList<string> ThumbnailFiles => OwnedThumbnails ?? [];
+
     /// <summary>Every map-select picture this map's included levels name, empty when they name none.</summary>
     public IReadOnlyList<string> Candidates => ThumbnailCandidates ?? [];
+
+    /// <summary>The first picture this map owns, or null when it owns none.</summary>
+    public string? ThumbnailFile => ThumbnailFiles.Count > 0 ? ThumbnailFiles[0] : null;
 }
 
 /// <summary>Folds the game's level data onto its mapArt folders. Folders no included level points at are not
@@ -104,10 +113,10 @@ public sealed class MapCatalog
             .ToList();
 
         var candidates = Candidates(folders, included);
-        var thumbnails = Thumbnails(candidates);
+        var owned = Owned(candidates);
 
         var maps = folders
-            .Select(g => Entry(g.Key, g.ToList(), Display, data.Sets, thumbnails[g.Key], candidates[g.Key]))
+            .Select(g => Entry(g.Key, g.ToList(), Display, data.Sets, owned[g.Key], candidates[g.Key]))
             .OrderBy(m => m.DisplayName, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
@@ -137,15 +146,17 @@ public sealed class MapCatalog
             Array.Empty<string>(),
             Array.Empty<string>(),
             folder.Files.Select(f => Path.Combine(folder.Name, f.Name)).ToList(),
-            ThumbnailFile: null);
+            OwnedThumbnails: null);
     }
 
-    /// <summary>The map-select picture each folder owns, keyed by folder name. A folder owns a file only when
-    /// all of its levels that name one name that same file and no other folder names it: a file two maps share
-    /// or a folder's own levels disagree over belongs to no single map, and writing it would change another
-    /// map's thumbnail.</summary>
-    private static Dictionary<string, string?> Thumbnails(Dictionary<string, IReadOnlyList<string>> candidates)
+    /// <summary>The map-select pictures each folder owns, keyed by folder name, in the order its levels name
+    /// them. A folder owns a candidate when it is the only folder naming it: a file two folders name belongs to
+    /// neither, because writing it would change the other map's thumbnail. A folder naming several files of its
+    /// own owns all of them, which is the case the ranked "Small X" levels make.</summary>
+    private static Dictionary<string, IReadOnlyList<string>> Owned(
+        Dictionary<string, IReadOnlyList<string>> candidates)
     {
+        // Candidates are already distinct within a folder, so a count above one always means a second folder.
         var owners = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         foreach (var file in candidates.Values.SelectMany(files => files))
         {
@@ -154,7 +165,7 @@ public sealed class MapCatalog
 
         return candidates.ToDictionary(
             pair => pair.Key,
-            pair => pair.Value.Count == 1 && owners[pair.Value[0]] == 1 ? pair.Value[0] : null,
+            pair => (IReadOnlyList<string>)pair.Value.Where(file => owners[file] == 1).ToList(),
             StringComparer.OrdinalIgnoreCase);
     }
 
@@ -178,7 +189,7 @@ public sealed class MapCatalog
         IReadOnlyList<LevelDesc> levels,
         Func<LevelDesc, string> display,
         IReadOnlyList<LevelSet> sets,
-        string? thumbnailFile,
+        IReadOnlyList<string> owned,
         IReadOnlyList<string> candidates)
     {
         var levelNames = levels.Select(l => l.LevelName).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -200,7 +211,7 @@ public sealed class MapCatalog
                 .SelectMany(l => Assets(l.Platforms).Select(a => AssetPath.Resolve(l.AssetDir, a.AssetName)))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList(),
-            thumbnailFile,
+            owned,
             candidates);
     }
 

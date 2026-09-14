@@ -10,12 +10,13 @@ namespace BhMaps.App.ViewModels;
 /// mode, the map it stands for. Picture mode leaves Map null and the caller reads Path.</summary>
 public sealed partial class ChooserRow : ObservableObject
 {
-    public ChooserRow(string name, string detail, string path, MapEntry? map)
+    public ChooserRow(string name, string detail, string path, MapEntry? map, bool isNewPack = false)
     {
         Name = name;
         Detail = detail;
         Path = path;
         Map = map;
+        IsNewPack = isNewPack;
     }
 
     public string Name { get; }
@@ -27,6 +28,9 @@ public sealed partial class ChooserRow : ObservableObject
     public string Path { get; }
 
     public MapEntry? Map { get; }
+
+    /// <summary>The last line of the pack chooser (spec 2.6 4.3), which makes a pack rather than picking one.</summary>
+    public bool IsNewPack { get; }
 
     [ObservableProperty]
     public partial ImageSource? Thumbnail { get; set; }

@@ -6,24 +6,36 @@ using BhMaps.Core.Storage;
 
 namespace BhMaps.Core.Operations;
 
-/// <summary>Why a map's map-select thumbnail is left alone. None means it can be written.</summary>
+/// <summary>Why one of a map's map-select pictures is left alone. None means it can be written.</summary>
 public enum ThumbnailSkip
 {
     None,
     Shared,
-    NoFile,
     Missing,
 }
 
 /// <summary>Where a map's thumbnail lives and where its original is kept.</summary>
 public sealed record ThumbnailTarget(string FileName, string TargetPath, string OriginalPath);
 
-/// <summary>Target when the map's thumbnail can be written; otherwise the reason, and for Shared the other map's
-/// display name.</summary>
-public sealed record ThumbnailPlan(ThumbnailTarget? Target, ThumbnailSkip Skip, string? OtherMap);
+/// <summary>One picture a map's levels name: a target when the map owns it and the game's jpg is there,
+/// otherwise the reason it is left alone, and for Shared the display name of the map that also names it.</summary>
+public sealed record ThumbnailFilePlan(string FileName, ThumbnailTarget? Target, ThumbnailSkip Skip, string? OtherMap);
 
-/// <summary>Spec 10.3: the map-select thumbnail of one map, rendered from the game folder and written over the
-/// game's own jpg. The game's picture is kept first, under the app's data folder, so every write can be undone.</summary>
+/// <summary>Spec section 8: one entry per picture the map's included levels name, in level order. A map whose
+/// levels name none plans no entries at all, which is <see cref="NamesNoFile"/>.</summary>
+public sealed record ThumbnailPlan(IReadOnlyList<ThumbnailFilePlan> Files)
+{
+    /// <summary>Every file of the plan that can be written, in level order.</summary>
+    public IReadOnlyList<ThumbnailTarget> Targets { get; } =
+        [.. Files.Select(f => f.Target).OfType<ThumbnailTarget>()];
+
+    /// <summary>True when the map's levels name no picture at all, so there was never anything to write.</summary>
+    public bool NamesNoFile => Files.Count == 0;
+}
+
+/// <summary>Spec sections 8 and 10.3: the map-select thumbnails of one map, rendered from the game folder and
+/// written over the game's own jpgs. The game's picture is kept first, under the app's data folder, so every
+/// write can be undone.</summary>
 public static class ThumbnailWriter
 {
     public const int Width = 290;
@@ -44,28 +56,39 @@ public static class ThumbnailWriter
     /// <summary>appDataDir\thumbnails-original.</summary>
     public static string OriginalsDir(string appDataDir) => Path.Combine(appDataDir, OriginalsFolderName);
 
-    /// <summary>Shared when another map's included levels name the same file (OtherMap is that map's DisplayName);
-    /// NoFile when the map names none; Missing when the jpg is not in the thumbnails folder.</summary>
+    /// <summary>One plan entry per picture the map's levels name: a target when the map owns the file and the
+    /// jpg is in the game's thumbnails folder, Shared when another map's folder also names it (OtherMap is that
+    /// map's display name), Missing when the jpg is not there. A map that owns two files and is missing one
+    /// plans the one that exists and reports the other.</summary>
     public static ThumbnailPlan Plan(MapEntry map, IReadOnlyList<MapEntry> allMaps, string gameRoot, string appDataDir)
     {
-        if (map.ThumbnailFile is not { } fileName)
+        var thumbnailsDir = ThumbnailsDir(gameRoot);
+        var originalsDir = OriginalsDir(appDataDir);
+        var owned = map.ThumbnailFiles.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var files = new List<ThumbnailFilePlan>();
+
+        foreach (var fileName in map.Candidates)
         {
-            // A file two maps name belongs to neither: writing it would change the other map's thumbnail too.
-            var other = allMaps.FirstOrDefault(o =>
-                o != map && o.Candidates.Intersect(map.Candidates, StringComparer.OrdinalIgnoreCase).Any());
-            return other is null
-                ? new ThumbnailPlan(null, ThumbnailSkip.NoFile, null)
-                : new ThumbnailPlan(null, ThumbnailSkip.Shared, other.DisplayName);
+            if (!owned.Contains(fileName))
+            {
+                // A file two folders name belongs to neither: writing it would change the other map's thumbnail.
+                var other = allMaps.FirstOrDefault(o =>
+                    o != map && o.Candidates.Contains(fileName, StringComparer.OrdinalIgnoreCase));
+                files.Add(new ThumbnailFilePlan(fileName, null, ThumbnailSkip.Shared, other?.DisplayName));
+                continue;
+            }
+
+            var targetPath = Path.Combine(thumbnailsDir, fileName);
+            files.Add(File.Exists(targetPath)
+                ? new ThumbnailFilePlan(
+                    fileName,
+                    new ThumbnailTarget(fileName, targetPath, Path.Combine(originalsDir, fileName)),
+                    ThumbnailSkip.None,
+                    null)
+                : new ThumbnailFilePlan(fileName, null, ThumbnailSkip.Missing, null));
         }
 
-        var targetPath = Path.Combine(ThumbnailsDir(gameRoot), fileName);
-        if (!File.Exists(targetPath))
-        {
-            return new ThumbnailPlan(null, ThumbnailSkip.Missing, null);
-        }
-
-        var target = new ThumbnailTarget(fileName, targetPath, Path.Combine(OriginalsDir(appDataDir), fileName));
-        return new ThumbnailPlan(target, ThumbnailSkip.None, null);
+        return new ThumbnailPlan(files);
     }
 
     /// <summary>Renders the map from the game folder at RenderWidth by RenderHeight and returns the frozen

@@ -28,6 +28,27 @@ public static class ExplorerLauncher
         }
     }
 
+    /// <summary>Opens a https url in whatever the machine's browser is. Returns the reason it could not, or null.
+    /// Anything that is not an absolute https uri is refused rather than handed to the shell, because what the
+    /// shell does with a string that is not a url is open whatever program claims it.</summary>
+    public static string? OpenUrl(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
+        {
+            return $"Not a https address: {url}";
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true })?.Dispose();
+            return null;
+        }
+        catch (Exception ex) when (ex is Win32Exception or InvalidOperationException)
+        {
+            return ex.Message;
+        }
+    }
+
     /// <summary>Opens the file's folder with the file selected, which is what "Show in folder" means. Null when it
     /// worked, otherwise why it did not. A missing file is caught first, because explorer handed a path that is
     /// not there opens Documents instead, which looks like the menu item doing nothing.</summary>

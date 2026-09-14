@@ -565,6 +565,29 @@
     <Setter Property="behaviors:SliderDrag.IsEnabled" Value="True" />
   </Style>
 
+  <!-- Spec 7.3: the one progress bar in the app, three pixels of it, under the download line. -->
+  <Style x:Key="ThinProgress" TargetType="ProgressBar">
+    <Setter Property="Height" Value="3" />
+    <Setter Property="Background" Value="{StaticResource Line2Brush}" />
+    <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Maximum" Value="1" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ProgressBar">
+          <Grid>
+            <Border Background="{TemplateBinding Background}" CornerRadius="{StaticResource Radius}" />
+            <Border x:Name="PART_Track" />
+            <Border x:Name="PART_Indicator"
+                    HorizontalAlignment="Left"
+                    Background="{TemplateBinding Foreground}"
+                    CornerRadius="{StaticResource Radius}" />
+          </Grid>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
   <Style x:Key="SectionHeaderText" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
     <Setter Property="FontSize" Value="12" />
     <Setter Property="FontWeight" Value="Medium" />
@@ -592,6 +615,13 @@
     <Setter Property="Padding" Value="4" />
   </Style>
 
+  <!-- For a menu whose rows are not TileMenuCommand: the header is the words themselves, drawn the same way and
+       still not through AccessText. A style based on TileMenuItem that sets its own Header sets this beside it,
+       because TileMenuItem's own template reads Text and Gesture off the line. -->
+  <DataTemplate x:Key="TileMenuPlainHeader">
+    <TextBlock Text="{Binding}" />
+  </DataTemplate>
+
   <!-- Header and Command are setters rather than per item markup, so one ItemsSource of TileMenuCommand drives
        every tile's menu and a page never writes a MenuItem by hand. A literal MenuItem that sets its own Header
        still wins: a local value beats a style setter. -->
@@ -600,15 +630,24 @@
     <Setter Property="FontSize" Value="13" />
     <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
     <Setter Property="Padding" Value="10,6" />
-    <Setter Property="Header" Value="{Binding Text}" />
+    <Setter Property="Header" Value="{Binding}" />
 
     <!-- A file or pack name reads exactly as typed. Without a template the header string is drawn through
          AccessText, which eats the underscore in "BG_Dojo.jpg" and underlines the D instead; no menu in spec
-         section 11 offers an access key, so no menu needs one. The template's DataContext is the header itself. -->
+         section 11 offers an access key, so no menu needs one. The header is the line itself, so the template
+         can draw its gesture beside its words. -->
     <Setter Property="HeaderTemplate">
       <Setter.Value>
         <DataTemplate>
-          <TextBlock Text="{Binding}" />
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="{Binding Text}" />
+            <TextBlock Grid.Column="1" Margin="24,0,0,0" Foreground="{StaticResource Text3Brush}"
+                       Text="{Binding Gesture}" />
+          </Grid>
         </DataTemplate>
       </Setter.Value>
     </Setter>

@@ -774,6 +774,7 @@
                          binding and falls back to its header. -->
                     <Style TargetType="MenuItem" BasedOn="{StaticResource TileMenuItem}">
                       <Setter Property="Header" Value="{Binding Name}" />
+                      <Setter Property="HeaderTemplate" Value="{StaticResource TileMenuPlainHeader}" />
                       <Setter Property="Command" Value="{Binding DataContext.ApplyPackToTickedCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                       <Setter Property="CommandParameter" Value="{Binding}" />
                       <Setter Property="AutomationProperties.Name" Value="{Binding Name}" />
@@ -791,6 +792,7 @@
                          Text binding would fail on it exactly as it does on a pack row. -->
                     <Style TargetType="MenuItem" BasedOn="{StaticResource TileMenuItem}">
                       <Setter Property="Header" Value="{Binding Header}" />
+                      <Setter Property="HeaderTemplate" Value="{StaticResource TileMenuPlainHeader}" />
                       <Setter Property="Command" Value="{Binding DataContext.ApplyPictureToTickedCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                       <Setter Property="CommandParameter" Value="{Binding}" />
                       <Setter Property="AutomationProperties.Name" Value="{Binding Header}" />

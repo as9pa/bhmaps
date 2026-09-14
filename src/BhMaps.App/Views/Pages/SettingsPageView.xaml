@@ -69,6 +69,7 @@
             <RowDefinition Height="Auto" MinHeight="56" />
             <RowDefinition Height="Auto" MinHeight="56" />
             <RowDefinition Height="Auto" MinHeight="56" />
+            <RowDefinition Height="Auto" MinHeight="56" />
           </Grid.RowDefinitions>
 
           <!-- Game folder -->
@@ -171,13 +172,63 @@
                      TextWrapping="Wrap" />
 
           <!-- Version -->
+          <Border Grid.Row="6" Style="{StaticResource SettingRule}" />
           <TextBlock Grid.Row="6" Grid.Column="0" Style="{StaticResource SettingLabel}" Text="Version" />
-          <TextBlock Grid.Row="6"
-                     Grid.Column="1"
-                     Margin="0,10"
-                     VerticalAlignment="Center"
-                     Style="{StaticResource SettingValue}"
-                     Text="{Binding Version}" />
+          <StackPanel Grid.Row="6" Grid.Column="1" Style="{StaticResource SettingCell}">
+            <TextBlock Style="{StaticResource SettingValue}" Text="{Binding Version}" />
+
+            <!-- Spec 7.3: one second line for every state, available, up to date, never checked, failed, and the
+                 two download states. The view model owns which one it is. -->
+            <TextBlock Margin="0,6,0,0"
+                       Foreground="{StaticResource Text2Brush}"
+                       Text="{Binding UpdateLine}"
+                       TextWrapping="Wrap"
+                       Visibility="{Binding HasUpdateLine, Converter={StaticResource BoolToVis}}" />
+            <ProgressBar Margin="0,8,0,0"
+                         Style="{StaticResource ThinProgress}"
+                         Value="{Binding DownloadProgress, Mode=OneWay}"
+                         Visibility="{Binding Downloading, Converter={StaticResource BoolToVis}}" />
+          </StackPanel>
+          <StackPanel Grid.Row="6" Style="{StaticResource SettingActions}">
+            <Button Command="{Binding CancelDownloadCommand}"
+                    Content="Cancel"
+                    FocusVisualStyle="{StaticResource DialogFocusRing}"
+                    Style="{StaticResource PlainButton}"
+                    Visibility="{Binding Downloading, Converter={StaticResource BoolToVis}}" />
+            <Button Margin="8,0,0,0"
+                    Command="{Binding WhatChangedCommand}"
+                    Content="What changed"
+                    FocusVisualStyle="{StaticResource DialogFocusRing}"
+                    Style="{StaticResource PlainButton}"
+                    Visibility="{Binding ShowWhatChanged, Converter={StaticResource BoolToVis}}" />
+            <Button Margin="8,0,0,0"
+                    Command="{Binding UpdateCommand}"
+                    Content="{Binding UpdateButtonText}"
+                    FocusVisualStyle="{StaticResource DialogFocusRing}"
+                    Style="{StaticResource PrimaryButton}"
+                    Visibility="{Binding CanUpdate, Converter={StaticResource BoolToVis}}" />
+          </StackPanel>
+
+          <!-- Updates (spec 7.2, 7.3). Under Version, because it is about the row above it. -->
+          <Border Grid.Row="7" Style="{StaticResource SettingRule}" />
+          <TextBlock Grid.Row="7" Grid.Column="0" Style="{StaticResource SettingLabel}" Text="Updates" />
+          <StackPanel Grid.Row="7" Grid.Column="1" Style="{StaticResource SettingCell}">
+            <CheckBox AutomationProperties.Name="Check for updates when BhMaps starts"
+                      Content="Check for updates when BhMaps starts"
+                      FocusVisualStyle="{StaticResource DialogFocusRing}"
+                      Foreground="{StaticResource TextBrush}"
+                      IsChecked="{Binding CheckForUpdates}" />
+            <TextBlock Margin="0,6,0,0"
+                       Foreground="{StaticResource Text2Brush}"
+                       Text="{Binding UpdatesLine}"
+                       TextWrapping="Wrap" />
+          </StackPanel>
+          <StackPanel Grid.Row="7" Style="{StaticResource SettingActions}">
+            <Button Command="{Binding CheckNowCommand}"
+                    Content="Check now"
+                    FocusVisualStyle="{StaticResource DialogFocusRing}"
+                    Style="{StaticResource OutlineButton}" />
+          </StackPanel>
         </Grid>
       </StackPanel>
     </ScrollViewer>

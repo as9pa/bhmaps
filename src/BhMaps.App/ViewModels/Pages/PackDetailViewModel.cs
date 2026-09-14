@@ -1,11 +1,13 @@
 using System.Collections.ObjectModel;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 using BhMaps.App.Services;
 using BhMaps.Core.Imaging;
 using BhMaps.Core.Maps;
 using BhMaps.Core.Model;
 using BhMaps.Core.Operations;
+using BhMaps.Core.Packs;
 using BhMaps.Core.Scanning;
 using BhMaps.Core.Settings;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -27,6 +29,16 @@ public partial class PackDetailViewModel : PageViewModel
     public const string NoPackText = "No pack is open.";
 
     public const string NoMapsText = "This pack has no map folders.";
+
+    /// <summary>Spec 5.3: the tip on the disabled Import from pack button.</summary>
+    public const string NoOtherPackText = "No other pack to import from";
+
+    /// <summary>Spec 2.6 4.3: the line the page shows for two seconds when Ctrl+V has nothing to paste.</summary>
+    public const string NothingCopiedText = "Nothing copied yet";
+
+    /// <summary>The line Ctrl+X shows on the Default pack, whose menu offers no Move line either (spec 7.5: the
+    /// Default pack is the game's own files).</summary>
+    public const string NoCutFromDefaultText = "Nothing moves out of the Default pack";
 
     /// <summary>The folder a pack keeps its background images in. Every other folder is a map.</summary>
     private const string BackgroundsFolder = "Backgrounds";
@@ -51,11 +63,20 @@ public partial class PackDetailViewModel : PageViewModel
     /// instead of twice.</summary>
     private bool _rebuildOnPackChange = true;
 
+    /// <summary>Takes <see cref="ClipboardHint" /> away again two seconds after it was put up.</summary>
+    private readonly DispatcherTimer _hintTimer = new() { Interval = TimeSpan.FromSeconds(2) };
+
     public PackDetailViewModel(MainViewModel shell)
         : base(shell)
     {
         Items = [];
         TransparentText = "";
+        ClipboardHint = "";
+        _hintTimer.Tick += (_, _) =>
+        {
+            _hintTimer.Stop();
+            ClipboardHint = "";
+        };
 
         // A stored zoom from another version, or a hand-edited one, is clamped rather than trusted.
         Zoom = Math.Clamp(shell.Services.Settings.PackZoom, MinZoom, MaxZoom);
@@ -65,9 +86,16 @@ public partial class PackDetailViewModel : PageViewModel
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Title))]
     [NotifyPropertyChangedFor(nameof(HasPack))]
+    [NotifyPropertyChangedFor(nameof(CanImportFromPack))]
     [NotifyCanExecuteChangedFor(nameof(ApplyAllCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ImportFromPackCommand))]
     [NotifyCanExecuteChangedFor(nameof(OpenFolderCommand))]
     public partial Pack? Pack { get; set; }
+
+    /// <summary>Spec 5.3: nothing to import from when the library holds only this pack.</summary>
+    public bool CanImportFromPack =>
+        Pack is { } pack && _snapshot is { } snapshot
+        && snapshot.Packs.Any(p => !p.Name.Equals(pack.Name, StringComparison.OrdinalIgnoreCase));
 
     public override string Title => Pack?.Name ?? "Pack";
 
@@ -97,6 +125,18 @@ public partial class PackDetailViewModel : PageViewModel
 
     public bool HasTransparent => TransparentText.Length > 0;
 
+    /// <summary>"Wharf cut", or "" while the page has nothing to say. Shown for two seconds beside the zoom
+    /// slider, so Ctrl+C and Ctrl+X say out loud what they took (spec 2.6 4.3).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasClipboardHint))]
+    public partial string ClipboardHint { get; set; }
+
+    public bool HasClipboardHint => ClipboardHint.Length > 0;
+
+    /// <summary>The tile the pointer is over wins; the keyboard-focused tile is the fallback (spec 2.6 4.3). The
+    /// view knows both, so it hands the page the one it wants before the command runs.</summary>
+    public PackTileViewModel? KeyTarget { get; set; }
+
     /// <summary>The shell's own navigation command. PageViewModel.Shell is protected, so the markup cannot reach
     /// Shell.NavigatePacksCommand directly; this one-line property is the smallest way to bind it.</summary>
     public IRelayCommand BackToPacksCommand => Shell.NavigatePacksCommand;
@@ -120,6 +160,10 @@ public partial class PackDetailViewModel : PageViewModel
             // Spec 6.5: Remove deletes the pack from the library. Its page has nothing left to show.
             Shell.NavigatePacksCommand.Execute(null);
         }
+
+        // The new snapshot, not the pack, is what decides whether there is another pack to import from.
+        OnPropertyChanged(nameof(CanImportFromPack));
+        ImportFromPackCommand.NotifyCanExecuteChanged();
     }
 
     /// <summary>Spec 5: a click, or Enter on the focused tile, opens the drawer. A background tile whose slot no
@@ -145,28 +189,75 @@ public partial class PackDetailViewModel : PageViewModel
 
     public void OpenSelected() => Open(SelectedTile);
 
-    /// <summary>Spec 4.1: the lines of one picture tile's menu, in the spec's order, each present only when its
-    /// condition holds. Built when the menu opens, so the ticked count is the one the user can see.</summary>
+    /// <summary>Spec 2.6 section 3: every tile has a menu. A map tile leads with the map, a file tile with the
+    /// file name, and both end with the line that takes the tile out of the pack. Built when the menu opens, so
+    /// the ticked count is the one the user can see.</summary>
     public void BuildTileMenu(PackTileViewModel tile)
     {
-        if (tile.PicturePath is not { } path || Pack is not { } pack)
+        if (Pack is not { } pack)
         {
             tile.MenuItems = [];
             return;
         }
 
+        var isDefault = pack.Name.Equals(DefaultPack.Name, StringComparison.OrdinalIgnoreCase);
+        var items = new List<TileMenuCommand>();
+        if (tile.Map is { } owner)
+        {
+            items.Add(TileMenuCommand.Header(owner.DisplayName));
+            items.Add(new TileMenuCommand(
+                $"Apply to {owner.DisplayName}",
+                new AsyncRelayCommand(() => Shell.ApplySetAsync(pack, [owner], clearTicks: false)),
+                IsEnabled: Shell.CanWrite));
+        }
+        else
+        {
+            items.Add(TileMenuCommand.Header(tile.Caption));
+        }
+
+        if (tile.PicturePath is { } path)
+        {
+            AddPictureLines(items, tile, pack, path);
+        }
+
+        items.Add(new TileMenuCommand(
+            "Copy to pack...", new AsyncRelayCommand(() => CopyTileAsync(tile, cut: false)), Gesture: "Ctrl+C"));
+        if (!isDefault)
+        {
+            items.Add(new TileMenuCommand(
+                "Move to pack...", new AsyncRelayCommand(() => CopyTileAsync(tile, cut: true)), Gesture: "Ctrl+X"));
+        }
+
+        if (tile.PicturePath is not null || tile.FolderPath is not null)
+        {
+            items.Add(new TileMenuCommand(
+                "Show in folder", new RelayCommand(() => ShowInFolder(tile.PicturePath ?? tile.FolderPath!))));
+        }
+
+        if (tile.Map is { } removable && !isDefault)
+        {
+            items.Add(TileMenuCommand.Separator());
+            items.Add(new TileMenuCommand(
+                $"Remove from {pack.Name}", new AsyncRelayCommand(() => RemoveMapFromPackAsync(removable))));
+        }
+        else if (tile.Map is null && tile.PicturePath is { } file)
+        {
+            items.Add(TileMenuCommand.Separator());
+            items.Add(new TileMenuCommand(
+                $"Remove from {pack.Name}",
+                new AsyncRelayCommand(() => RemoveFromPackAsync(file, Path.GetFileName(file)))));
+        }
+
+        tile.MenuItems = items;
+    }
+
+    /// <summary>The 2.5 picture lines, in their order: the ticked apply, the chooser, every map, then Edit. The
+    /// per-map apply of 2.5 is gone: on a map tile Apply to {map} above it already names that map.</summary>
+    private void AddPictureLines(List<TileMenuCommand> items, PackTileViewModel tile, Pack pack, string path)
+    {
         var name = Path.GetFileName(path);
         var ticked = Shell.SelectedMapCount;
         var slot = tile.Map?.BackgroundSlots.FirstOrDefault();
-        var items = new List<TileMenuCommand> { TileMenuCommand.Header(name) };
-
-        if (tile.Map is { } owner)
-        {
-            items.Add(new TileMenuCommand(
-                $"Apply to {owner.DisplayName}",
-                new AsyncRelayCommand(() => Shell.ApplyPictureAsync(path, [owner], false, name, pack.Name))));
-        }
-
         if (ticked > 0)
         {
             var text = ticked == 1 ? "Apply to the 1 selected map" : $"Apply to the {ticked} selected maps";
@@ -185,10 +276,238 @@ public partial class PackDetailViewModel : PageViewModel
             "Edit",
             new AsyncRelayCommand(
                 () => Shell.OpenBackgroundEditorAsync(new BackgroundEditorRequest(path, pack.Name, slot)))));
-        items.Add(new TileMenuCommand("Show in folder", new RelayCommand(() => ShowInFolder(path))));
-        items.Add(new TileMenuCommand(
-            $"Remove from {pack.Name}", new AsyncRelayCommand(() => RemoveFromPackAsync(path, name))));
-        tile.MenuItems = items;
+    }
+
+    /// <summary>Spec 2.6 4.3: pick the target, then copy or move the tile into it. A copy that clashes offers
+    /// Replace once; a move is always inside an undo session, a copy only when it replaces something.</summary>
+    private async Task CopyTileAsync(PackTileViewModel tile, bool cut)
+    {
+        if (Pack is not { } pack)
+        {
+            return;
+        }
+
+        var name = tile.Map?.DisplayName ?? tile.Caption;
+        var title = cut ? $"Move {name} to" : $"Copy {name} to";
+        if (await Shell.ChoosePackAsync(title, pack) is { } target)
+        {
+            await PasteIntoAsync(pack, tile, cut, target);
+        }
+    }
+
+    /// <summary>The write itself, shared by the menu lines and by Ctrl+V (spec 2.6 4.3). The first attempt never
+    /// replaces; a Skipped result asks once and repeats with replace on, and that second attempt is captured for
+    /// undo because it overwrites what the target held.</summary>
+    public async Task PasteIntoAsync(Pack source, PackTileViewModel tile, bool cut, Pack target)
+    {
+        if (_snapshot is not { } snapshot
+            || source.Name.Equals(target.Name, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var catalog = snapshot.Catalog;
+        var name = tile.Map?.DisplayName ?? tile.Caption;
+        var relative = tile.PicturePath is { } picture && tile.Map is null
+            ? Path.Combine(PackCopier.BackgroundsFolder, Path.GetFileName(picture))
+            : null;
+        var files = tile.Map is { } map ? PackCopier.MapFiles(source, map, catalog) : [relative!];
+
+        // Replacing a map removes the files the target holds for it, which need not be the ones the source is
+        // handing over, so those are captured too. A picture tile is one path, the same in either pack.
+        IReadOnlyList<string> replaced = tile.Map is { } existing
+            ? PackCopier.MapFiles(target, existing, catalog)
+            : files;
+        IReadOnlyList<string> undoPaths =
+        [
+            .. PackCopier.Touched(source, files)
+                .Concat(PackCopier.Touched(target, [.. files, .. replaced]))
+                .Distinct(StringComparer.OrdinalIgnoreCase),
+        ];
+
+        var result = await RunPasteAsync(source, target, tile, catalog, cut, replace: false, name, undoPaths);
+        if (result is { Skipped: true }
+            && Shell.Dialogs.Confirm("Replace", $"{target.Name} already has {name}. Replace it?"))
+        {
+            result = await RunPasteAsync(source, target, tile, catalog, cut, replace: true, name, undoPaths);
+        }
+
+        if (result is not null)
+        {
+            Shell.Dialogs.ShowFailures("Some files could not be copied", result.Failures);
+        }
+    }
+
+    /// <summary>One attempt. A plain copy that replaces nothing writes outside an undo session and offers the
+    /// target instead of Undo (spec 4.2); everything else goes through the library write boundary.</summary>
+    private async Task<PackCopyResult?> RunPasteAsync(
+        Pack source,
+        Pack target,
+        PackTileViewModel tile,
+        MapCatalog catalog,
+        bool cut,
+        bool replace,
+        string name,
+        IReadOnlyList<string> undoPaths)
+    {
+        PackCopyResult? result = null;
+        var verb = cut ? "Moving" : "Copying";
+        var done = cut ? $"{name} moved to {target.Name}" : $"{name} copied to {target.Name}";
+        var relative = tile.Map is null && tile.PicturePath is { } picture
+            ? Path.Combine(PackCopier.BackgroundsFolder, Path.GetFileName(picture))
+            : null;
+
+        Task Work(IProgress<string> progress, CancellationToken ct) => Task.Run(
+            () =>
+            {
+                progress.Report(name);
+                result = tile.Map is { } map
+                    ? cut
+                        ? PackCopier.MoveMap(source, target, map, catalog, replace)
+                        : PackCopier.CopyMap(source, target, map, catalog, replace)
+                    : cut
+                        ? PackCopier.MoveFile(source, target, relative!, replace)
+                        : PackCopier.CopyFile(source, target, relative!, replace);
+            },
+            ct);
+
+        if (cut || replace)
+        {
+            await Shell.RunLibraryWriteAsync($"{verb} {name}", undoPaths, Work, done);
+            return result;
+        }
+
+        var ok = await Shell.RunBusyAsync($"{verb} {name}", Work);
+        if (ok && result is { Skipped: false })
+        {
+            var open = target;
+            Shell.SetLibraryDone(done, $"Open {target.Name}", new RelayCommand(() => Shell.NavigateToPack(open)));
+        }
+
+        await Shell.RescanAsync();
+        return result;
+    }
+
+    /// <summary>Ctrl+C and Ctrl+X: the tile is remembered on the shell and the page says so. The Default pack is
+    /// the game's own, so nothing is ever cut out of it, exactly as its menu offers no Move line.</summary>
+    public void CopyTileToClipboard(PackTileViewModel? tile, bool cut)
+    {
+        if (tile is null || Pack is not { } pack)
+        {
+            return;
+        }
+
+        if (cut && pack.Name.Equals(DefaultPack.Name, StringComparison.OrdinalIgnoreCase))
+        {
+            ShowHint(NoCutFromDefaultText);
+            return;
+        }
+
+        Shell.PackClipboard = new PackClipboardItem(pack, tile, cut);
+        var name = tile.Map?.DisplayName ?? tile.Caption;
+        ShowHint(cut ? $"{name} cut" : $"{name} copied");
+    }
+
+    /// <summary>Ctrl+V: what the clipboard holds, into this page's pack. Nothing happens when the clipboard is
+    /// empty but the line, and nothing at all when the source is this pack.</summary>
+    public async Task PasteAsync()
+    {
+        if (Pack is not { } pack)
+        {
+            return;
+        }
+
+        if (Shell.PackClipboard is not { } held)
+        {
+            ShowHint(NothingCopiedText);
+            return;
+        }
+
+        if (!HeldStillThere(held))
+        {
+            Shell.PackClipboard = null;
+            ShowHint(NothingCopiedText);
+            return;
+        }
+
+        if (held.Source.Name.Equals(pack.Name, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        await PasteIntoAsync(held.Source, held.Tile, held.Cut, pack);
+        if (held.Cut)
+        {
+            Shell.PackClipboard = null;
+        }
+    }
+
+    /// <summary>Whether what the clipboard holds is still on disk. Ctrl+C a tile, remove that pack on the Packs
+    /// page, then Ctrl+V somewhere else: the copy names a folder that is gone, and without this the copier throws
+    /// and the paste ends in the "Something went wrong" dialog instead of the line that says nothing is copied.</summary>
+    private static bool HeldStillThere(PackClipboardItem held)
+    {
+        if (!Directory.Exists(held.Source.FullPath))
+        {
+            return false;
+        }
+
+        return held.Tile.PicturePath is { } picture
+            ? File.Exists(picture)
+            : held.Tile.FolderPath is { } folder && Directory.Exists(folder);
+    }
+
+    /// <summary>The line, and the timer that takes it away again. One timer, restarted, so two keys in a row do
+    /// not leave the first line's tick to clear the second's words.</summary>
+    private void ShowHint(string text)
+    {
+        ClipboardHint = text;
+        _hintTimer.Stop();
+        _hintTimer.Start();
+    }
+
+    /// <summary>Spec 5.3: the window picks what comes over and the shell writes it, as every library write is.</summary>
+    [RelayCommand(CanExecute = nameof(CanImportFromPack))]
+    private Task ImportFromPackAsync() =>
+        Pack is { } pack ? Shell.ImportFromPackAsync(pack) : Task.CompletedTask;
+
+    [RelayCommand]
+    private void CopyTile() => CopyTileToClipboard(KeyTarget ?? SelectedTile, cut: false);
+
+    [RelayCommand]
+    private void CutTile() => CopyTileToClipboard(KeyTarget ?? SelectedTile, cut: true);
+
+    [RelayCommand]
+    private Task Paste() => PasteAsync();
+
+    /// <summary>Spec 2.6 section 3 item 7: the map's files in this pack, deleted together, inside a library undo
+    /// session so the confirm is the only thing standing between the user and getting them back.</summary>
+    private async Task RemoveMapFromPackAsync(MapEntry map)
+    {
+        if (Pack is not { } pack || _snapshot is not { } snapshot)
+        {
+            return;
+        }
+
+        var count = PackCopier.MapFiles(pack, map, snapshot.Catalog).Count;
+        if (!Shell.Dialogs.Confirm(
+                $"Remove from {pack.Name}?",
+                $"{map.DisplayName} and its {PackRowViewModel.Plural(count, "file")} are removed from {pack.Name}. The game keeps whatever is applied until you apply something else."))
+        {
+            return;
+        }
+
+        var catalog = snapshot.Catalog;
+        PackCopyResult? result = null;
+        await Shell.RunLibraryWriteAsync(
+            $"Removing {map.DisplayName}",
+            PackCopier.Touched(pack, PackCopier.MapFiles(pack, map, catalog)),
+            (_, ct) => Task.Run(() => { result = PackCopier.RemoveMap(pack, map, catalog); }, ct),
+            $"{map.DisplayName} removed from {pack.Name}");
+        if (result is not null)
+        {
+            Shell.Dialogs.ShowFailures("Some files could not be removed", result.Failures);
+        }
     }
 
     /// <summary>Spec 4.1 line 3: the chooser, then the shell's apply on the one map it returned. No confirm,
@@ -385,6 +704,10 @@ public partial class PackDetailViewModel : PageViewModel
         var reopen = _openKey;
         CloseDrawer();
         SelectedTile = null;
+
+        // The pointer is over nothing the new grid holds: a tile left over from the previous pack would pair the
+        // wrong pack with it on the next Ctrl+C, and MouseLeave never comes for a container that is gone.
+        KeyTarget = null;
         Items.Clear();
         _transparentFiles = Array.Empty<string>();
         TransparentText = "";
@@ -396,7 +719,8 @@ public partial class PackDetailViewModel : PageViewModel
         foreach (var map in MapsIn(snapshot.Catalog, pack))
         {
             Items.Add(new PackTileViewModel(
-                map.FolderName, map.DisplayName, map, null, MapCompositor.CardWidth, MapCompositor.CardHeight));
+                map.FolderName, map.DisplayName, map, null, MapCompositor.CardWidth, MapCompositor.CardHeight)
+            { FolderPath = pack.FindFolder(map.FolderName)?.FullPath });
         }
 
         // .jpg only: the game's backgrounds are all JPEGs, so a PNG in the folder fills no slot and belongs in
@@ -409,7 +733,7 @@ public partial class PackDetailViewModel : PageViewModel
                 continue;
             }
 
-            var owner = MapForSlot(snapshot.Catalog, file.Name);
+            var owner = PackCopier.MapForSlot(snapshot.Catalog, file.Name);
             if (owner is null)
             {
                 Items.Add(new PackTileViewModel(
@@ -424,7 +748,8 @@ public partial class PackDetailViewModel : PageViewModel
                 {
                     tile = new PackTileViewModel(
                         owner.FolderName, owner.DisplayName, owner, null,
-                        MapCompositor.CardWidth, MapCompositor.CardHeight);
+                        MapCompositor.CardWidth, MapCompositor.CardHeight)
+                    { FolderPath = pack.FindFolder(owner.FolderName)?.FullPath };
                     Items.Add(tile);
                 }
 
@@ -442,10 +767,6 @@ public partial class PackDetailViewModel : PageViewModel
             Open(Items.FirstOrDefault(t => t.Key.Equals(reopen, StringComparison.OrdinalIgnoreCase)));
         }
     }
-
-    /// <summary>The first map, in display-name order, whose levels name this background slot (decision C-D4).</summary>
-    private static MapEntry? MapForSlot(MapCatalog catalog, string slot) =>
-        catalog.Maps.FirstOrDefault(m => m.BackgroundSlots.Any(s => s.Equals(slot, StringComparison.OrdinalIgnoreCase)));
 
     /// <summary>The maps the pack touches: the catalog maps it has at least one file for. A pack folder that is
     /// not a map, such as a theme folder other maps borrow from (spec 4), is not one of them.</summary>
@@ -615,6 +936,10 @@ public partial class PackTileViewModel : ObservableObject
     public partial IReadOnlyList<TileMenuCommand> MenuItems { get; set; } = [];
 
     /// <summary>The picture the tile is about: the pack's own file for an orphan, or the pack's copy of the map's
-    /// background slot. Null on a tile whose map the pack has no background for, and then the tile has no menu.</summary>
+    /// background slot. Null on a tile whose map the pack has no background for.</summary>
     public string? PicturePath { get; set; }
+
+    /// <summary>The map's folder inside the pack, so Show in folder on a map tile has something to open. Null on
+    /// a file tile, whose picture is what Show in folder reveals.</summary>
+    public string? FolderPath { get; set; }
 }
