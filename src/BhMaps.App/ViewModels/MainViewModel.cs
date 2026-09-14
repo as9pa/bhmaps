@@ -1655,13 +1655,13 @@ public partial class MainViewModel : ObservableObject
 
         if (plan.Targets.Count == 0 && missing.Count == 0)
         {
-            return $"Map-select thumbnail not written: {map.DisplayName} shares its picture with {shared[0].OtherMap}.";
+            return $"Map-select thumbnail not written: {map.DisplayName} shares its picture with {SharedWith(shared)}.";
         }
 
         var parts = new List<string>();
         if (shared.Count > 0)
         {
-            parts.Add($"{Names(shared)} {(shared.Count == 1 ? "is" : "are")} shared with {shared[0].OtherMap}.");
+            parts.Add($"{Names(shared)} {(shared.Count == 1 ? "is" : "are")} shared with {SharedWith(shared)}.");
         }
 
         if (missing.Count > 0)
@@ -1676,6 +1676,25 @@ public partial class MainViewModel : ObservableObject
     /// <summary>The file names of a group of skipped plan entries, in level order.</summary>
     private static string Names(IReadOnlyList<ThumbnailFilePlan> files) =>
         string.Join(", ", files.Select(f => f.FileName));
+
+    /// <summary>The other maps a shared group's pictures belong to, each named once in the order it turns up and
+    /// read as a list. A group whose entries name no other map falls back to "another map", so the sentence still
+    /// reads.</summary>
+    private static string SharedWith(IReadOnlyList<ThumbnailFilePlan> files)
+    {
+        var names = files
+            .Where(f => !string.IsNullOrWhiteSpace(f.OtherMap))
+            .Select(f => f.OtherMap!)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        return names.Count switch
+        {
+            0 => "another map",
+            1 => names[0],
+            _ => $"{string.Join(", ", names.Take(names.Count - 1))} and {names[^1]}",
+        };
+    }
 
     /// <summary>The caller's done fragment with the thumbnail step's own on the end, or the fragment untouched
     /// when the step wrote nothing. The period between them is settled here for the reason DoneLine settles the
