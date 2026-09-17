@@ -374,8 +374,9 @@ public partial class PackDetailViewModel : PageViewModel, ITileSized
         var ok = await Shell.RunBusyAsync($"{verb} {name}", Work);
         if (ok && result is { Skipped: false })
         {
-            var open = target;
-            Shell.SetLibraryDone(done, $"Open {target.Name}", new RelayCommand(() => Shell.NavigateToPack(open)));
+            // 3.0: the strip offers Cancel, Undo and Retry and nothing else, so the line says where the file
+            // landed rather than offering a button to the pack it landed in.
+            Shell.Status.Done(done, undoable: false);
         }
 
         await Shell.RescanAsync();
@@ -629,7 +630,7 @@ public partial class PackDetailViewModel : PageViewModel, ITileSized
 
         if (ok)
         {
-            Shell.SetLibraryDone($"Removed {PackRowViewModel.Plural(files.Count - failures.Count, "file")}.");
+            Shell.Status.Done($"Removed {PackRowViewModel.Plural(files.Count - failures.Count, "file")}.", undoable: false);
         }
 
         await Shell.RescanAsync();

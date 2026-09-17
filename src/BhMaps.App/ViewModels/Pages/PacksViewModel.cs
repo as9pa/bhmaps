@@ -271,11 +271,18 @@ public partial class PacksViewModel : PageViewModel
         IReadOnlyList<MapEntry> artMaps = Shell.Snapshot is { } snapshot
             ? PackApplier.MapsTouched(pack, snapshot.Catalog.Maps)
             : [];
+        // The strip names maps, not files (3.0), so the applier gets the catalog's name for every folder it writes.
+        // Two catalog maps can share a folder, so the first name for a folder is the one it reports under. The keys
+        // cover every map the confirm counted, since a map with files in the pack is one of artMaps too, and that is
+        // what makes the strip's total the same number the confirm and the done line say.
+        var mapNames = artMaps
+            .GroupBy(map => map.FolderName, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(folder => folder.Key, folder => folder.First().DisplayName, StringComparer.OrdinalIgnoreCase);
         ApplyResult? result = null;
         await Shell.RunGameWriteAsync(
             $"Applying {pack.Name}",
             pack.RelativePaths,
-            (progress, ct) => Task.Run(() => { result = PackApplier.ApplyPack(pack, gamePath, progress, ct); }, ct),
+            (progress, ct) => Task.Run(() => { result = PackApplier.ApplyPack(pack, gamePath, progress, ct, mapNames); }, ct),
             $"{pack.Name} applied to {MainViewModel.Count(maps.Count, "map")}.",
             packName: pack.Name,
             artMaps: artMaps,
@@ -343,7 +350,7 @@ public partial class PacksViewModel : PageViewModel
         }
         else if (ok)
         {
-            Shell.SetLibraryDone($"Deleted {pack.Name}.");
+            Shell.Status.Done($"Deleted {pack.Name}.", undoable: false);
             if (Shell.PackClipboard is { } held && held.Source.Name.Equals(pack.Name, StringComparison.OrdinalIgnoreCase))
             {
                 Shell.PackClipboard = null;
@@ -380,7 +387,7 @@ public partial class PacksViewModel : PageViewModel
 
         if (ok)
         {
-            Shell.SetLibraryDone($"Exported {pack.Name}.");
+            Shell.Status.Done($"Exported {pack.Name}.", undoable: false);
         }
     }
 
@@ -422,7 +429,7 @@ public partial class PacksViewModel : PageViewModel
         {
             // The copy took its own half-written folder with it, so there is nothing to undo and nothing to say
             // but what went wrong: the line the write boundary left is written over, as an import's is.
-            Shell.SetLibraryDone($"Could not duplicate {pack.Name}.");
+            Shell.Status.Error($"Could not duplicate {pack.Name}.", retry: null);
             Shell.Dialogs.Error("Could not duplicate pack", $"Could not duplicate {pack.Name}: {error}");
         }
     }

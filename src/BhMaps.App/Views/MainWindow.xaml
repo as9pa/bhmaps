@@ -5,9 +5,14 @@
         Title="BhMaps" Width="1280" Height="800" MinWidth="1000" MinHeight="640"
         Background="{StaticResource BgBrush}">
   <!-- Nothing on a page triggers a rescan, so the keyboard does; Ctrl+1..5 are the five tabs (addendum A).
-       Ctrl+K is in the code-behind: it navigates and then focuses, which a command cannot do. -->
+       Ctrl+K is in the code-behind: it navigates and then focuses, which a command cannot do. Ctrl+Z and Escape
+       are the status strip's two links (3.0); both commands say no when the strip is not offering them, and a
+       page that answers Escape itself is asked first, because its own binding sits nearer the focus than this
+       one. -->
   <Window.InputBindings>
     <KeyBinding Key="F5" Command="{Binding RescanFromKeyCommand}" />
+    <KeyBinding Key="Z" Modifiers="Control" Command="{Binding Status.UndoCommand}" />
+    <KeyBinding Key="Escape" Command="{Binding Status.CancelCommand}" />
     <KeyBinding Key="D1" Modifiers="Control" Command="{Binding NavigateMapsCommand}" />
     <KeyBinding Key="D2" Modifiers="Control" Command="{Binding NavigateBackgroundsCommand}" />
     <KeyBinding Key="D3" Modifiers="Control" Command="{Binding NavigatePlatformsCommand}" />
@@ -23,6 +28,7 @@
     <Grid.RowDefinitions>
       <RowDefinition Height="44" />
       <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
     </Grid.RowDefinitions>
 
     <!-- Addendum A: brand, five tabs, and the game line at the right. 44 px with a hairline under it. -->
@@ -164,5 +170,10 @@
     </Border>
 
     <ContentControl x:Name="PageHost" Grid.Row="1" Content="{Binding CurrentPage}" />
+
+    <!-- 3.0: the one place the shell says anything, at the foot of the content area. The side gutter is the
+         pages' own 24 px, so the strip's left edge is the page content's; it collapses when there is nothing to
+         say, and the row gives the height back to the page with it. -->
+    <controls:StatusStrip Grid.Row="2" Margin="24,0,24,16" DataContext="{Binding Status}" />
   </Grid>
 </Window>

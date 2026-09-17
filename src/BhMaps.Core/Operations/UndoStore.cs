@@ -57,6 +57,24 @@ public sealed class UndoSession
     /// <summary>Relative paths captured so far, every side: files copied in plus paths recorded as absent.</summary>
     public int Count => _captured.Count + _capturedLibrary.Count + _capturedThumbnails.Count;
 
+    /// <summary>How many map folders the game side covers: the first segment of every game path captured, each
+    /// folder once. The undo's done line counts these rather than files, because a map is what the owner sees go
+    /// back. The library and thumbnail sides hold no map folders, so they are not counted.
+    /// <paramref name="mapFolders"/> names the folders the catalog knows as maps, case-insensitively, so the
+    /// shared Backgrounds folder and a folder for a map the game no longer has are left out and the count is the
+    /// same number the confirm and the apply's done line said. Null counts every folder, for a caller with no
+    /// catalog to hand.</summary>
+    public int MapFolderCount(IEnumerable<string>? mapFolders = null)
+    {
+        var known = mapFolders is null ? null : new HashSet<string>(mapFolders, StringComparer.OrdinalIgnoreCase);
+        return _captured
+            .Select(relativePath => relativePath.Split(
+                [System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar])[0])
+            .Where(folder => known is null || known.Contains(folder))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count();
+    }
+
     /// <summary>Copies the game file into the session. A path with no file is recorded in _absent.txt.</summary>
     public void Capture(string gamePath, string relativePath) =>
         CaptureInto(_captured, gamePath, Path, AbsentFileName, relativePath);

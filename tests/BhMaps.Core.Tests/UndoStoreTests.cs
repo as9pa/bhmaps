@@ -70,6 +70,33 @@ public class UndoStoreTests
     }
 
     [Fact]
+    public void MapFolderCount_CountsEachMapFolderOnce()
+    {
+        using var tmp = new TempDir();
+        var (store, game) = Arrange(tmp);
+        var session = store.Begin(Stamp);
+
+        session.Capture(game, ["Grove\\a.png", "Grove\\b.png", "Swamp\\gone.png"]);
+
+        Assert.Equal(3, session.Count);
+        Assert.Equal(2, session.MapFolderCount());
+    }
+
+    [Fact]
+    public void MapFolderCount_CountsOnlyTheFoldersTheCatalogKnows()
+    {
+        using var tmp = new TempDir();
+        var (store, game) = Arrange(tmp);
+        var session = store.Begin(Stamp);
+
+        session.Capture(game, ["Grove\\a.png", "Backgrounds\\BG_Sewer.jpg", "Gone\\old.png"]);
+
+        // The shared Backgrounds folder and a folder for a map the game no longer has are no map of the catalog's,
+        // so the undo's done line does not count them. The match ignores case, as the game paths do.
+        Assert.Equal(1, session.MapFolderCount(["grove", "Swamp"]));
+    }
+
+    [Fact]
     public void Capture_RecordsAMissingFileAsAbsent()
     {
         using var tmp = new TempDir();

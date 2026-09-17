@@ -72,6 +72,7 @@ public partial class MapsViewModel : PageViewModel, ITileSized
 
     /// <summary>The card whose right panel is open. Null closes the panel.</summary>
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(EscapeCommand))]
     public partial MapCardViewModel? Selected { get; set; }
 
     /// <summary>The right panel for <see cref="Selected"/> (spec 7.2), rebuilt whenever the selection changes and
@@ -153,9 +154,12 @@ public partial class MapsViewModel : PageViewModel, ITileSized
     private void ClearSearch() => SearchText = "";
 
     /// <summary>Spec 3.2: Escape closes the panel. The search box takes Escape before it does, in
-    /// MapsView.OnPageKeyDown.</summary>
-    [RelayCommand]
+    /// MapsView.OnPageKeyDown. With no panel open it says no rather than doing nothing, so the keystroke carries
+    /// on to the window's own Escape, which is the status strip's Cancel (3.0).</summary>
+    [RelayCommand(CanExecute = nameof(HasPanel))]
     private void Escape() => Selected = null;
+
+    private bool HasPanel => Selected is not null;
 
     /// <summary>The header's menu (3.0): a reset of every map is destructive and rare, so it reads as a line in
     /// the menu rather than as a button one slip away from the zoom. CanWrite, not IsNotBusy: it writes into the

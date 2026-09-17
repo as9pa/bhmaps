@@ -64,8 +64,7 @@ public partial class MainViewModel : ObservableObject
     {
         Services = services;
         Dialogs = dialogs;
-        ProgressText = "";
-        DoneText = "";
+        Status = new StatusViewModel(Cancel, UndoAsync);
         _launcher = new GameLauncher();
         Maps = new MapsViewModel(this);
         Backgrounds = new BackgroundsViewModel(this);
@@ -150,32 +149,9 @@ public partial class MainViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(RefreshGameCommand), nameof(UndoCommand))]
     public partial bool GameFolderMissing { get; set; }
 
-    [ObservableProperty]
-    public partial string ProgressText { get; set; }
-
-    /// <summary>What the last write did, shown in the page header beside Undo. Empty when there is nothing to show.</summary>
-    [ObservableProperty]
-    public partial string DoneText { get; set; }
-
-    /// <summary>Whether the line in <see cref="DoneText" /> describes a game write, which is the only kind of write
-    /// there is a snapshot to put back. False for a library-only line, and the header hides Undo beside it rather
-    /// than offering to undo something else.</summary>
-    [ObservableProperty]
-    public partial bool DoneUndoable { get; set; }
-
-    /// <summary>The words on the one button a library line may offer instead of Undo, "" for none.</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasDoneAction))]
-    public partial string DoneActionText { get; set; } = "";
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasDoneAction))]
-    public partial IRelayCommand? DoneActionCommand { get; set; }
-
-    public bool HasDoneAction => DoneActionText.Length > 0 && DoneActionCommand is not null;
-
-    [ObservableProperty]
-    public partial bool CanUndo { get; set; }
+    /// <summary>The status strip's line (3.0): what is running, what the last operation did, or why it did
+    /// nothing. Every outcome in the app is said through it, so nothing else here keeps a line of its own.</summary>
+    public StatusViewModel Status { get; }
 
     /// <summary>Spec 7.3: the latest release the last check found, or null when nothing has been found yet. Set
     /// off the UI thread's work but assigned on it, because the top bar binds to it.</summary>
@@ -272,7 +248,7 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanAct))]
     private Task RescanFromKeyAsync() => RescanAsync();
 
-    [RelayCommand]
+    /// <summary>What the strip's Cancel link and Escape run; nothing binds it as a command any more (3.0).</summary>
     private void Cancel() => _cts?.Cancel();
 
     [RelayCommand(CanExecute = nameof(CanAct))]
@@ -342,7 +318,7 @@ public partial class MainViewModel : ObservableObject
         {
             // Nothing to write, so nothing takes an undo snapshot: a refresh that does nothing must not throw the
             // last write's undo away.
-            SetLibraryDone("Nothing to refresh.");
+            Status.Note("Nothing to refresh.");
             return;
         }
 
@@ -425,7 +401,7 @@ public partial class MainViewModel : ObservableObject
         var gamePath = Services.GamePath;
         var libraryPath = Services.LibraryPath;
         ApplyResult? result = null;
-        await RunWriteCoreAsync(
+        var ok = await RunWriteCoreAsync(
             "Undoing",
             undoPaths: null,
             (_, ct) => Task.Run(
@@ -441,6 +417,18 @@ public partial class MainViewModel : ObservableObject
                 ct),
             UndoDoneText,
             undoable: false);
+
+        if (ok)
+        {
+            // Over the done line the wrapper left: an undo is not a write waiting to be undone, and the strip says
+            // so in its own words.
+            Status.Undone(DoneLine(
+                UndoneLine(
+                    result,
+                    session,
+                    Snapshot is { } snapshot ? [.. snapshot.Catalog.Maps.Select(map => map.FolderName)] : null),
+                GameRunning));
+        }
 
         if (result is not null)
         {
@@ -502,9 +490,11 @@ public partial class MainViewModel : ObservableObject
 
         if (ok)
         {
-            SetLibraryDone(result?.Copied == 1
-                ? $"Imported 1 picture into {packName}."
-                : $"Imported {result?.Copied ?? 0} pictures into {packName}.");
+            Status.Done(
+                result?.Copied == 1
+                    ? $"Imported 1 picture into {packName}."
+                    : $"Imported {result?.Copied ?? 0} pictures into {packName}.",
+                undoable: false);
         }
 
         await RescanAsync();
@@ -636,10 +626,13 @@ public partial class MainViewModel : ObservableObject
             (progress, ct) => Task.Run(
                 () =>
                 {
-                    foreach (var map in targets)
+                    // Counted, not just named: a line that says how far along it is tells the user whether to
+                    // wait (3.0), and the label the boundary puts in front of it makes the whole line.
+                    for (var i = 0; i < targets.Count; i++)
                     {
+                        var map = targets[i];
                         ct.ThrowIfCancellationRequested();
-                        progress.Report(map.DisplayName);
+                        progress.Report($"{map.DisplayName}, {i + 1} of {targets.Count}");
                         failures.AddRange(
                             BackgroundApplier.Apply(sourcePath, gamePath, map.BackgroundSlots, null, ct).Failures);
                     }
@@ -692,10 +685,13 @@ public partial class MainViewModel : ObservableObject
             (progress, ct) => Task.Run(
                 () =>
                 {
-                    foreach (var map in targets)
+                    // Counted, not just named: a line that says how far along it is tells the user whether to
+                    // wait (3.0), and the label the boundary puts in front of it makes the whole line.
+                    for (var i = 0; i < targets.Count; i++)
                     {
+                        var map = targets[i];
                         ct.ThrowIfCancellationRequested();
-                        progress.Report(map.DisplayName);
+                        progress.Report($"{map.DisplayName}, {i + 1} of {targets.Count}");
                         failures.AddRange(PlatformSetApplier.Apply(pack, map.FolderName, gamePath, null, ct).Failures);
                     }
                 },
@@ -1006,9 +1002,10 @@ public partial class MainViewModel : ObservableObject
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
         PackImportResult? result = null;
+        var touched = PackCopier.Touched(target, files);
         var ok = await RunLibraryWriteAsync(
             $"Importing into {target.Name}",
-            PackCopier.Touched(target, files),
+            touched,
             (progress, ct) => Task.Run(() => { result = PackCopier.Import(plan, catalog, progress, ct); }, ct),
             $"Importing into {target.Name}");
         if (!ok)
@@ -1018,7 +1015,7 @@ public partial class MainViewModel : ObservableObject
 
         // The line names what the import did, which is only known once the work is over, so it is written over
         // the placeholder the write boundary left rather than handed to it.
-        DoneText = ImportDone(result, plan, target);
+        Status.Done(ImportDone(result, plan, target), touched.Count > 0 && Services.Undo.Latest is not null);
         if (result is not null)
         {
             Dialogs.ShowFailures("Some files could not be imported", result.Failures);
@@ -1075,7 +1072,7 @@ public partial class MainViewModel : ObservableObject
             if (vm.WorkingCopies.Count > 0)
             {
                 await RescanAsync();
-                SetLibraryDone(WorkingCopyDone(vm.WorkingCopies));
+                Status.Done(WorkingCopyDone(vm.WorkingCopies), undoable: false);
             }
 
             return;
@@ -1208,8 +1205,9 @@ public partial class MainViewModel : ObservableObject
         Dialogs.ShowFailures("Some files could not be imported", failures);
         if (ok)
         {
-            SetLibraryDone(
-                jobs.Count == 1 ? $"Imported {jobs[0].PackName}." : $"Imported {Count(jobs.Count, "pack")}.");
+            Status.Done(
+                jobs.Count == 1 ? $"Imported {jobs[0].PackName}." : $"Imported {Count(jobs.Count, "pack")}.",
+                undoable: false);
         }
 
         await RescanAsync();
@@ -1243,8 +1241,6 @@ public partial class MainViewModel : ObservableObject
         {
             page.Refresh(snapshot, writtenFolders);
         }
-
-        CanUndo = Services.Undo.Latest is not null;
 
         // Spec 7.3: once a run, 5 s after the first scan finished, off the UI thread and blocking nothing. A
         // timer rather than an await, so the scan's caller is not held by it.
@@ -1325,9 +1321,11 @@ public partial class MainViewModel : ObservableObject
 
         if (ok && result is { MapsAdded.Count: > 0 })
         {
-            SetLibraryDone(result.MapsAdded.Count == 1
-                ? $"Brawlhalla updated: {result.MapsAdded[0]} added to Default."
-                : $"Brawlhalla updated: {Count(result.MapsAdded.Count, "map")} added to Default.");
+            Status.Done(
+                result.MapsAdded.Count == 1
+                    ? $"Brawlhalla updated: {result.MapsAdded[0]} added to Default."
+                    : $"Brawlhalla updated: {Count(result.MapsAdded.Count, "map")} added to Default.",
+                undoable: false);
         }
 
         // The map reads as default art from here on. This rescan's own top-up finds nothing: the paths above are
@@ -1499,9 +1497,11 @@ public partial class MainViewModel : ObservableObject
 
         if (ok)
         {
-            SetLibraryDone(result is { } captured
-                ? $"Captured the Default pack, {Count(captured.Copied, "file")}."
-                : "Captured the Default pack.");
+            Status.Done(
+                result is { } captured
+                    ? $"Captured the Default pack, {Count(captured.Copied, "file")}."
+                    : "Captured the Default pack.",
+                undoable: false);
         }
 
         await RescanAsync();
@@ -1510,24 +1510,40 @@ public partial class MainViewModel : ObservableObject
     public Pack? FindPack(string name) =>
         Snapshot?.Packs.FirstOrDefault(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
 
-    /// <summary>Runs one long operation with the busy flag, progress text, and Cancel. False when cancelled or
-    /// failed. A progress message is normally a fragment, so it is shown as "&lt;label&gt;: &lt;message&gt;";
-    /// <paramref name="prefixProgress"/> false is for an operation whose messages already read as the whole line.</summary>
+    /// <summary>Runs one long operation with the busy flag, the strip's progress line, and Cancel. False when
+    /// cancelled or failed. A progress message is normally a fragment, so it is shown as
+    /// "&lt;label&gt;: &lt;message&gt;"; <paramref name="prefixProgress"/> false is for an operation whose messages
+    /// already read as the whole line. <paramref name="retry"/> is what the strip's Retry link runs after a
+    /// failure; left null the strip offers no Retry, because running the bare work again would skip whatever the
+    /// caller does after it (its done line, its rescan) and leave the window saying the wrong thing.</summary>
     public async Task<bool> RunBusyAsync(
         string label,
         Func<IProgress<string>, CancellationToken, Task> work,
-        bool prefixProgress = true)
+        bool prefixProgress = true,
+        Func<Task>? retry = null)
     {
         if (IsBusy)
         {
             return false;
         }
 
+        // What the strip was saying before this took it over. An operation that runs inside another one, which is
+        // the rescan every write ends with, must not swallow the line the write left.
+        var resume = Status.Capture();
+        var live = true;
         _cts = new CancellationTokenSource();
         IsBusy = true;
-        ProgressText = label;
+        Status.Running(label);
         var progress = new Progress<string>(
-            message => ProgressText = prefixProgress ? $"{label}: {message}" : message);
+            message =>
+            {
+                // A report is posted to this thread rather than run on it, so one can land after the operation is
+                // over. Late is the same as never here: it must not be written over the outcome.
+                if (live)
+                {
+                    Status.Text = prefixProgress ? $"{label}: {message}" : message;
+                }
+            });
         try
         {
             await work(progress, _cts.Token);
@@ -1535,24 +1551,36 @@ public partial class MainViewModel : ObservableObject
         }
         catch (OperationCanceledException)
         {
+            // What a cancel left behind is the caller's to describe: a write that took a snapshot says so over this
+            // line, and everything else really has changed nothing.
+            Status.Cancelled("Cancelled. Nothing changed.", undoable: false);
             return false;
         }
         catch (Exception ex) when (ex is DirectoryNotFoundException or FileNotFoundException && !GameFolderExists())
         {
-            // The game folder went away under the operation. Spec 7.8 calls that a state the header reports, not a
-            // failure worth a dialog: every write stays off until a scan finds the folder again.
+            // The game folder went away under the operation. Spec 7.8 calls that a state the top bar reports, not a
+            // failure worth a line of its own: every write stays off until a scan finds the folder again.
             GameFolderMissing = true;
             return false;
         }
         catch (Exception ex)
         {
-            Dialogs.Error("Something went wrong", ex.Message);
+            // The strip carries the failure now, rather than a dialog to dismiss before the window can be read
+            // again (3.0). Retry is beside it, because the usual reason is a file that was in use a moment ago.
+            Status.Error(FailureLine(label, ex.Message), retry);
             return false;
         }
         finally
         {
+            live = false;
             IsBusy = false;
-            ProgressText = "";
+            if (Status.Kind is StatusKind.Running)
+            {
+                // Nothing wrote over the progress line: either the operation succeeded and its caller says what it
+                // did once this has returned, or it was a scan, which says nothing at all.
+                Status.Restore(resume);
+            }
+
             _cts.Dispose();
             _cts = null;
 
@@ -1565,26 +1593,6 @@ public partial class MainViewModel : ObservableObject
                 _ = RescanAsync();
             }
         }
-    }
-
-    /// <summary>The header line a library-only operation leaves: the same line a game write leaves, without the
-    /// Undo button, because nothing in the game folder moved and the snapshot Undo holds is an older write's.</summary>
-    public void SetLibraryDone(string doneText)
-    {
-        DoneText = doneText;
-        DoneUndoable = false;
-        DoneActionText = "";
-        DoneActionCommand = null;
-    }
-
-    /// <summary>The line a library-only operation leaves when it offers something other than Undo: spec 2.6 4.3's
-    /// "Open {target}" beside a plain copy.</summary>
-    public void SetLibraryDone(string doneText, string actionText, IRelayCommand action)
-    {
-        DoneText = doneText;
-        DoneUndoable = false;
-        DoneActionText = actionText;
-        DoneActionCommand = action;
     }
 
     /// <summary>Spec 2.6 4.2: one write that touches the library and not the game. The busy boundary, an undo
@@ -1628,12 +1636,17 @@ public partial class MainViewModel : ObservableObject
                 await work(progress, ct);
             });
 
-        // Begin has already replaced the previous snapshot, so a write that failed clears the line with it.
-        DoneText = ok ? doneText : "";
-        DoneUndoable = ok && undoable;
-        DoneActionText = "";
-        DoneActionCommand = null;
-        CanUndo = Services.Undo.Latest is not null;
+        if (ok)
+        {
+            Status.Done(doneText, undoable && Services.Undo.Latest is not null);
+        }
+        else if (Status.Kind is StatusKind.Cancelled && undoable && Services.Undo.Latest is not null)
+        {
+            // Begin has already replaced the previous snapshot, and the work does not say how far it got, so the
+            // line says only what is certain: whatever was written is in the snapshot the capture took.
+            Status.Cancelled("Cancelled part way. Undo puts back anything that was written.", undoable: true);
+        }
+
         await RescanAsync(writtenFolders);
         return ok;
     }
@@ -1831,6 +1844,63 @@ public partial class MainViewModel : ObservableObject
         return fragment.Length == 0 ? DoneSentence(gameRunning) : $"{fragment}. {DoneSentence(gameRunning)}";
     }
 
+    /// <summary>What an undo put back. The count is maps rather than files (3.0): the session's game side names
+    /// the map folders it captured, and a map is what the owner sees go back. Only the catalog's own map folders
+    /// count, so the number matches the one the apply said; with no catalog to hand every folder counts. A restore
+    /// that copied nothing back, or that put back nothing outside the library, says only that it is undone.</summary>
+    private static string UndoneLine(ApplyResult? result, UndoSession session, IEnumerable<string>? mapFolders) => result?.Copied switch
+    {
+        null or 0 => UndoDoneText,
+        _ => session.MapFolderCount(mapFolders) switch
+        {
+            0 => UndoDoneText,
+            1 => "Undone. 1 map is back to what it was.",
+            var maps => $"Undone. {maps} maps are back to what they were.",
+        },
+    };
+
+    /// <summary>What a failure says (3.0): the operation named as a verb, the reason, and the state things are in.
+    /// The verbs are the ones the app's own labels open with; a label opening with anything else leaves the line to
+    /// the exception's own words, which is all we could honestly say about it.</summary>
+    private static string FailureLine(string label, string message)
+    {
+        var space = label.IndexOf(' ');
+        var verb = (space < 0 ? label : label[..space]) switch
+        {
+            "Adding" => "add",
+            "Applying" => "apply",
+            "Capturing" => "capture",
+            "Deleting" => "delete",
+            "Duplicating" => "duplicate",
+            "Exporting" => "export",
+            "Importing" => "import",
+            "Refreshing" => "refresh",
+            "Removing" => "remove",
+            "Resetting" => "reset",
+            "Saving" => "save",
+            "Scanning" => "scan",
+            "Undoing" => "undo",
+            "Writing" => "write",
+            _ => null,
+        };
+
+        var reason = Sentence(message);
+        if (verb is null)
+        {
+            return reason;
+        }
+
+        var what = $"Could not {verb}{(space < 0 ? "" : label[space..])}";
+        return reason.Length == 0 ? $"{what}. Nothing changed." : $"{what}: {reason} Nothing changed.";
+    }
+
+    /// <summary>A fragment as a sentence: one period at the end, however it was punctuated.</summary>
+    private static string Sentence(string text)
+    {
+        var trimmed = text.TrimEnd('.', ' ');
+        return trimmed.Length == 0 ? "" : $"{trimmed}.";
+    }
+
     /// <summary>One write into the game folder (spec 8): the busy boundary, an undo snapshot of the paths it is
     /// about to touch, a done line the wrapper finishes with the period and the shared sentence, and a rescan.
     /// False when the folder was missing, another operation held the boundary, or the write was cancelled or
@@ -1973,16 +2043,37 @@ public partial class MainViewModel : ObservableObject
                                 () => WriteThumbnails(thumbnailPlans, resetThumbnails, gamePath, progress), ct);
                         }
                     });
-            });
+            },
+            retry: () => RunWriteCoreAsync(
+                label,
+                undoPaths,
+                work,
+                doneText,
+                undoable,
+                packName,
+                libraryUndoPaths,
+                writtenFolders,
+                artMaps,
+                resetThumbnails,
+                thumbnailUndoNames,
+                sources));
 
-        // Begin has already replaced the previous snapshot, so a write that was cancelled or failed has to clear
-        // the done line too; leaving it would describe something Undo no longer restores.
-        DoneText = ok ? DoneLine(WithThumbnailsDone(doneText, thumbnailWrites), GameRunning) : "";
-        DoneUndoable = ok && undoable;
+        // A restore that fully succeeds discards its snapshot, so whether there is anything to undo is read back
+        // from the store rather than remembered.
+        if (ok)
+        {
+            Status.Done(
+                DoneLine(WithThumbnailsDone(doneText, thumbnailWrites), GameRunning),
+                undoable && Services.Undo.Latest is not null);
+        }
+        else if (Status.Kind is StatusKind.Cancelled && undoPaths is not null && Services.Undo.Latest is not null)
+        {
+            // Begin has already replaced the previous snapshot, and the work does not report how many maps it got
+            // through, so the line claims no count: what it can say is that anything already written is in the
+            // snapshot the capture took.
+            Status.Cancelled("Cancelled part way. Undo puts back anything that was written.", undoable: true);
+        }
 
-        // A restore that fully succeeds discards its snapshot, so what can be undone is always read back from the
-        // store rather than remembered.
-        CanUndo = Services.Undo.Latest is not null;
         if (ok && packName is not null)
         {
             // Spec 8: the stamp is written before the rescan, so the scan this write ends with already sorts the
