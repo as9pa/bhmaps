@@ -30,7 +30,7 @@
               </Border>
               <Border x:Name="Ring"
                       BorderBrush="{StaticResource FocusRingBrush}"
-                      BorderThickness="2"
+                      BorderThickness="1"
                       CornerRadius="{StaticResource Radius}"
                       IsHitTestVisible="False"
                       Opacity="0" />
@@ -40,7 +40,7 @@
                 <Setter TargetName="Chrome" Property="Background" Value="{StaticResource Surface2Brush}" />
               </Trigger>
               <Trigger Property="IsKeyboardFocused" Value="True">
-                <Setter TargetName="Ring" Property="Opacity" Value="1" />
+                <Setter TargetName="Ring" Property="Opacity" Value="0.6" />
               </Trigger>
               <Trigger Property="IsEnabled" Value="False">
                 <Setter TargetName="Chrome" Property="Opacity" Value="0.4" />

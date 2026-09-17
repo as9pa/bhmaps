@@ -24,8 +24,8 @@
 
   <!-- The button styles below replace the theme's own, so they lose its focus visual with it, and the stock
        dashed adorner is close to invisible on this palette. They wear this instead, and so do the chips, the
-       tick boxes, the section headers and a dialog's checkboxes and radios: one 2 px accent ring standing 2 px
-       off the control, in the adorner layer, so it costs the shared templates nothing (spec 7.8). Only keyboard
+       tick boxes, the section headers and a dialog's checkboxes and radios: one 1 px accent ring at 60% standing
+       2 px off the control, in the adorner layer, so it costs the shared templates nothing (spec 7.8). Only keyboard
        focus raises it, which is what a FocusVisualStyle already does; the mouse never draws one. Declared
        first because a StaticResource cannot reach forward inside one dictionary. -->
   <Style x:Key="DialogFocusRing">
@@ -35,8 +35,9 @@
           <!-- Radius plus the 2 px it stands off by, written out because XAML cannot add two tokens. -->
           <Border Margin="-2"
                   BorderBrush="{StaticResource FocusRingBrush}"
-                  BorderThickness="2"
+                  BorderThickness="1"
                   CornerRadius="8"
+                  Opacity="0.6"
                   SnapsToDevicePixels="True" />
         </ControlTemplate>
       </Setter.Value>
@@ -356,14 +357,14 @@
             </Border>
             <Border x:Name="Ring"
                     BorderBrush="{StaticResource FocusRingBrush}"
-                    BorderThickness="2"
+                    BorderThickness="1"
                     CornerRadius="{StaticResource Radius}"
                     IsHitTestVisible="False"
                     Opacity="0" />
           </Grid>
           <ControlTemplate.Triggers>
             <Trigger Property="IsKeyboardFocused" Value="True">
-              <Setter TargetName="Ring" Property="Opacity" Value="1" />
+              <Setter TargetName="Ring" Property="Opacity" Value="0.6" />
             </Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
@@ -464,9 +465,10 @@
     </Setter>
   </Style>
 
-  <!-- Selection is a ring, not a fill, so a tile's own artwork keeps its colours. Keyboard focus draws the same
-       2 px accent ring, so focus is visible even on an unselected tile (spec 7.8). The ring is an overlay in the
-       Grid rather than a border around the content, so widening it to 2 px moves nothing. -->
+  <!-- Selection is a ring, not a fill, so a tile's own artwork keeps its colours. Selection is 2 px in the
+       accent; keyboard focus draws the same ring 1 px at 60%, so focus is visible even on an unselected tile
+       (spec 7.8). The ring is an overlay in the Grid rather than a border around the content, so the 2 px the
+       open card wears moves nothing. -->
   <Style x:Key="TileListBoxItem" TargetType="ListBoxItem">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="Padding" Value="0" />
@@ -482,17 +484,18 @@
                               VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
             <Border x:Name="Ring"
                     BorderBrush="{StaticResource FocusRingBrush}"
-                    BorderThickness="2"
+                    BorderThickness="1"
                     CornerRadius="{StaticResource Radius}"
                     IsHitTestVisible="False"
                     Opacity="0" />
           </Grid>
           <ControlTemplate.Triggers>
             <Trigger Property="IsKeyboardFocused" Value="True">
-              <Setter TargetName="Ring" Property="Opacity" Value="1" />
+              <Setter TargetName="Ring" Property="Opacity" Value="0.6" />
             </Trigger>
             <Trigger Property="IsSelected" Value="True">
               <Setter TargetName="Ring" Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+              <Setter TargetName="Ring" Property="BorderThickness" Value="2" />
               <Setter TargetName="Ring" Property="Opacity" Value="1" />
             </Trigger>
           </ControlTemplate.Triggers>
@@ -859,7 +862,7 @@
                           Style="{StaticResource ChipToggle}" />
             <Border x:Name="Ring"
                     BorderBrush="{StaticResource FocusRingBrush}"
-                    BorderThickness="2"
+                    BorderThickness="1"
                     CornerRadius="14"
                     IsHitTestVisible="False"
                     Opacity="0" />
