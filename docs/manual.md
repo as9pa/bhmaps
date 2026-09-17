@@ -10,6 +10,26 @@ also writes over the `.jpg` files already in the game's `images\thumbnails` fold
 copy of every original so it can put it back. The game's data files are read and never written, and
 nothing else in the game install is touched.
 
+## What is new in 2.7
+
+- **Delete lines on the tile menus.** A My Backgrounds tile and a pack's picture tile have **Delete
+  background**, a Platforms page tile has **Delete platform set**, a pack's map tile has **Delete from
+  <pack>**, and the Packs row's Remove is now **Delete pack**. They sit last in the menu, in red, and
+  none of them appears on the Default pack. The confirm reads **Delete <name>?** and says what will
+  happen: "It will be removed from My Backgrounds and Brawlhaven will reset to default." A delete
+  removes the pack's files and, where the game is showing that art, puts only that part of the map
+  back to default, the background or the platforms, in one write, so one Undo brings back the files
+  and the game folder together. Without a Default pack the files still go and the game is left as it
+  is.
+- **The menu's first line is a title.** It names the map, the picture or the pack in the text colour
+  with a rule under it, and a second, smaller line says what the map shows ("sunset.jpg from My
+  Backgrounds", "Neon pack", "Default art") or which pack and map a tile belongs to. It no longer
+  looks like a greyed-out button.
+- **Map-select thumbnails for the Small maps are right.** A folder that holds several levels, Mammoth
+  Fortress and Small Mammoth Fortress for one, used to have its big level's picture written over every
+  thumbnail it owns. Each thumbnail is now rendered from the level that names it, so Small Brawlhaven,
+  Small Mammoth Fortress and the rest show their own layout in the map select screen.
+
 ## What is new in 2.6
 
 - **Every tile in a pack has a menu**, map tiles included. The dots button on a tile, or a right-click,
@@ -248,7 +268,8 @@ stops a long operation.
   first and names the count. The selection clears after a write that worked, and stays after one that
   failed or was cancelled. Escape closes the panel when one is open, and clears the selection when
   none is.
-- A right-click on a card opens its menu without changing the selection. The menu names the map, or
+- A right-click on a card opens its menu without changing the selection. The menu opens with the
+  map's name and, under it, what the map shows, or
   says "N selected maps" when the card is selected along with others: then everything in the menu
   works on the whole selection. **Apply pack** unfolds the packs, with a pack greyed out when it has
   nothing for that map; **Apply picture** unfolds your pictures, up to eight, then "More pictures..."
@@ -281,8 +302,9 @@ stops a long operation.
   fold back when the page is left.
   One click on a thumbnail applies it to that map, with no confirmation to answer. Hovering shows
   Apply and a dots button, and the menu offers to apply the picture to the selected
-  maps or to all maps, then Edit and Show in folder, and for a picture in a pack Remove from that
-  pack, or Save to My Backgrounds for a picture the game is showing that no pack holds. Search
+  maps or to all maps, then Edit and Show in folder, and for a picture in a pack **Delete
+  background**, which also puts the default back on any map showing it, or Save to My Backgrounds
+  for a picture the game is showing that no pack holds. Search
   matches map names, pack names and file names. The chips are the ones Maps has.
   The zoom slider sets the row height in five steps, the second to begin with. Add Image is in the
   header. Maps are not selected on this page: it has
@@ -295,8 +317,10 @@ stops a long operation.
   Each thumbnail is cropped to the platforms themselves and drawn over the map's current background,
   because a whole level shrunk to row height shows the platforms as slivers. Every thumbnail in a row
   uses the same crop, so they can be compared. The packs follow the Packs order. Clicking a thumbnail
-  applies it to that map. The menu offers Edit, apply to this map, apply to the selected maps, and
-  Open folder; Show files belongs to the map panel, where the files are listed. Search matches map
+  applies it to that map. The menu offers Edit, apply to this map, apply to the selected maps, Open
+  folder and, for a set that is not Default's, **Delete platform set**, which also puts the default
+  platforms back if the map is showing that set; Show files belongs to the map panel, where the
+  files are listed. Search matches map
   and pack names, and the zoom slider has the same five steps, the third to begin with.
 - **Packs** is one row per pack: a composed thumbnail of the pack's first map, the pack's name and
   what it holds, as in "3 maps, 12 backgrounds, applied 2 min ago", and a strip of previews of the
@@ -304,7 +328,7 @@ stops a long operation.
   then the packs that have been applied, the most recent first, then the ones never applied, by
   name; every list of packs in the app follows that order. Apply all is a button on the row; a dots
   button beside it holds **Duplicate**, **Import from another pack...**, Export, Open folder and
-  Remove; `Default` has no Remove. The header has Import folder, New pack,
+  **Delete pack**; `Default` has no Delete pack. The header has Import folder, New pack,
   Capture defaults and Open library. **New pack** asks for a name and makes an empty pack you can
   fill later from Add Image or the editors. Clicking a row opens the pack.
 - **Pack detail** shows one pack as a single grid of its maps, each composed with the game's art
@@ -312,8 +336,10 @@ stops a long operation.
   drawer listing that map's files, its background and its platforms, and where each came from.
   Hovering a tile shows a dots button, and the dots or a right-click opens the
   menu. A map's tile is headed with the map's name and holds **Apply to <map>**, **Copy to pack...**
-  (Ctrl+C), **Move to pack...** (Ctrl+X), **Show in folder** and **Remove from <pack>**; a picture's
-  tile is headed with its file name and keeps 2.5's lines, with Copy and Move added after **Edit**.
+  (Ctrl+C), **Move to pack...** (Ctrl+X), **Show in folder** and **Delete from <pack>**; a picture's
+  tile is headed with its file name and keeps 2.5's lines, with Copy and Move added after **Edit**
+  and **Delete background** last. A delete puts the default back on whatever the game was showing
+  from it, and Undo brings back the files and the game folder together.
   Ctrl+V pastes whatever was copied or cut into the pack you are looking at. **Import from pack** in
   the header opens the import dialog. The Backgrounds page's picture menus gain the same **Apply to a
   map...** line. When
@@ -492,7 +518,8 @@ now, and a later apply to one map replaces it there.
   over every picture in the game's `images\thumbnails` folder that the map's own levels name and no
   other map's folder names. A map's folder often holds more than one level, the ranked "Small" one
   beside the casual one, and those levels usually name different pictures; all of them are that map's
-  and all of them are written. The first time a file is written over, the original is copied into
+  and each is rendered from its own level, so the Small variant gets its own layout. The first time a
+  file is written over, the original is copied into
   `%APPDATA%\BhMaps\thumbnails-original` under that file's own name, and those copies are what Reset
   to default, Undo and turning the switch off put back. A picture two different maps' folders both
   name is skipped, so one map's art is never written over another map's thumbnail, and the map panel

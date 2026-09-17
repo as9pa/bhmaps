@@ -56,7 +56,8 @@ Brawlhalla open or closed, and show on the next match load.
 - Only `.png` and `.jpg` files inside `mapArt` are ever changed, plus the map-select thumbnails when
   that switch is on; the game's data files are read only.
 - Every tile in a pack has a menu. **Copy to pack...** and **Move to pack...**, or Ctrl+C, Ctrl+X and
-  Ctrl+V, take a map or a picture from one pack to another, and **Remove from** takes it out.
+  Ctrl+V, take a map or a picture from one pack to another, and the red **Delete** lines take a
+  picture, a platform set or a map out of a pack and put the default back on any map showing it.
 - **Import from pack** copies all of another pack's maps, or the ones you pick, into the pack you are
   looking at, and **Duplicate** in the Packs menu copies a whole pack under a new name.
 - BhMaps checks for a new release once a day and can download it and swap itself over when you close

@@ -4,6 +4,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using BhMaps.App.Services;
 using BhMaps.Core.Imaging;
+using BhMaps.Core.LevelData;
 using BhMaps.Core.Maps;
 using BhMaps.Core.Model;
 using BhMaps.Core.Operations;
@@ -238,14 +239,17 @@ public partial class PackDetailViewModel : PageViewModel
         {
             items.Add(TileMenuCommand.Separator());
             items.Add(new TileMenuCommand(
-                $"Remove from {pack.Name}", new AsyncRelayCommand(() => RemoveMapFromPackAsync(removable))));
+                $"Delete from {pack.Name}",
+                new AsyncRelayCommand(() => DeleteMapFromPackAsync(removable)),
+                IsDestructive: true));
         }
-        else if (tile.Map is null && tile.PicturePath is { } file)
+        else if (tile.Map is null && tile.PicturePath is { } file && !isDefault)
         {
             items.Add(TileMenuCommand.Separator());
             items.Add(new TileMenuCommand(
-                $"Remove from {pack.Name}",
-                new AsyncRelayCommand(() => RemoveFromPackAsync(file, Path.GetFileName(file)))));
+                "Delete background",
+                new AsyncRelayCommand(() => DeleteBackgroundAsync(file, Path.GetFileName(file))),
+                IsDestructive: true));
         }
 
         tile.MenuItems = items;
@@ -480,34 +484,32 @@ public partial class PackDetailViewModel : PageViewModel
     [RelayCommand]
     private Task Paste() => PasteAsync();
 
-    /// <summary>Spec 2.6 section 3 item 7: the map's files in this pack, deleted together, inside a library undo
-    /// session so the confirm is the only thing standing between the user and getting them back.</summary>
-    private async Task RemoveMapFromPackAsync(MapEntry map)
+    /// <summary>Spec 2.6 section 3 item 7: the map's files in this pack, deleted together, and whatever of them
+    /// the game is showing put back to default with them, inside one undo session so the confirm is the only
+    /// thing standing between the user and getting them back.</summary>
+    private Task DeleteMapFromPackAsync(MapEntry map)
     {
         if (Pack is not { } pack || _snapshot is not { } snapshot)
         {
-            return;
-        }
-
-        var count = PackCopier.MapFiles(pack, map, snapshot.Catalog).Count;
-        if (!Shell.Dialogs.Confirm(
-                $"Remove from {pack.Name}?",
-                $"{map.DisplayName} and its {PackRowViewModel.Plural(count, "file")} are removed from {pack.Name}. The game keeps whatever is applied until you apply something else."))
-        {
-            return;
+            return Task.CompletedTask;
         }
 
         var catalog = snapshot.Catalog;
-        PackCopyResult? result = null;
-        await Shell.RunLibraryWriteAsync(
-            $"Removing {map.DisplayName}",
+        var status = snapshot.MapStatuses.TryGetValue(map.FolderName, out var found) ? found : null;
+
+        // Only the halves the game is actually showing out of this pack reset: a map wearing this pack's
+        // platforms and another pack's picture keeps the picture.
+        var platforms = InGameMatch.SetInGame(pack, map.FolderName, status);
+        var slots = map.BackgroundSlots
+            .Where(slot => InGameMatch.Matches(status, AssetPath.Background(slot), pack.Name))
+            .ToList();
+
+        return Shell.DeleteFromLibraryAsync(
+            map.DisplayName,
+            pack.Name,
             PackCopier.Touched(pack, PackCopier.MapFiles(pack, map, catalog)),
-            (_, ct) => Task.Run(() => { result = PackCopier.RemoveMap(pack, map, catalog); }, ct),
-            $"{map.DisplayName} removed from {pack.Name}");
-        if (result is not null)
-        {
-            Shell.Dialogs.ShowFailures("Some files could not be removed", result.Failures);
-        }
+            () => PackCopier.RemoveMap(pack, map, catalog),
+            platforms || slots.Count > 0 ? [new PartReset(map, platforms, slots)] : []);
     }
 
     /// <summary>Spec 4.1 line 3: the chooser, then the shell's apply on the one map it returned. No confirm,
@@ -535,53 +537,53 @@ public partial class PackDetailViewModel : PageViewModel
         }
     }
 
-    /// <summary>Spec 4.1 line 8: the file leaves the pack the way Remove from library takes it out of My
-    /// Backgrounds. A library write, so RunBusyAsync and SetLibraryDone, never RunGameWriteAsync, and the
-    /// packs-root guard is why this is not one File.Delete.</summary>
-    private async Task RemoveFromPackAsync(string path, string name)
+    /// <summary>Spec 4.1 line 8: the pack's picture deleted, and every map the game is showing it on put back to
+    /// default with it. The packs-root guard is why this is not one File.Delete: PackCopier works inside the pack
+    /// folder the scan found, so a path outside packs\ never reaches a delete.</summary>
+    private Task DeleteBackgroundAsync(string path, string name)
     {
-        if (Pack is not { } pack
-            || !Shell.Dialogs.Confirm(
-                $"Remove from {pack.Name}?",
-                $"{name} is removed from {pack.Name}. The game keeps whatever is applied until you apply something else."))
+        if (Pack is not { } pack || _snapshot is not { } snapshot)
         {
-            return;
+            return Task.CompletedTask;
         }
 
-        var packsRoot = PackScanner.PacksRoot(Shell.Services.LibraryPath);
-        var failures = new List<FileFailure>();
-        var ok = await Shell.RunBusyAsync(
-            $"Removing {name}",
-            (_, ct) => Task.Run(
-                () =>
-                {
-                    ct.ThrowIfCancellationRequested();
-                    if (!Path.GetFullPath(path).StartsWith(
-                            Path.GetFullPath(packsRoot) + Path.DirectorySeparatorChar,
-                            StringComparison.OrdinalIgnoreCase))
-                    {
-                        failures.Add(new FileFailure(path, "Not a file in the library."));
-                        return;
-                    }
-
-                    try
-                    {
-                        File.Delete(path);
-                    }
-                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-                    {
-                        failures.Add(new FileFailure(path, ex.Message));
-                    }
-                },
-                ct));
-
-        Shell.Dialogs.ShowFailures("Some files could not be removed", failures);
-        if (ok && failures.Count == 0)
+        var packsRoot = Path.GetFullPath(PackScanner.PacksRoot(Shell.Services.LibraryPath))
+            + Path.DirectorySeparatorChar;
+        if (!Path.GetFullPath(path).StartsWith(packsRoot, StringComparison.OrdinalIgnoreCase))
         {
-            Shell.SetLibraryDone($"Removed {name} from {pack.Name}");
+            Shell.Dialogs.ShowFailures(
+                "Some files could not be deleted", [new FileFailure(path, "Not a file in the library.")]);
+            return Task.CompletedTask;
         }
 
-        await Shell.RescanAsync();
+        // A map resets when the scan says this pack's copy of the slot is the file in the game, and also when the
+        // custom picture this file is has that slot in game: two packs shipping the same picture leave the scan
+        // naming either of them, and the map is showing this file whichever it named.
+        var full = Path.GetFullPath(path);
+        var picture = snapshot.CustomPictures.FirstOrDefault(p => p.LibraryPaths.Any(
+            libraryPath => Path.GetFullPath(libraryPath).Equals(full, StringComparison.OrdinalIgnoreCase)));
+        var resets = new List<PartReset>();
+        foreach (var map in snapshot.Catalog.Maps)
+        {
+            var status = snapshot.MapStatuses.TryGetValue(map.FolderName, out var found) ? found : null;
+            var slots = map.BackgroundSlots
+                .Where(slot => Path.GetFileName(AssetPath.Background(slot))
+                    .Equals(name, StringComparison.OrdinalIgnoreCase))
+                .Where(slot => InGameMatch.Matches(status, AssetPath.Background(slot), pack.Name)
+                    || (picture?.InGameSlots.Contains(name, StringComparer.OrdinalIgnoreCase) ?? false))
+                .ToList();
+            if (slots.Count > 0)
+            {
+                resets.Add(new PartReset(map, false, slots));
+            }
+        }
+
+        return Shell.DeleteFromLibraryAsync(
+            name,
+            pack.Name,
+            PackCopier.Touched(pack, [Path.Combine(PackCopier.BackgroundsFolder, name)]),
+            () => PackCopier.RemoveBackground(pack, name),
+            resets);
     }
 
     /// <summary>A command as well as a method: C7 binds Escape to CloseDrawerCommand, and a KeyBinding whose

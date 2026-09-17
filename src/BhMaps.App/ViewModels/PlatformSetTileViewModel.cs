@@ -3,6 +3,8 @@ using System.Windows.Media;
 using BhMaps.App.Services;
 using BhMaps.Core.Maps;
 using BhMaps.Core.Model;
+using BhMaps.Core.Operations;
+using BhMaps.Core.Packs;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -77,7 +79,11 @@ public sealed partial class PlatformSetTileViewModel : ObservableObject
     {
         // No "Apply to <map>": a click on the tile is that apply, and so is the panel's Apply button, and a menu
         // holds only what the tile cannot do on its own (spec 9).
-        var items = new List<TileMenuCommand> { new("Edit", EditCommand) };
+        var items = new List<TileMenuCommand>
+        {
+            TileMenuCommand.Header(Pack.Name, $"Platforms for {Map.DisplayName}"),
+            new("Edit", EditCommand),
+        };
         if (tickedCount > 0)
         {
             items.Add(new TileMenuCommand(
@@ -92,7 +98,36 @@ public sealed partial class PlatformSetTileViewModel : ObservableObject
         }
 
         items.Add(new TileMenuCommand("Open folder", OpenFolderCommand));
+
+        // The Default pack is the art a reset restores, so there is nothing to delete it into.
+        if (!Pack.Name.Equals(DefaultPack.Name, StringComparison.OrdinalIgnoreCase))
+        {
+            items.Add(TileMenuCommand.Separator());
+            items.Add(new TileMenuCommand("Delete platform set", DeleteCommand, IsDestructive: true));
+        }
+
         MenuItems = items;
+    }
+
+    /// <summary>The pack's files for this map's folder, deleted, and the map's platforms put back to default
+    /// when the game is showing this set. Its pictures are left alone: a platform delete is not a background
+    /// delete.</summary>
+    [RelayCommand]
+    private Task DeleteAsync()
+    {
+        if (_shell.Snapshot is not { } snapshot)
+        {
+            return Task.CompletedTask;
+        }
+
+        var status = snapshot.MapStatuses.TryGetValue(Map.FolderName, out var found) ? found : null;
+        var catalog = snapshot.Catalog;
+        return _shell.DeleteFromLibraryAsync(
+            $"{Pack.Name} platforms",
+            Pack.Name,
+            PackCopier.Touched(Pack, PackCopier.PlatformFiles(Pack, Map)),
+            () => PackCopier.RemovePlatforms(Pack, Map, catalog),
+            InGameMatch.SetInGame(Pack, Map.FolderName, status) ? [new PartReset(Map, true, [])] : []);
     }
 
     [RelayCommand]

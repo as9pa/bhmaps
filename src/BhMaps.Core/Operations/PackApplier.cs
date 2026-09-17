@@ -107,17 +107,32 @@ public static class PackApplier
     /// restore. MapReset skips a slot the pack has not got, so nothing outside this list is touched. The map
     /// panel and the selection bar both call this: two copies of an undo list is how one of them ends up short,
     /// and what a short list leaves overwritten cannot be put back.</summary>
-    public static IReadOnlyList<string> ResetMapPaths(GameTree tree, MapEntry map, Pack defaultPack)
+    public static IReadOnlyList<string> ResetMapPaths(GameTree tree, MapEntry map, Pack defaultPack) =>
+        ResetPlatformPaths(tree, map, defaultPack)
+            .Concat(ResetBackgroundPaths(defaultPack, map.BackgroundSlots))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+    /// <summary>The platforms half of ResetMapPaths: the files that folder holds in the game now and the Default
+    /// pack's files for it. A platform reset writes nothing outside this list.</summary>
+    public static IReadOnlyList<string> ResetPlatformPaths(GameTree tree, MapEntry map, Pack defaultPack)
     {
-        var backgrounds = defaultPack.FindFolder(BackgroundsFolder);
-        var slots = map.BackgroundSlots.Where(slot => backgrounds?.FindFile(slot) is not null).ToList();
         var current = tree.FindFolder(map.FolderName)?.Files.Select(f => Path.Combine(map.FolderName, f.Name))
             ?? Array.Empty<string>();
         return current
             .Concat(PlatformSetApplier.TargetPaths(defaultPack, map.FolderName))
-            .Concat(BackgroundApplier.TargetPaths(slots))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
+    }
+
+    /// <summary>The backgrounds half of ResetMapPaths: the slots the Default pack can actually restore, since
+    /// MapReset skips a slot the pack has not got. No game tree is needed for these, because the file a slot holds
+    /// now sits at the same path the restore writes.</summary>
+    public static IReadOnlyList<string> ResetBackgroundPaths(Pack defaultPack, IReadOnlyList<string> slots)
+    {
+        var backgrounds = defaultPack.FindFolder(BackgroundsFolder);
+        return BackgroundApplier.TargetPaths(
+            [.. slots.Where(slot => backgrounds?.FindFile(slot) is not null)]);
     }
 
     /// <summary>The pack's pictures for one map's slots, in slot order, each at most once.</summary>

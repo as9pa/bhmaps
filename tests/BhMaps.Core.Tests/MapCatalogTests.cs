@@ -258,6 +258,41 @@ public class MapCatalogTests
     }
 
     [Fact]
+    public void Build_LinksEachOwnedFileToTheLevelThatNamesIt()
+    {
+        var data = Model(
+            [Level("Fortress", "Fortress"), Level("SmallFortress", "Fortress")],
+            [
+                new LevelType("Fortress", "Mammoth Fortress", false, false, "Mammoth.jpg"),
+                new LevelType("SmallFortress", "Small Mammoth Fortress", false, false, "MammothSmall.jpg"),
+            ],
+            []);
+
+        var fortress = MapCatalog.Build(data).ByFolder("Fortress")!;
+
+        Assert.Equal("Fortress", fortress.LevelFor("Mammoth.jpg").LevelName);
+        Assert.Equal("SmallFortress", fortress.LevelFor("MammothSmall.jpg").LevelName);
+        Assert.Same(fortress.BaseLevel, fortress.LevelFor("NotAFileOfThisMap.jpg"));
+    }
+
+    [Fact]
+    public void Build_GivesAFileTwoOfAFoldersLevelsNameToTheBaseLevel()
+    {
+        var data = Model(
+            [Level("SmallFortress", "Fortress"), Level("Fortress", "Fortress")],
+            [
+                new LevelType("SmallFortress", "Small Mammoth Fortress", false, false, "Mammoth.jpg"),
+                new LevelType("Fortress", "Mammoth Fortress", false, false, "Mammoth.jpg"),
+            ],
+            []);
+
+        var fortress = MapCatalog.Build(data).ByFolder("Fortress")!;
+
+        Assert.Equal(["Mammoth.jpg"], fortress.ThumbnailFiles);
+        Assert.Same(fortress.BaseLevel, fortress.LevelFor("Mammoth.jpg"));
+    }
+
+    [Fact]
     public void Build_OwnsAllThreeFilesOfAThreeLevelFolderInLevelOrder()
     {
         var data = Model(

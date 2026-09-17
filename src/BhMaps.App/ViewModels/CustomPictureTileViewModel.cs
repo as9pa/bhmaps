@@ -4,14 +4,15 @@ using BhMaps.Core.LevelData;
 using BhMaps.Core.Maps;
 using BhMaps.Core.Model;
 using BhMaps.Core.Operations;
+using BhMaps.Core.Packs;
 using BhMaps.Core.Scanning;
 using CommunityToolkit.Mvvm.Input;
 
 namespace BhMaps.App.ViewModels;
 
 /// <summary>One custom picture, which belongs to no map: its Apply is always a choice (spec 4), so the hover
-/// button opens the menu. Remove from the pack deletes every copy of it in the packs and is the one destructive
-/// action on this page, so it confirms and names the pack.</summary>
+/// button opens the menu. Delete background deletes every copy of it in the packs and puts the maps the game is
+/// showing it on back to default, so it is the one destructive action on this page and it confirms first.</summary>
 public sealed partial class CustomPictureTileViewModel : PictureTileViewModel
 {
     private readonly CustomPicture _picture;
@@ -66,14 +67,14 @@ public sealed partial class CustomPictureTileViewModel : PictureTileViewModel
     public override ICommand? ApplyCommand => Map is null ? null : ApplyToMapCommand;
 
     /// <summary>False for a picture that is only in the game folder, which is offered Save to My Backgrounds
-    /// instead of Remove from its pack.</summary>
+    /// instead of Delete background.</summary>
     private bool InLibrary => _picture.LibraryPaths.Count > 0;
 
     public override void RebuildMenu(int tickedCount)
     {
         // No "Apply to <map>": a tile that names a map carries the Apply button, and a menu holds only what the
         // tile cannot do on its own (spec 9).
-        var items = new List<TileMenuCommand>();
+        var items = new List<TileMenuCommand> { TileMenuCommand.Header(Title, MenuDetail()) };
         if (tickedCount > 0)
         {
             items.Add(new TileMenuCommand(TickedText(tickedCount), ApplyToTickedCommand));
@@ -83,10 +84,64 @@ public sealed partial class CustomPictureTileViewModel : PictureTileViewModel
         items.Add(new TileMenuCommand("Apply to all maps", ApplyToAllCommand));
         items.Add(new TileMenuCommand("Edit", EditCommand));
         items.Add(new TileMenuCommand("Show in folder", ShowInFolderCommand));
-        items.Add(InLibrary
-            ? new TileMenuCommand($"Remove from {PackName}", RemoveFromLibraryCommand)
-            : new TileMenuCommand("Save to My Backgrounds", SaveToLibraryCommand));
+        if (InLibrary)
+        {
+            // Last, behind a rule and in the destructive colour: it deletes files, and the pointer should not
+            // have to pass over it to reach another line.
+            items.Add(TileMenuCommand.Separator());
+            items.Add(new TileMenuCommand("Delete background", DeleteCommand, IsDestructive: true));
+        }
+        else
+        {
+            items.Add(new TileMenuCommand("Save to My Backgrounds", SaveToLibraryCommand));
+        }
+
         MenuItems = items;
+    }
+
+    /// <summary>The header's second line: the pack the picture lives in, and the map the game is showing it on.
+    /// A picture that is only in the game folder is in no pack, so that is the whole line.</summary>
+    private string? MenuDetail()
+    {
+        if (!InLibrary)
+        {
+            return "In game only";
+        }
+
+        var parts = new List<string>();
+        if (PackName is { } pack)
+        {
+            parts.Add(pack);
+        }
+
+        if (_picture.InGameSlots.Count > 0 && OnMapsText(_picture.InGameSlots[0]) is { } on)
+        {
+            parts.Add(on);
+        }
+
+        return parts.Count > 0 ? string.Join(", ", parts) : null;
+    }
+
+    /// <summary>"on Brawlhaven", or "on Brawlhaven and 2 more" when the slot belongs to several maps. Null when
+    /// no catalog map names the slot, which is what a scan that has not run yet looks like.</summary>
+    private string? OnMapsText(string slotFile)
+    {
+        if (Shell.Snapshot is not { } snapshot)
+        {
+            return null;
+        }
+
+        var maps = snapshot.Catalog.Maps
+            .Where(m => m.BackgroundSlots.Any(slot => Path.GetFileName(AssetPath.Background(slot))
+                .Equals(slotFile, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+
+        return maps.Count switch
+        {
+            0 => null,
+            1 => $"on {maps[0].DisplayName}",
+            _ => $"on {maps[0].DisplayName} and {maps.Count - 1} more",
+        };
     }
 
     // The picture's own name, not the file it happens to be stored as, is what the done line reports (spec 2.2).
@@ -129,56 +184,97 @@ public sealed partial class CustomPictureTileViewModel : PictureTileViewModel
         }
     }
 
+    /// <summary>Every copy of the picture in the library, deleted together, and every map the game is showing it
+    /// on put back to default with them. A copy goes out through the pack that holds it, so that pack's edit
+    /// record loses the entry with the file; a copy in no scanned pack is deleted on its own, behind the
+    /// packs-root guard that is the reason this is not one File.Delete.</summary>
     [RelayCommand]
-    private async Task RemoveFromLibraryAsync()
+    private Task DeleteAsync()
     {
-        var paths = _picture.LibraryPaths;
-        if (!Shell.Dialogs.Confirm(
-                $"Remove from {PackName}?",
-                $"{Title} is removed from {PackName}. The game keeps whatever is applied until you apply something else."))
+        if (Shell.Snapshot is not { } snapshot)
         {
-            return;
+            return Task.CompletedTask;
         }
 
-        // A library write, so RunBusyAsync and SetLibraryDone, never RunGameWriteAsync. The guard is the reason
-        // this is not one File.Delete: a path outside packs\ is refused rather than deleted.
-        var packsRoot = PackScanner.PacksRoot(Shell.Services.LibraryPath);
+        var packsRoot = Path.GetFullPath(PackScanner.PacksRoot(Shell.Services.LibraryPath))
+            + Path.DirectorySeparatorChar;
+        var libraryPath = Shell.Services.LibraryPath;
+        var copies = _picture.LibraryPaths
+            .Select(path => (
+                Path: path,
+                Pack: PackOf(snapshot, path),
+                InLibrary: Path.GetFullPath(path).StartsWith(packsRoot, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+
+        var undoPaths = copies
+            .Where(copy => copy.InLibrary)
+            .SelectMany(copy => copy.Pack is { } pack
+                ? PackCopier.Touched(pack, [Path.Combine(PackCopier.BackgroundsFolder, Path.GetFileName(copy.Path))])
+                : [Path.GetRelativePath(libraryPath, copy.Path)])
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        // Every map whose slots the game is filling with this picture, each with the slots it fills, so a map
+        // that shows it in one slot and something else in another keeps the other.
+        var resets = snapshot.Catalog.Maps
+            .Select(map => new PartReset(map, false, [.. map.BackgroundSlots.Where(InGameSlot)]))
+            .Where(reset => reset.Slots.Count > 0)
+            .ToList();
+
+        return Shell.DeleteFromLibraryAsync(
+            Title,
+            PackName ?? "My Backgrounds",
+            undoPaths,
+            () => Delete(copies),
+            resets);
+    }
+
+    /// <summary>True when the game is showing this picture in that slot, as the last scan measured it. A slot
+    /// borrowed from a theme folder through "../" resolves first, because InGameSlots holds file names.</summary>
+    private bool InGameSlot(string slot) =>
+        _picture.InGameSlots.Contains(
+            Path.GetFileName(AssetPath.Background(slot)), StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The scanned pack a library copy sits in, or null for a file under packs\ that no scanned pack
+    /// claims, which is what a folder added since the last scan looks like.</summary>
+    private static Pack? PackOf(ScanSnapshot snapshot, string path) =>
+        snapshot.Packs.FirstOrDefault(pack => Path.GetFullPath(path).StartsWith(
+            Path.GetFullPath(pack.FullPath) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>The delete itself, off the UI thread. A path the guard refused is reported rather than silently
+    /// skipped, so a picture the scan found outside packs\ says so instead of looking deleted.</summary>
+    private static PackCopyResult Delete(IReadOnlyList<(string Path, Pack? Pack, bool InLibrary)> copies)
+    {
+        var removed = new List<string>();
         var failures = new List<FileFailure>();
-        var ok = await Shell.RunBusyAsync(
-            $"Removing {Title}",
-            (_, ct) => Task.Run(
-                () =>
-                {
-                    foreach (var path in paths)
-                    {
-                        ct.ThrowIfCancellationRequested();
-                        if (!Path.GetFullPath(path).StartsWith(
-                                Path.GetFullPath(packsRoot) + Path.DirectorySeparatorChar,
-                                StringComparison.OrdinalIgnoreCase))
-                        {
-                            failures.Add(new FileFailure(path, "Not a file in the library."));
-                            continue;
-                        }
-
-                        try
-                        {
-                            File.Delete(path);
-                        }
-                        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-                        {
-                            failures.Add(new FileFailure(path, ex.Message));
-                        }
-                    }
-                },
-                ct));
-
-        Shell.Dialogs.ShowFailures("Some files could not be removed", failures);
-        if (ok)
+        foreach (var (path, pack, inLibrary) in copies)
         {
-            Shell.SetLibraryDone($"Removed {Title} from {PackName}");
+            if (!inLibrary)
+            {
+                failures.Add(new FileFailure(path, "Not a file in the library."));
+                continue;
+            }
+
+            if (pack is not null)
+            {
+                var result = PackCopier.RemoveBackground(pack, Path.GetFileName(path));
+                removed.AddRange(result.Removed);
+                failures.AddRange(result.Failures);
+                continue;
+            }
+
+            try
+            {
+                File.Delete(path);
+                removed.Add(path);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                failures.Add(new FileFailure(path, ex.Message));
+            }
         }
 
-        await Shell.RescanAsync();
+        return new PackCopyResult([], removed, false, failures);
     }
 
     [RelayCommand]

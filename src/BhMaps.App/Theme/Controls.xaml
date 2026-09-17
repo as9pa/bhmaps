@@ -622,6 +622,10 @@
     <TextBlock Text="{Binding}" />
   </DataTemplate>
 
+  <!-- The header's detail line only exists on a header that has one, and a header with none must not leave a
+       gap above its hairline. -->
+  <converters:NullToVisibilityConverter x:Key="NullToVis" />
+
   <!-- Header and Command are setters rather than per item markup, so one ItemsSource of TileMenuCommand drives
        every tile's menu and a page never writes a MenuItem by hand. A literal MenuItem that sets its own Header
        still wins: a local value beats a style setter. -->
@@ -666,13 +670,37 @@
     <Setter Property="ToolTipService.ShowOnDisabled" Value="True" />
 
     <Style.Triggers>
-      <!-- The header line (spec 4.1): the menu's own muted style, not a new style key. Not focusable, so the
-           arrow keys land on the first line that does something. -->
+      <!-- The header line (spec 4.1) is a title, not a line that refused to run: its own template, so it keeps
+           neither the row shape nor the indent of the commands under it, and no hover, pressed or focus visuals.
+           Not focusable, so the arrow keys land on the first line that does something. -->
       <DataTrigger Binding="{Binding Kind}" Value="Header">
-        <Setter Property="FontSize" Value="11.5" />
-        <Setter Property="Foreground" Value="{StaticResource Text3Brush}" />
         <Setter Property="Focusable" Value="False" />
-        <Setter Property="Padding" Value="10,4" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Template">
+          <Setter.Value>
+            <ControlTemplate TargetType="MenuItem">
+              <StackPanel>
+                <StackPanel Margin="10,6,10,6">
+                  <!-- One line each, trimmed rather than wrapped: a long file name must not push the commands
+                       down the screen. MaxWidth so the menu is no wider than the name it is titled with. -->
+                  <TextBlock HorizontalAlignment="Left" MaxWidth="260" FontSize="12" FontWeight="SemiBold"
+                             Foreground="{StaticResource TextBrush}" Text="{Binding Text}"
+                             TextTrimming="CharacterEllipsis" />
+                  <TextBlock HorizontalAlignment="Left" MaxWidth="260" Margin="0,1,0,0" FontSize="11"
+                             Foreground="{StaticResource Text2Brush}" Text="{Binding Detail}"
+                             TextTrimming="CharacterEllipsis"
+                             Visibility="{Binding Detail, Converter={StaticResource NullToVis}}" />
+                </StackPanel>
+                <Border Height="1" Margin="6,0,6,4" Background="{StaticResource LineBrush}" />
+              </StackPanel>
+            </ControlTemplate>
+          </Setter.Value>
+        </Setter>
+      </DataTrigger>
+
+      <!-- A line that deletes or removes reads in the missing colour, so it is not clicked for another. -->
+      <DataTrigger Binding="{Binding IsDestructive}" Value="True">
+        <Setter Property="Foreground" Value="{StaticResource MissingFgBrush}" />
       </DataTrigger>
 
       <DataTrigger Binding="{Binding Kind}" Value="Separator">

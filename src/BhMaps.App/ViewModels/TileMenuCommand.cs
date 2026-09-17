@@ -2,8 +2,8 @@ using System.Windows.Input;
 
 namespace BhMaps.App.ViewModels;
 
-/// <summary>What a line of a tile menu is. An ordinary line runs a command; a Header is the muted first line that
-/// names what the menu is about (spec 4.1); a Separator is a rule. The style in Controls.xaml draws all three.</summary>
+/// <summary>What a line of a tile menu is. An ordinary line runs a command; a Header is the title line that names
+/// what the menu is about (spec 4.1); a Separator is a rule. The style in Controls.xaml draws all three.</summary>
 public enum TileMenuKind
 {
     Item,
@@ -25,11 +25,20 @@ public sealed record TileMenuCommand(
 
     /// <summary>Spec 2.6 section 3: the key the line answers to, drawn muted on the right. Null on a line with
     /// no key.</summary>
-    string? Gesture = null)
+    string? Gesture = null,
+
+    /// <summary>A header's second line: one short line saying what the menu's subject is showing or where it
+    /// came from. Null on a header with nothing to add, and on every other kind of line.</summary>
+    string? Detail = null,
+
+    /// <summary>True for a line that removes or deletes something, which the menu draws in the missing colour so
+    /// it is not clicked by accident.</summary>
+    bool IsDestructive = false)
 {
-    /// <summary>The muted first line naming the file, the map or the count (spec 4.1, spec 4.3).</summary>
-    public static TileMenuCommand Header(string text) =>
-        new(text, null, IsEnabled: false, Kind: TileMenuKind.Header);
+    /// <summary>The title line naming the file, the map or the count (spec 4.1, spec 4.3), with an optional one
+    /// line detail under it.</summary>
+    public static TileMenuCommand Header(string text, string? detail = null) =>
+        new(text, null, IsEnabled: false, Kind: TileMenuKind.Header, Detail: detail);
 
     public static TileMenuCommand Separator() =>
         new("", null, IsEnabled: false, Kind: TileMenuKind.Separator);

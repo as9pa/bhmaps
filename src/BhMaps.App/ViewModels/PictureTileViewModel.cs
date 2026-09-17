@@ -126,7 +126,11 @@ public sealed partial class MapPictureTileViewModel : PictureTileViewModel
     {
         // No "Apply to <map>": the tile's own button already does exactly that, and a menu holds only what the
         // tile cannot do on its own (spec 9).
-        var items = new List<TileMenuCommand>();
+        var items = new List<TileMenuCommand>
+        {
+            // The subtitle is the pack or the slot, which is exactly what a header's detail line is for.
+            TileMenuCommand.Header(Title, Subtitle.Length > 0 ? Subtitle : null),
+        };
         if (tickedCount > 0)
         {
             items.Add(new TileMenuCommand(TickedText(tickedCount), ApplyToTickedCommand));

@@ -10,8 +10,8 @@ public sealed record UiSet(string Name, string Label);
 /// <see cref="ThumbnailFiles"/> are the map-select pictures this map owns outright, in level order: a folder
 /// owns every file its included levels name that no other folder's levels also name, so a folder whose levels
 /// name two or three different pictures owns all of them. <see cref="Candidates"/> holds every file its levels
-/// name, owned or not, and <see cref="ThumbnailFile"/> is the first owned one for callers that want a single
-/// name.</summary>
+/// name, owned or not, <see cref="ThumbnailFile"/> is the first owned one for callers that want a single
+/// name, and <see cref="LevelFor"/> answers which level a file is the picture of.</summary>
 public sealed record MapEntry(
     string FolderName,
     string DisplayName,
@@ -21,13 +21,21 @@ public sealed record MapEntry(
     IReadOnlyList<string> BackgroundSlots,
     IReadOnlyList<string> PlatformFiles,
     IReadOnlyList<string>? OwnedThumbnails = null,
-    IReadOnlyList<string>? ThumbnailCandidates = null)
+    IReadOnlyList<string>? ThumbnailCandidates = null,
+    IReadOnlyDictionary<string, LevelDesc>? ThumbnailLevels = null)
 {
     /// <summary>The map-select pictures this map owns outright, in level order, empty when it owns none.</summary>
     public IReadOnlyList<string> ThumbnailFiles => OwnedThumbnails ?? [];
 
     /// <summary>Every map-select picture this map's included levels name, empty when they name none.</summary>
     public IReadOnlyList<string> Candidates => ThumbnailCandidates ?? [];
+
+    /// <summary>The level the picture <paramref name="fileName"/> belongs to: a folder's files are one per
+    /// level, so the small level's picture must be rendered from the small level and not from the map. Falls
+    /// back to <see cref="BaseLevel"/> for a file no level of this map names, which is what the fallback
+    /// catalog and a map built without level data have.</summary>
+    public LevelDesc LevelFor(string fileName) =>
+        ThumbnailLevels is not null && ThumbnailLevels.TryGetValue(fileName, out var level) ? level : BaseLevel;
 
     /// <summary>The first picture this map owns, or null when it owns none.</summary>
     public string? ThumbnailFile => ThumbnailFiles.Count > 0 ? ThumbnailFiles[0] : null;
@@ -116,7 +124,7 @@ public sealed class MapCatalog
         var owned = Owned(candidates);
 
         var maps = folders
-            .Select(g => Entry(g.Key, g.ToList(), Display, data.Sets, owned[g.Key], candidates[g.Key]))
+            .Select(g => Entry(g.Key, g.ToList(), Display, data.Sets, owned[g.Key], candidates[g.Key], included))
             .OrderBy(m => m.DisplayName, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
@@ -190,7 +198,8 @@ public sealed class MapCatalog
         Func<LevelDesc, string> display,
         IReadOnlyList<LevelSet> sets,
         IReadOnlyList<string> owned,
-        IReadOnlyList<string> candidates)
+        IReadOnlyList<string> candidates,
+        IReadOnlyDictionary<string, LevelType> included)
     {
         var levelNames = levels.Select(l => l.LevelName).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var baseLevel = PickBase(folder, levels, display);
@@ -212,7 +221,35 @@ public sealed class MapCatalog
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList(),
             owned,
-            candidates);
+            candidates,
+            ThumbnailLevels(levels, baseLevel, included));
+    }
+
+    /// <summary>Which level each of the folder's map-select pictures is the picture of, keyed by file name. A
+    /// folder holds a big and a small level that name a file each, and each file has to be rendered from its own
+    /// level. When two levels name the same file the base level wins it, else the first in level order: the
+    /// file can only be written once.</summary>
+    private static IReadOnlyDictionary<string, LevelDesc> ThumbnailLevels(
+        IReadOnlyList<LevelDesc> levels,
+        LevelDesc baseLevel,
+        IReadOnlyDictionary<string, LevelType> included)
+    {
+        var byFile = new Dictionary<string, LevelDesc>(StringComparer.OrdinalIgnoreCase);
+        foreach (var level in levels)
+        {
+            var file = included.TryGetValue(level.LevelName, out var type) ? type.ThumbnailFile : null;
+            if (string.IsNullOrEmpty(file))
+            {
+                continue;
+            }
+
+            if (!byFile.ContainsKey(file) || ReferenceEquals(level, baseLevel))
+            {
+                byFile[file] = level;
+            }
+        }
+
+        return byFile;
     }
 
     private static LevelDesc PickBase(string folder, IReadOnlyList<LevelDesc> levels, Func<LevelDesc, string> display)
