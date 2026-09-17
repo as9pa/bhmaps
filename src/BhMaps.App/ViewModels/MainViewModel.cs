@@ -1239,7 +1239,7 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
-        var applied = AppliedRecord.Load(AppliedRecord.PathFor(Services.AppDataDir));
+        var recordPath = AppliedRecord.PathFor(Services.AppDataDir);
         var packed = new HashSet<string>(
             snapshot.MapStatuses.Values
                 .SelectMany(s => s.Files)
@@ -1247,24 +1247,24 @@ public partial class MainViewModel : ObservableObject
                 .Select(f => f.RelativePath),
             StringComparer.OrdinalIgnoreCase);
 
-        // A file a pack matches, or one this app wrote, is applied art rather than the game's own. Default keeps
-        // lacking it, which is honest: the app has no way to know what the vanilla bytes were.
-        bool IsVanilla(string relative) => !packed.Contains(relative) && !applied.Entries.ContainsKey(relative);
-
         var tree = snapshot.Tree;
         var catalog = snapshot.Catalog;
-        var missing = await Task.Run(() => DefaultPack.FindMissing(tree, catalog, defaultPack, IsVanilla));
-        var fresh = new List<MissingDefault>();
-        foreach (var item in missing)
+        var missing = await Task.Run(() =>
         {
-            // A file that failed to copy is still missing at the next scan; tried once a run, not every rescan.
-            if (_defaultTopUpTried.Add(item.GameRelativePath))
-            {
-                fresh.Add(item);
-            }
-        }
+            // Reading the record is file reading, so it waits off the UI thread with the search itself.
+            var applied = AppliedRecord.Load(recordPath);
 
-        if (fresh.Count == 0)
+            // A file a pack matches, or one this app wrote, is applied art rather than the game's own. Default
+            // keeps lacking it, which is honest: the app has no way to know what the vanilla bytes were.
+            bool IsVanilla(string relative) => !packed.Contains(relative) && !applied.Entries.ContainsKey(relative);
+
+            return DefaultPack.FindMissing(tree, catalog, defaultPack, IsVanilla);
+        });
+
+        // A file that failed to copy is still missing at the next scan; tried once a run, not every rescan. The
+        // set is filled only after the copy ran, so a run that never started (busy) offers the files again.
+        var fresh = missing.Where(item => !_defaultTopUpTried.Contains(item.GameRelativePath)).ToList();
+        if (fresh.Count == 0 || IsBusy)
         {
             return;
         }
@@ -1278,6 +1278,13 @@ public partial class MainViewModel : ObservableObject
             "Adding to Default",
             (progress, ct) => Task.Run(
                 () => { result = DefaultPack.AddMissing(gamePath, library, fresh, progress, ct); }, ct));
+        if (ok)
+        {
+            foreach (var item in fresh)
+            {
+                _defaultTopUpTried.Add(item.GameRelativePath);
+            }
+        }
         if (result is not null)
         {
             Dialogs.ShowFailures("Some files could not be added to Default", result.Failures);
