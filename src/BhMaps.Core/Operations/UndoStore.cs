@@ -6,10 +6,15 @@ namespace BhMaps.Core.Operations;
 
 /// <summary>One undo set on disk: the game files as they were, under &lt;undo&gt;\&lt;stamp&gt;\&lt;Folder&gt;\, plus _absent.txt for the
 /// paths that held no file. Library files live beside them under &lt;undo&gt;\&lt;stamp&gt;\library\, with their own _library_absent.txt.
-/// Map-select thumbnails live under &lt;undo&gt;\&lt;stamp&gt;\thumbnails\, with their own _thumbnails_absent.txt.</summary>
+/// Map-select thumbnails live under &lt;undo&gt;\&lt;stamp&gt;\thumbnails\, with their own _thumbnails_absent.txt.
+/// The applied record is copied to &lt;undo&gt;\&lt;stamp&gt;\applied.json, or noted in _record_absent.txt when there was none.</summary>
 public sealed class UndoSession
 {
     internal const string AbsentFileName = "_absent.txt";
+
+    internal const string RecordFileName = "applied.json";
+
+    internal const string RecordAbsentFileName = "_record_absent.txt";
 
     internal const string LibraryFolderName = "library";
 
@@ -25,9 +30,12 @@ public sealed class UndoSession
 
     private readonly HashSet<string> _capturedThumbnails = new(StringComparer.OrdinalIgnoreCase);
 
+    private bool _capturedRecord;
+
     internal UndoSession(string path)
     {
         Path = path;
+        _capturedRecord = HasRecordSide;
         foreach (var relativePath in CapturedFiles().Concat(AbsentPaths()))
         {
             _captured.Add(relativePath);
@@ -84,6 +92,36 @@ public sealed class UndoSession
         }
     }
 
+    /// <summary>Copies the applied record into the session, or notes in _record_absent.txt that there was none, so
+    /// an undo puts the app's memory of what it wrote back with the files it wrote. First capture wins, as on the
+    /// other sides. The record is bookkeeping rather than a file the user picked, so it is left out of Count.</summary>
+    public void CaptureRecord(string recordPath)
+    {
+        if (_capturedRecord)
+        {
+            // The first capture is the one taken before the operation started; a later one would snapshot its own note.
+            return;
+        }
+
+        _capturedRecord = true;
+        try
+        {
+            if (File.Exists(recordPath))
+            {
+                File.Copy(recordPath, RecordSidePath, overwrite: true);
+            }
+            else
+            {
+                File.WriteAllText(RecordAbsentPath, string.Empty);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // A record we cannot snapshot is left out entirely, so undo skips it instead of deleting it.
+            _capturedRecord = false;
+        }
+    }
+
     /// <summary>One side's capture: copy the file in under targetRoot, or write the path to the side's absent list.</summary>
     private void CaptureInto(HashSet<string> captured, string sourceRoot, string targetRoot, string absentFileName, string relativePath)
     {
@@ -124,6 +162,8 @@ public sealed class UndoSession
             .Where(r => !r.Equals(AbsentFileName, StringComparison.OrdinalIgnoreCase)
                 && !r.Equals(LibraryAbsentFileName, StringComparison.OrdinalIgnoreCase)
                 && !r.Equals(ThumbnailsAbsentFileName, StringComparison.OrdinalIgnoreCase)
+                && !r.Equals(RecordFileName, StringComparison.OrdinalIgnoreCase)
+                && !r.Equals(RecordAbsentFileName, StringComparison.OrdinalIgnoreCase)
                 && !r.StartsWith(librarySide, StringComparison.OrdinalIgnoreCase)
                 && !r.StartsWith(thumbnailsSide, StringComparison.OrdinalIgnoreCase))
             .ToList();
@@ -145,6 +185,14 @@ public sealed class UndoSession
 
     /// <summary>File names that held no thumbnail when the session began, one per line of _thumbnails_absent.txt.</summary>
     internal IReadOnlyList<string> ThumbnailsAbsentPaths() => AbsentPathsIn(ThumbnailsAbsentFileName);
+
+    internal string RecordSidePath => System.IO.Path.Combine(Path, RecordFileName);
+
+    internal string RecordAbsentPath => System.IO.Path.Combine(Path, RecordAbsentFileName);
+
+    /// <summary>Whether this session holds the applied record: either the file itself or the note that there was
+    /// none. A session begun by an older build holds neither, and a restore leaves the record alone.</summary>
+    internal bool HasRecordSide => File.Exists(RecordSidePath) || File.Exists(RecordAbsentPath);
 
     private static IReadOnlyList<string> CapturedUnder(string root)
     {
@@ -226,7 +274,15 @@ public sealed class UndoStore
     public ApplyResult Restore(UndoSession session, string gamePath, string libraryPath, string thumbnailsDir) =>
         RestoreSides(session, gamePath, libraryPath, thumbnailsDir.Length == 0 ? null : thumbnailsDir);
 
-    private ApplyResult RestoreSides(UndoSession session, string gamePath, string? libraryPath, string? thumbnailsDir)
+    /// <summary>The three sides plus the applied record at recordPath, put back the way the session found it. The
+    /// record describes writes this restore is undoing, so it goes back with them or it would name files that no
+    /// longer hold those bytes.</summary>
+    public ApplyResult Restore(
+        UndoSession session, string gamePath, string libraryPath, string thumbnailsDir, string recordPath) =>
+        RestoreSides(session, gamePath, libraryPath, thumbnailsDir.Length == 0 ? null : thumbnailsDir, recordPath);
+
+    private ApplyResult RestoreSides(
+        UndoSession session, string gamePath, string? libraryPath, string? thumbnailsDir, string? recordPath = null)
     {
         IReadOnlyList<string> captured;
         IReadOnlyList<string> absent;
@@ -292,6 +348,21 @@ public sealed class UndoStore
             foreach (var fileName in thumbnailsAbsent)
             {
                 DeleteBack(Path.Combine(thumbnailsDir, fileName), ref restored, failures);
+            }
+        }
+
+        if (recordPath is not null && session.HasRecordSide)
+        {
+            // The record is bookkeeping, not one of the files the count reports, so it is put back without
+            // counting; a failure still counts, because a stale record outlives the restore.
+            var bookkeeping = 0;
+            if (File.Exists(session.RecordSidePath))
+            {
+                CopyBack(session.RecordSidePath, recordPath, ref bookkeeping, failures);
+            }
+            else
+            {
+                DeleteBack(recordPath, ref bookkeeping, failures);
             }
         }
 

@@ -1,4 +1,4 @@
-<UserControl x:Class="BhMaps.App.Views.Pages.BackgroundsView"
+﻿<UserControl x:Class="BhMaps.App.Views.Pages.BackgroundsView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:behaviors="clr-namespace:BhMaps.App.Behaviors"
@@ -68,12 +68,13 @@
       </controls:PageHeader.Actions>
     </controls:PageHeader>
 
-    <!-- Addendum B, q4: the chip row ends at the last chip. Ticking is the Maps page's, so there is no "Select
-         all shown" here and no bar at the foot of the page. Spec 4 puts the page's one switch at the right end of
-         the same line, which is why the row is a Grid rather than the ListBox alone. -->
+    <!-- Addendum B, q4: the chip row ends at the last chip, and there is no bar at the foot of the page. Spec 4
+         puts the page's one switch at the right end of the same line, which is why the row is a Grid rather than
+         the ListBox alone. -->
     <Grid DockPanel.Dock="Top" Margin="0,4,0,8">
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="Auto" />
         <ColumnDefinition Width="Auto" />
       </Grid.ColumnDefinitions>
 
@@ -89,9 +90,24 @@
         </ListBox.ItemsPanel>
       </ListBox>
 
+      <!-- 2.8: the rows are missing a pack on purpose, so the header says how many and goes to the page where
+           that was done. -->
+      <Button Grid.Column="1"
+              Margin="0,0,12,0"
+              HorizontalAlignment="Right"
+              VerticalAlignment="Center"
+              AutomationProperties.Name="{Binding HiddenPacksText}"
+              Command="{Binding GoToPacksCommand}"
+              Content="{Binding HiddenPacksText}"
+              FocusVisualStyle="{StaticResource DialogFocusRing}"
+              Foreground="{StaticResource Text2Brush}"
+              Style="{StaticResource PlainButton}"
+              ToolTip="Hidden on the Packs page. Click to go there."
+              Visibility="{Binding ShowHiddenPacks, Converter={StaticResource BoolToVis}}" />
+
       <!-- Spec 4: one control for the one question every row was asking. No border and no box: a plus and a label,
            muted while it is off. A Button, so Space and Enter toggle it as a click does. -->
-      <Button Grid.Column="1"
+      <Button Grid.Column="2"
               HorizontalAlignment="Right"
               VerticalAlignment="Center"
               AutomationProperties.Name="{Binding PicturesLabel}"
@@ -133,8 +149,8 @@
 
     <Grid>
       <!-- The rows virtualise (addendum B). Recycling is safe here because nothing in a row binds a container
-           property back into the view model: without ticks there is no IsSelected to be written by a container
-           that has just been handed to a different row. -->
+           property back into the view model: a row has no IsSelected to be written by a container that has just
+           been handed to a different row. -->
       <ItemsControl ItemTemplate="{StaticResource MapRow}"
                     ItemsSource="{Binding Rows}"
                     KeyboardNavigation.DirectionalNavigation="Continue"

@@ -51,7 +51,7 @@ public partial class BackgroundsViewModel : RowsPageViewModel
     /// None kind says (spec 7.1).</summary>
     [RelayCommand]
     private Task AddPicturesAsync() =>
-        Shell.OpenAddPicturesAsync(new AddPicturesTarget(AddPicturesTargetKind.None, null, null));
+        Shell.OpenAddPicturesAsync(new AddPicturesTarget(AddPicturesTargetKind.None, null));
 
     /// <summary>What the switch does. A command rather than a two-way binding, because the switch is a button:
     /// Space and Enter reach it the same way a click does.</summary>

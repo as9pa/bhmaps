@@ -135,7 +135,7 @@ public partial class MapPanelViewModel : ObservableObject
                 CanEdit: false, EditCommand: new RelayCommand(() => _ = shell.OpenPlatformEditorAsync([map], pack: null, onlyFile: file))));
         }
 
-        RebuildMenus(shell.SelectedMapCount);
+        RebuildMenus();
     }
 
     public string DisplayName { get; }
@@ -183,22 +183,22 @@ public partial class MapPanelViewModel : ObservableObject
     /// <summary>Why Reset is off, or empty when it is on.</summary>
     public string ResetHint { get; }
 
-    /// <summary>Every tile's menu names the ticked maps, so the count changing rewords every one of them.</summary>
-    public void RebuildMenus(int tickedCount)
+    /// <summary>Fills every tile's menu, which the panel does once, when it is built.</summary>
+    public void RebuildMenus()
     {
         foreach (var tile in _backgroundTiles)
         {
-            tile.RebuildMenu(tickedCount);
+            tile.RebuildMenu();
         }
 
         foreach (var tile in _customTiles)
         {
-            tile.RebuildMenu(tickedCount);
+            tile.RebuildMenu();
         }
 
         foreach (var tile in _platformTiles)
         {
-            tile.RebuildMenu(tickedCount);
+            tile.RebuildMenu();
         }
     }
 
@@ -244,9 +244,10 @@ public partial class MapPanelViewModel : ObservableObject
         _snapshot.MapStatuses.TryGetValue(folderName, out var status);
         var matched = RecordReset.MatchedPacks(map, status, _snapshot.Packs);
         ResetOutcome? outcome = null;
+        var resetPaths = PackApplier.ResetMapPaths(_snapshot.Tree, _map, defaultPack);
         await _shell.RunGameWriteAsync(
             $"Resetting {DisplayName}",
-            PackApplier.ResetMapPaths(_snapshot.Tree, _map, defaultPack),
+            resetPaths,
             (_, ct) => Task.Run(
                 () =>
                 {
@@ -257,7 +258,8 @@ public partial class MapPanelViewModel : ObservableObject
             $"Reset {DisplayName} to default",
             libraryUndoPaths: RecordReset.UndoPaths(matched, _shell.Services.LibraryPath),
             artMaps: [map],
-            resetThumbnails: true);
+            resetThumbnails: true,
+            sources: AppliedSources.FromPack(defaultPack, resetPaths));
 
         if (outcome is not null)
         {
@@ -284,7 +286,7 @@ public partial class MapPanelViewModel : ObservableObject
     /// radio that starts on.</summary>
     [RelayCommand]
     private Task AddPictureAsync() =>
-        _shell.OpenAddPicturesAsync(new AddPicturesTarget(AddPicturesTargetKind.Map, _map, null));
+        _shell.OpenAddPicturesAsync(new AddPicturesTarget(AddPicturesTargetKind.Map, _map));
 
     /// <summary>Spec 3.2's one sentence: "Missing 2 files", "sunset, from My Backgrounds", "Default", or
     /// "In game: flowermap background, Default platforms".</summary>

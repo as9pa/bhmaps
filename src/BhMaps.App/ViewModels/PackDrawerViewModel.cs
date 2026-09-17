@@ -138,13 +138,15 @@ public partial class PackDrawerViewModel : ObservableObject
         var gamePath = _shell.Services.GamePath;
         var pack = _pack;
         ApplyResult? result = null;
+        var targetPaths = PackApplier.ApplyToMapsPaths(pack, [map]);
         await _shell.RunGameWriteAsync(
             $"Applying {pack.Name}",
-            PackApplier.ApplyToMapsPaths(pack, [map]),
+            targetPaths,
             (progress, ct) => Task.Run(() => { result = PackApplier.ApplyToMaps(pack, [map], gamePath, progress, ct); }, ct),
             $"{pack.Name} applied to {map.DisplayName}",
             packName: pack.Name,
-            artMaps: [map]);
+            artMaps: [map],
+            sources: AppliedSources.FromPack(pack, targetPaths));
 
         if (result is not null)
         {

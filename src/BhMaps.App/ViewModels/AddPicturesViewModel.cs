@@ -16,17 +16,16 @@ public sealed record PictureFileViewModel(string FullPath)
 }
 
 /// <summary>Spec 7.1: what the window does once the pictures are in the library. The library alone is always on
-/// offer; the other three are there only when the caller's target can name maps to write to.</summary>
+/// offer; the other two are there only when the caller's target can name maps to write to.</summary>
 public enum AddPicturesThen
 {
     Library,
     Map,
-    Ticked,
     All,
 }
 
 /// <summary>Spec 7.1: any number of dropped or picked pictures, one fit mode for the batch, a target pack, and one
-/// of four outcomes: the library alone, or an apply to the named map, the ticked maps or every map. The dialog only
+/// of three outcomes: the library alone, or an apply to the named map or every map. The dialog only
 /// collects the answers; the shell runs the import and the apply, because both belong to its busy boundary.</summary>
 public partial class AddPicturesViewModel : ObservableObject
 {
@@ -41,19 +40,17 @@ public partial class AddPicturesViewModel : ObservableObject
     private readonly IDialogs _dialogs;
     private readonly Debouncer _preview = new();
 
-    /// <summary>What the caller's target leaves the window to work with: the named map's name, how many maps are
-    /// ticked and how many there are in all. They decide which radios there are and the words on them.</summary>
+    /// <summary>What the caller's target leaves the window to work with: the named map's name and how many maps
+    /// there are in all. They decide which radios there are and the words on them.</summary>
     private readonly string? _mapName;
-    private readonly int _tickedCount;
     private readonly int _allCount;
 
     public AddPicturesViewModel(
         IDialogs dialogs, IReadOnlyList<string> packNames, AddPicturesTargetKind kind, string? mapName,
-        int tickedCount, int allCount)
+        int allCount)
     {
         _dialogs = dialogs;
         _mapName = mapName;
-        _tickedCount = tickedCount;
         _allCount = allCount;
         Files = [];
         Files.CollectionChanged += OnFilesChanged;
@@ -66,7 +63,6 @@ public partial class AddPicturesViewModel : ObservableObject
         Then = kind switch
         {
             AddPicturesTargetKind.Map when mapName is not null => AddPicturesThen.Map,
-            AddPicturesTargetKind.Ticked when tickedCount > 0 => AddPicturesThen.Ticked,
             AddPicturesTargetKind.All when allCount > 0 => AddPicturesThen.All,
             _ => AddPicturesThen.Library,
         };
@@ -102,7 +98,7 @@ public partial class AddPicturesViewModel : ObservableObject
     public partial string NewPackName { get; set; }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ThenLibrary), nameof(ThenMap), nameof(ThenTicked), nameof(ThenAll))]
+    [NotifyPropertyChangedFor(nameof(ThenLibrary), nameof(ThenMap), nameof(ThenAll))]
     public partial AddPicturesThen Then { get; set; }
 
     [ObservableProperty]
@@ -111,18 +107,12 @@ public partial class AddPicturesViewModel : ObservableObject
     [ObservableProperty]
     public partial string Error { get; set; }
 
-    /// <summary>The two radios that are not always there: a map the caller named, and a ticked set with maps in
-    /// it. A radio for nothing would be a choice that cannot be made (spec 7.1).</summary>
+    /// <summary>The one radio that is not always there: a map the caller named. A radio for nothing would be a
+    /// choice that cannot be made (spec 7.1).</summary>
     public bool ShowMapChoice => _mapName is not null;
-
-    public bool ShowTickedChoice => _tickedCount > 0;
 
     /// <summary>Each radio says what it does, in the words of the thing it would write to.</summary>
     public string MapChoiceText => $"Add and apply to {_mapName}";
-
-    public string TickedChoiceText => _tickedCount == 1
-        ? "Add and apply to the 1 selected map"
-        : $"Add and apply to the {_tickedCount} selected maps";
 
     public string AllChoiceText => $"Add and apply to all {_allCount} maps";
 
@@ -204,18 +194,6 @@ public partial class AddPicturesViewModel : ObservableObject
             if (value)
             {
                 Then = AddPicturesThen.Map;
-            }
-        }
-    }
-
-    public bool ThenTicked
-    {
-        get => Then == AddPicturesThen.Ticked;
-        set
-        {
-            if (value)
-            {
-                Then = AddPicturesThen.Ticked;
             }
         }
     }

@@ -30,9 +30,21 @@ public static class MapChoices
         var tiles = new List<MapPictureTileViewModel>();
         foreach (var choice in BackgroundChoices.For(slot, snapshot.Packs))
         {
+            var inGame = InGameMatch.Matches(status, relative, choice.Pack.Name);
+            var hidden = IsHidden(shell, choice.Pack.Name);
+
+            // 2.8: a pack hidden on the Packs page leaves the lists, unless the game is showing its file for this
+            // map, because the tile the ring is on cannot be the one that went.
+            if (hidden && !inGame)
+            {
+                continue;
+            }
+
             tiles.Add(new MapPictureTileViewModel(
-                shell, map, slot, choice.Pack.Name, "", choice.File.FullPath, choice.Pack.Name,
-                InGameMatch.Matches(status, relative, choice.Pack.Name)));
+                shell, map, slot, choice.Pack.Name, "", choice.File.FullPath, choice.Pack.Name, inGame)
+            {
+                IsHiddenPack = hidden,
+            });
         }
 
         return tiles;
@@ -76,6 +88,14 @@ public static class MapChoices
             var inPack = tiles
                 .Where(t => string.Equals(t.PackName, pack.Name, StringComparison.OrdinalIgnoreCase))
                 .ToList();
+
+            // 2.8: a hidden pack keeps only what the game is showing on this map, and is no group at all when
+            // that is nothing.
+            if (IsHidden(shell, pack.Name))
+            {
+                inPack = inPack.Where(t => t.IsInGame).ToList();
+            }
+
             if (inPack.Count > 0)
             {
                 groups.Add(new PictureGroup($"{pack.Name} ({inPack.Count})", pack.Name, inPack));
@@ -101,11 +121,27 @@ public static class MapChoices
         var tiles = new List<PlatformSetTileViewModel>();
         foreach (var pack in PlatformSetApplier.SetsFor(map.FolderName, snapshot.Packs))
         {
+            var inGame = InGameMatch.SetInGame(pack, map.FolderName, status);
+            var hidden = IsHidden(shell, pack.Name);
+            if (hidden && !inGame)
+            {
+                continue;
+            }
+
             tiles.Add(new PlatformSetTileViewModel(
-                shell, map, pack, InGameMatch.SetInGame(pack, map.FolderName, status), width, height, showFiles,
-                () => _ = shell.OpenPlatformEditorAsync([map], pack)));
+                shell, map, pack, inGame, width, height, showFiles,
+                () => _ = shell.OpenPlatformEditorAsync([map], pack))
+            {
+                IsHiddenPack = hidden,
+            });
         }
 
         return tiles;
     }
+
+    /// <summary>True for a pack the Packs page is hiding (2.8). The Default pack is never one, whatever the
+    /// setting holds: the game's own art is the fallback every other choice is measured against.</summary>
+    private static bool IsHidden(MainViewModel shell, string packName) =>
+        !packName.Equals(DefaultPack.Name, StringComparison.OrdinalIgnoreCase)
+        && shell.Services.Settings.IsHidden(packName);
 }

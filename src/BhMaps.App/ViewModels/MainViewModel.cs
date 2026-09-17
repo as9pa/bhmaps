@@ -5,6 +5,7 @@ using BhMaps.App.Services;
 using BhMaps.App.ViewModels.Pages;
 using BhMaps.App.Views;
 using BhMaps.Core.Game;
+using BhMaps.Core.Hashing;
 using BhMaps.Core.LevelData;
 using BhMaps.Core.Maps;
 using BhMaps.Core.Model;
@@ -37,6 +38,10 @@ public partial class MainViewModel : ObservableObject
     /// <summary>Spec 10.4: why a map's map-select thumbnail was left alone by the last write that named it, by
     /// map folder. A write replaces the entry of every map it named: removed when the thumbnail was written.</summary>
     private readonly Dictionary<string, string> _thumbnailNotes = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Game-relative paths a top-up of the Default pack has already tried this run, so a file that
+    /// cannot be copied is not tried again by every rescan after it.</summary>
+    private readonly HashSet<string> _defaultTopUpTried = new(StringComparer.OrdinalIgnoreCase);
 
     private readonly DispatcherTimer _gameTimer;
     private readonly DispatcherTimer _updateTimer;
@@ -111,13 +116,6 @@ public partial class MainViewModel : ObservableObject
 
     public SettingsPageViewModel SettingsPage { get; }
 
-    /// <summary>The ticked maps, in display order (spec 3.3). One list for the whole app: a tile on any page
-    /// aims at these. Read from the Maps page's unfiltered cards, not its visible ones, so a search does not
-    /// silently shrink what a write is about to touch (plan decision A-D1).</summary>
-    public IReadOnlyList<MapEntry> SelectedMaps => Maps.TickedMaps;
-
-    public int SelectedMapCount => SelectedMaps.Count;
-
     /// <summary>Whether Brawlhalla is running, as of the last poll. The top bar's game line shows it.</summary>
     [ObservableProperty]
     public partial bool GameRunning { get; set; }
@@ -138,7 +136,8 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsNotBusy), nameof(CanWrite))]
     [NotifyCanExecuteChangedFor(
-        nameof(RefreshCommand),
+        nameof(RescanFromKeyCommand),
+        nameof(RefreshGameCommand),
         nameof(LaunchGameCommand),
         nameof(ImportCommand),
         nameof(UndoCommand))]
@@ -148,7 +147,7 @@ public partial class MainViewModel : ObservableObject
     /// the game is off until a rescan finds it again. Recomputed around each scan, never guessed.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanWrite))]
-    [NotifyCanExecuteChangedFor(nameof(UndoCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RefreshGameCommand), nameof(UndoCommand))]
     public partial bool GameFolderMissing { get; set; }
 
     [ObservableProperty]
@@ -268,26 +267,10 @@ public partial class MainViewModel : ObservableObject
     /// between pack pages. Never the Windows clipboard: this carries a pack, a tile and how it was taken.</summary>
     public PackClipboardItem? PackClipboard { get; set; }
 
-    /// <summary>SelectedMaps is computed, so the pages bound to it are told by hand when it changes. Public:
-    /// the Maps page raises it when a card is ticked.</summary>
-    public void NotifySelectionChanged()
-    {
-        OnPropertyChanged(nameof(SelectedMaps));
-        OnPropertyChanged(nameof(SelectedMapCount));
-    }
-
-    /// <summary>Unticks every map. The selection bar offers it as "Clear".</summary>
-    [RelayCommand]
-    private void ClearSelection()
-    {
-        foreach (var card in Maps.AllCards)
-        {
-            card.IsSelected = false;
-        }
-    }
-
+    /// <summary>F5's read-only rescan. The keyboard is the only thing that asks for it, so the command carries
+    /// the key in its name and leaves "Refresh" to the top bar's game write.</summary>
     [RelayCommand(CanExecute = nameof(CanAct))]
-    private Task RefreshAsync() => RescanAsync();
+    private Task RescanFromKeyAsync() => RescanAsync();
 
     [RelayCommand]
     private void Cancel() => _cts?.Cancel();
@@ -313,6 +296,121 @@ public partial class MainViewModel : ObservableObject
         await RunImportAsync(vm.Jobs);
     }
 
+    /// <summary>Spec 2.8: makes the game match what the app says is on. Every file the app wrote whose source has
+    /// been edited since goes in again, every file a map folder has lost comes back from the pack the rest of the
+    /// folder matches, and the map-select thumbnails are written again. A file someone else wrote over since is
+    /// left alone and counted in the done line: the refresh only ever puts back the app's own writes. It is a game
+    /// write like any other, so it goes through the wrapper with its undo snapshot.</summary>
+    [RelayCommand(CanExecute = nameof(CanWrite))]
+    private async Task RefreshGameAsync()
+    {
+        if (Snapshot is not { } snapshot || GameFolderMissing)
+        {
+            return;
+        }
+
+        var gamePath = Services.GamePath;
+        var libraryPath = Services.LibraryPath;
+        var hashes = Services.HashCache;
+        var recordPath = AppliedRecord.PathFor(Services.AppDataDir);
+
+        string? HashOf(string fullPath)
+        {
+            var file = new FileInfo(fullPath);
+            return file.Exists ? hashes.GetOrCompute(fullPath, file.Length, file.LastWriteTimeUtc.Ticks) : null;
+        }
+
+        // Hashing a source for every recorded file is file reading, so it waits off the UI thread like a write.
+        var plan = await Task.Run(() => RefreshPlanner.Plan(
+            gamePath,
+            libraryPath,
+            snapshot.Tree,
+            snapshot.Packs,
+            snapshot.DefaultPack,
+            snapshot.MapStatuses,
+            AppliedRecord.Load(recordPath),
+            HashOf));
+
+        // Art the game did not ship is what a map-select thumbnail is for, whether a pack put it there or the
+        // user did, so a refresh writes the thumbnail of every map showing either.
+        var artMaps = snapshot.Catalog.Maps
+            .Where(map => snapshot.MapStatuses.TryGetValue(map.FolderName, out var status)
+                && status.State is MapState.Packs or MapState.Custom)
+            .ToList();
+
+        if (plan.Copies.Count == 0 && ThumbnailPlans(artMaps).Count == 0)
+        {
+            // Nothing to write, so nothing takes an undo snapshot: a refresh that does nothing must not throw the
+            // last write's undo away.
+            SetLibraryDone("Nothing to refresh.");
+            return;
+        }
+
+        var copies = plan.Copies;
+        var catalog = snapshot.Catalog;
+        var failures = new List<FileFailure>();
+        var touched = MapsTouched(catalog, copies);
+        var mapsTouched = copies.Count > 0 ? touched.Count : artMaps.Count;
+        var doneText = $"Refreshed {Count(mapsTouched, "map")}";
+        if (plan.Skipped.Count > 0)
+        {
+            doneText += $". {Count(plan.Skipped.Count, "file")} changed by hand, left alone";
+        }
+
+        await RunGameWriteAsync(
+            "Refreshing",
+            [.. copies.Select(c => c.GameRelativePath)],
+            (progress, ct) => Task.Run(
+                () =>
+                {
+                    foreach (var copy in copies)
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        progress.Report(RefreshedName(catalog, copy.GameRelativePath));
+                        failures.AddRange(RefreshOne(copy, gamePath, ct));
+                    }
+                },
+                ct),
+            doneText,
+            // The copies can land in the shared backgrounds folder as well as a map's own, so the folders are the
+            // maps the copies touch rather than the top folders of the undo paths (spec 11).
+            writtenFolders: touched,
+            artMaps: artMaps,
+            sources: [.. copies.Select(c => new AppliedSource(c.GameRelativePath, c.SourceFullPath, c.PackName))]);
+
+        Dialogs.ShowFailures("Some files could not be refreshed", failures);
+    }
+
+    /// <summary>One file of a refresh. A picture goes back through the fitter that sized it for the slot the
+    /// first time, never in raw: the slot is the file's own name, which is what the applier joined to the
+    /// backgrounds folder to build the path. Everything else is the raw copy a pack write makes.</summary>
+    private static IReadOnlyList<FileFailure> RefreshOne(RefreshCopy copy, string gamePath, CancellationToken ct)
+    {
+        if (copy.Fit)
+        {
+            return BackgroundApplier
+                .Apply(copy.SourceFullPath, gamePath, [Path.GetFileName(copy.GameRelativePath)], null, ct)
+                .Failures;
+        }
+
+        var target = Path.Combine(gamePath, copy.GameRelativePath);
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.Copy(copy.SourceFullPath, target, overwrite: true);
+            return [];
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return [new FileFailure(target, ex.Message)];
+        }
+    }
+
+    /// <summary>What a refreshed file is called in the progress line: the map whose folder it lands in, or the
+    /// file's own name for a background, which belongs to no one map.</summary>
+    private static string RefreshedName(MapCatalog catalog, string gameRelativePath) =>
+        catalog.ByFolder(AssetPath.FolderOf(gameRelativePath))?.DisplayName ?? Path.GetFileName(gameRelativePath);
+
     /// <summary>Spec 6.4 and 8: puts back the files the last game write was about to overwrite or delete, through
     /// the same wrapper as every other write. It is a game write, so it is off while the folder is missing, and
     /// it takes no snapshot of its own: the one it is restoring is the only one there is.</summary>
@@ -334,12 +432,15 @@ public partial class MainViewModel : ObservableObject
                 () =>
                 {
                     result = Services.Undo.Restore(
-                        session, gamePath, libraryPath, ThumbnailWriter.ThumbnailsDir(Services.GameRoot));
+                        session,
+                        gamePath,
+                        libraryPath,
+                        ThumbnailWriter.ThumbnailsDir(Services.GameRoot),
+                        AppliedRecord.PathFor(Services.AppDataDir));
                 },
                 ct),
             UndoDoneText,
-            undoable: false,
-            clearTicks: false);
+            undoable: false);
 
         if (result is not null)
         {
@@ -362,7 +463,6 @@ public partial class MainViewModel : ObservableObject
             snapshot.Packs.Select(p => p.Name).ToList(),
             target.Kind,
             mapName,
-            SelectedMapCount,
             snapshot.Catalog.Maps.Count);
         var window = new AddPicturesWindow { DataContext = vm, Owner = Application.Current.MainWindow, ShowActivated = !App.Quiet };
         if (window.ShowDialog() != true)
@@ -396,7 +496,7 @@ public partial class MainViewModel : ObservableObject
         if (ok && maps.Count > 0 && result is { Written.Count: > 0 })
         {
             // The apply rescans on its way out, and its done line is the one that ends up in the header.
-            await ApplyPicturesAsync(maps, packName, result.Written, vm.Then == AddPicturesThen.Ticked);
+            await ApplyPicturesAsync(maps, packName, result.Written);
             return;
         }
 
@@ -417,7 +517,6 @@ public partial class MainViewModel : ObservableObject
         IEnumerable<MapEntry> maps = then switch
         {
             AddPicturesThen.Map => target.Map is null ? [] : [target.Map],
-            AddPicturesThen.Ticked => SelectedMaps,
             AddPicturesThen.All => snapshot.Catalog.Maps,
             _ => [],
         };
@@ -429,11 +528,10 @@ public partial class MainViewModel : ObservableObject
     /// starting again from the first picture when there are more maps than pictures, and a picture past the last
     /// map is imported only.</summary>
     private async Task ApplyPicturesAsync(
-        IReadOnlyList<MapEntry> maps, string packName, IReadOnlyList<string> written, bool clearTicks)
+        IReadOnlyList<MapEntry> maps, string packName, IReadOnlyList<string> written)
     {
         // Spec 6.3: the maps are named before more than one of them is written. The import has already run, so
-        // declining still rescans: the library has changed even though nothing was applied. Nothing reached the
-        // game folder, so the ticks stay as they are.
+        // declining still rescans: the library has changed even though nothing was applied.
         if (maps.Count > 1
             && !Dialogs.Confirm(
                 "Apply pictures",
@@ -453,6 +551,13 @@ public partial class MainViewModel : ObservableObject
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
+        // One source per slot the write lands on: the picture that map's turn uses, cycling as the loop below does.
+        IReadOnlyList<AppliedSource> sources = pictures.Count == 0
+            ? []
+            : [.. maps.SelectMany(
+                (m, i) => BackgroundApplier.TargetPaths(m.BackgroundSlots)
+                    .Select(p => new AppliedSource(p, pictures[i % pictures.Count], packName)))];
+
         var used = Math.Min(pictures.Count, maps.Count);
         var failures = new List<FileFailure>();
         await RunGameWriteAsync(
@@ -471,18 +576,18 @@ public partial class MainViewModel : ObservableObject
                 },
                 ct),
             $"{Count(used, "picture")} applied to {Count(maps.Count, "map")}",
-            clearTicks,
             packName,
             // The undo paths are all in the shared backgrounds folder, so the maps whose slots were written are
             // named here rather than read back off them (spec 11).
             writtenFolders: [.. maps.Select(m => m.FolderName)],
-            artMaps: maps);
+            artMaps: maps,
+            sources: sources);
 
         Dialogs.ShowFailures("Some pictures could not be applied", failures);
     }
 
     /// <summary>Spec 3.2 and 4: one picture into the background slots of every map given, as one game write.
-    /// More than one map confirms with the count first (spec 3.3) and clears the ticks on success.
+    /// More than one map confirms with the count first (spec 3.3).
     /// displayName is the name the user chose the picture by, which is the pack on a panel tile and the picture's
     /// own name in the custom library: spec 2.2 words the done line "flowermap applied to Brawlhaven", never the
     /// file name inside the pack, which the user never picked. Null for a caller with no such name, and then the
@@ -491,7 +596,6 @@ public partial class MainViewModel : ObservableObject
     public async Task ApplyPictureAsync(
         string sourcePath,
         IReadOnlyList<MapEntry> maps,
-        bool clearTicks,
         string? displayName = null,
         string? packName = null)
     {
@@ -538,19 +642,19 @@ public partial class MainViewModel : ObservableObject
             targets.Count == 1
                 ? $"{name} applied to {targets[0].DisplayName}"
                 : $"{name} applied to {targets.Count} maps",
-            clearTicks,
             packName,
             // The undo paths are all in the shared backgrounds folder, so the maps whose slots were written are
             // named here rather than read back off them (spec 11).
             writtenFolders: [.. targets.Select(m => m.FolderName)],
-            artMaps: targets);
+            artMaps: targets,
+            sources: [.. undoPaths.Select(p => new AppliedSource(p, sourcePath, packName))]);
 
         Dialogs.ShowFailures("Some backgrounds could not be applied", failures);
     }
 
     /// <summary>Spec 3.2: one pack's platform art onto every map given, each map getting its own set from the
     /// same pack. A map the pack has nothing for is left out rather than cleared.</summary>
-    public async Task ApplySetAsync(Pack pack, IReadOnlyList<MapEntry> maps, bool clearTicks)
+    public async Task ApplySetAsync(Pack pack, IReadOnlyList<MapEntry> maps)
     {
         var targets = maps.Where(m => pack.FindFolder(m.FolderName) is { Files.Count: > 0 }).ToList();
         if (targets.Count == 0)
@@ -590,9 +694,9 @@ public partial class MainViewModel : ObservableObject
             targets.Count == 1
                 ? $"{pack.Name} applied to {targets[0].DisplayName}"
                 : $"{pack.Name} applied to {targets.Count} maps",
-            clearTicks,
             pack.Name,
-            artMaps: targets);
+            artMaps: targets,
+            sources: AppliedSources.FromPack(pack, undoPaths));
 
         Dialogs.ShowFailures("Some files could not be applied", failures);
     }
@@ -636,7 +740,6 @@ public partial class MainViewModel : ObservableObject
             await ApplyPictureAsync(
                 saved.PackFile,
                 snapshot.Catalog.Maps,
-                clearTicks: false,
                 Path.GetFileNameWithoutExtension(saved.PackFile),
                 saved.PackName);
             return;
@@ -649,9 +752,10 @@ public partial class MainViewModel : ObservableObject
             .Where(m => m.BackgroundSlots.Contains(slot, StringComparer.OrdinalIgnoreCase))
             .ToList();
         var failures = new List<FileFailure>();
+        var editorTargets = BackgroundApplier.TargetPaths([slot]);
         await RunGameWriteAsync(
             $"Applying {Path.GetFileName(source)}",
-            BackgroundApplier.TargetPaths([slot]),
+            editorTargets,
             (_, ct) => Task.Run(
                 () => failures.AddRange(BackgroundApplier.Apply(source, gamePath, [slot], null, ct).Failures),
                 ct),
@@ -660,7 +764,8 @@ public partial class MainViewModel : ObservableObject
             // One slot, and the maps that name it are the cards it changes: the backgrounds folder it is written
             // into belongs to no map of its own (spec 11).
             writtenFolders: [.. slotMaps.Select(m => m.FolderName)],
-            artMaps: slotMaps);
+            artMaps: slotMaps,
+            sources: [.. editorTargets.Select(p => new AppliedSource(p, source, saved.PackName))]);
 
         Dialogs.ShowFailures("Some backgrounds could not be applied", failures);
     }
@@ -904,7 +1009,7 @@ public partial class MainViewModel : ObservableObject
     /// the snapshot and the undo every other write gets. The rescan comes first either way, because the pack the
     /// apply needs is one the last scan may never have seen. <paramref name="onlyFile" /> is the one file the
     /// editor opens ticked, for the panel row that asked for it (ruling 7). Spec 9: the editor opens on a set of
-    /// maps, which is one map for every way in but the ticked selection, and one Save writes all of them.</summary>
+    /// maps, which is one map for every way in, and one Save writes all of them.</summary>
     public async Task OpenPlatformEditorAsync(IReadOnlyList<MapEntry> maps, Pack? pack, string? onlyFile = null)
     {
         if (Snapshot is not { } snapshot || maps.Count == 0)
@@ -959,7 +1064,7 @@ public partial class MainViewModel : ObservableObject
         if (Snapshot?.Packs.FirstOrDefault(p => p.Name.Equals(saved.PackName, StringComparison.OrdinalIgnoreCase))
             is { } target)
         {
-            await ApplySetAsync(target, saved.Maps, clearTicks: false);
+            await ApplySetAsync(target, saved.Maps);
         }
     }
 
@@ -1100,7 +1205,7 @@ public partial class MainViewModel : ObservableObject
         // A file may be a different picture now, so the rows pages' decodes are forgotten before they rebuild.
         Services.RowThumbnails.Clear();
 
-        // Maps rebuilds its cards first, because SelectedMaps reads them and a page's Refresh may ask for it.
+        // Maps rebuilds its cards first, because the rows pages build their own rows from its cards.
         foreach (var page in _pages)
         {
             page.Refresh(snapshot, writtenFolders);
@@ -1114,6 +1219,107 @@ public partial class MainViewModel : ObservableObject
         {
             _updateCheckStarted = true;
             _updateTimer.Start();
+        }
+
+        // Level data being re-read needs no wiring of its own: a re-read rebuilds the catalog, the next scan
+        // sees the new map's folder, and the top-up reads the snapshot in front of it rather than any history.
+        await TopUpDefaultAsync(snapshot);
+    }
+
+    /// <summary>Adds a new map's own art to the Default pack after a game update. The pack was captured before
+    /// the update, so the new map's files read as custom and Reset to default has nothing to put back. Only what
+    /// the pack lacks is copied, and only files nothing has applied over, so this can never write over the art
+    /// the pack already holds the way a capture would. No confirm: the first scan that sees the folder is the one
+    /// moment the app knows those files are the game's own.</summary>
+    private async Task TopUpDefaultAsync(ScanSnapshot snapshot)
+    {
+        // Without a Default pack there is nothing to add to, and a missing game folder has nothing to add from.
+        if (snapshot.DefaultPack is not { } defaultPack || GameFolderMissing || IsBusy)
+        {
+            return;
+        }
+
+        var recordPath = AppliedRecord.PathFor(Services.AppDataDir);
+        var packed = new HashSet<string>(
+            snapshot.MapStatuses.Values
+                .SelectMany(s => s.Files)
+                .Where(f => f.State == MapFileState.Pack)
+                .Select(f => f.RelativePath),
+            StringComparer.OrdinalIgnoreCase);
+
+        var tree = snapshot.Tree;
+        var catalog = snapshot.Catalog;
+        var missing = await Task.Run(() =>
+        {
+            // Reading the record is file reading, so it waits off the UI thread with the search itself.
+            var applied = AppliedRecord.Load(recordPath);
+
+            // A file a pack matches, or one this app wrote, is applied art rather than the game's own. Default
+            // keeps lacking it, which is honest: the app has no way to know what the vanilla bytes were.
+            bool IsVanilla(string relative) => !packed.Contains(relative) && !applied.Entries.ContainsKey(relative);
+
+            return DefaultPack.FindMissing(tree, catalog, defaultPack, IsVanilla);
+        });
+
+        // A file that failed to copy is still missing at the next scan; tried once a run, not every rescan. The
+        // set is filled only after the copy ran, so a run that never started (busy) offers the files again.
+        var fresh = missing.Where(item => !_defaultTopUpTried.Contains(item.GameRelativePath)).ToList();
+        if (fresh.Count == 0 || IsBusy)
+        {
+            return;
+        }
+
+        var gamePath = Services.GamePath;
+        var library = Services.LibraryPath;
+        AddMissingResult? result = null;
+
+        // A library write: no undo snapshot and no game-running policy, as a capture is.
+        var ok = await RunBusyAsync(
+            "Adding to Default",
+            (progress, ct) => Task.Run(
+                () => { result = DefaultPack.AddMissing(gamePath, library, fresh, progress, ct); }, ct));
+        if (ok)
+        {
+            foreach (var item in fresh)
+            {
+                _defaultTopUpTried.Add(item.GameRelativePath);
+            }
+        }
+        if (result is not null)
+        {
+            Dialogs.ShowFailures("Some files could not be added to Default", result.Failures);
+        }
+
+        if (ok && result is { MapsAdded.Count: > 0 })
+        {
+            SetLibraryDone(result.MapsAdded.Count == 1
+                ? $"Brawlhalla updated: {result.MapsAdded[0]} added to Default."
+                : $"Brawlhalla updated: {Count(result.MapsAdded.Count, "map")} added to Default.");
+        }
+
+        // The map reads as default art from here on. This rescan's own top-up finds nothing: the paths above are
+        // in the pack now, and whatever failed is in _defaultTopUpTried, so there is no way round again.
+        await RescanAsync();
+    }
+
+    /// <summary>Rebuilds the pages from the snapshot already in hand, for a setting that changes what the pages
+    /// show rather than what is on disk (2.8's hidden packs). No scan, because nothing on disk moved.
+    /// <paramref name="except" /> is the page that made the change and has already put itself right, which is how
+    /// the Packs page keeps its scroll position.</summary>
+    public void RefreshPages(PageViewModel? except = null)
+    {
+        // Nothing to rebuild before the first scan, and mid-scan the pages are about to be rebuilt anyway.
+        if (Snapshot is not { } snapshot || IsBusy)
+        {
+            return;
+        }
+
+        foreach (var page in _pages)
+        {
+            if (page != except)
+            {
+                page.Refresh(snapshot);
+            }
         }
     }
 
@@ -1217,7 +1423,6 @@ public partial class MainViewModel : ObservableObject
                 (_, ct) => Task.Run(() => ThumbnailWriter.RestoreAll(originalsDir, thumbnailsDir), ct),
                 "Map-select thumbnails restored",
                 undoable: true,
-                clearTicks: false,
                 // The setting is already off, so the capture has to be told the names itself: the thumbnails side
                 // of this undo is the whole of what it restores.
                 thumbnailUndoNames: names);
@@ -1452,14 +1657,16 @@ public partial class MainViewModel : ObservableObject
         var gamePath = Services.GamePath;
         var failures = new List<FileFailure>();
         var maps = resets.Select(r => r.Map).ToList();
+        var resetPaths = resets
+            .SelectMany(r => (r.Platforms
+                    ? PackApplier.ResetPlatformPaths(snapshot.Tree, r.Map, defaultPack)
+                    : Array.Empty<string>())
+                .Concat(PackApplier.ResetBackgroundPaths(defaultPack, r.Slots)))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
         await RunGameWriteAsync(
             "Deleting",
-            [.. resets
-                .SelectMany(r => (r.Platforms
-                        ? PackApplier.ResetPlatformPaths(snapshot.Tree, r.Map, defaultPack)
-                        : Array.Empty<string>())
-                    .Concat(PackApplier.ResetBackgroundPaths(defaultPack, r.Slots)))
-                .Distinct(StringComparer.OrdinalIgnoreCase)],
+            resetPaths,
             (progress, ct) => Task.Run(
                 () =>
                 {
@@ -1492,7 +1699,10 @@ public partial class MainViewModel : ObservableObject
             artMaps: maps,
             // One flag for every map in the write, so it is only the kept original when every one of them ends
             // fully default; a map that keeps custom art elsewhere is re-rendered with the rest.
-            resetThumbnails: resets.All(r => EndsDefault(r, MapStatusOf(snapshot, r.Map))));
+            resetThumbnails: resets.All(r => EndsDefault(r, MapStatusOf(snapshot, r.Map))),
+            // The reset copies Default's files over these paths; a path Default has nothing for is deleted
+            // instead, and the note drops it because the game file is then missing.
+            sources: AppliedSources.FromPack(defaultPack, resetPaths));
 
         Dialogs.ShowFailures("Some files could not be deleted", failures);
     }
@@ -1551,6 +1761,28 @@ public partial class MainViewModel : ObservableObject
     public static string DoneSentence(bool gameRunning) =>
         gameRunning ? "Shows on the next match load." : "Shows when Brawlhalla starts.";
 
+    /// <summary>The hash of a game file as the undo session copied it just before the write, or null when the path
+    /// held nothing, the session did not capture it, or there was no session at all. It is what tells a write that
+    /// landed as different bytes, which a fitted picture does, from one that never ran.</summary>
+    private static string? CapturedHash(UndoSession? session, string relativePath)
+    {
+        if (session is null)
+        {
+            return null;
+        }
+
+        var captured = Path.Combine(session.Path, relativePath);
+        try
+        {
+            return File.Exists(captured) ? FileHasher.Hash(captured) : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // An unreadable copy is one we cannot compare against, so the write counts as landed.
+            return null;
+        }
+    }
+
     /// <summary>The line an undo leaves. Spec 11 names no string for it, so this is the plan's (A-D7).</summary>
     public const string UndoDoneText = "Last change undone.";
 
@@ -1565,9 +1797,9 @@ public partial class MainViewModel : ObservableObject
     }
 
     /// <summary>One write into the game folder (spec 8): the busy boundary, an undo snapshot of the paths it is
-    /// about to touch, a done line the wrapper finishes with the period and the shared sentence, the ticks
-    /// cleared when the write was aimed at them, and a rescan. False when the folder was missing, another
-    /// operation held the boundary, or the write was cancelled or failed. <paramref name="packName"/> is the pack
+    /// about to touch, a done line the wrapper finishes with the period and the shared sentence, and a rescan.
+    /// False when the folder was missing, another operation held the boundary, or the write was cancelled or
+    /// failed. <paramref name="packName"/> is the pack
     /// the write came out of, stamped as last applied when it succeeds; null for undo, reset and a picture that
     /// was only ever in the game folder. <paramref name="libraryUndoPaths"/> names library files the write also
     /// changes, relative to the library folder, so the undo puts them back with the game files (spec 7).
@@ -1575,30 +1807,33 @@ public partial class MainViewModel : ObservableObject
     /// (spec 11); left null it is read off the undo paths, which is what every write into a map's own folder
     /// wants. <paramref name="artMaps"/> names the maps whose art the write changes, so their map-select
     /// thumbnails are written after it when the switch is on (spec 10.4); <paramref name="resetThumbnails"/>
-    /// makes that step put the game's own thumbnail back instead, for a write that resets the art.</summary>
+    /// makes that step put the game's own thumbnail back instead, for a write that resets the art.
+    /// <paramref name="sources"/> names the library file behind every game path the write lays down, so the applied
+    /// record can remember what the app itself wrote; left null nothing is recorded, which is what a write of
+    /// thumbnails alone wants.</summary>
     public Task<bool> RunGameWriteAsync(
         string label,
         IReadOnlyList<string> undoPaths,
         Func<IProgress<string>, CancellationToken, Task> work,
         string doneText,
-        bool clearTicks = false,
         string? packName = null,
         IReadOnlyList<string>? libraryUndoPaths = null,
         IReadOnlyList<string>? writtenFolders = null,
         IReadOnlyList<MapEntry>? artMaps = null,
-        bool resetThumbnails = false) =>
+        bool resetThumbnails = false,
+        IReadOnlyList<AppliedSource>? sources = null) =>
         RunWriteCoreAsync(
             label,
             undoPaths,
             work,
             doneText,
             undoable: true,
-            clearTicks,
             packName,
             libraryUndoPaths,
             writtenFolders,
             artMaps,
-            resetThumbnails);
+            resetThumbnails,
+            sources: sources);
 
     /// <summary>The one path every game write takes. <paramref name="undoPaths"/> null means take no snapshot,
     /// which is Undo's case and only Undo's: the snapshot it is restoring is the only one there is, and Begin
@@ -1609,13 +1844,13 @@ public partial class MainViewModel : ObservableObject
         Func<IProgress<string>, CancellationToken, Task> work,
         string doneText,
         bool undoable,
-        bool clearTicks,
         string? packName = null,
         IReadOnlyList<string>? libraryUndoPaths = null,
         IReadOnlyList<string>? writtenFolders = null,
         IReadOnlyList<MapEntry>? artMaps = null,
         bool resetThumbnails = false,
-        IReadOnlyList<string>? thumbnailUndoNames = null)
+        IReadOnlyList<string>? thumbnailUndoNames = null,
+        IReadOnlyList<AppliedSource>? sources = null)
     {
         if (GameFolderMissing || IsBusy)
         {
@@ -1627,6 +1862,7 @@ public partial class MainViewModel : ObservableObject
         var gamePath = Services.GamePath;
         var libraryPath = Services.LibraryPath;
         var thumbnailsDir = ThumbnailWriter.ThumbnailsDir(Services.GameRoot);
+        var recordPath = AppliedRecord.PathFor(Services.AppDataDir);
         var thumbnailPlans = ThumbnailPlans(artMaps);
         var thumbnailWrites = 0;
         var ok = await RunBusyAsync(
@@ -1637,6 +1873,9 @@ public partial class MainViewModel : ObservableObject
                     label,
                     async () =>
                     {
+                        // The session is held past its capture: the note after the write reads the copies it took
+                        // to tell the files the write changed from the ones it left alone.
+                        UndoSession? session = null;
                         if (undoPaths is not null)
                         {
                             // The capture is the first step of the work, not a step before it: it is file copying,
@@ -1648,7 +1887,7 @@ public partial class MainViewModel : ObservableObject
                                 {
                                     // One session holds both sides: the library records a write clears go back
                                     // with the game files it cleared them for, in the same undo.
-                                    var session = Services.Undo.Begin();
+                                    session = Services.Undo.Begin();
                                     session.Capture(gamePath, undoPaths);
                                     if (libraryUndoPaths is { Count: > 0 })
                                     {
@@ -1665,11 +1904,31 @@ public partial class MainViewModel : ObservableObject
                                     {
                                         session.CaptureThumbnails(thumbnailsDir, thumbnailUndoNames);
                                     }
+
+                                    // The applied record describes the files this session is holding, so it goes
+                                    // into the same session and comes back with them.
+                                    session.CaptureRecord(recordPath);
                                 },
                                 ct);
                         }
 
                         await work(progress, ct);
+
+                        if (sources is { Count: > 0 })
+                        {
+                            // After the work, because the record is the hash of what really landed: a write that
+                            // failed part way must not leave the record claiming files it never wrote.
+                            var captured = session;
+                            await Task.Run(
+                                () => AppliedRecord.Note(
+                                    recordPath,
+                                    gamePath,
+                                    libraryPath,
+                                    sources,
+                                    DateTimeOffset.Now,
+                                    relativePath => CapturedHash(captured, relativePath)),
+                                ct);
+                        }
 
                         if (thumbnailPlans.Count > 0)
                         {
@@ -1689,13 +1948,6 @@ public partial class MainViewModel : ObservableObject
         // A restore that fully succeeds discards its snapshot, so what can be undone is always read back from the
         // store rather than remembered.
         CanUndo = Services.Undo.Latest is not null;
-        if (ok && clearTicks)
-        {
-            // Spec 3.3 (S3): a write aimed at the ticked maps is finished with them. A cancelled or failed write
-            // keeps them, which is why this is inside the ok branch.
-            ClearSelection();
-        }
-
         if (ok && packName is not null)
         {
             // Spec 8: the stamp is written before the rescan, so the scan this write ends with already sorts the
@@ -1875,6 +2127,36 @@ public partial class MainViewModel : ObservableObject
     /// <summary>Spec 11: the map folders a write touched, read off the paths it took its undo snapshot of. The
     /// backgrounds folder is shared by every map rather than owned by one, so it names no map and is left out;
     /// the callers that write only backgrounds pass the folders themselves.</summary>
+    /// <summary>The folders of the maps a set of refresh copies touches, for the done line's count and the rescan.
+    /// A copy in the shared Backgrounds folder belongs to every map whose slot it fills, not to a folder called
+    /// Backgrounds: counting first path segments would call two slot pictures one map, and one map's platform
+    /// file plus its slot two.</summary>
+    private static IReadOnlyList<string> MapsTouched(MapCatalog catalog, IReadOnlyList<RefreshCopy> copies)
+    {
+        var folders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var copy in copies)
+        {
+            var top = TopFolder(copy.GameRelativePath);
+            if (top.Equals(PictureImporter.BackgroundsFolder, StringComparison.OrdinalIgnoreCase))
+            {
+                var slot = Path.GetFileName(copy.GameRelativePath);
+                foreach (var map in catalog.Maps)
+                {
+                    if (map.BackgroundSlots.Contains(slot, StringComparer.OrdinalIgnoreCase))
+                    {
+                        folders.Add(map.FolderName);
+                    }
+                }
+            }
+            else if (top.Length > 0)
+            {
+                folders.Add(top);
+            }
+        }
+
+        return [.. folders];
+    }
+
     private static IReadOnlyList<string> WrittenFolders(IReadOnlyList<string>? undoPaths) =>
         undoPaths is null
             ? []

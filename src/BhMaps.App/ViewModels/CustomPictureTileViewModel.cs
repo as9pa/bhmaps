@@ -70,16 +70,11 @@ public sealed partial class CustomPictureTileViewModel : PictureTileViewModel
     /// instead of Delete background.</summary>
     private bool InLibrary => _picture.LibraryPaths.Count > 0;
 
-    public override void RebuildMenu(int tickedCount)
+    public override void RebuildMenu()
     {
         // No "Apply to <map>": a tile that names a map carries the Apply button, and a menu holds only what the
         // tile cannot do on its own (spec 9).
         var items = new List<TileMenuCommand> { TileMenuCommand.Header(Title, MenuDetail()) };
-        if (tickedCount > 0)
-        {
-            items.Add(new TileMenuCommand(TickedText(tickedCount), ApplyToTickedCommand));
-        }
-
         items.Add(new TileMenuCommand("Apply to a map...", ApplyToChosenMapCommand));
         items.Add(new TileMenuCommand("Apply to all maps", ApplyToAllCommand));
         items.Add(new TileMenuCommand("Edit", EditCommand));
@@ -148,7 +143,7 @@ public sealed partial class CustomPictureTileViewModel : PictureTileViewModel
     [RelayCommand]
     private Task ApplyToMapAsync() =>
         Map is { } map
-            ? Shell.ApplyPictureAsync(FullPath, [map], clearTicks: false, _picture.DisplayName, _picture.PackName)
+            ? Shell.ApplyPictureAsync(FullPath, [map], _picture.DisplayName, _picture.PackName)
             : Task.CompletedTask;
 
     /// <summary>Spec 4.4: the chooser in map mode, then the shell's apply on the one map it returned.</summary>
@@ -158,18 +153,14 @@ public sealed partial class CustomPictureTileViewModel : PictureTileViewModel
         if (await Shell.ChooseMapAsync(FullPath, _picture.DisplayName) is { } map)
         {
             await Shell.ApplyPictureAsync(
-                FullPath, [map], clearTicks: false, _picture.DisplayName, _picture.PackName);
+                FullPath, [map], _picture.DisplayName, _picture.PackName);
         }
     }
 
     [RelayCommand]
-    private Task ApplyToTickedAsync() =>
-        Shell.ApplyPictureAsync(FullPath, Shell.SelectedMaps, clearTicks: true, _picture.DisplayName, _picture.PackName);
-
-    [RelayCommand]
     private Task ApplyToAllAsync() =>
         Shell.Snapshot is { } snapshot
-            ? Shell.ApplyPictureAsync(FullPath, snapshot.Catalog.Maps, clearTicks: false, _picture.DisplayName, _picture.PackName)
+            ? Shell.ApplyPictureAsync(FullPath, snapshot.Catalog.Maps, _picture.DisplayName, _picture.PackName)
             : Task.CompletedTask;
 
     [RelayCommand]

@@ -84,7 +84,7 @@
           <Button Margin="8,0,0,0"
                   Command="{Binding CaptureDefaultsCommand}"
                   Content="Capture defaults"
-                  controls:Icon.Glyph="{StaticResource Icon.Refresh}"
+                  controls:Icon.Glyph="{StaticResource Icon.Camera}"
                   IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}"
                   Style="{StaticResource OutlineButton}" />
           <Button Margin="8,0,0,0"
@@ -127,8 +127,18 @@
                   <Button Grid.Column="0"
                           AutomationProperties.Name="{Binding Name, StringFormat=Open pack {0}}"
                           Command="{Binding DataContext.OpenCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                          CommandParameter="{Binding}"
-                          Style="{StaticResource PackRowBody}">
+                          CommandParameter="{Binding}">
+                    <!-- 2.8: a hidden pack's face is faded, so the list reads at a glance. Only the face: the eye
+                         and the dots stay at full strength, because they are how the row is brought back. -->
+                    <Button.Style>
+                      <Style BasedOn="{StaticResource PackRowBody}" TargetType="Button">
+                        <Style.Triggers>
+                          <DataTrigger Binding="{Binding IsHidden}" Value="True">
+                            <Setter Property="Opacity" Value="0.5" />
+                          </DataTrigger>
+                        </Style.Triggers>
+                      </Style>
+                    </Button.Style>
                     <Grid>
                       <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
@@ -150,7 +160,9 @@
 
                       <StackPanel Grid.Column="1" Margin="14,0,12,0" VerticalAlignment="Center">
                         <TextBlock FontWeight="Medium" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
-                        <TextBlock Margin="0,3,0,0" Foreground="{StaticResource Text2Brush}" Text="{Binding CountsText}" />
+                        <!-- Wraps rather than trims: ", hidden from lists" is the end of the line and the part that matters. -->
+                        <TextBlock Margin="0,3,0,0" Foreground="{StaticResource Text2Brush}" Text="{Binding CountsText}"
+                                   TextWrapping="Wrap" />
                       </StackPanel>
 
                       <!-- The strip and its count share one star column: a count in an Auto column of its own
@@ -197,6 +209,32 @@
                               Margin="8,0,10,0"
                               VerticalAlignment="Center"
                               Orientation="Horizontal">
+                    <!-- 2.8: the eye, which keeps the pack out of the Backgrounds and Platforms lists. Muted while
+                         the pack is shown and lit once it is hidden, the same way the My Backgrounds switch reads.
+                         The Default pack has none: the lists fall back to it. -->
+                    <Button Margin="0,0,6,0"
+                            Command="{Binding DataContext.ToggleHiddenCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                            CommandParameter="{Binding}">
+                      <Button.Style>
+                        <Style BasedOn="{StaticResource PlainButton}" TargetType="Button">
+                          <Setter Property="AutomationProperties.Name" Value="{Binding Name, StringFormat=Hide {0} from lists}" />
+                          <Setter Property="controls:Icon.Glyph" Value="{StaticResource Icon.Eye}" />
+                          <Setter Property="ToolTip" Value="Shown in Backgrounds and Platforms" />
+                          <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsHidden}" Value="True">
+                              <Setter Property="AutomationProperties.Name" Value="{Binding Name, StringFormat=Show {0} in lists}" />
+                              <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+                              <Setter Property="controls:Icon.Glyph" Value="{StaticResource Icon.EyeOff}" />
+                              <Setter Property="ToolTip" Value="Hidden from Backgrounds and Platforms" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsDefault}" Value="True">
+                              <Setter Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                          </Style.Triggers>
+                        </Style>
+                      </Button.Style>
+                    </Button>
+
                     <!-- The one action in the row that writes into the game, so the only one gated on CanWrite;
                          Export, Open folder and Remove are the library's own and now live in the menu (q7). -->
                     <Button Command="{Binding DataContext.ApplyAllCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
@@ -248,7 +286,7 @@
         <Button Margin="8,0,0,0"
                 Command="{Binding CaptureDefaultsCommand}"
                 Content="Capture defaults"
-                controls:Icon.Glyph="{StaticResource Icon.Refresh}"
+                controls:Icon.Glyph="{StaticResource Icon.Camera}"
                 IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}"
                 Style="{StaticResource OutlineButton}" />
       </StackPanel>

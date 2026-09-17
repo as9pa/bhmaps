@@ -49,6 +49,13 @@ public sealed partial class PlatformSetTileViewModel : ObservableObject
     /// <summary>The picture tiles' name for <see cref="InGame" />, for the same reason.</summary>
     public bool IsInGame => InGame;
 
+    /// <summary>2.8: true for a set whose pack is hidden on the Packs page, which is here only because the game
+    /// is showing it. The picture tiles' member, for the same reason the names above are.</summary>
+    public bool IsHiddenPack { get; init; }
+
+    /// <summary>The word after the caption on such a tile, empty on every other one.</summary>
+    public string HiddenNote => IsHiddenPack ? "hidden" : "";
+
     /// <summary>The picture tiles' name for <see cref="Preview" />.</summary>
     public ImageSource? Thumbnail => Preview;
 
@@ -74,8 +81,8 @@ public sealed partial class PlatformSetTileViewModel : ObservableObject
     [ObservableProperty]
     public partial IReadOnlyList<TileMenuCommand> MenuItems { get; set; }
 
-    /// <summary>Rebuilt whenever the ticked count changes, because the ticked line names it and is dropped at zero.</summary>
-    public void RebuildMenu(int tickedCount)
+    /// <summary>Fills <see cref="MenuItems" />, which the tile does once, when it is built.</summary>
+    public void RebuildMenu()
     {
         // No "Apply to <map>": a click on the tile is that apply, and so is the panel's Apply button, and a menu
         // holds only what the tile cannot do on its own (spec 9).
@@ -84,13 +91,6 @@ public sealed partial class PlatformSetTileViewModel : ObservableObject
             TileMenuCommand.Header(Pack.Name, $"Platforms for {Map.DisplayName}"),
             new("Edit", EditCommand),
         };
-        if (tickedCount > 0)
-        {
-            items.Add(new TileMenuCommand(
-                tickedCount == 1 ? "Apply to the 1 selected map" : $"Apply to the {tickedCount} selected maps",
-                ApplyToTickedCommand));
-        }
-
         // Only where there is a file list to open: on a row the line would do nothing, so it is not offered.
         if (_showFiles is not null)
         {
@@ -131,10 +131,7 @@ public sealed partial class PlatformSetTileViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private Task ApplyToMapAsync() => _shell.ApplySetAsync(Pack, [Map], clearTicks: false);
-
-    [RelayCommand]
-    private Task ApplyToTickedAsync() => _shell.ApplySetAsync(Pack, _shell.SelectedMaps, clearTicks: true);
+    private Task ApplyToMapAsync() => _shell.ApplySetAsync(Pack, [Map]);
 
     [RelayCommand]
     private void Edit() => _edit();
