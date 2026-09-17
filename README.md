@@ -39,17 +39,20 @@ Brawlhalla open or closed, and show on the next match load.
 - Add Image fits any image to the background size and writes it into a pack, and the editor
   crops, pans and darkens one picture into a map's background slot, for one map or for all of them.
 - The platform editor fades a map's platforms with an Opacity slider and recolours them with a Hue
-  slider, over a live preview that can show only the ticked pieces, and saves the result into a pack.
-  Replace lays one picture across the platforms, dragged into place, and a selection of maps is
-  edited together and written by one Save.
+  slider, over a live preview that can show only the selected pieces, and saves the result into a
+  pack. Replace lays one picture across the platforms, dragged into place.
 - Both editors remember what was saved into a pack: reopening one on the same map and pack brings
   back its fit, pan, opacity and hue, with a Start fresh link to drop them and begin again.
-- Right-click any picture in a pack to put it on one map, the selected maps, a map picked from a
+- Right-click any picture in a pack to put it on one map, a map picked from a
   list, or every map; right-click any map card to apply a pack or picture, edit it or reset it.
 - The My Backgrounds switch on Backgrounds shows your own pictures on every row at once, or hides
   them all while you compare packs.
-- Select maps on Maps to apply a pack or a picture to all of them at once, from the selection bar or
-  from any choice's menu.
+- Hide a pack from the lists with the eye on its Packs row: it stays in the library and keeps
+  working, but its pictures and platform sets no longer take up a tile on every row, except where the
+  game is showing them.
+- Refresh, next to Launch, applies again what changed at the source, restores missing files and
+  rewrites the map-select thumbnails, in one write with one Undo. After a game update, a new map's
+  own art goes into the Default pack by itself.
 - Map-select thumbnails, switched on in Settings, put each map's new art on the game's map select
   screen as well, keeping the original so a reset, an Undo or switching it off puts it back.
 - Undo puts back whatever the last write into the game folder overwrote or deleted.
