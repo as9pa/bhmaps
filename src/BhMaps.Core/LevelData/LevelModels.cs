@@ -47,11 +47,14 @@ public sealed record LevelType(
 
 public sealed record LevelSet(string Name, IReadOnlyList<string> LevelNames);
 
+/// <summary><see cref="Version"/> is the game's "10.10" when the SWF named one, null when it did not (3.0).
+/// </summary>
 public sealed record LevelDataModel(
     IReadOnlyList<LevelDesc> Levels,
     IReadOnlyList<LevelType> Types,
     IReadOnlyList<LevelSet> Sets,
-    DateTimeOffset ReadAtUtc);
+    DateTimeOffset ReadAtUtc,
+    string? Version = null);
 
 /// <summary>Turns the asset names in a LevelDesc into paths relative to mapArt.</summary>
 public static class AssetPath

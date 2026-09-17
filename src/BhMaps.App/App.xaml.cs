@@ -71,11 +71,9 @@ public partial class App : Application
             startOnPacks = captured is null;
         }
 
-        // Spec 3.5: an unchanged game starts from the cache; anything else re-reads while the window opens.
-        if (!services.LevelData.LoadCached())
-        {
-            _ = services.LevelData.RefreshAsync();
-        }
+        // Spec 3.5: an unchanged game starts from the cache. A game that changed is re-read by the shell once
+        // its first scan is done (3.0), so the read says what it did on the strip instead of racing the window.
+        _ = services.LevelData.LoadCached();
 
         var model = new MainViewModel(services, dialogs);
 

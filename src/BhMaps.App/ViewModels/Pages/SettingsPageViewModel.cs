@@ -426,8 +426,14 @@ public partial class SettingsPageViewModel : PageViewModel
     [RelayCommand]
     private async Task RefreshGameDataAsync()
     {
-        await Shell.RunBusyAsync("Reading game data", (_, ct) => Services.LevelData.RefreshAsync(ct));
+        var ok = await Shell.RunBusyAsync("Reading game data", (_, ct) => Services.LevelData.RefreshAsync(ct));
         await Shell.RescanAsync();
+
+        // After the rescan, because the scan puts back whatever line it found on the strip when it started.
+        if (ok && Services.LevelData.Available)
+        {
+            Shell.Status.Note(Services.LevelData.ReadNote);
+        }
 
         // Again by hand, because a cancelled scan never reaches Refresh and the read behind it still happened.
         GameDataStatus = Services.LevelData.StatusSentence;

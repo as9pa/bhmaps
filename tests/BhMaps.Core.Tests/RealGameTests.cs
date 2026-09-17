@@ -32,6 +32,20 @@ public class RealGameTests
     }
 
     [Fact]
+    public void TheSwfNamesTheGameVersion()
+    {
+        if (Root() is not { } root)
+        {
+            return;
+        }
+
+        var version = GameVersion.Read(Path.Combine(root, "BrawlhallaAir.swf"));
+
+        Assert.NotNull(version);
+        Assert.Matches(@"^\d+\.\d+$", version);
+    }
+
+    [Fact]
     public void GroveReadsAsTwilightGrove()
     {
         if (Root() is not { } root)

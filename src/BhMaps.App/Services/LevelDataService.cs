@@ -12,7 +12,7 @@ public sealed class LevelDataService
     /// <summary>Captured where the service is built, which is the UI thread, so Changed is raised there.</summary>
     private readonly SynchronizationContext? _context;
 
-    private State _state = new(null, null, null, null);
+    private State _state = new(null, null, null, null, null);
 
     public LevelDataService(string appDataDir, Func<string> gameRootAccessor)
     {
@@ -31,6 +31,12 @@ public sealed class LevelDataService
 
     public bool Available => Model is not null;
 
+    /// <summary>The game's "10.10", or null when the model came from a SWF that named no version (3.0).</summary>
+    public string? Version => Volatile.Read(ref _state).Model?.Version;
+
+    /// <summary>What the strip says after a read finishes, from Settings or from the game poll (3.0).</summary>
+    public string ReadNote => Version is { } version ? $"Game data read from Brawlhalla {version}." : "Game data read.";
+
     /// <summary>The Settings line (spec 7.6), carrying the reason when the data could not be read (spec 3.6).</summary>
     public string StatusSentence
     {
@@ -39,12 +45,13 @@ public sealed class LevelDataService
             var state = Volatile.Read(ref _state);
             if (state.Model is not null)
             {
-                return $"Maps and names come from the game's files and refresh after a game update. Read on {state.ReadAt:d MMMM yyyy}.";
+                return state.Model.Version is { } version
+                    ? $"From Brawlhalla {version}, read {state.ReadAt:d MMMM yyyy}."
+                    : $"From the game's files, read {state.ReadAt:d MMMM yyyy}.";
             }
 
-            return state.Error is { } error
-                ? "Maps and names come from the game's files. They could not be read: " + error
-                : "Maps and names come from the game's files. They have not been read yet.";
+            // Spec 3.6: a read that failed still owes the reason, so the sentence carries it instead of the date.
+            return state.Error is { } error ? "Could not be read: " + error : "Not read yet.";
         }
     }
 
@@ -64,12 +71,28 @@ public sealed class LevelDataService
         {
             // The game updated. Keep the key anyway, because it still unlocks the files after most updates and
             // that is the difference between a refresh that takes a moment and one that takes seconds.
-            Publish(new State(null, null, null, stamp.Key), raiseChanged: false);
+            Publish(new State(null, null, null, stamp.Key, stamp), raiseChanged: false);
             return false;
         }
 
-        Publish(new State(cached.Model, cached.Model.ReadAtUtc.ToLocalTime(), null, stamp.Key), raiseChanged: false);
+        Publish(new State(cached.Model, cached.Model.ReadAtUtc.ToLocalTime(), null, stamp.Key, stamp), raiseChanged: false);
         return true;
+    }
+
+    /// <summary>Whether the game's four files have moved on from the model in hand. Cheap enough for the game
+    /// poll to ask on every start and stop (3.0): four FileInfo calls, no SWF scan. A game folder that is not
+    /// there is not stale, because there is nothing to re-read.</summary>
+    public bool IsStale()
+    {
+        var gameRoot = _gameRoot();
+        if (!Directory.Exists(gameRoot))
+        {
+            return false;
+        }
+
+        // No stamp at all means nothing has been read yet, which wants the same refresh a changed stamp does.
+        return Volatile.Read(ref _state).Stamp is not { } stamp
+            || !stamp.Equals(LevelDataReader.Stamp(gameRoot, stamp.Key));
     }
 
     /// <summary>Re-reads off the UI thread, writes the cache atomically, raises Changed on completion.
@@ -92,26 +115,27 @@ public sealed class LevelDataService
         {
             // The reader turns its own failures into a sentence; this catches anything that still escapes,
             // because the startup refresh is not awaited and nothing may throw out of it.
-            Publish(new State(null, null, ex.Message, key), raiseChanged: true);
+            Publish(new State(null, null, ex.Message, key, null), raiseChanged: true);
             return;
         }
 
         if (result.Model is not { } model)
         {
-            Publish(new State(null, null, result.Error, key), raiseChanged: true);
+            Publish(new State(null, null, result.Error, key, null), raiseChanged: true);
             return;
         }
 
+        var stamp = LevelDataReader.Stamp(gameRoot, result.Key);
         try
         {
-            LevelDataCache.Save(_cachePath, model, LevelDataReader.Stamp(gameRoot, result.Key));
+            LevelDataCache.Save(_cachePath, model, stamp);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
         {
             // A cache that cannot be written only costs the next start another read.
         }
 
-        Publish(new State(model, model.ReadAtUtc.ToLocalTime(), result.Error, result.Key), raiseChanged: true);
+        Publish(new State(model, model.ReadAtUtc.ToLocalTime(), result.Error, result.Key, stamp), raiseChanged: true);
     }
 
     private void Publish(State state, bool raiseChanged)
@@ -134,5 +158,6 @@ public sealed class LevelDataService
 
     /// <summary>Everything one read produces. Published as a single field so a reader on another thread
     /// never sees a model paired with the previous read's date.</summary>
-    private sealed record State(LevelDataModel? Model, DateTimeOffset? ReadAt, string? Error, uint? Key);
+    private sealed record State(
+        LevelDataModel? Model, DateTimeOffset? ReadAt, string? Error, uint? Key, LevelDataStamp? Stamp);
 }

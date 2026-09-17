@@ -58,7 +58,10 @@ public partial class MainViewModel : ObservableObject
 
     /// <summary>Set when the game data lands while a scan is running, so the rescan it needs happens once the
     /// busy boundary clears instead of being dropped.</summary>
-    private bool _rescanPending;
+
+    /// <summary>Whether a game-data read is already running. The game poll can ask twice in a row, and a read
+    /// takes longer than one tick.</summary>
+    private bool _readingGameData;
 
     public MainViewModel(AppServices services, IDialogs dialogs)
     {
@@ -87,10 +90,20 @@ public partial class MainViewModel : ObservableObject
         _gameTimer = new DispatcherTimer { Interval = GamePollInterval };
         _gameTimer.Tick += (_, _) =>
         {
-            GameRunning = GameProcess.IsRunning();
+            var running = GameProcess.IsRunning();
+            var flipped = running != GameRunning;
+            GameRunning = running;
             if (!IsBusy)
             {
                 GameFolderMissing = !GameFolderExists();
+            }
+
+            // The game coming up and the game going down are both moments a patch may just have landed: the
+            // launcher updates before it starts the game, and an update can install while it runs (3.0). Nothing
+            // else tells the app the four data files moved on, so both edges ask.
+            if (flipped)
+            {
+                _ = RefreshGameDataIfStaleAsync();
             }
         };
         _gameTimer.Start();
@@ -1450,14 +1463,53 @@ public partial class MainViewModel : ObservableObject
     private static bool DueForCheck(DateTimeOffset? last) =>
         last is not { } then || DateTimeOffset.UtcNow - then >= TimeSpan.FromHours(24) || then > DateTimeOffset.UtcNow;
 
+    /// <summary>Spec 3.5 (3.0): re-reads the game's four data files when they have moved on since the model in
+    /// hand, on the strip rather than in a dialog, and rescans so every page picks up the new maps and names.
+    /// Does nothing when the files are unchanged, when the game folder is gone, while anything else holds the
+    /// busy boundary, or while a read is already running: one read at a time, and never over a write.</summary>
+    public async Task RefreshGameDataIfStaleAsync()
+    {
+        if (IsBusy || _readingGameData || !Services.LevelData.IsStale())
+        {
+            return;
+        }
+
+        _readingGameData = true;
+        try
+        {
+            if (!await RunBusyAsync("Reading game data", (_, ct) => Services.LevelData.RefreshAsync(ct)))
+            {
+                // The read failed or was cancelled, and the strip says so; the pages still need a scan, because
+                // on a first run this is the only one they get.
+                await RescanAsync();
+                return;
+            }
+        }
+        finally
+        {
+            _readingGameData = false;
+        }
+
+        // After the rescan, not before it: the scan takes the strip over while it runs and puts back whatever
+        // line it found there, so a note set first would be the line it puts back rather than the last word.
+        await RescanAsync();
+        if (Services.LevelData.Available)
+        {
+            Status.Note(Services.LevelData.ReadNote);
+        }
+    }
+
     /// <summary>Spec 3.5: the game data has been read, so the catalog the last scan built from the cache, or from
-    /// nothing, is out of date. A read that lands mid-scan is remembered rather than started on top of it, and
-    /// RunBusyAsync runs the one rescan it asked for when the boundary clears.</summary>
+    /// nothing, is out of date.</summary>
     private void OnLevelDataChanged()
     {
+        // A read that lands inside the busy boundary is one of this app's own: the stale check at start and on the
+        // game's edges, or Refresh now on Settings. Both rescan and then write their note once the read returns,
+        // so a rescan started from here would run beside theirs and its progress would land on top of the note
+        // (the strip stuck on "Scanning: hashing files" in the note's colours). Only a read from nowhere else
+        // needs the rescan started here.
         if (IsBusy)
         {
-            _rescanPending = true;
             return;
         }
 
@@ -1635,15 +1687,6 @@ public partial class MainViewModel : ObservableObject
 
             _cts.Dispose();
             _cts = null;
-
-            // Last, after the token is cleared: a rescan started any earlier would take _cts for itself and have it
-            // disposed out from under it by the lines above. Cleared before the start, so the rescan's own turn
-            // through this boundary cannot start a second one.
-            if (_rescanPending)
-            {
-                _rescanPending = false;
-                _ = RescanAsync();
-            }
         }
     }
 

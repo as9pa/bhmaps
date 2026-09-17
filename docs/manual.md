@@ -284,10 +284,11 @@ instead.
 The top bar carries the app's name, then the five tabs: Maps, Backgrounds, Platforms, Packs and
 Settings. Ctrl+1 to Ctrl+5 switch between them, and Ctrl+K goes to Maps and puts the cursor in its
 search box. On the right is the game line, reading "Brawlhalla running", or "Brawlhalla not running"
-beside a Launch button that asks Steam to start the game. Before the game line is **Refresh**, which
-applies again every game file whose source changed since the app put it there, restores a file
-missing from a map folder, and rewrites the map-select thumbnails; one write, one Undo, and "Nothing
-to refresh." when there is nothing to do. When a newer release is out, a **New update
+beside a Launch button that asks Steam to start the game. Before the game line is **Refresh**, a
+square button showing only its arrows, which applies again every game file whose source changed since
+the app put it there, restores a file missing from a map folder, and rewrites the map-select
+thumbnails; one write, one Undo, and "Nothing to refresh." when there is nothing to do. Hovering it
+says "Refresh: re-apply what is on, restore missing files, redraw the map-select thumbnails". When a newer release is out, a **New update
 available** line sits before the game line; clicking it opens Settings and the small x beside it hides
 it until the release after that. When the game folder cannot be found the
 line turns red and offers Choose folder, which opens Settings. F5 rescans; Cancel in a page header
@@ -400,7 +401,8 @@ stops a long operation.
   nothing in game and offers to remove them. Apply all, Open folder and the way back to the pack list
   are in the header.
 - **Settings** is one line per setting: the game folder and the library, each with Change and Open;
-  the game data, with the date it was last read and Refresh now; Capture defaults; one line about
+  the game data, reading "From Brawlhalla 10.10, read 16 September 2026." with the version the game's
+  files name, or "From the game's files, read ..." when they name none, and Refresh now beside it; Capture defaults; one line about
   applying, which says that changes are written straight into the game folder with Brawlhalla open or
   closed and show on the next match load, and that Undo puts back the files of the last write;
   **Map-select thumbnails**, a checkbox reading **Also update the game's map-select thumbnails** that
@@ -518,7 +520,7 @@ repeats it with the number of maps in it.
 | Apply | "Apply all", "Apply to a map...", "Apply to all maps", "Apply to N maps" | The row button on a pack, the tile and card menus, and the confirm button |
 | Reset | "Reset map", "Reset this map", "Reset all maps", "Reset N maps" | The card menu, the open map's panel, the Maps page menu, and the confirm |
 | Capture | "Capture the Default pack" | The Packs page menu and the third step of the welcome window |
-| Refresh | "Refresh" | The top bar. Re-copies the app's own files over what the game holds now |
+| Refresh | "Refresh", as the tooltip of an icon | The top bar. Re-copies the app's own files over what the game holds now |
 | Rescan | "Rescan", F5 | The top bar. Re-reads the game folder and the library without writing anything |
 | Import | "Import folder", "Import from pack" | The Packs page and a pack's own page |
 | New | "New pack", "Add image" | The Packs page and a pack's own page |
@@ -535,8 +537,11 @@ own art, and Reset puts that art back.
   scanning the compiled ActionScript in `BrawlhallaAir.swf` for the number that unlocks them; it is
   never hard-coded, because it changes with every game update. The parsed result is cached in
   `leveldata.json` next to the size and timestamp of all four files, so an unchanged game starts from
-  the cache and a game update re-reads in the background. When the files are not there, the key is
-  not found, or an entry fails its checksum, the app falls back to folder names for map names, hides
+  the cache and a game update re-reads in the background: after the first scan of a run, and again
+  whenever Brawlhalla starts or stops, because that is when an update has just landed. The strip says
+  "Game data read from Brawlhalla 10.10." when it did. The version is the one the app finds written in
+  `BrawlhallaAir.swf`; neither the `.swz` files nor the game's exe carry it. When the files are not
+  there, the key is not found, or an entry fails its checksum, the app falls back to folder names for map names, hides
   the set chips, and shows a single-file thumbnail in place of each composed preview. Settings says
   which of those happened.
 - A **map** is a `mapArt` folder that at least one level points at, named after the level the game

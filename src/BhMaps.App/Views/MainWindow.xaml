@@ -81,11 +81,16 @@
 
           <!-- Spec 2.8: writes the game back to what the app says is on. It stands whether the game is up or
                down, because the write path already handles a running game; only the missing folder takes it
-               away, as it takes away every other write. -->
-          <Button Margin="0,0,12,0"
+               away, as it takes away every other write. The glyph alone in a square (3.0): the top bar had two
+               words of button before the game line, and the tooltip and the accessible name still say Refresh.
+               The left padding is the glyph's own 7 px right margin given back, so it sits in the middle. -->
+          <Button Width="{StaticResource ActionHeight}"
+                  Height="{StaticResource ActionHeight}"
+                  Margin="0,0,12,0"
+                  Padding="7,0,0,0"
+                  AutomationProperties.Name="Refresh"
                   Command="{Binding RefreshGameCommand}"
-                  Content="Refresh"
-                  ToolTip="Re-applies what is on, restores missing files and rewrites the map-select thumbnails"
+                  ToolTip="Refresh: re-apply what is on, restore missing files, redraw the map-select thumbnails"
                   controls:Icon.Glyph="{StaticResource Icon.Refresh}">
             <Button.Style>
               <!-- Outlined rather than plain (3.0): it writes into the game folder, and a write does not read as
