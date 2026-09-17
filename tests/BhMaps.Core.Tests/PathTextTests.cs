@@ -34,5 +34,9 @@ public sealed class PathTextTests
     }
 
     [Fact]
+    public void MiddleTruncate_StaysInsideABudgetSmallerThanTheDots() =>
+        Assert.Equal("nds", PathText.MiddleTruncate(@"C:\a-very-long-folder-of-backgrounds", 3));
+
+    [Fact]
     public void MiddleTruncate_LeavesAnEmptyPathAlone() => Assert.Equal("", PathText.MiddleTruncate("", 48));
 }

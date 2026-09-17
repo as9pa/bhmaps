@@ -10,7 +10,8 @@ public static class PathText
     /// <summary>Shortens <paramref name="path"/> to <paramref name="maxChars"/> by dropping whole segments out of
     /// the middle, keeping as many from the start as fit and always the last two. A path that already fits comes
     /// back unchanged. When even the last two segments cannot fit, the last one is kept and hard-cut with the
-    /// dots in front of it, because a name cut at the front still reads as a name.</summary>
+    /// dots in front of it, because a name cut at the front still reads as a name. A budget smaller than the dots
+    /// gets the path's last characters on their own, so the result never runs past what was asked for.</summary>
     public static string MiddleTruncate(string path, int maxChars)
     {
         if (string.IsNullOrEmpty(path) || maxChars <= 0 || path.Length <= maxChars)
@@ -43,11 +44,16 @@ public static class PathText
 
         var last = separators.Count > 0 ? path[(separators[^1] + 1)..] : path;
         var kept = Dots + last;
-        return kept.Length <= maxChars
-            // A budget under the dots themselves cannot be met by anything; the dots stay rather than the result
-            // becoming an empty row.
-            ? kept
-            : Dots + last[^Math.Max(0, maxChars - Dots.Length)..];
+        if (kept.Length <= maxChars)
+        {
+            return kept;
+        }
+
+        // A budget under the dots themselves cannot fit them and a tail, so the end of the path is what the row
+        // gets: still inside the budget, and the part that says which folder it is.
+        return maxChars <= Dots.Length
+            ? path[^Math.Min(path.Length, maxChars)..]
+            : Dots + last[^Math.Min(last.Length, maxChars - Dots.Length)..];
     }
 
     /// <summary>Both separators, because a path typed by hand or copied out of a log may use either.</summary>

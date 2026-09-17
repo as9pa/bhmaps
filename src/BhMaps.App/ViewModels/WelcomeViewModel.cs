@@ -103,10 +103,8 @@ public partial class WelcomeViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanAct))]
     private async Task FinishAsync()
     {
-        var game = Normalize(GamePath);
-        var library = Normalize(LibraryPath);
-        GamePath = game;
-        LibraryPath = library;
+        var game = GamePath;
+        var library = LibraryPath;
         var gameOk = SettingsStore.ValidateGamePath(game, out var gameError);
         var libraryOk = SettingsStore.ValidateLibraryPath(library, out var libraryError);
         GameError = gameOk ? "" : gameError;
@@ -141,8 +139,8 @@ public partial class WelcomeViewModel : ObservableObject
         CloseRequested?.Invoke(true);
     }
 
-    /// <summary>An error next to a path the user has since changed is worse than no error at all, so any edit,
-    /// typed or picked, clears it; Finish is what puts one back.</summary>
+    /// <summary>An error next to a path the user has since picked again is worse than no error at all, so
+    /// choosing a folder clears it; Finish is what puts one back.</summary>
     partial void OnGamePathChanged(string value) => GameError = "";
 
     partial void OnLibraryPathChanged(string value) => LibraryError = "";
@@ -199,15 +197,6 @@ public partial class WelcomeViewModel : ObservableObject
     /// capture's own cleanup is what puts the library back.</summary>
     [RelayCommand(CanExecute = nameof(IsBusy))]
     private void CancelCapture() => _cts?.Cancel();
-
-    /// <summary>Explorer's "Copy as path" wraps the path in quotes; strip one surrounding pair so it still resolves.</summary>
-    private static string Normalize(string path)
-    {
-        var trimmed = path.Trim();
-        return trimmed.Length >= 2 && trimmed.StartsWith('"') && trimmed.EndsWith('"')
-            ? trimmed[1..^1]
-            : trimmed;
-    }
 }
 
 /// <summary>What step 3's capture did, in the line the status strip will show: the done line the in-app capture

@@ -1,12 +1,22 @@
 ﻿<Window x:Class="BhMaps.App.Views.WelcomeWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:converters="clr-namespace:BhMaps.App.Converters"
         Title="Welcome to BhMaps" Width="620" SizeToContent="Height" ResizeMode="NoResize"
         WindowStartupLocation="CenterScreen" ShowInTaskbar="True"
         Background="{StaticResource BgBrush}"
         Closing="OnClosing">
   <Window.Resources>
     <BooleanToVisibilityConverter x:Key="BoolToVis" />
+    <converters:MiddleTruncateConverter x:Key="MiddleTruncate" />
+
+    <!-- The paths read the way Settings' folder rows read: one shortened mono line, the whole path in the
+         tooltip, and Change the only way to set one. The step is narrower than the Settings row, so the budget
+         is 48 characters rather than 56. -->
+    <Style x:Key="PathValue" TargetType="TextBlock" BasedOn="{StaticResource MonoText}">
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
 
     <!-- Geist Mono for the step numerals, in the quietest text colour: they are labels for the eye, not copy. -->
     <Style x:Key="StepNumber" TargetType="TextBlock" BasedOn="{StaticResource MonoText}">
@@ -71,10 +81,9 @@
                     Content="Change"
                     FocusVisualStyle="{StaticResource DialogFocusRing}"
                     Style="{StaticResource OutlineButton}" />
-            <TextBox AutomationProperties.Name="Game folder"
-                     Style="{StaticResource FieldTextBox}"
-                     Text="{Binding GamePath, UpdateSourceTrigger=PropertyChanged}"
-                     ToolTip="{Binding GamePath}" />
+            <TextBlock Style="{StaticResource PathValue}"
+                       Text="{Binding GamePath, Converter={StaticResource MiddleTruncate}, ConverterParameter=48}"
+                       ToolTip="{Binding GamePath}" />
           </DockPanel>
           <TextBlock Style="{StaticResource ErrorText}" Text="{Binding GameError}" />
         </StackPanel>
@@ -98,10 +107,9 @@
                     Content="Change"
                     FocusVisualStyle="{StaticResource DialogFocusRing}"
                     Style="{StaticResource OutlineButton}" />
-            <TextBox AutomationProperties.Name="Library folder"
-                     Style="{StaticResource FieldTextBox}"
-                     Text="{Binding LibraryPath, UpdateSourceTrigger=PropertyChanged}"
-                     ToolTip="{Binding LibraryPath}" />
+            <TextBlock Style="{StaticResource PathValue}"
+                       Text="{Binding LibraryPath, Converter={StaticResource MiddleTruncate}, ConverterParameter=48}"
+                       ToolTip="{Binding LibraryPath}" />
           </DockPanel>
           <TextBlock Style="{StaticResource ErrorText}" Text="{Binding LibraryError}" />
         </StackPanel>
