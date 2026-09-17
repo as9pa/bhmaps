@@ -94,7 +94,7 @@
         <TextBlock DockPanel.Dock="Top"
                    Margin="14,10,14,8"
                    Style="{StaticResource SectionHeaderText}"
-                   Text="{Binding Files.Count, StringFormat='Pictures, {0}'}" />
+                   Text="{Binding CountText}" />
         <Border DockPanel.Dock="Top" Height="1" Background="{StaticResource LineBrush}" />
 
         <Grid>
@@ -184,14 +184,6 @@
           <!-- The ring is a local value, not a setter in FitRadio: through a Style the theme's own focus visual
                wins and the radios keep the stock dashed rectangle, which is close to invisible on this palette. -->
           <WrapPanel>
-            <RadioButton Content="Stretch"
-                         FocusVisualStyle="{StaticResource DialogFocusRing}"
-                         IsChecked="{Binding FitStretch}"
-                         Style="{StaticResource FitRadio}" />
-            <RadioButton Content="Center"
-                         FocusVisualStyle="{StaticResource DialogFocusRing}"
-                         IsChecked="{Binding FitCenter}"
-                         Style="{StaticResource FitRadio}" />
             <RadioButton Content="Fill"
                          FocusVisualStyle="{StaticResource DialogFocusRing}"
                          IsChecked="{Binding FitFill}"
@@ -199,6 +191,14 @@
             <RadioButton Content="Fit"
                          FocusVisualStyle="{StaticResource DialogFocusRing}"
                          IsChecked="{Binding FitFit}"
+                         Style="{StaticResource FitRadio}" />
+            <RadioButton Content="Center"
+                         FocusVisualStyle="{StaticResource DialogFocusRing}"
+                         IsChecked="{Binding FitCenter}"
+                         Style="{StaticResource FitRadio}" />
+            <RadioButton Content="Stretch"
+                         FocusVisualStyle="{StaticResource DialogFocusRing}"
+                         IsChecked="{Binding FitStretch}"
                          Style="{StaticResource FitRadio}" />
           </WrapPanel>
           <TextBlock Margin="0,4,0,0"
@@ -250,11 +250,23 @@
               FocusVisualStyle="{StaticResource DialogFocusRing}"
               IsCancel="True"
               Style="{StaticResource PlainButton}" />
+      <!-- 3.0 E: disabled with nothing picked, and the tooltip says what to do about it. ShowOnDisabled, or a
+           disabled button swallows the hover and the tip never shows. -->
       <Button Command="{Binding AddCommand}"
               Content="Add"
               FocusVisualStyle="{StaticResource DialogFocusRing}"
               IsDefault="True"
-              Style="{StaticResource PrimaryButton}" />
+              ToolTipService.ShowOnDisabled="True">
+        <Button.Style>
+          <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+            <Style.Triggers>
+              <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="ToolTip" Value="Pick a picture first" />
+              </Trigger>
+            </Style.Triggers>
+          </Style>
+        </Button.Style>
+      </Button>
     </StackPanel>
   </Grid>
 </Window>

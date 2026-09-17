@@ -28,7 +28,7 @@ public sealed partial class CustomPictureTileViewModel : PictureTileViewModel
         MainViewModel shell, CustomPicture picture, string subtitle, MapEntry? map, string? slot, bool inGame)
         : base(
             shell,
-            Path.GetFileNameWithoutExtension(picture.DisplayName),
+            picture.Name,
             subtitle,
             // Empty only for the picture SourcePath calls impossible, and then every action on the tile reports a
             // file that is not there rather than throwing on a path nobody could resolve.
@@ -147,24 +147,24 @@ public sealed partial class CustomPictureTileViewModel : PictureTileViewModel
     [RelayCommand]
     private Task ApplyToMapAsync() =>
         Map is { } map
-            ? Shell.ApplyPictureAsync(FullPath, [map], _picture.DisplayName, _picture.PackName)
+            ? Shell.ApplyPictureAsync(FullPath, [map], _picture.Name, _picture.PackName)
             : Task.CompletedTask;
 
     /// <summary>Spec 4.4: the chooser in map mode, then the shell's apply on the one map it returned.</summary>
     [RelayCommand]
     private async Task ApplyToChosenMapAsync()
     {
-        if (await Shell.ChooseMapAsync(FullPath, _picture.DisplayName) is { } map)
+        if (await Shell.ChooseMapAsync(FullPath, _picture.Name) is { } map)
         {
             await Shell.ApplyPictureAsync(
-                FullPath, [map], _picture.DisplayName, _picture.PackName);
+                FullPath, [map], _picture.Name, _picture.PackName);
         }
     }
 
     [RelayCommand]
     private Task ApplyToAllAsync() =>
         Shell.Snapshot is { } snapshot
-            ? Shell.ApplyPictureAsync(FullPath, snapshot.Catalog.Maps, _picture.DisplayName, _picture.PackName)
+            ? Shell.ApplyPictureAsync(FullPath, snapshot.Catalog.Maps, _picture.Name, _picture.PackName)
             : Task.CompletedTask;
 
     [RelayCommand]

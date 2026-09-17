@@ -35,7 +35,7 @@ public class EditRecordTests
         record.Save(tmp.Path);
         var loaded = PlatformEditRecord.Load(tmp.Path);
 
-        Assert.Equal(1, loaded.Version);
+        Assert.Equal(PlatformEditRecord.SchemaVersion, loaded.Version);
         var map = loaded.Map("bloodmoon");
         Assert.NotNull(map);
         Assert.Equal(SavedAt, map.SavedAt);

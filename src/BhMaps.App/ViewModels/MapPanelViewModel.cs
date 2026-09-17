@@ -322,7 +322,7 @@ public partial class MapPanelViewModel : ObservableObject
             var picture = _snapshot.CustomPictures.FirstOrDefault(
                 p => p.InGameSlots.Contains(fileName, StringComparer.OrdinalIgnoreCase));
             return picture is { PackName: { } pack }
-                ? $"{Path.GetFileNameWithoutExtension(picture.DisplayName)}, from {pack}."
+                ? $"{picture.Name}, from {pack}."
                 : "In game only.";
         }
 

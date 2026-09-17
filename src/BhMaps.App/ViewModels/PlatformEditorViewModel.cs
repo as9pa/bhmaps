@@ -159,7 +159,6 @@ public partial class PlatformEditorViewModel : ObservableObject
 
         PackChoices = packs.Select(p => p.Name).Concat([BackgroundEditorViewModel.NewPackChoice]).ToList();
         Error = "";
-        ApplyNow = true;
 
         // Spec 3.4: a panel row's Edit names one file, and that editor opens on it. Spec 3.5: every other way in
         // opens in the mode the last chip click left behind.
@@ -239,7 +238,7 @@ public partial class PlatformEditorViewModel : ObservableObject
     /// Cancel and holds the window's own two buttons.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanSave), nameof(CanCloseWindow))]
-    [NotifyCanExecuteChangedFor(nameof(SaveCommand), nameof(CancelSaveCommand), nameof(PreviousMapCommand), nameof(NextMapCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SaveAndApplyCommand), nameof(SaveOnlyCommand), nameof(CancelSaveCommand), nameof(PreviousMapCommand), nameof(NextMapCommand))]
     public partial bool IsSaving { get; set; }
 
     [ObservableProperty]
@@ -259,6 +258,12 @@ public partial class PlatformEditorViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(CanPan))]
     public partial bool FitAcross { get; set; } = true;
 
+    /// <summary>3.0 E: how the picture fills the piece's box, or the whole stage when it is laid across. The one
+    /// fit set every window offers. Changing it cuts the ticked rows again.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanPan), nameof(FitFill), nameof(FitFit), nameof(FitCenter), nameof(FitStretch))]
+    public partial PictureFit Fit { get; set; } = PictureFit.Fill;
+
     /// <summary>Where the laid picture sits inside the platform box, 0..1 (spec 6.2). The drag on the preview is
     /// the only thing that moves it.</summary>
     [ObservableProperty]
@@ -276,16 +281,13 @@ public partial class PlatformEditorViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsNewPack), nameof(PackNameError), nameof(CanSave), nameof(CanEditOutside))]
-    [NotifyCanExecuteChangedFor(nameof(SaveCommand), nameof(EditOutsideCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SaveAndApplyCommand), nameof(SaveOnlyCommand), nameof(EditOutsideCommand))]
     public partial string TargetPack { get; set; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PackNameError), nameof(CanSave), nameof(CanEditOutside))]
-    [NotifyCanExecuteChangedFor(nameof(SaveCommand), nameof(EditOutsideCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SaveAndApplyCommand), nameof(SaveOnlyCommand), nameof(EditOutsideCommand))]
     public partial string NewPackName { get; set; }
-
-    [ObservableProperty]
-    public partial bool ApplyNow { get; set; }
 
     [ObservableProperty]
     public partial string Error { get; set; }
@@ -409,8 +411,33 @@ public partial class PlatformEditorViewModel : ObservableObject
     /// <summary>Whether the fit switch can be used: there is a picture to lay (spec 6.2).</summary>
     public bool CanUseFit => LoadedPicture is not null;
 
-    /// <summary>Whether dragging the preview moves anything: a laid picture, not one fitted piece by piece.</summary>
-    public bool CanPan => CanUseFit && FitAcross;
+    /// <summary>Whether dragging the preview moves anything: a laid picture, not one fitted piece by piece, and
+    /// only a Fill, which is the one fit with anything hanging over the box to move (3.0 E).</summary>
+    public bool CanPan => CanUseFit && FitAcross && Fit == PictureFit.Fill;
+
+    public bool FitFill
+    {
+        get => Fit == PictureFit.Fill;
+        set { if (value) { Fit = PictureFit.Fill; } }
+    }
+
+    public bool FitFit
+    {
+        get => Fit == PictureFit.Fit;
+        set { if (value) { Fit = PictureFit.Fit; } }
+    }
+
+    public bool FitCenter
+    {
+        get => Fit == PictureFit.Center;
+        set { if (value) { Fit = PictureFit.Center; } }
+    }
+
+    public bool FitStretch
+    {
+        get => Fit == PictureFit.Stretch;
+        set { if (value) { Fit = PictureFit.Stretch; } }
+    }
 
     public bool CanResetImage => TickedRows().Any(p => p.Art != PieceArt.Original);
 
@@ -575,6 +602,8 @@ public partial class PlatformEditorViewModel : ObservableObject
     /// again. Nothing is loaded until a Replace or a record, and the record puts all three on at once.</summary>
     partial void OnFitAcrossChanged(bool value) => ScheduleRecut();
 
+    partial void OnFitChanged(PictureFit value) => ScheduleRecut();
+
     partial void OnPanXChanged(double value) => ScheduleRecut();
 
     partial void OnPanYChanged(double value) => ScheduleRecut();
@@ -630,6 +659,12 @@ public partial class PlatformEditorViewModel : ObservableObject
             {
                 pieces.Add(row);
             }
+        }
+
+        // 3.0 E: a row is called "Piece 1", "Piece 2" and so on, which is the order it is listed in.
+        for (var i = 0; i < pieces.Count; i++)
+        {
+            pieces[i].Number = i + 1;
         }
 
         return pieces;
@@ -801,6 +836,7 @@ public partial class PlatformEditorViewModel : ObservableObject
         var entry = spanning[0].Entry;
         _restoringFit = true;
         FitAcross = true;
+        Fit = entry.Fit ?? PictureFit.Fill;
         PanX = Math.Clamp(entry.PanX ?? 0.5, 0, 1);
         PanY = Math.Clamp(entry.PanY ?? 0.5, 0, 1);
         _restoringFit = false;
@@ -1079,7 +1115,8 @@ public partial class PlatformEditorViewModel : ObservableObject
         }
 
         var across = FitAcross;
-        var pan = new FitOptions(PanX: PanX, PanY: PanY);
+        var options = PictureFits.Options(Fit);
+        var pan = PictureFits.Options(Fit, PanX, PanY);
         List<(PlatformPieceViewModel Row, BitmapSource Fitted, bool Across, string Note)> cut;
         try
         {
@@ -1095,7 +1132,7 @@ public partial class PlatformEditorViewModel : ObservableObject
                         var piece = BackgroundFitter.LoadSource(row.SourcePath);
                         if (!across || box is not { } stage)
                         {
-                            results.Add((row, PieceFitter.Fit(picture, piece), false, ""));
+                            results.Add((row, PieceFitter.Fit(picture, piece, options), false, ""));
                             continue;
                         }
 
@@ -1104,7 +1141,7 @@ public partial class PlatformEditorViewModel : ObservableObject
                         {
                             results.Add((
                                 row,
-                                PieceFitter.Fit(picture, piece),
+                                PieceFitter.Fit(picture, piece, options),
                                 false,
                                 $"{row.FileName} not on this stage, fitted on its own."));
                             continue;
@@ -1556,12 +1593,18 @@ public partial class PlatformEditorViewModel : ObservableObject
     private bool IsMixed(Func<PlatformPieceViewModel, int> value) =>
         TickedRows().Select(value).Distinct().Count() > 1;
 
-    /// <summary>Saves the recoloured sets into the pack and nothing else; the "Apply to game" box is the
-    /// shell's business, because a game write needs the boundary, the snapshot and the undo (spec 8). Spec 9: one
-    /// Save writes every map of the set, one map at a time, and the question is asked once for all of them.
-    /// Cancel is read between maps only, so a map is written whole or not at all.</summary>
+    /// <summary>"Save and apply": the recoloured sets go into the pack and on into the game. The game write
+    /// itself is the shell's business, because it needs the boundary, the snapshot and the undo (spec 8, 3.0 E).
+    /// Spec 9: one save writes every map of the set, one map at a time, and the question is asked once for all of
+    /// them. Cancel is read between maps only, so a map is written whole or not at all.</summary>
     [RelayCommand(CanExecute = nameof(CanSave))]
-    private async Task SaveAsync()
+    private Task SaveAndApplyAsync() => SaveAsync(apply: true);
+
+    /// <summary>"Save only": the same write into the library, with nothing said to the game (3.0 E).</summary>
+    [RelayCommand(CanExecute = nameof(CanSave))]
+    private Task SaveOnlyAsync() => SaveAsync(apply: false);
+
+    private async Task SaveAsync(bool apply)
     {
         var packRoot = Path.Combine(PackScanner.PacksRoot(_services.LibraryPath), EffectivePackName);
         var replacing = _sets.Count(s => HasOwnFiles(Path.Combine(packRoot, s.Map.FolderName)));
@@ -1578,6 +1621,7 @@ public partial class PlatformEditorViewModel : ObservableObject
         }
 
         var (panX, panY) = (PanX, PanY);
+        var fit = Fit;
         var written = new List<MapEntry>();
         using var cts = new CancellationTokenSource();
         _saveCts = cts;
@@ -1607,7 +1651,7 @@ public partial class PlatformEditorViewModel : ObservableObject
                         row.CopyOrWriteResult(Path.Combine(packRoot, row.RelativePath));
                     }
 
-                    record.SetMap(folder, DateTimeOffset.Now, EntriesFor(rows, packRoot, panX, panY));
+                    record.SetMap(folder, DateTimeOffset.Now, EntriesFor(rows, packRoot, panX, panY, fit));
                     record.Save(packRoot);
                 });
                 written.Add(set.Map);
@@ -1632,7 +1676,7 @@ public partial class PlatformEditorViewModel : ObservableObject
         }
 
         Saved = new PlatformSave(
-            EffectivePackName, Path.Combine(packRoot, written[0].FolderName), ApplyNow, written);
+            EffectivePackName, Path.Combine(packRoot, written[0].FolderName), apply, written);
         CloseRequested?.Invoke(true);
     }
 
@@ -1645,7 +1689,8 @@ public partial class PlatformEditorViewModel : ObservableObject
     /// A row whose file is not there was not written, so the record says nothing about it. The pan belongs to the
     /// editor rather than to a row, so an Across row writes down the one the picture was laid with (spec 6.2).</summary>
     internal static Dictionary<string, PlatformPieceEntry> EntriesFor(
-        IReadOnlyList<PlatformPieceViewModel> rows, string packRoot, double panX, double panY)
+        IReadOnlyList<PlatformPieceViewModel> rows, string packRoot, double panX, double panY,
+        PictureFit fit = PictureFit.Fill)
     {
         var entries = new Dictionary<string, PlatformPieceEntry>(StringComparer.OrdinalIgnoreCase);
         foreach (var row in rows)
@@ -1664,10 +1709,12 @@ public partial class PlatformEditorViewModel : ObservableObject
                 if (entry.Art == PlatformArt.EachPiece)
                 {
                     entry.Picture = row.ReplacementPath;
+                    entry.Fit = fit;
                 }
                 else if (entry.Art == PlatformArt.Across)
                 {
                     entry.Picture = row.ReplacementPath;
+                    entry.Fit = fit;
                     entry.PanX = panX;
                     entry.PanY = panY;
                 }

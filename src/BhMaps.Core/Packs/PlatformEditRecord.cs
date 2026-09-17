@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using BhMaps.Core.Operations;
 
 namespace BhMaps.Core.Packs;
 
@@ -23,6 +24,10 @@ public sealed class PlatformPieceEntry
     public PlatformArt Art { get; set; }
 
     public string? Picture { get; set; }
+
+    /// <summary>How the picture fills the piece, or the whole stage for an Across piece. Missing in a version 1
+    /// file, which knew one fit only, and reads as Fill.</summary>
+    public PictureFit? Fit { get; set; }
 
     public double? PanX { get; set; }
 
@@ -54,7 +59,10 @@ public sealed class PlatformEditRecord
 {
     public const string FileName = "platforms.bhmaps.json";
 
-    public int Version { get; set; } = 1;
+    /// <summary>2 since the pieces carry a fit; a version 1 file reads as Fill and is stamped 2 when it is saved.</summary>
+    public const int SchemaVersion = 2;
+
+    public int Version { get; set; } = SchemaVersion;
 
     public Dictionary<string, PlatformMapEntry> Maps { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
@@ -72,7 +80,11 @@ public sealed class PlatformEditRecord
         return record;
     }
 
-    public void Save(string packRoot) => EditRecordFile.Write(PathFor(packRoot), this);
+    public void Save(string packRoot)
+    {
+        Version = SchemaVersion;
+        EditRecordFile.Write(PathFor(packRoot), this);
+    }
 
     public PlatformMapEntry? Map(string mapFolder) => Maps.GetValueOrDefault(mapFolder);
 

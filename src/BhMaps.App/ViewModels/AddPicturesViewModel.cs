@@ -126,6 +126,10 @@ public partial class AddPicturesViewModel : ObservableObject
 
     public bool CanAdd => Files.Count > 0 && PackNameError.Length == 0;
 
+    /// <summary>The list's own header: "No pictures yet", then "1 picture" and "4 pictures" (3.0 E).</summary>
+    public string CountText =>
+        Files.Count == 0 ? "No pictures yet" : PackRowViewModel.Plural(Files.Count, "picture");
+
     public bool FitStretch
     {
         get => Fit == PictureFit.Stretch;
@@ -265,6 +269,7 @@ public partial class AddPicturesViewModel : ObservableObject
     private void OnFilesChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         OnPropertyChanged(nameof(CanAdd));
+        OnPropertyChanged(nameof(CountText));
         AddCommand.NotifyCanExecuteChanged();
 
         // The preview is of the first picture, so any change to the list can change it.

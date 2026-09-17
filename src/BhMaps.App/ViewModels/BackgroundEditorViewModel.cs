@@ -50,7 +50,7 @@ public partial class BackgroundEditorViewModel : ObservableObject
     private readonly BackgroundEditorRequest _request;
     private readonly Throttler _preview = new();
 
-    private BitmapSource? _working;
+    private WorkingSource? _working;
     private string _workingPath = "";
 
     public BackgroundEditorViewModel(
@@ -74,7 +74,6 @@ public partial class BackgroundEditorViewModel : ObservableObject
         SourceDetail = "";
         PanX = 0.5;
         PanY = 0.5;
-        ApplyNow = true;
 
         // The tile's own pack, so Save replaces the picture the user was looking at; anything else keeps it.
         var requested = packNames.FirstOrDefault(p => p.Equals(request.PackName, StringComparison.OrdinalIgnoreCase));
@@ -101,13 +100,13 @@ public partial class BackgroundEditorViewModel : ObservableObject
     public BackgroundSave? Saved { get; private set; }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanSave), nameof(OverwriteHint), nameof(MapLabel), nameof(ApplyNowText))]
-    [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
+    [NotifyPropertyChangedFor(nameof(CanSave), nameof(OverwriteHint), nameof(MapLabel), nameof(SaveAndApplyText), nameof(Title))]
+    [NotifyCanExecuteChangedFor(nameof(SaveAndApplyCommand), nameof(SaveOnlyCommand))]
     public partial MapSlotChoice? SelectedMap { get; set; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanSave), nameof(HasSource), nameof(Title), nameof(SourceFileName), nameof(EmptyText), nameof(OverwriteHint))]
-    [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SaveAndApplyCommand), nameof(SaveOnlyCommand))]
     public partial string SourcePath { get; set; }
 
     [ObservableProperty]
@@ -121,8 +120,8 @@ public partial class BackgroundEditorViewModel : ObservableObject
     public partial string SourceDetail { get; set; }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsFill), nameof(ModeFill), nameof(ModeFit), nameof(ModeStretch))]
-    public partial FitMode Mode { get; set; }
+    [NotifyPropertyChangedFor(nameof(IsFill), nameof(FitFill), nameof(FitFit), nameof(FitCenter), nameof(FitStretch))]
+    public partial PictureFit Fit { get; set; }
 
     [ObservableProperty]
     public partial double PanX { get; set; }
@@ -135,16 +134,13 @@ public partial class BackgroundEditorViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsNewPack), nameof(CanSave), nameof(OverwriteHint))]
-    [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SaveAndApplyCommand), nameof(SaveOnlyCommand))]
     public partial string TargetPack { get; set; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanSave), nameof(OverwriteHint))]
-    [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SaveAndApplyCommand), nameof(SaveOnlyCommand))]
     public partial string NewPackName { get; set; }
-
-    [ObservableProperty]
-    public partial bool ApplyNow { get; set; }
 
     [ObservableProperty]
     public partial string Error { get; set; }
@@ -157,7 +153,9 @@ public partial class BackgroundEditorViewModel : ObservableObject
     [ObservableProperty]
     public partial bool HasValuesFrom { get; set; }
 
-    public string Title => SourceFileName.Length == 0 ? "Edit background" : $"Edit {SourceFileName}";
+    /// <summary>3.0: the window is named for the map, the way the platform editor is, never for the file.</summary>
+    public string Title =>
+        SelectedMap is { } map ? $"Edit background, {map.DisplayNames}" : "Edit background";
 
     public string SourceFileName => SourcePath.Length == 0 ? "" : Path.GetFileName(SourcePath);
 
@@ -174,7 +172,7 @@ public partial class BackgroundEditorViewModel : ObservableObject
         ? NoSourceText
         : HasSource ? "" : $"{SourceFileName} is no longer in {_request.PackName ?? "the library"}. Choose another source.";
 
-    public bool IsFill => Mode == FitMode.Cover;
+    public bool IsFill => Fit == PictureFit.Fill;
 
     public bool IsNewPack => TargetPack == NewPackChoice;
 
@@ -182,8 +180,9 @@ public partial class BackgroundEditorViewModel : ObservableObject
 
     public string Slot => SelectedMap?.Slot ?? "";
 
-    /// <summary>Spec 5: "Apply to all maps" under All maps, because the tick then writes every map's slot.</summary>
-    public string ApplyNowText => SelectedMap is { IsAllMaps: true } ? "Apply to all maps" : "Apply to game";
+    /// <summary>Under All maps the save writes every map's slot, so the button says so before it is pressed.</summary>
+    public string SaveAndApplyText =>
+        SelectedMap is { IsAllMaps: true } ? "Save and apply to all maps" : "Save and apply";
 
     /// <summary>Spec 7.2, shown only when Save would replace a file that is already in the pack.</summary>
     public string OverwriteHint =>
@@ -191,27 +190,33 @@ public partial class BackgroundEditorViewModel : ObservableObject
             ? $"Replaces {name} in {TargetPack}. Pick another pack to keep the original."
             : "";
 
-    public bool ModeFill
+    public bool FitFill
     {
-        get => Mode == FitMode.Cover;
-        set { if (value) { Mode = FitMode.Cover; } }
+        get => Fit == PictureFit.Fill;
+        set { if (value) { Fit = PictureFit.Fill; } }
     }
 
-    public bool ModeFit
+    public bool FitFit
     {
-        get => Mode == FitMode.Contain;
-        set { if (value) { Mode = FitMode.Contain; } }
+        get => Fit == PictureFit.Fit;
+        set { if (value) { Fit = PictureFit.Fit; } }
     }
 
-    public bool ModeStretch
+    public bool FitCenter
     {
-        get => Mode == FitMode.Stretch;
-        set { if (value) { Mode = FitMode.Stretch; } }
+        get => Fit == PictureFit.Center;
+        set { if (value) { Fit = PictureFit.Center; } }
+    }
+
+    public bool FitStretch
+    {
+        get => Fit == PictureFit.Stretch;
+        set { if (value) { Fit = PictureFit.Stretch; } }
     }
 
     public bool CanSave => HasSource && SelectedMap is not null && PackNameValidator.IsValid(EffectivePackName, out _);
 
-    private FitOptions Options => new(Mode, PanX, PanY, DarkenPercent / 100.0);
+    private FitOptions Options => PictureFits.Options(Fit, PanX, PanY, DarkenPercent / 100.0);
 
     public void AcceptDroppedFile(string path) => SourcePath = path;
 
@@ -231,7 +236,7 @@ public partial class BackgroundEditorViewModel : ObservableObject
         SchedulePreview();
     }
 
-    partial void OnModeChanged(FitMode value) => SchedulePreview();
+    partial void OnFitChanged(PictureFit value) => SchedulePreview();
 
     partial void OnPanXChanged(double value) => SchedulePreview();
 
@@ -263,7 +268,7 @@ public partial class BackgroundEditorViewModel : ObservableObject
     private void StartFresh()
     {
         SourcePath = _request.SourcePath;
-        Mode = FitMode.Cover;
+        Fit = PictureFit.Fill;
         PanX = 0.5;
         PanY = 0.5;
         DarkenPercent = 0;
@@ -292,7 +297,7 @@ public partial class BackgroundEditorViewModel : ObservableObject
             return;
         }
 
-        Mode = FromRecord(entry.Mode);
+        Fit = FromRecord(entry.Mode);
         PanX = entry.PanX;
         PanY = entry.PanY;
         DarkenPercent = entry.Darken;
@@ -331,7 +336,7 @@ public partial class BackgroundEditorViewModel : ObservableObject
             return;
         }
 
-        BitmapSource decoded;
+        WorkingSource decoded;
         try
         {
             decoded = await Task.Run(() => BackgroundFitter.LoadWorkingSource(packFile, PreviewWidth, PreviewHeight));
@@ -345,30 +350,38 @@ public partial class BackgroundEditorViewModel : ObservableObject
         // A source picked while the decode ran owns the stage; this one is only what there was without it.
         if (SourcePath.Length == 0)
         {
-            Preview = decoded;
+            Preview = decoded.Bitmap;
         }
     }
 
     /// <summary>The editor's fit and the record's are the same three choices under two names (spec 8).</summary>
-    internal static BackgroundMode ToRecord(FitMode mode) => mode switch
+    internal static BackgroundMode ToRecord(PictureFit fit) => fit switch
     {
-        FitMode.Contain => BackgroundMode.Contain,
-        FitMode.Stretch => BackgroundMode.Stretch,
+        PictureFit.Fit => BackgroundMode.Contain,
+        PictureFit.Center => BackgroundMode.Center,
+        PictureFit.Stretch => BackgroundMode.Stretch,
         _ => BackgroundMode.Cover,
     };
 
     /// <summary>The way back, with an unknown value from a newer version reading as the default.</summary>
-    internal static FitMode FromRecord(BackgroundMode mode) => mode switch
+    internal static PictureFit FromRecord(BackgroundMode mode) => mode switch
     {
-        BackgroundMode.Contain => FitMode.Contain,
-        BackgroundMode.Stretch => FitMode.Stretch,
-        _ => FitMode.Cover,
+        BackgroundMode.Contain => PictureFit.Fit,
+        BackgroundMode.Center => PictureFit.Center,
+        BackgroundMode.Stretch => PictureFit.Stretch,
+        _ => PictureFit.Fill,
     };
 
-    /// <summary>Saves the fitted picture into the pack and nothing else; the "Apply to game" box is the
-    /// shell's business, because a game write needs the boundary, the snapshot and the undo (spec 8).</summary>
+    /// <summary>"Save and apply": the picture goes into the pack and on into the game. The game write itself is
+    /// the shell's business, because it needs the boundary, the snapshot and the undo (spec 8, 3.0 E).</summary>
     [RelayCommand(CanExecute = nameof(CanSave))]
-    private async Task SaveAsync()
+    private Task SaveAndApplyAsync() => SaveAsync(apply: true);
+
+    /// <summary>"Save only": the same write into the library, with nothing said to the game (3.0 E).</summary>
+    [RelayCommand(CanExecute = nameof(CanSave))]
+    private Task SaveOnlyAsync() => SaveAsync(apply: false);
+
+    private async Task SaveAsync(bool apply)
     {
         var packFile = PackFilePath();
         var slot = Slot;
@@ -383,6 +396,7 @@ public partial class BackgroundEditorViewModel : ObservableObject
         }
 
         var path = SourcePath;
+        var fit = Fit;
         var options = Options;
         var darken = DarkenPercent;
         var packRoot = Path.Combine(PackScanner.PacksRoot(_services.LibraryPath), EffectivePackName);
@@ -405,7 +419,7 @@ public partial class BackgroundEditorViewModel : ObservableObject
                     {
                         SavedAt = DateTimeOffset.Now,
                         Picture = path,
-                        Mode = ToRecord(options.Mode),
+                        Mode = ToRecord(fit),
                         PanX = options.PanX,
                         PanY = options.PanY,
                         Darken = darken,
@@ -414,7 +428,7 @@ public partial class BackgroundEditorViewModel : ObservableObject
                 record.Save(packRoot);
             });
             Saved = new BackgroundSave(
-                packFile, slot, SelectedMap?.DisplayNames ?? slot, ApplyNow, EffectivePackName, allMaps);
+                packFile, slot, SelectedMap?.DisplayNames ?? slot, apply, EffectivePackName, allMaps);
             CloseRequested?.Invoke(true);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or FileFormatException)

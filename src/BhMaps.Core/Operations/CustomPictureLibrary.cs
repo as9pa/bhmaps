@@ -15,7 +15,12 @@ public sealed record CustomPicture(
     string DisplayName,
     IReadOnlyList<string> LibraryPaths,
     IReadOnlyList<string> InGameSlots,
-    string? PackName);
+    string? PackName)
+{
+    /// <summary>3.0: the picture's name, which is its file name without the extension. Every line that names
+    /// the picture to the user (tile, chooser title, done line, menu row) says this; DisplayName is the file.</summary>
+    public string Name => Path.GetFileNameWithoutExtension(DisplayName);
+}
 
 /// <summary>One library copy that took a new name: where it was and where it is now, so the caller can point the
 /// applied record at the file the game's bytes came from.</summary>

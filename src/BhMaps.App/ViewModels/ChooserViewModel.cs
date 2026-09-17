@@ -74,10 +74,23 @@ public sealed partial class ChooserViewModel : ObservableObject
 
     public bool ShowEmpty => Rows.Count == 0;
 
+    /// <summary>3.0 E: the box says what it searches, in the noun the window is about.</summary>
+    public string SearchPlaceholder => $"Search {_noun}s";
+
     /// <summary>"Apply to" in map mode, "Apply" in picture mode, so this class holds no mode flag.</summary>
     public string PrimaryPrefix { get; init; } = "Apply";
 
-    public string PrimaryText => Selected is null ? PrimaryPrefix : $"{PrimaryPrefix} {Selected.Name}";
+    /// <summary>3.0 E: the button says what it will do. Nothing picked leaves the bare word and the button is
+    /// disabled beside it; one row names it; several say how many, in the window's own noun.</summary>
+    public string PrimaryText => SelectedCount switch
+    {
+        0 => PrimaryPrefix,
+        1 => $"{PrimaryPrefix} {Selected!.Name}",
+        _ => $"{PrimaryPrefix} {MainViewModel.Count(SelectedCount, _noun)}",
+    };
+
+    /// <summary>How many rows are picked. The list picks one at a time, so this is 0 or 1 today.</summary>
+    public int SelectedCount => Selected is null ? 0 : 1;
 
     public bool CanApply => Selected is not null;
 

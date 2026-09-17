@@ -317,7 +317,7 @@ stops a long operation.
   out when it has nothing for that map and a hidden pack marked "hidden";
   **Apply picture** unfolds your pictures, up to eight, then "More pictures..."
   for the chooser and "Add Custom Image..."; then **Edit background**, **Edit platforms** (one map
-  only), **Reset to default** and **Show in game folder**. One map applies without asking; a write to
+  only), **Reset** and **Show in game folder**. One map applies without asking; a write to
   more than one map asks and names the count.
 - The **map panel** opens on the right and holds everything one map can do: its name and the sets it
   belongs to, a larger preview, a line saying in words what is in game, Reset this map and Open
@@ -414,8 +414,8 @@ These windows open on top of the pages:
   found through Steam when it can be, the library folder, and whether to capture the game's current
   art as the `Default` pack. It comes back if the saved game folder later stops working.
 - **Add Image**, from the Backgrounds header or a map's panel, takes any
-  number of images, dropped on the window or picked, fits them all one way (**Stretch**, **Center**,
-  **Fill** or **Fit**) and writes each one into an existing or new pack as a 2048x1151 JPEG. A block
+  number of images, dropped on the window or picked, fits them all one way (**Fill**, **Fit**,
+  **Center** or **Stretch**) and writes each one into an existing or new pack as a 2048x1151 JPEG. A block
   of choices headed "Then" decides what happens after that: add them to the library and stop; add and
   apply to the map the window was opened from; or add and apply
   to every map. Applying goes in order and starts again from the first picture when there are more
@@ -425,8 +425,10 @@ These windows open on top of the pages:
   asking. A name another picture in the pack already has gets " (2)" after it.
 - **Chooser**, from "Apply to a map..." on a picture's menu or "More pictures..." on a map card's
   menu, is one list with a search box: every map, each with a thumbnail and the art it shows now, or
-  every picture you imported, each with the pack that holds it. The button reads "Apply to <name>"
-  and the list opens on the first row; Escape or Cancel applies nothing.
+  every picture you imported, each with the pack that holds it. The box says "Search maps", and the
+  button reads "Apply to <name>" for the row picked, "Apply to 3 maps" when several are, and a plain
+  "Apply", greyed out, with nothing picked; the list opens on the first row, and Escape or Cancel
+  applies nothing.
 - **Import folder** takes several folders at once and makes one pack of each. Every folder's name is
   filled in as its pack name and can be edited; a name that matches a pack already in the library
   adds to that pack after one confirm. The button reads "Import N packs". Inside each folder, every
@@ -435,14 +437,15 @@ These windows open on top of the pages:
 - The **background editor**, from a background tile's **Edit**, fits one picture to a background slot
   and saves it into a pack. Its title names the file. The source row shows the picture, its name, its
   pack and its size, with **Replace** beside it, and another image can be dropped on it. Under that:
-  which map the picture is for, a slot several maps share naming them all; the fit, **Fill**, **Fit**
-  or **Stretch**, with two pan sliders that apply only to Fill; and how far to darken it. The Map
+  which map the picture is for, a slot several maps share naming them all; the fit, **Fill**, **Fit**,
+  **Center** or **Stretch**, with two pan sliders that apply only to Fill; and how far to darken it. The Map
   picker starts with **All maps**, which saves the picture under its own name rather than a map's
-  slot name, so it stays an any-map picture; **Apply to all maps now** then writes it over every map
+  slot name, so it stays an any-map picture; **Save and apply** then writes it over every map
   in the same step. All maps is what an any-map picture opens on, and the map it belongs to is what a
   pack picture opens on. It saves into a pack, the picture's own to begin with, under a note saying
-  which file it replaces and that choosing another pack keeps the original, and it can write the
-  result into the game in the same step. When that pack already holds values saved for this map, the
+  which file it replaces and that choosing another pack keeps the original. It ends in two buttons:
+  **Save and apply** writes the picture into the pack and on into the game, and **Save only** writes
+  it into the pack and leaves the game as it is. When that pack already holds values saved for this map, the
   editor opens on them and a line reads "Values from Neon", with a **Start fresh** link beside it
   that puts the defaults back. Opened from Add Image with no picture, the source row is
   where a picture is dropped or browsed for.
@@ -469,7 +472,9 @@ These windows open on top of the pages:
   laid on: **Across the platforms**, which is what it starts on, fits one copy of the picture over
   all the selected pieces at once, so each platform shows the part of the picture it sits on, and
   dragging the preview moves the picture under them; **On each piece** fits a separate copy to every
-  selected piece, covering and centring it. **Edit in
+  selected piece. Beside the switch, the same four fits the other windows offer, **Fill**, **Fit**,
+  **Center** and **Stretch**, say how the picture fills that box; only Fill hangs over the edges, so
+  only Fill can be panned. **Edit in
   another app** writes each selected piece into the pack named under Save into pack and opens it with
   the Windows "Open with" dialog; the preview follows what that program saves, and Cancel leaves
   those files in the pack. **Reset** beside Image puts the piece's own art back, asking first over a
@@ -477,8 +482,9 @@ These windows open on top of the pages:
   through, and **Hue** turns their colour round the wheel, in degrees, to match a background; each has
   its own reset, the readout says Mixed when selected pieces disagree, and the preview recomposes as
   the slider moves. **Save into pack** takes an existing pack or a new one and writes the selected
-  pieces, copying a piece left at its own art and default values as it is, and **Apply to game now**
-  writes the result over the map's own art in the same step. A map with no platform art of its own
+  pieces, copying a piece left at its own art and default values as it is. It ends in the editors'
+  two buttons: **Save and apply** writes the result over the map's own art in the same step, and
+  **Save only** leaves the game as it is. A map with no platform art of its own
   says so and has nothing to edit.
 
 Every change is written straight into the game folder, whether Brawlhalla is open or closed, and
@@ -562,7 +568,7 @@ own art, and Reset puts that art back.
 - **Apply all** copies every file a pack holds into the game folder, overwriting what is there. It
   never deletes a game file the pack does not have, so packs stack: applying one changes only the
   slots it carries.
-- **Reset to default** copies the `Default` pack's files for that map back, including its copies of
+- **Reset** copies the `Default` pack's files for that map back, including its copies of
   the map's backgrounds. With no `Default` pack it falls back to deleting the map's `.png` and `.jpg`
   files so Brawlhalla writes its own art back the next time it launches, which leaves the folder
   looking empty until then.
@@ -596,7 +602,7 @@ own art, and Reset puts that art back.
 - **What the editors remember** is kept in the pack, in two files at its root,
   `platforms.bhmaps.json` and `backgrounds.bhmaps.json`, one entry per map holding the values that
   editor was saved on. A pack gets one once something has been saved into it, whichever pack that
-  is, and Export carries them with the rest of the pack. Reset to default drops the
+  is, and Export carries them with the rest of the pack. Reset drops the
   entries for the maps it resets, and Undo puts them back.
 - **Map-select thumbnails** are the one thing the app writes outside `mapArt`. A write that changes
   a map's art renders that map at 290 by 164 and writes the JPEG

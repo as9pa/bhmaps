@@ -285,12 +285,12 @@ public partial class MapsViewModel : PageViewModel, ITileSized
         {
             Shell.Dialogs.Info(
                 "Nothing to apply",
-                $"{picture.DisplayName} has no file in the library or in the game folder.");
+                $"{picture.Name} has no file in the library or in the game folder.");
             return;
         }
 
         // The name the menu row was labelled with, so the done line reports the row that was clicked (spec 2.2).
-        await Shell.ApplyPictureAsync(source, maps, picture.DisplayName, picture.PackName);
+        await Shell.ApplyPictureAsync(source, maps, picture.Name, picture.PackName);
     }
 
     /// <summary>Spec 4.3: the maps given, back to the Default pack. One map resets without asking; more than one
@@ -606,7 +606,7 @@ public partial class MapsViewModel : PageViewModel, ITileSized
         foreach (var picture in CustomPictures().Take(8))
         {
             pictures.Add(new TileMenuCommand(
-                Path.GetFileNameWithoutExtension(picture.DisplayName),
+                picture.Name,
                 new AsyncRelayCommand(() => ApplyPictureToAsync(target, picture))));
         }
 

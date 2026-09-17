@@ -188,11 +188,17 @@ public class BackgroundFitterTests
         var scaled = BackgroundFitter.LoadWorkingSource(big, 640, 360);
         var kept = BackgroundFitter.LoadWorkingSource(small, 640, 360);
 
-        Assert.Equal(640, scaled.PixelWidth);
-        Assert.Equal(360, scaled.PixelHeight);
-        Assert.True(scaled.IsFrozen);
-        Assert.Equal(100, kept.PixelWidth);
-        Assert.Equal(50, kept.PixelHeight);
+        Assert.Equal(640, scaled.Bitmap.PixelWidth);
+        Assert.Equal(360, scaled.Bitmap.PixelHeight);
+        Assert.True(scaled.Bitmap.IsFrozen);
+        Assert.Equal(100, kept.Bitmap.PixelWidth);
+        Assert.Equal(50, kept.Bitmap.PixelHeight);
+
+        // The working copy still knows the size the picture really is, which is what Center is placed from.
+        Assert.Equal(1600, scaled.NaturalWidth);
+        Assert.Equal(900, scaled.NaturalHeight);
+        Assert.Equal(100, kept.NaturalWidth);
+        Assert.Equal(50, kept.NaturalHeight);
     }
 
     [Theory]
