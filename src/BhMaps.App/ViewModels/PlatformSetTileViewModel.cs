@@ -77,7 +77,11 @@ public sealed partial class PlatformSetTileViewModel : ObservableObject
     {
         // No "Apply to <map>": a click on the tile is that apply, and so is the panel's Apply button, and a menu
         // holds only what the tile cannot do on its own (spec 9).
-        var items = new List<TileMenuCommand> { new("Edit", EditCommand) };
+        var items = new List<TileMenuCommand>
+        {
+            TileMenuCommand.Header(Pack.Name, $"Platforms for {Map.DisplayName}"),
+            new("Edit", EditCommand),
+        };
         if (tickedCount > 0)
         {
             items.Add(new TileMenuCommand(

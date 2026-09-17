@@ -703,9 +703,20 @@ public partial class MapsViewModel : PageViewModel
                     : new AddPicturesTarget(AddPicturesTargetKind.Ticked, null, target)))));
 
         var slot = one.BackgroundSlots.FirstOrDefault();
+
+        // The detail line is about one map's art, so a set target has none: the count is the whole subject.
+        string? detail = null;
+        if (single)
+        {
+            snapshot.MapStatuses.TryGetValue(one.FolderName, out var status);
+            detail = MapArtText.Describe(one, status, snapshot);
+        }
+
         card.MenuItems =
         [
-            TileMenuCommand.Header(single ? one.DisplayName : $"{target.Count} selected maps"),
+            single
+                ? TileMenuCommand.Header(one.DisplayName, detail)
+                : TileMenuCommand.Header($"{target.Count} selected maps"),
             TileMenuCommand.Flyout("Apply pack", packs),
             TileMenuCommand.Flyout("Apply picture", pictures),
             TileMenuCommand.Separator(),

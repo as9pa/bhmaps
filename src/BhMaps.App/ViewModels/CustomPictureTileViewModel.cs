@@ -73,7 +73,7 @@ public sealed partial class CustomPictureTileViewModel : PictureTileViewModel
     {
         // No "Apply to <map>": a tile that names a map carries the Apply button, and a menu holds only what the
         // tile cannot do on its own (spec 9).
-        var items = new List<TileMenuCommand>();
+        var items = new List<TileMenuCommand> { TileMenuCommand.Header(Title, MenuDetail()) };
         if (tickedCount > 0)
         {
             items.Add(new TileMenuCommand(TickedText(tickedCount), ApplyToTickedCommand));
@@ -87,6 +87,51 @@ public sealed partial class CustomPictureTileViewModel : PictureTileViewModel
             ? new TileMenuCommand($"Remove from {PackName}", RemoveFromLibraryCommand)
             : new TileMenuCommand("Save to My Backgrounds", SaveToLibraryCommand));
         MenuItems = items;
+    }
+
+    /// <summary>The header's second line: the pack the picture lives in, and the map the game is showing it on.
+    /// A picture that is only in the game folder is in no pack, so that is the whole line.</summary>
+    private string? MenuDetail()
+    {
+        if (!InLibrary)
+        {
+            return "In game only";
+        }
+
+        var parts = new List<string>();
+        if (PackName is { } pack)
+        {
+            parts.Add(pack);
+        }
+
+        if (_picture.InGameSlots.Count > 0 && OnMapsText(_picture.InGameSlots[0]) is { } on)
+        {
+            parts.Add(on);
+        }
+
+        return parts.Count > 0 ? string.Join(", ", parts) : null;
+    }
+
+    /// <summary>"on Brawlhaven", or "on Brawlhaven and 2 more" when the slot belongs to several maps. Null when
+    /// no catalog map names the slot, which is what a scan that has not run yet looks like.</summary>
+    private string? OnMapsText(string slotFile)
+    {
+        if (Shell.Snapshot is not { } snapshot)
+        {
+            return null;
+        }
+
+        var maps = snapshot.Catalog.Maps
+            .Where(m => m.BackgroundSlots.Any(slot => Path.GetFileName(AssetPath.Background(slot))
+                .Equals(slotFile, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+
+        return maps.Count switch
+        {
+            0 => null,
+            1 => $"on {maps[0].DisplayName}",
+            _ => $"on {maps[0].DisplayName} and {maps.Count - 1} more",
+        };
     }
 
     // The picture's own name, not the file it happens to be stored as, is what the done line reports (spec 2.2).

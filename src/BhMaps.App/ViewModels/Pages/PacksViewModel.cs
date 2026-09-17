@@ -195,6 +195,7 @@ public partial class PacksViewModel : PageViewModel
     /// destructive one, and the pointer should not have to pass over it to reach another line.</summary>
     private IReadOnlyList<TileMenuCommand> BuildMenu(PackRowViewModel row) =>
     [
+        TileMenuCommand.Header(row.Name),
         new TileMenuCommand("Duplicate", new RelayCommand(() => DuplicateCommand.Execute(row))),
         new TileMenuCommand("Import from another pack...", new RelayCommand(() => ImportIntoCommand.Execute(row))),
         new TileMenuCommand("Export", new RelayCommand(() => ExportCommand.Execute(row))),
