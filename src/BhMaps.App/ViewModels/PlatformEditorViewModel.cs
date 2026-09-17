@@ -708,6 +708,12 @@ public partial class PlatformEditorViewModel : ObservableObject
     /// when all of that is done, and the preview waits on this task before it draws.</summary>
     private async Task LoadRecordArtAsync()
     {
+        // The constructor stores this method's task in _recordArt, and the first preview awaits that field. A
+        // pack with no record has nothing to load, so without this yield the body would run to OnImageChanged
+        // synchronously, inside the call, and schedule a render before the field is assigned: the render then
+        // awaited null and the app showed "Object reference not set to an instance of an object". Yielding once
+        // returns to the constructor first, so the field is set before any continuation runs.
+        await Task.Yield();
         foreach (var set in _sets)
         {
             await LoadRecordArtAsync(set);
