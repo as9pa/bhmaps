@@ -108,6 +108,7 @@ public partial class MapsViewModel : PageViewModel, ITileSized
             var what = SelectedChip switch
             {
                 AllChip => "map",
+                MapCatalog.MinigameLabel => "minigame map",
 
                 // RebuildChips clears the chip ListBox's items, and the ListBox pushes its lost selection back
                 // through this two-way binding, so the getter can run between the null and the chip put back.
@@ -554,11 +555,20 @@ public partial class MapsViewModel : PageViewModel, ITileSized
             return false;
         }
 
+        // 3.0: a search reads every map, whatever the chip says, so a typed name still reaches a minigame map
+        // that the All chip leaves out.
+        if (SearchText.Length > 0)
+        {
+            return true;
+        }
+
         return SelectedChip switch
         {
-            AllChip => true,
+            AllChip => !MapCatalog.IsMinigame(card.Map),
             _ => _uiSets.FirstOrDefault(s => s.Label == SelectedChip) is { } set
-                && card.Map.Sets.Contains(set.Name, StringComparer.OrdinalIgnoreCase),
+                && (set.Name == MapCatalog.MinigameSetName
+                    ? MapCatalog.IsMinigame(card.Map)
+                    : card.Map.Sets.Contains(set.Name, StringComparer.OrdinalIgnoreCase)),
         };
     }
 

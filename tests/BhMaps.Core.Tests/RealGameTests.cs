@@ -109,4 +109,31 @@ public class RealGameTests
             Helpers.SyntheticImage.MeanLuminance(withPlatforms),
             precision: 2);
     }
+
+    /// <summary>3.0: the maps only a game mode uses, which the Minigames chip holds and All leaves out. Ten
+    /// folders on the real data; every other folder in the mode set is a map a player can also pick.</summary>
+    [Fact]
+    public void TheMinigameMapsAreTheTenModeOnlyFolders()
+    {
+        if (Root() is not { } root)
+        {
+            return;
+        }
+
+        var catalog = MapCatalog.Build(LevelDataReader.Read(root, null).Model!);
+        var minigames = catalog.Maps.Where(MapCatalog.IsMinigame).Select(m => m.FolderName).Order().ToList();
+
+        Assert.Equal(
+            [
+                "Bombsketball", "Brawlball", "Buddy", "Horde", "HordeTwo",
+                "Ring", "Soccer", "StreetFighter2", "VolleyBattle", "Zombie",
+            ],
+            minigames);
+
+        var alsoPlayable = catalog.Maps
+            .Where(m => m.Sets.Contains(MapCatalog.MinigameSetName, StringComparer.OrdinalIgnoreCase))
+            .Where(m => !minigames.Contains(m.FolderName));
+
+        Assert.All(alsoPlayable, m => Assert.False(MapCatalog.IsMinigame(m)));
+    }
 }

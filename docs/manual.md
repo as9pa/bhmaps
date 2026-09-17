@@ -296,7 +296,9 @@ stops a long operation.
   filter: All and one per level set. The set
   chips are Ranked 1v1, Ranked 2v2 and
   Tournament when the game's data has the ranked sets, and the standard ones when it does not; the
-  other sets the game defines are read but not shown. The card size is the size control (Large,
+  other sets the game defines are read but not shown. Minigames comes last and holds the ten maps
+  only a game mode uses, such as Brawlball and Horde, and All leaves those ten out; a search still
+  finds them whatever chip is on. The card size is the size control (Large,
   Medium, Small) in the page header, or Ctrl and plus, minus, zero, or the wheel; the grid holds as
   many columns as fit, so opening the panel moves cards down a row instead of shrinking them. Each card is a composed preview, the map's
   name, and a tag only when there is something to say: the pack the map matches, the name of the

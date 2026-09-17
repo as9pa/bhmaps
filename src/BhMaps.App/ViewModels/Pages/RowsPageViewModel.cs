@@ -110,6 +110,7 @@ public abstract partial class RowsPageViewModel : PageViewModel, ITileSized
             return SelectedChip switch
             {
                 null or "" or AllChip => "No map to show.",
+                MapCatalog.MinigameLabel => "No minigame map to show.",
                 _ => $"No {SelectedChip.ToLowerInvariant()} map to show.",
             };
         }
@@ -265,17 +266,21 @@ public abstract partial class RowsPageViewModel : PageViewModel, ITileSized
     private bool Matches(MapRowViewModel row)
     {
         var search = SearchText;
-        if (search.Length > 0 && !row.Haystack.Contains(search, StringComparison.OrdinalIgnoreCase))
+        if (search.Length > 0)
         {
-            return false;
+            // 3.0: a search reads every map, whatever the chip says, so a typed name still reaches a minigame
+            // map that the All chip leaves out.
+            return row.Haystack.Contains(search, StringComparison.OrdinalIgnoreCase);
         }
 
         return SelectedChip switch
         {
-            AllChip => true,
+            AllChip => !MapCatalog.IsMinigame(row.Map),
             null or "" => true,
             _ => _uiSets.FirstOrDefault(s => s.Label == SelectedChip) is { } set
-                && row.Map.Sets.Contains(set.Name, StringComparer.OrdinalIgnoreCase),
+                && (set.Name == MapCatalog.MinigameSetName
+                    ? MapCatalog.IsMinigame(row.Map)
+                    : row.Map.Sets.Contains(set.Name, StringComparer.OrdinalIgnoreCase)),
         };
     }
 }
