@@ -1528,44 +1528,6 @@ public partial class MainViewModel : ObservableObject
         Services.LevelData.Changed -= OnLevelDataChanged;
     }
 
-    /// <summary>Spec 10.2: the Settings switch tells the shell it moved, so turning it off puts the game's own
-    /// thumbnails back, through the same wrapper as any other game write. Turning it on writes nothing: a
-    /// thumbnail is only ever written by a write that changed the map's art. The switch fires this unawaited, so
-    /// it turns its own failure into the dialog a write failure gets rather than an unobserved exception.</summary>
-    public async Task ThumbnailSwitchChangedAsync(bool on)
-    {
-        if (on)
-        {
-            return;
-        }
-
-        try
-        {
-            var originalsDir = ThumbnailWriter.OriginalsDir(Services.AppDataDir);
-            var thumbnailsDir = ThumbnailWriter.ThumbnailsDir(Services.GameRoot);
-            var names = ThumbnailWriter.KeptOriginals(originalsDir);
-            if (names.Count == 0)
-            {
-                // Nothing was ever written, so there is nothing to put back and no line to leave.
-                return;
-            }
-
-            await RunWriteCoreAsync(
-                "Restoring map-select thumbnails",
-                [],
-                (_, ct) => Task.Run(() => ThumbnailWriter.RestoreAll(originalsDir, thumbnailsDir), ct),
-                "Map-select thumbnails restored",
-                undoable: true,
-                // The setting is already off, so the capture has to be told the names itself: the thumbnails side
-                // of this undo is the whole of what it restores.
-                thumbnailUndoNames: names);
-        }
-        catch (Exception ex)
-        {
-            Dialogs.Error("Something went wrong", ex.Message);
-        }
-    }
-
     /// <summary>Copies the game folder into the Default pack (spec 6.1), asking before replacing one that already
     /// exists. Shared by the Packs and Settings pages so the confirm text and the busy boundary are the same
     /// from both. A library-only write: no undo snapshot and no game-running policy.</summary>
@@ -2010,7 +1972,7 @@ public partial class MainViewModel : ObservableObject
     /// <paramref name="writtenFolders"/> names the map folders the write lands in, for the rescan it ends with
     /// (spec 11); left null it is read off the undo paths, which is what every write into a map's own folder
     /// wants. <paramref name="artMaps"/> names the maps whose art the write changes, so their map-select
-    /// thumbnails are written after it when the switch is on (spec 10.4); <paramref name="resetThumbnails"/>
+    /// thumbnails are written after it (spec 10.4); <paramref name="resetThumbnails"/>
     /// makes that step put the game's own thumbnail back instead, for a write that resets the art.
     /// <paramref name="sources"/> names the library file behind every game path the write lays down, so the applied
     /// record can remember what the app itself wrote; left null nothing is recorded, which is what a write of
@@ -2053,7 +2015,6 @@ public partial class MainViewModel : ObservableObject
         IReadOnlyList<string>? writtenFolders = null,
         IReadOnlyList<MapEntry>? artMaps = null,
         bool resetThumbnails = false,
-        IReadOnlyList<string>? thumbnailUndoNames = null,
         IReadOnlyList<AppliedSource>? sources = null)
     {
         if (GameFolderMissing || IsBusy)
@@ -2098,16 +2059,10 @@ public partial class MainViewModel : ObservableObject
                                         session.CaptureLibrary(libraryPath, libraryUndoPaths);
                                     }
 
-                                    // The thumbnails the step below is about to write, plus any the caller named
-                                    // itself: the restore-on-off write is the one whose thumbnails side is all
-                                    // there is to it.
+                                    // The thumbnails the step below is about to write.
                                     session.CaptureThumbnails(
                                         thumbnailsDir,
                                         thumbnailPlans.SelectMany(planned => planned.Plan.Targets.Select(t => t.FileName)));
-                                    if (thumbnailUndoNames is { Count: > 0 })
-                                    {
-                                        session.CaptureThumbnails(thumbnailsDir, thumbnailUndoNames);
-                                    }
 
                                     // The applied record describes the files this session is holding, so it goes
                                     // into the same session and comes back with them.
@@ -2154,7 +2109,6 @@ public partial class MainViewModel : ObservableObject
                 writtenFolders,
                 artMaps,
                 resetThumbnails,
-                thumbnailUndoNames,
                 sources));
 
         // A restore that fully succeeds discards its snapshot, so whether there is anything to undo is read back
@@ -2193,10 +2147,10 @@ public partial class MainViewModel : ObservableObject
     /// the last write that named the map wrote it.</summary>
     public IReadOnlyDictionary<string, string> ThumbnailNotes => _thumbnailNotes;
 
-    /// <summary>The thumbnail plan of every map a write names, or nothing at all when the switch is off, the
-    /// write names no maps, or there is no scan to read the other maps' names out of (spec 10.4).</summary>
+    /// <summary>The thumbnail plan of every map a write names, or nothing at all when the write names no maps
+    /// or there is no scan to read the other maps' names out of (spec 10.4).</summary>
     private IReadOnlyList<(MapEntry Map, ThumbnailPlan Plan)> ThumbnailPlans(IReadOnlyList<MapEntry>? artMaps) =>
-        Services.Settings.WriteGameThumbnails && artMaps is { Count: > 0 } && Snapshot is { } snapshot
+        artMaps is { Count: > 0 } && Snapshot is { } snapshot
             ? [.. artMaps.Select(map =>
                 (map, ThumbnailWriter.Plan(map, snapshot.Catalog.Maps, Services.GameRoot, Services.AppDataDir)))]
             : [];

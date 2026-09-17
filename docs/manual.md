@@ -5,9 +5,8 @@ listed under the name the game gives it, above a preview composed the way the ga
 the game's own level data. It keeps a library of *packs*, folders of images that mirror the game's
 `mapArt` tree, and copies them into the game folder on demand. The only files it changes are `.png`
 and `.jpg` files inside the `mapArt` folder and inside its own library, plus its own files in
-`%APPDATA%\BhMaps`. With the Map-select thumbnails switch on, which is off until you turn it on, it
-also writes over the `.jpg` files already in the game's `images\thumbnails` folder, and it keeps a
-copy of every original so it can put it back. The game's data files are read and never written, and
+`%APPDATA%\BhMaps`. It also writes over the `.jpg` files already in the game's `images\thumbnails`
+folder, and it keeps a copy of every original so it can put it back. The game's data files are read and never written, and
 nothing else in the game install is touched.
 
 ## What is new in 2.8
@@ -26,7 +25,7 @@ nothing else in the game install is touched.
   again every game file whose source changed since the app put it there (a pack picture edited on
   disk, a picture in My Backgrounds replaced), restores a file missing from a map folder from the
   pack the folder matches or from Default, and rewrites the map-select thumbnails for every map with
-  custom art when that switch is on. It is one write with one Undo, and its line reads "Refreshed 12
+  custom art. It is one write with one Undo, and its line reads "Refreshed 12
   maps. Shows on the next match load." A game file the app wrote that has since been changed by
   hand is left alone and counted: "1 file changed by hand, left alone." With nothing to do it says
   "Nothing to refresh." and writes nothing. F5 is still the read-only rescan.
@@ -246,7 +245,7 @@ describes things by where they are and what they do. Nothing on disk changes sha
 | --- | --- |
 | Game map art, read and written | `C:\Program Files (x86)\Steam\steamapps\common\Brawlhalla\mapArt` |
 | Game data files, read only | `BrawlhallaAir.swf`, `Dynamic.swz`, `Init.swz` and `Game.swz`, in the folder above `mapArt` |
-| Game map-select thumbnails, written only with the switch on | `C:\Program Files (x86)\Steam\steamapps\common\Brawlhalla\images\thumbnails` |
+| Game map-select thumbnails, written with the map art | `C:\Program Files (x86)\Steam\steamapps\common\Brawlhalla\images\thumbnails` |
 | Pack library | `Documents\BhMaps` by default, changeable in Settings |
 | Packs inside the library | `<library>\packs\<pack name>\<GameFolder>\<file>` |
 | Settings | `%APPDATA%\BhMaps\settings.json` |
@@ -262,8 +261,7 @@ The map art folder and the library are chosen in the welcome window and editable
 data files are wherever the game folder is. Only `<library>\packs` is read and written, so anything
 else kept in the library folder is left alone. The settings file holds the two paths, the tile size
 each page remembers, when each pack was last applied, whether the Backgrounds page is showing your own
-pictures, whether the game's map-select thumbnails are updated, the names of the packs hidden from
-the lists, whether the welcome window has been
+pictures, the names of the packs hidden from the lists, whether the welcome window has been
 finished, whether BhMaps checks for updates when it starts, when it last checked, and any update
 notice you dismissed. The three caches are speed-ups
 only: deleting any of them costs one slower start, and preview files unused for 30 days are deleted
@@ -400,16 +398,13 @@ stops a long operation.
   the pack holds fully transparent PNGs, a line above the grid says how many of its files change
   nothing in game and offers to remove them. Apply all, Open folder and the way back to the pack list
   are in the header.
-- **Settings** is one line per setting: the game folder and the library, each with Change and Open;
-  the game data, reading "From Brawlhalla 10.10, read 16 September 2026." with the version the game's
-  files name, or "From the game's files, read ..." when they name none, and Refresh now beside it; Capture defaults; one line about
-  applying, which says that changes are written straight into the game folder with Brawlhalla open or
-  closed and show on the next match load, and that Undo puts back the files of the last write;
-  **Map-select thumbnails**, a checkbox reading **Also update the game's map-select thumbnails** that
-  starts off and, turned off again, puts every kept original thumbnail back; **Updates**, a checkbox
-  reading **Check for updates when BhMaps starts** with a **Check now** button and a line saying when
-  it last checked; and the version, which says whether a newer release is out and offers **Update to
-  <version>** and **What changed**. There is no OK button, so every row saves as it is changed.
+- **Settings** is one line per setting, under three headings. **Folders** is the game folder and the
+  library, each with Change and Open. **Game** is the game data, reading "From Brawlhalla 10.10, read
+  16 September 2026." with the version the game's files name, or "From the game's files, read ..."
+  when they name none, and Refresh now beside it; and the Default pack, with **Capture**. **Updates**
+  is the version, whose line reads "Latest. Last checked ..." or "Update available: <version>." with
+  **Get** and **What changed** beside it; and a checkbox reading **Check for updates when BhMaps
+  starts** with a **Check now** button. There is no OK button, so every row saves as it is changed.
 
 These windows open on top of the pages:
 
@@ -601,15 +596,15 @@ own art, and Reset puts that art back.
   editor was saved on. A pack gets one once something has been saved into it, whichever pack that
   is, and Export carries them with the rest of the pack. Reset to default drops the
   entries for the maps it resets, and Undo puts them back.
-- **Map-select thumbnails** are the one thing the app writes outside `mapArt`. With the switch in
-  Settings on, a write that changes a map's art renders that map at 290 by 164 and writes the JPEG
+- **Map-select thumbnails** are the one thing the app writes outside `mapArt`. A write that changes
+  a map's art renders that map at 290 by 164 and writes the JPEG
   over every picture in the game's `images\thumbnails` folder that the map's own levels name and no
   other map's folder names. A map's folder often holds more than one level, the ranked "Small" one
   beside the casual one, and those levels usually name different pictures; all of them are that map's
   and each is rendered from its own level, so the Small variant gets its own layout. The first time a
   file is written over, the original is copied into
   `%APPDATA%\BhMaps\thumbnails-original` under that file's own name, and those copies are what Reset
-  to default, Undo and turning the switch off put back. A picture two different maps' folders both
+  to default and Undo put back. A picture two different maps' folders both
   name is skipped, so one map's art is never written over another map's thumbnail, and the map panel
   says which file was left alone and why.
 - **Updates** are read from the GitHub releases page of the project, once a day at most, when BhMaps

@@ -13,7 +13,7 @@ public static class SettingsStore
     /// than as a property this version does not know.</summary>
     private static readonly JsonNodeOptions NodeOptions = new() { PropertyNameCaseInsensitive = true };
 
-    /// <summary>Keys this version writes, plus the two 2.0 keys it drops. A dropped key has to stay known, or
+    /// <summary>Keys this version writes, plus the older keys it drops. A dropped key has to stay known, or
     /// Load would carry it into <see cref="AppSettings.Unknown"/> and Save would write it straight back.</summary>
     private static readonly string[] KnownKeys =
     [
@@ -23,7 +23,10 @@ public static class SettingsStore
         // them; like the two keys below they have to stay known, or Save would carry them back as unknown.
         "mapsZoom", "backgroundsRowZoom", "packZoom", "platformsZoom",
         "welcomeDone", "homeZoom", "whileRunning", "backgroundsZoom", "packLastApplied",
-        "backgroundsShowPictures", "platformPreviewIsolate", "writeGameThumbnails",
+        "backgroundsShowPictures", "platformPreviewIsolate",
+        // 3.0 writes the game's map-select thumbnails always, so the 2.5 switch is read no more and written no
+        // more; it stays known so an old file's copy of it is dropped rather than carried back.
+        "writeGameThumbnails",
         "checkForUpdates", "lastUpdateCheck", "dismissedUpdate", "hiddenPacks",
     ];
 
@@ -99,7 +102,6 @@ public static class SettingsStore
             Stamps(obj),
             Bool(obj, "backgroundsShowPictures"),
             Bool(obj, "platformPreviewIsolate"),
-            Bool(obj, "writeGameThumbnails"),
             Bool(obj, "checkForUpdates", fallback: true),
             Time(obj, "lastUpdateCheck"),
             Str(obj, "dismissedUpdate") is { Length: > 0 } tag ? tag : null,
@@ -124,7 +126,6 @@ public static class SettingsStore
             ["welcomeDone"] = settings.WelcomeDone,
             ["backgroundsShowPictures"] = settings.BackgroundsShowPictures,
             ["platformPreviewIsolate"] = settings.PlatformPreviewIsolate,
-            ["writeGameThumbnails"] = settings.WriteGameThumbnails,
             ["checkForUpdates"] = settings.CheckForUpdates,
             ["lastUpdateCheck"] = settings.LastUpdateCheck?.ToString("o", CultureInfo.InvariantCulture),
             ["dismissedUpdate"] = settings.DismissedUpdate,

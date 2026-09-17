@@ -12,7 +12,6 @@ public sealed record AppSettings(
     IReadOnlyDictionary<string, DateTimeOffset>? PackLastApplied = null,
     bool BackgroundsShowPictures = false,
     bool PlatformPreviewIsolate = false,
-    bool WriteGameThumbnails = false,
     bool CheckForUpdates = true,
 
     /// <summary>Spec 7.2: when the last start-up check ran, so the next one waits 24 h. Null means never.</summary>

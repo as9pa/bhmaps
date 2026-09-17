@@ -412,22 +412,21 @@ public class SettingsStoreTests
     }
 
     [Fact]
-    public void WriteGameThumbnails_RoundTripsAndDefaultsOff()
+    public void Load_IgnoresTheDroppedThumbnailSwitch()
     {
         using var tmp = new TempDir();
         var path = tmp.Sub("settings.json");
 
-        // Spec 10.2: the switch is opt-in, so a file written before it existed loads off.
-        File.WriteAllText(path, "{ \"welcomeDone\": true }");
+        // 3.0 writes the game's map-select thumbnails always, so a 2.5 to 2.8 file still carrying the switch
+        // loads without it, and Save does not write it back.
+        File.WriteAllText(path, "{ \"welcomeDone\": true, \"writeGameThumbnails\": false }");
         var older = SettingsStore.Load(path);
         Assert.True(older.WelcomeDone);
-        Assert.False(older.WriteGameThumbnails);
-        Assert.False(AppSettings.Default.WriteGameThumbnails);
+        Assert.Null(older.Unknown);
 
-        SettingsStore.Save(path, AppSettings.Default with { WriteGameThumbnails = true });
+        SettingsStore.Save(path, older);
 
-        Assert.True(SettingsStore.Load(path).WriteGameThumbnails);
-        Assert.Contains("\"writeGameThumbnails\": true", File.ReadAllText(path));
+        Assert.DoesNotContain("writeGameThumbnails", File.ReadAllText(path));
     }
 
     [Fact]
