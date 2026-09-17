@@ -43,6 +43,11 @@ public sealed record TileMenuCommand(
     public static TileMenuCommand Separator() =>
         new("", null, IsEnabled: false, Kind: TileMenuKind.Separator);
 
+    /// <summary>The record is the MenuItem's header, and UI Automation names a header by its ToString, so a
+    /// record's generated form ("TileMenuCommand { Text = , ... }") was what a screen reader or a script got for
+    /// every line. The text is the name, and a separator's is empty, as it should be.</summary>
+    public override string ToString() => Text;
+
     /// <summary>A line that opens a submenu rather than running. Disabled when it has no lines, because a flyout
     /// that opens on nothing reads as the menu being broken.</summary>
     public static TileMenuCommand Flyout(string text, IReadOnlyList<TileMenuCommand> children) =>
