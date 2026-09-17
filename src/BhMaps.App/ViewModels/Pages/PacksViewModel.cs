@@ -200,7 +200,8 @@ public partial class PacksViewModel : PageViewModel
         new TileMenuCommand("Import from another pack...", new RelayCommand(() => ImportIntoCommand.Execute(row))),
         new TileMenuCommand("Export", new RelayCommand(() => ExportCommand.Execute(row))),
         new TileMenuCommand("Open folder", new RelayCommand(() => OpenFolderCommand.Execute(row))),
-        new TileMenuCommand("Remove", new RelayCommand(() => RemoveCommand.Execute(row))),
+        TileMenuCommand.Separator(),
+        new TileMenuCommand("Delete pack", new RelayCommand(() => RemoveCommand.Execute(row)), IsDestructive: true),
     ];
 
     /// <summary>The maps the pack touches: the catalog maps it has at least one file for, in catalog order. A
@@ -293,8 +294,8 @@ public partial class PacksViewModel : PageViewModel
 
         var pack = row.Pack;
         if (!Shell.Dialogs.Confirm(
-            "Remove pack",
-            $"Remove pack '{pack.Name}' and the {PackRowViewModel.Plural(pack.FileCount, "file")} in it? This cannot be undone."))
+            $"Delete {pack.Name}?",
+            $"Its {PackRowViewModel.Plural(pack.FileCount, "file")} will be deleted. This cannot be undone."))
         {
             return;
         }
@@ -302,7 +303,7 @@ public partial class PacksViewModel : PageViewModel
         var libraryPath = Shell.Services.LibraryPath;
         string? error = null;
         var ok = await Shell.RunBusyAsync(
-            $"Removing {pack.Name}",
+            $"Deleting {pack.Name}",
             (_, _) => Task.Run(() => { error = PackDeleter.Delete(libraryPath, pack.Name); }));
         if (error is not null)
         {
@@ -310,7 +311,7 @@ public partial class PacksViewModel : PageViewModel
         }
         else if (ok)
         {
-            Shell.SetLibraryDone($"Removed {pack.Name}");
+            Shell.SetLibraryDone($"Deleted {pack.Name}");
             if (Shell.PackClipboard is { } held && held.Source.Name.Equals(pack.Name, StringComparison.OrdinalIgnoreCase))
             {
                 Shell.PackClipboard = null;

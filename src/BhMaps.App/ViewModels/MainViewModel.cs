@@ -17,6 +17,11 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace BhMaps.App.ViewModels;
 
+/// <summary>One part of one map's art, put back to default alongside a delete. Slots is empty when only the
+/// map's platforms reset, and Platforms is false when only its pictures do; both are set when the delete takes
+/// away everything the game was showing for the map.</summary>
+public sealed record PartReset(MapEntry Map, bool Platforms, IReadOnlyList<string> Slots);
+
 /// <summary>The shell (decision D13): the busy boundary, navigation between the five pages, the scan that feeds
 /// them, and the undo of the last game write.</summary>
 public partial class MainViewModel : ObservableObject
@@ -1392,6 +1397,151 @@ public partial class MainViewModel : ObservableObject
         await RescanAsync(writtenFolders);
         return ok;
     }
+
+    /// <summary>The Delete lines on the tile menus: the library files go, and where the game is showing that art
+    /// the affected part of the map goes back to default, both inside one write so one Undo puts everything back.
+    /// <paramref name="name" /> is what the menu line was about, for the confirm title and the done line;
+    /// <paramref name="packName" /> the pack the words name; <paramref name="libraryUndoPaths" /> the
+    /// library-relative files the delete touches; <paramref name="delete" /> the Core call, run on a worker
+    /// thread; <paramref name="resets" /> the parts of maps that go back to default with it, empty when the game
+    /// is showing none of the deleted art.</summary>
+    public async Task DeleteFromLibraryAsync(
+        string name,
+        string packName,
+        IReadOnlyList<string> libraryUndoPaths,
+        Func<PackCopyResult> delete,
+        IReadOnlyList<PartReset> resets)
+    {
+        // A reset needs a Default pack to restore from, and the Maps page refuses to reset without one. The
+        // delete still goes ahead, so the promise the confirm makes is dropped rather than broken.
+        var snapshot = Snapshot;
+        var defaultPack = snapshot?.DefaultPack;
+        if (defaultPack is null)
+        {
+            resets = [];
+        }
+
+        var who = ResetWho(resets);
+        if (!Dialogs.Confirm(
+                $"Delete {name}?",
+                who is null
+                    ? $"It will be removed from {packName}."
+                    : $"It will be removed from {packName} and {who.Value.Who} will reset to default."))
+        {
+            return;
+        }
+
+        if (defaultPack is null || snapshot is null || who is null)
+        {
+            PackCopyResult? removed = null;
+            await RunLibraryWriteAsync(
+                "Deleting",
+                libraryUndoPaths,
+                (_, ct) => Task.Run(() => { removed = delete(); }, ct),
+                $"Deleted {name}.");
+            if (removed is not null)
+            {
+                Dialogs.ShowFailures("Some files could not be deleted", removed.Failures);
+            }
+
+            return;
+        }
+
+        var gamePath = Services.GamePath;
+        var failures = new List<FileFailure>();
+        var maps = resets.Select(r => r.Map).ToList();
+        await RunGameWriteAsync(
+            "Deleting",
+            [.. resets
+                .SelectMany(r => (r.Platforms
+                        ? PackApplier.ResetPlatformPaths(snapshot.Tree, r.Map, defaultPack)
+                        : Array.Empty<string>())
+                    .Concat(PackApplier.ResetBackgroundPaths(defaultPack, r.Slots)))
+                .Distinct(StringComparer.OrdinalIgnoreCase)],
+            (progress, ct) => Task.Run(
+                () =>
+                {
+                    // The library files first: the reset that follows is what the game is left showing, so a
+                    // delete that failed leaves the pack holding art the map no longer uses rather than the
+                    // other way round.
+                    ct.ThrowIfCancellationRequested();
+                    progress.Report(name);
+                    failures.AddRange(delete().Failures);
+                    foreach (var reset in resets)
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        progress.Report(reset.Map.DisplayName);
+                        if (reset.Platforms)
+                        {
+                            failures.AddRange(
+                                MapReset.ResetPlatforms(gamePath, reset.Map.FolderName, defaultPack).Failures);
+                        }
+
+                        if (reset.Slots.Count > 0)
+                        {
+                            failures.AddRange(
+                                MapReset.ResetBackgrounds(gamePath, reset.Slots, defaultPack).Failures);
+                        }
+                    }
+                },
+                ct),
+            $"Deleted {name}. {who.Value.Who} {(who.Value.Plural ? "are" : "is")} back to default.",
+            libraryUndoPaths: libraryUndoPaths,
+            artMaps: maps,
+            // One flag for every map in the write, so it is only the kept original when every one of them ends
+            // fully default; a map that keeps custom art elsewhere is re-rendered with the rest.
+            resetThumbnails: resets.All(r => EndsDefault(r, MapStatusOf(snapshot, r.Map))));
+
+        Dialogs.ShowFailures("Some files could not be deleted", failures);
+    }
+
+    /// <summary>The maps a delete puts back to default, as the confirm and the done line name them, and whether
+    /// they take "are" rather than "is". Null when nothing resets. A reset of a map's platforms alone names the
+    /// platforms, because the map's pictures are staying.</summary>
+    private static (string Who, bool Plural)? ResetWho(IReadOnlyList<PartReset> resets)
+    {
+        if (resets.Count == 0)
+        {
+            return null;
+        }
+
+        var names = resets
+            .Select(r => r.Slots.Count == 0 ? $"{r.Map.DisplayName}'s platforms" : r.Map.DisplayName)
+            .ToList();
+
+        // Two names join with "and", three list out, and past that the tail becomes a count: a confirm is read,
+        // not scanned, and a line of eleven map names is neither.
+        var who = names.Count switch
+        {
+            1 => names[0],
+            2 => $"{names[0]} and {names[1]}",
+            3 => $"{names[0]}, {names[1]} and {names[2]}",
+            _ => $"{names[0]}, {names[1]} and {Count(names.Count - 2, "other map")}",
+        };
+
+        return (who, names.Count > 1 || resets[0].Slots.Count == 0);
+    }
+
+    /// <summary>True when the reset leaves the map showing the game's own art throughout: every file the scan
+    /// found that is not default is one this reset puts back. That is the map whose map-select thumbnail should
+    /// be the kept original rather than a fresh render.</summary>
+    private static bool EndsDefault(PartReset reset, MapStatus? status)
+    {
+        if (status is null)
+        {
+            return true;
+        }
+
+        var folder = reset.Map.FolderName + Path.DirectorySeparatorChar;
+        return status.Files.All(file =>
+            file.State == MapFileState.Default
+            || (reset.Platforms && file.RelativePath.StartsWith(folder, StringComparison.OrdinalIgnoreCase))
+            || reset.Slots.Any(slot => AssetPath.Background(slot)
+                .Equals(file.RelativePath, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private static MapStatus? MapStatusOf(ScanSnapshot snapshot, MapEntry map) =>
+        snapshot.MapStatuses.TryGetValue(map.FolderName, out var status) ? status : null;
 
     /// <summary>Spec 2.2: what a write reports about when it will show. One string, appended by the wrapper, so
     /// two pages cannot word it differently. Read at completion, not at the start: a game that was launched while
