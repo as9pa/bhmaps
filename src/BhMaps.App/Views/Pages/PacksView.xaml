@@ -160,7 +160,9 @@
 
                       <StackPanel Grid.Column="1" Margin="14,0,12,0" VerticalAlignment="Center">
                         <TextBlock FontWeight="Medium" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
-                        <TextBlock Margin="0,3,0,0" Foreground="{StaticResource Text2Brush}" Text="{Binding CountsText}" />
+                        <!-- Wraps rather than trims: ", hidden from lists" is the end of the line and the part that matters. -->
+                        <TextBlock Margin="0,3,0,0" Foreground="{StaticResource Text2Brush}" Text="{Binding CountsText}"
+                                   TextWrapping="Wrap" />
                       </StackPanel>
 
                       <!-- The strip and its count share one star column: a count in an Auto column of its own
