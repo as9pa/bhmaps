@@ -42,6 +42,14 @@ public abstract partial class PictureTileViewModel : ObservableObject
     /// <summary>True when this picture is the one the game is showing for what the tile is about.</summary>
     public bool IsInGame { get; }
 
+    /// <summary>2.8: true for a tile whose pack is hidden on the Packs page, which is here only because the game
+    /// is showing it. On the base rather than on the one subclass that sets it, because one template draws every
+    /// tile and a binding has to find the member on all of them.</summary>
+    public bool IsHiddenPack { get; init; }
+
+    /// <summary>The word after the caption on such a tile, empty on every other one.</summary>
+    public string HiddenNote => IsHiddenPack ? "hidden" : "";
+
     /// <summary>The words on the hover button. A picture with no single map has no one-click Apply.</summary>
     public virtual string ApplyText => "Apply";
 

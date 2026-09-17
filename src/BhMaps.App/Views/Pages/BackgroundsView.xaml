@@ -75,6 +75,7 @@
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="*" />
         <ColumnDefinition Width="Auto" />
+        <ColumnDefinition Width="Auto" />
       </Grid.ColumnDefinitions>
 
       <ListBox HorizontalAlignment="Left"
@@ -89,9 +90,24 @@
         </ListBox.ItemsPanel>
       </ListBox>
 
+      <!-- 2.8: the rows are missing a pack on purpose, so the header says how many and goes to the page where
+           that was done. -->
+      <Button Grid.Column="1"
+              Margin="0,0,12,0"
+              HorizontalAlignment="Right"
+              VerticalAlignment="Center"
+              AutomationProperties.Name="{Binding HiddenPacksText}"
+              Command="{Binding GoToPacksCommand}"
+              Content="{Binding HiddenPacksText}"
+              FocusVisualStyle="{StaticResource DialogFocusRing}"
+              Foreground="{StaticResource Text2Brush}"
+              Style="{StaticResource PlainButton}"
+              ToolTip="Hidden on the Packs page. Click to go there."
+              Visibility="{Binding ShowHiddenPacks, Converter={StaticResource BoolToVis}}" />
+
       <!-- Spec 4: one control for the one question every row was asking. No border and no box: a plus and a label,
            muted while it is off. A Button, so Space and Enter toggle it as a click does. -->
-      <Button Grid.Column="1"
+      <Button Grid.Column="2"
               HorizontalAlignment="Right"
               VerticalAlignment="Center"
               AutomationProperties.Name="{Binding PicturesLabel}"

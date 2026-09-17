@@ -97,6 +97,15 @@ public abstract partial class RowsPageViewModel : PageViewModel
 
     public bool ShowClearSearch => SearchText.Length > 0;
 
+    /// <summary>2.8: how many packs the Packs page is hiding from these rows. Written by <see cref="Refresh" />,
+    /// because a list quietly missing a pack reads as a bug.</summary>
+    public int HiddenPackCount { get; private set; }
+
+    /// <summary>"1 pack hidden", "2 packs hidden".</summary>
+    public string HiddenPacksText => $"{MainViewModel.Count(HiddenPackCount, "pack")} hidden";
+
+    public bool ShowHiddenPacks => HiddenPackCount > 0;
+
     /// <summary>Spec 3.1's first-run line, on this page too: nothing in the library but the Default pack, and no
     /// any-map picture either.</summary>
     public bool ShowFirstRunLine =>
@@ -157,6 +166,14 @@ public abstract partial class RowsPageViewModel : PageViewModel
         ApplyFilter();
         RebuildMenus();
         OnPropertyChanged(nameof(ShowFirstRunLine));
+
+        // The Default pack is never hidden, whatever the setting holds.
+        HiddenPackCount = snapshot.Packs.Count(p =>
+            !p.Name.Equals(DefaultPack.Name, StringComparison.OrdinalIgnoreCase)
+            && Shell.Services.Settings.IsHidden(p.Name));
+        OnPropertyChanged(nameof(HiddenPackCount));
+        OnPropertyChanged(nameof(HiddenPacksText));
+        OnPropertyChanged(nameof(ShowHiddenPacks));
     }
 
     /// <summary>A row has come on screen. Fire and forget: the row turns every file failure into a blank tile, so
@@ -182,6 +199,11 @@ public abstract partial class RowsPageViewModel : PageViewModel
     /// <summary>The no-results state's way back (addendum B). RowKeys runs it for Escape in the box.</summary>
     [RelayCommand]
     private void ClearSearch() => SearchText = "";
+
+    /// <summary>The header note's way to the page where the hiding was done (2.8). The shell's own command, so
+    /// there is one route to a page.</summary>
+    [RelayCommand]
+    private void GoToPacks() => Shell.NavigatePacksCommand.Execute(null);
 
     partial void OnSearchTextChanged(string value)
     {

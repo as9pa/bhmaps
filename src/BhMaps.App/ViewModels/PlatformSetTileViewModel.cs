@@ -49,6 +49,13 @@ public sealed partial class PlatformSetTileViewModel : ObservableObject
     /// <summary>The picture tiles' name for <see cref="InGame" />, for the same reason.</summary>
     public bool IsInGame => InGame;
 
+    /// <summary>2.8: true for a set whose pack is hidden on the Packs page, which is here only because the game
+    /// is showing it. The picture tiles' member, for the same reason the names above are.</summary>
+    public bool IsHiddenPack { get; init; }
+
+    /// <summary>The word after the caption on such a tile, empty on every other one.</summary>
+    public string HiddenNote => IsHiddenPack ? "hidden" : "";
+
     /// <summary>The picture tiles' name for <see cref="Preview" />.</summary>
     public ImageSource? Thumbnail => Preview;
 

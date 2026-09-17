@@ -455,6 +455,10 @@ public partial class PacksViewModel : PageViewModel
         row.IsHidden = hide;
         row.RefreshCountsText();
         row.SetMenu(BuildMenu(row));
+
+        // 2.8: the other pages read the setting when they build their rows, and nothing else tells them it moved.
+        // This page is left alone, because the row above is already right and a rebuild would lose the scroll.
+        Shell.RefreshPages(this);
     }
 
     [RelayCommand]

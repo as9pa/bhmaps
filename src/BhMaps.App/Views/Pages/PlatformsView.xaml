@@ -58,19 +58,39 @@
       </controls:PageHeader.Actions>
     </controls:PageHeader>
 
-    <ListBox DockPanel.Dock="Top"
-             Margin="0,4,0,8"
-             HorizontalAlignment="Left"
-             ItemContainerStyle="{StaticResource ChipRow}"
-             ItemsSource="{Binding Chips}"
-             SelectedItem="{Binding SelectedChip}"
-             Style="{StaticResource TileListBox}">
-      <ListBox.ItemsPanel>
-        <ItemsPanelTemplate>
-          <StackPanel Orientation="Horizontal" />
-        </ItemsPanelTemplate>
-      </ListBox.ItemsPanel>
-    </ListBox>
+    <!-- A Grid rather than the chip ListBox alone, because 2.8's hidden note sits at the right end of the row. -->
+    <Grid DockPanel.Dock="Top" Margin="0,4,0,8">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="Auto" />
+      </Grid.ColumnDefinitions>
+
+      <ListBox HorizontalAlignment="Left"
+               ItemContainerStyle="{StaticResource ChipRow}"
+               ItemsSource="{Binding Chips}"
+               SelectedItem="{Binding SelectedChip}"
+               Style="{StaticResource TileListBox}">
+        <ListBox.ItemsPanel>
+          <ItemsPanelTemplate>
+            <StackPanel Orientation="Horizontal" />
+          </ItemsPanelTemplate>
+        </ListBox.ItemsPanel>
+      </ListBox>
+
+      <!-- 2.8: the rows are missing a pack on purpose, so the header says how many and goes to the page where
+           that was done. -->
+      <Button Grid.Column="1"
+              HorizontalAlignment="Right"
+              VerticalAlignment="Center"
+              AutomationProperties.Name="{Binding HiddenPacksText}"
+              Command="{Binding GoToPacksCommand}"
+              Content="{Binding HiddenPacksText}"
+              FocusVisualStyle="{StaticResource DialogFocusRing}"
+              Foreground="{StaticResource Text2Brush}"
+              Style="{StaticResource PlainButton}"
+              ToolTip="Hidden on the Packs page. Click to go there."
+              Visibility="{Binding ShowHiddenPacks, Converter={StaticResource BoolToVis}}" />
+    </Grid>
 
     <TextBlock DockPanel.Dock="Top"
                Margin="0,0,0,12"

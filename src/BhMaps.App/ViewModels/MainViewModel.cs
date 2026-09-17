@@ -1117,6 +1117,27 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
+    /// <summary>Rebuilds the pages from the snapshot already in hand, for a setting that changes what the pages
+    /// show rather than what is on disk (2.8's hidden packs). No scan, because nothing on disk moved.
+    /// <paramref name="except" /> is the page that made the change and has already put itself right, which is how
+    /// the Packs page keeps its scroll position.</summary>
+    public void RefreshPages(PageViewModel? except = null)
+    {
+        // Nothing to rebuild before the first scan, and mid-scan the pages are about to be rebuilt anyway.
+        if (Snapshot is not { } snapshot || IsBusy)
+        {
+            return;
+        }
+
+        foreach (var page in _pages)
+        {
+            if (page != except)
+            {
+                page.Refresh(snapshot);
+            }
+        }
+    }
+
     /// <summary>Spec 7.3: the check itself. Off unless the setting is on; at most once a day unless the Settings
     /// page's Check now button forces it. Never throws, never shows a dialog, never downloads, never blocks: the
     /// only thing it can do is set AvailableUpdate and stamp lastUpdateCheck.</summary>

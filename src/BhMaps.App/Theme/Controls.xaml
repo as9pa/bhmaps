@@ -953,13 +953,30 @@
               </StackPanel>
             </Grid>
 
-            <TextBlock Margin="0,4,0,0"
-                       MaxWidth="{Binding DataContext.ThumbWidth, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                       HorizontalAlignment="Left"
-                       FontSize="11"
-                       Foreground="{StaticResource Text2Brush}"
-                       Text="{Binding Title}"
-                       TextTrimming="CharacterEllipsis" />
+            <!-- The caption, and after it the word that says the tile's pack is hidden and the tile is here only
+                 because the game is showing it (2.8). A Grid rather than one line, so the caption still trims at
+                 the tile's width with the word beside it. -->
+            <Grid Margin="0,4,0,0"
+                  MaxWidth="{Binding DataContext.ThumbWidth, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                  HorizontalAlignment="Left">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+
+              <TextBlock HorizontalAlignment="Left"
+                         FontSize="11"
+                         Foreground="{StaticResource Text2Brush}"
+                         Text="{Binding Title}"
+                         TextTrimming="CharacterEllipsis" />
+
+              <TextBlock Grid.Column="1"
+                         Margin="4,0,0,0"
+                         FontSize="11"
+                         Foreground="{StaticResource Text2Brush}"
+                         Text="{Binding HiddenNote, StringFormat='&#183; {0}'}"
+                         Visibility="{Binding IsHiddenPack, Converter={StaticResource BoolToVis}}" />
+            </Grid>
           </StackPanel>
           <ControlTemplate.Triggers>
             <DataTrigger Binding="{Binding IsInGame}" Value="True">

@@ -670,8 +670,12 @@ public partial class MapsViewModel : PageViewModel
             var why = single
                 ? $"Nothing for {one.DisplayName} in this pack"
                 : "Nothing for these maps in this pack";
+            // 2.8: hiding a pack is for the browsing lists, not for acting, so a hidden pack is still offered
+            // here and only says that it is hidden.
+            var hidden = !pack.Name.Equals(DefaultPack.Name, StringComparison.OrdinalIgnoreCase)
+                && Shell.Services.Settings.IsHidden(pack.Name);
             packs.Add(new TileMenuCommand(
-                pack.Name,
+                hidden ? $"{pack.Name} \u00b7 hidden" : pack.Name,
                 new AsyncRelayCommand(() => ApplyPackToAsync(target, pack, clearTicks: false)),
                 IsEnabled: has,
                 ToolTip: has ? null : why));
