@@ -15,8 +15,12 @@ namespace BhMaps.App.ViewModels.Pages;
 /// on the row it belongs to.</summary>
 public abstract partial class RowsPageViewModel : PageViewModel
 {
-    public const int MinZoom = AppSettings.MinRowZoom;
-    public const int MaxZoom = AppSettings.MaxRowZoom;
+    /// <summary>The 2.8 thumbnail heights, 48 px to 128 px. Part 2 gives these pages the size picker the Maps
+    /// page has now, at which point the slider and this range go with it; until then the steps live here rather
+    /// than on AppSettings, whose zooms are tile sizes already.</summary>
+    public const int MinZoom = 1;
+
+    public const int MaxZoom = 5;
 
     protected const string AllChip = "All";
 

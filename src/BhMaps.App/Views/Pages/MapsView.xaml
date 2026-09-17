@@ -7,6 +7,7 @@
              xmlns:imaging="clr-namespace:BhMaps.Core.Imaging;assembly=BhMaps.Core"
              xmlns:pages="clr-namespace:BhMaps.App.ViewModels.Pages"
              xmlns:primitives="clr-namespace:System.Windows.Controls.Primitives;assembly=PresentationFramework"
+             behaviors:SizeShortcuts.Target="{Binding}"
              PreviewKeyDown="OnPageKeyDown">
   <!-- Spec 3.2: Escape closes the panel. Escape in the search box is the typed text's first; OnPageKeyDown
        handles that one before this binding can see it. -->
@@ -20,11 +21,12 @@
     <converters:WidthAtLeastConverter x:Key="WidthAtLeast" />
 
     <!-- 2.8: one map is selected at a time, and it is the map the panel is open on. The card is a ListBoxItem,
-         so the light border is the control's own selection and the page keeps it on the open card. The gap is the
-         zoom's (spec 3.1), read off the page rather than set here, so the two tightest steps can tighten it. -->
+         so the light border is the control's own selection and the page keeps it on the open card. 3.0: no margin
+         here, because the justified panel owns the gutter; the open card's 2 px ring is drawn inside the
+         container, so it needs no room of its own either. -->
     <Style x:Key="MapCardItem" TargetType="ListBoxItem" BasedOn="{StaticResource TileListBoxItem}">
       <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
-      <Setter Property="Margin" Value="{Binding DataContext.CardMargin, RelativeSource={RelativeSource AncestorType=ListBox}}" />
+      <Setter Property="Margin" Value="0" />
       <Setter Property="Cursor" Value="Hand" />
       <Setter Property="AutomationProperties.Name" Value="{Binding DisplayName}" />
       <!-- 3.0: a ToolTip element rather than the bare string, because a tooltip already on screen when the card's
@@ -489,12 +491,8 @@
             </TextBlock>
           </Grid>
 
-          <!-- Spec 3.1: the zoom belongs to the header row, where nothing the chip row does can move it. -->
-          <controls:ZoomSlider Margin="16,0,0,0"
-                               VerticalAlignment="Center"
-                               Maximum="{x:Static pages:MapsViewModel.MaxZoom}"
-                               Minimum="{x:Static pages:MapsViewModel.MinZoom}"
-                               Value="{Binding Zoom}" />
+          <!-- Spec 3.1: the size belongs to the header row, where nothing the chip row does can move it. -->
+          <controls:SizePicker Margin="16,0,0,0" VerticalAlignment="Center" Value="{Binding TileSize}" />
         </StackPanel>
       </controls:PageHeader.Actions>
     </controls:PageHeader>
@@ -554,13 +552,14 @@
           </ListBox.Resources>
           <ListBox.ItemsPanel>
             <ItemsPanelTemplate>
-              <!-- Top aligned, or a short list comes out with a huge gap under it. 2.8: a WrapPanel rather than
-                   a UniformGrid, so the cards keep the width the zoom gives them and the row holds however many
-                   fit; opening the panel moves the last card of a row down instead of shrinking every card. No
-                   ItemWidth: the card sets its own width, and the item's margin is the gap. A WrapPanel does not
-                   virtualise either, which is the point: every container is realised, so the selection binding
-                   is exact (plan decision A-D10). -->
-              <WrapPanel VerticalAlignment="Top" Orientation="Horizontal" />
+              <!-- Top aligned, or a short list comes out with a huge gap under it. 3.0: a JustifiedPanel
+                   rather than the 2.8 WrapPanel, which left whatever did not fit as a hole down the right edge
+                   beside the open panel. The size is a target width; the panel fits as many cards across as it
+                   can and shares the rest of the row out over them, so the grid always reaches the edge. The
+                   gutter is the panel's Gap, so the cards themselves carry no margin. -->
+              <controls:JustifiedPanel VerticalAlignment="Top"
+                                       Gap="12"
+                                       TargetWidth="{Binding DataContext.TargetCardWidth, RelativeSource={RelativeSource AncestorType=ListBox}}" />
             </ItemsPanelTemplate>
           </ListBox.ItemsPanel>
           <ListBox.ItemTemplate>
@@ -568,7 +567,6 @@
               <!-- The name and the tag are the container's tooltip, which is the only place they are at the two
                    tightest zoom steps (spec 3.1), and a longer name than the card can draw at any step. -->
               <Border x:Name="Chrome"
-                      Width="{Binding DataContext.CardWidth, RelativeSource={RelativeSource AncestorType=ListBox}}"
                       Padding="{Binding DataContext.CardPadding, RelativeSource={RelativeSource AncestorType=ListBox}}"
                       Style="{StaticResource CardBorder}">
                 <StackPanel>
@@ -716,12 +714,13 @@
         </StackPanel>
       </Grid>
 
-      <!-- Spec 7.2: the right panel for one map, 360 px, open exactly while a card is selected. -->
+      <!-- Spec 7.2: the right panel for one map, 420 px (3.0), open exactly while a card is selected. -->
       <Border Grid.Column="1"
               Width="{StaticResource PanelWidth}"
-              Margin="16,0,0,0"
+              Margin="24,0,0,0"
               AutomationProperties.Name="{Binding DisplayName}"
               DataContext="{Binding Panel}"
+              Padding="16"
               Style="{StaticResource CardBorder}"
               Visibility="{Binding DataContext.Panel, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource NullToVis}}">
         <Grid>
@@ -730,7 +729,7 @@
             <RowDefinition Height="*" />
           </Grid.RowDefinitions>
 
-          <Grid Margin="16,12,8,4">
+          <Grid Margin="0,0,0,12">
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="*" />
               <ColumnDefinition Width="Auto" />
@@ -756,15 +755,14 @@
             </Button>
           </Grid>
 
-          <!-- The right margin is 4 and the content's is 12, so the overlay scrollbar rides in a gutter of its own
-               instead of sitting on top of the tiles. -->
+          <!-- 3.0: the panel's 16 px inset is the Border's padding, so nothing in here repeats it. The content
+               keeps a right margin of its own, so the overlay scrollbar rides in a gutter instead of sitting on
+               top of the tiles. -->
           <ScrollViewer Grid.Row="1"
-                        Margin="16,4,4,0"
                         HorizontalScrollBarVisibility="Disabled"
                         behaviors:SmoothScroll.IsEnabled="True"
                         VerticalScrollBarVisibility="Auto">
-            <!-- The bottom margin keeps the last row clear of the panel's own edge. -->
-            <StackPanel Margin="0,0,12,16">
+            <StackPanel Margin="0,0,8,0">
               <!-- The panel preview's source is 1280x720 (spec 7.2); 16:9 at the panel's own width is 185 px tall. -->
               <Border Height="185" Style="{StaticResource PictureTile}">
                 <Border CornerRadius="{StaticResource Radius}" RenderOptions.BitmapScalingMode="HighQuality">

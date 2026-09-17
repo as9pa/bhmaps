@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows;
 using BhMaps.App.Services;
+using BhMaps.Core.Layout;
 using BhMaps.Core.LevelData;
 using BhMaps.Core.Maps;
 using BhMaps.Core.Model;
@@ -15,16 +16,9 @@ namespace BhMaps.App.ViewModels.Pages;
 /// <summary>Spec 3.1: the chip row with "Select all" at its right end, and the grid of composed map cards.
 /// No summary bar and no composition bars; the header carries the search box, the zoom and Reset all to
 /// default, so nothing the chips do can move the slider.</summary>
-public partial class MapsViewModel : PageViewModel
+public partial class MapsViewModel : PageViewModel, ITileSized
 {
-    public const int MinZoom = AppSettings.MinZoom;
-    public const int MaxZoom = AppSettings.MaxZoom;
-
     private const string AllChip = "All";
-
-    /// <summary>The grid's content width in the default 1280 px window with the panel shut, which is what the
-    /// zoom steps were drawn against: 6 columns of a 188 px card and a 12 px gap.</summary>
-    private const double ReferenceGridWidth = 1200;
 
     /// <summary>Every card the last scan produced. Cards is this list under the chip and the search.</summary>
     private readonly List<MapCardViewModel> _all = [];
@@ -47,8 +41,7 @@ public partial class MapsViewModel : PageViewModel
         SearchText = "";
         SelectedChip = AllChip;
 
-        // A stored zoom from another version, or a hand-edited one, is clamped rather than trusted.
-        Zoom = Math.Clamp(shell.Services.Settings.MapsZoom, MinZoom, MaxZoom);
+        TileSize = shell.Services.Settings.MapsTileSize;
     }
 
     public override string Title => "Maps";
@@ -71,10 +64,11 @@ public partial class MapsViewModel : PageViewModel
     [ObservableProperty]
     public partial string SelectedChip { get; set; }
 
-    /// <summary>The zoom step, MinZoom to MaxZoom, persisted as mapsZoom. It sets the card's width through
-    /// <see cref="CardWidth"/>; how many cards a row holds is whatever fits.</summary>
+    /// <summary>How big the cards are drawn, persisted as mapsTileSize. It sets the card's target width
+    /// through <see cref="TargetCardWidth"/>; how many cards a row holds, and the width they end up at, is the
+    /// justified panel's answer.</summary>
     [ObservableProperty]
-    public partial int Zoom { get; set; }
+    public partial TileSize TileSize { get; set; }
 
     /// <summary>The card whose right panel is open. Null closes the panel.</summary>
     [ObservableProperty]
@@ -85,27 +79,25 @@ public partial class MapsViewModel : PageViewModel
     [ObservableProperty]
     public partial MapPanelViewModel? Panel { get; set; }
 
-    /// <summary>2.8: the slider sets a card width, not a column count, so the cards keep their size when the
-    /// right panel opens and the row simply holds fewer of them. The width is the one the step used to give in
-    /// the default window, so nothing moves at the same zoom with the panel shut.</summary>
-    public double CardWidth => Math.Round(ReferenceGridWidth / Zoom) - CardMargin.Right;
+    /// <summary>3.0: about how wide a card should be at this size. The panel takes it as a wish and hands the
+    /// cards whatever makes the row reach the right edge, so the grid no longer leaves a hole beside the open
+    /// panel (wireframe 8.1).</summary>
+    public double TargetCardWidth => TileSizes.CardWidth(TileSize);
 
-    /// <summary>Spec 3.1's density steps, which follow the same steps the width does. At 2 to 4 the widest
-    /// cards carry the name at 15; at 7 and 8 the name shrinks and the tag goes; at 9 and 10 the name row goes
-    /// with it, the card tightens to 4 px padding and 8 px gaps, and Missing becomes a mark on the picture.
-    /// ShowTagRow is the zoom's answer for every card; MapCardViewModel.ShowTag is one card's own answer about
-    /// whether it has a tag at all. Both have to be true for a tag to be drawn, so they keep different names.</summary>
-    public bool ShowName => Zoom <= 8;
+    /// <summary>Spec 3.1's density steps, now three rather than nine. Large and Medium carry the name and the
+    /// tag; Small drops both, tightens the card to 4 px padding, and shows Missing as a mark on the picture
+    /// instead of a word under it. ShowTagRow is the size's answer for every card; MapCardViewModel.ShowTag is
+    /// one card's own answer about whether it has a tag at all. Both have to be true for a tag to be drawn, so
+    /// they keep different names.</summary>
+    public bool ShowName => TileSize != TileSize.Small;
 
-    public bool ShowTagRow => Zoom <= 6;
+    public bool ShowTagRow => TileSize != TileSize.Small;
 
-    public bool ShowMissingMark => Zoom >= 9;
+    public bool ShowMissingMark => TileSize == TileSize.Small;
 
-    public double NameFontSize => Zoom <= 4 ? 15 : Zoom <= 6 ? 13 : 12;
+    public double NameFontSize => TileSize == TileSize.Large ? 15 : TileSize == TileSize.Medium ? 13 : 12;
 
-    public Thickness CardPadding => Zoom <= 8 ? new Thickness(8) : new Thickness(4);
-
-    public Thickness CardMargin => Zoom <= 8 ? new Thickness(0, 0, 12, 12) : new Thickness(0, 0, 8, 8);
+    public Thickness CardPadding => TileSize == TileSize.Small ? new Thickness(4) : new Thickness(8);
 
     /// <summary>Spec 3.1: why the grid is empty, in one line.</summary>
     public string EmptyText
@@ -439,21 +431,20 @@ public partial class MapsViewModel : PageViewModel
         }
     }
 
-    partial void OnZoomChanged(int value)
+    partial void OnTileSizeChanged(TileSize value)
     {
-        if (Shell.Services.Settings.MapsZoom != value)
+        if (Shell.Services.Settings.MapsTileSize != value)
         {
-            Shell.Services.UpdateSettings(Shell.Services.Settings with { MapsZoom = value });
+            Shell.Services.UpdateSettings(Shell.Services.Settings with { MapsTileSize = value });
         }
 
         // The card template reads these numbers rather than carrying a pile of triggers of its own.
-        OnPropertyChanged(nameof(CardWidth));
+        OnPropertyChanged(nameof(TargetCardWidth));
         OnPropertyChanged(nameof(ShowName));
         OnPropertyChanged(nameof(ShowTagRow));
         OnPropertyChanged(nameof(ShowMissingMark));
         OnPropertyChanged(nameof(NameFontSize));
         OnPropertyChanged(nameof(CardPadding));
-        OnPropertyChanged(nameof(CardMargin));
     }
 
     /// <summary>The library's custom pictures, as the last scan built them (spec 4). Empty before the first scan.</summary>

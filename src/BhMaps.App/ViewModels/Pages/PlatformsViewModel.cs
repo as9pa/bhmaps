@@ -20,7 +20,7 @@ public partial class PlatformsViewModel : RowsPageViewModel
     private const double Aspect = 16d / 9d;
 
     public PlatformsViewModel(MainViewModel shell)
-        : base(shell, shell.Services.Settings.PlatformsZoom)
+        : base(shell, LegacyZoom.ToRowZoom(shell.Services.Settings.PlatformsTileSize))
     {
     }
 
@@ -32,9 +32,10 @@ public partial class PlatformsViewModel : RowsPageViewModel
 
     protected override void SaveZoom(int value)
     {
-        if (Shell.Services.Settings.PlatformsZoom != value)
+        var size = LegacyZoom.FromRowZoom(value);
+        if (Shell.Services.Settings.PlatformsTileSize != size)
         {
-            Shell.Services.UpdateSettings(Shell.Services.Settings with { PlatformsZoom = value });
+            Shell.Services.UpdateSettings(Shell.Services.Settings with { PlatformsTileSize = size });
         }
     }
 

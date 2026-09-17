@@ -23,9 +23,9 @@ namespace BhMaps.App.ViewModels.Pages;
 /// <see cref="MainViewModel.NavigateToPack" />, so the title is a pack name rather than a fixed word.</summary>
 public partial class PackDetailViewModel : PageViewModel
 {
-    public const int MinZoom = AppSettings.MinZoom;
+    public const int MinZoom = 2;
 
-    public const int MaxZoom = AppSettings.MaxZoom;
+    public const int MaxZoom = 10;
 
     public const string NoPackText = "No pack is open.";
 
@@ -80,7 +80,7 @@ public partial class PackDetailViewModel : PageViewModel
         };
 
         // A stored zoom from another version, or a hand-edited one, is clamped rather than trusted.
-        Zoom = Math.Clamp(shell.Services.Settings.PackZoom, MinZoom, MaxZoom);
+        Zoom = LegacyZoom.ToGridZoom(shell.Services.Settings.PackTileSize);
     }
 
     /// <summary>The pack the page is showing. Null until the shell navigates to one.</summary>
@@ -681,9 +681,10 @@ public partial class PackDetailViewModel : PageViewModel
 
     partial void OnZoomChanged(int value)
     {
-        if (Shell.Services.Settings.PackZoom != value)
+        var size = LegacyZoom.FromGridZoom(value);
+        if (Shell.Services.Settings.PackTileSize != size)
         {
-            Shell.Services.UpdateSettings(Shell.Services.Settings with { PackZoom = value });
+            Shell.Services.UpdateSettings(Shell.Services.Settings with { PackTileSize = size });
         }
     }
 

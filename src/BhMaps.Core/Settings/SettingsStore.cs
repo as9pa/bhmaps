@@ -17,7 +17,11 @@ public static class SettingsStore
     /// Load would carry it into <see cref="AppSettings.Unknown"/> and Save would write it straight back.</summary>
     private static readonly string[] KnownKeys =
     [
-        "gamePath", "libraryPath", "firstRunDone", "mapsZoom", "backgroundsRowZoom", "packZoom", "platformsZoom",
+        "gamePath", "libraryPath", "firstRunDone", "mapsTileSize", "backgroundsTileSize", "packTileSize",
+        "platformsTileSize",
+        // The 2.1 to 2.8 zoom keys. 3.0 reads each one once, as the tile size nearest to it, and stops writing
+        // them; like the two keys below they have to stay known, or Save would carry them back as unknown.
+        "mapsZoom", "backgroundsRowZoom", "packZoom", "platformsZoom",
         "welcomeDone", "homeZoom", "whileRunning", "backgroundsZoom", "packLastApplied",
         "backgroundsShowPictures", "platformPreviewIsolate", "writeGameThumbnails",
         "checkForUpdates", "lastUpdateCheck", "dismissedUpdate", "hiddenPacks",
@@ -26,8 +30,9 @@ public static class SettingsStore
     public static string DefaultAppDataDir =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "BhMaps");
 
-    /// <summary>Missing file, unreadable file, corrupt file or missing fields all fall back to defaults. Zooms are
-    /// clamped, a 2.0 homeZoom loads as MapsZoom, and whileRunning is dropped.</summary>
+    /// <summary>Missing file, unreadable file, corrupt file or missing fields all fall back to defaults. An old
+    /// zoom key migrates once into the page's tile size, a 2.0 homeZoom loads as the Maps size, and whileRunning
+    /// is dropped.</summary>
     public static AppSettings Load(string settingsPath)
     {
         JsonObject? obj = null;
@@ -75,22 +80,22 @@ public static class SettingsStore
                 "BhMaps settings: backgroundsZoom is no longer used and was dropped; the Backgrounds rows start dense.");
         }
 
-        // 2.0 stored the Maps zoom as homeZoom. The new key wins where both are present; otherwise the old one is
-        // read once and written back under the new name, so an upgrade does not reset anyone's column count.
-        var mapsZoom = obj["mapsZoom"] is not null ? Int(obj, "mapsZoom", 6) : Int(obj, "homeZoom", 6);
+        // 2.0 stored the Maps zoom as homeZoom and 2.1 as mapsZoom. The new key wins where both are present;
+        // otherwise the old one is read once as the tile size nearest to it, so an upgrade does not drop anyone
+        // back to the middle size.
+        var mapsZoom = obj["mapsZoom"] is not null ? obj["mapsZoom"] : obj["homeZoom"];
 
         return new AppSettings(
             Str(obj, "gamePath") is { Length: > 0 } g ? g : AppSettings.DefaultGamePath,
             Str(obj, "libraryPath") is { Length: > 0 } l ? l : AppSettings.DefaultLibraryPath,
             Bool(obj, "firstRunDone"),
-            Math.Clamp(mapsZoom, AppSettings.MinZoom, AppSettings.MaxZoom),
+            Tile(obj, "mapsTileSize", mapsZoom, FromGridZoom),
 
-            // Addendum B: Backgrounds is a rows page now, so its stored value is a thumbnail height under its own
-            // key; the old backgroundsZoom was dropped above.
-            Math.Clamp(Int(obj, "backgroundsRowZoom", 2), AppSettings.MinRowZoom, AppSettings.MaxRowZoom),
-            Math.Clamp(Int(obj, "packZoom", 5), AppSettings.MinZoom, AppSettings.MaxZoom),
+            // Addendum B: Backgrounds is a rows page, so its 2.8 value was a thumbnail height under its own key.
+            Tile(obj, "backgroundsTileSize", obj["backgroundsRowZoom"], FromRowZoom),
+            Tile(obj, "packTileSize", obj["packZoom"], FromGridZoom),
             Bool(obj, "welcomeDone"),
-            Math.Clamp(Int(obj, "platformsZoom", 3), AppSettings.MinRowZoom, AppSettings.MaxRowZoom),
+            Tile(obj, "platformsTileSize", obj["platformsZoom"], FromRowZoom),
             Stamps(obj),
             Bool(obj, "backgroundsShowPictures"),
             Bool(obj, "platformPreviewIsolate"),
@@ -112,10 +117,10 @@ public static class SettingsStore
             ["gamePath"] = settings.GamePath,
             ["libraryPath"] = settings.LibraryPath,
             ["firstRunDone"] = settings.FirstRunDone,
-            ["mapsZoom"] = settings.MapsZoom,
-            ["backgroundsRowZoom"] = settings.BackgroundsZoom,
-            ["packZoom"] = settings.PackZoom,
-            ["platformsZoom"] = settings.PlatformsZoom,
+            ["mapsTileSize"] = Name(settings.MapsTileSize),
+            ["backgroundsTileSize"] = Name(settings.BackgroundsTileSize),
+            ["packTileSize"] = Name(settings.PackTileSize),
+            ["platformsTileSize"] = Name(settings.PlatformsTileSize),
             ["welcomeDone"] = settings.WelcomeDone,
             ["backgroundsShowPictures"] = settings.BackgroundsShowPictures,
             ["platformPreviewIsolate"] = settings.PlatformPreviewIsolate,
@@ -231,6 +236,35 @@ public static class SettingsStore
 
         return true;
     }
+
+    /// <summary>3.0's tile size, as large, medium or small. A value this version does not know, in any case at
+    /// all, reads as Medium rather than failing the file. Where the key is absent and the page's old zoom key is
+    /// there, <paramref name="zoom"/> is migrated once; the old key is dropped by the next Save.</summary>
+    private static TileSize Tile(JsonObject obj, string key, JsonNode? zoom, Func<int, TileSize> fromZoom)
+    {
+        if (Str(obj, key) is { Length: > 0 } name)
+        {
+            return name.ToLowerInvariant() switch
+            {
+                "large" => TileSize.Large,
+                "small" => TileSize.Small,
+                _ => TileSize.Medium,
+            };
+        }
+
+        return zoom is JsonValue value && value.TryGetValue<int>(out var steps) ? fromZoom(steps) : TileSize.Medium;
+    }
+
+    /// <summary>A 2 to 10 grid zoom as a tile size. The old step was a column count, so the small end of it is
+    /// the many-small-cards end.</summary>
+    private static TileSize FromGridZoom(int zoom) => zoom <= 4 ? TileSize.Large : zoom <= 7 ? TileSize.Medium : TileSize.Small;
+
+    /// <summary>A 1 to 5 rows zoom as a tile size. The old step was a thumbnail height, so it runs the other way
+    /// round from a grid's.</summary>
+    private static TileSize FromRowZoom(int zoom) => zoom <= 3 ? TileSize.Small : zoom == 4 ? TileSize.Medium : TileSize.Large;
+
+    /// <summary>The lowercase name the file carries, so a hand-edited settings file reads the way it looks.</summary>
+    private static string Name(TileSize size) => size.ToString().ToLowerInvariant();
 
     /// <summary>Null when the key is absent or holds anything other than a JSON string, so a hand-edited file never throws.</summary>
     private static string? Str(JsonObject obj, string key) =>

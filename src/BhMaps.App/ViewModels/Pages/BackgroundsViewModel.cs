@@ -16,7 +16,7 @@ public partial class BackgroundsViewModel : RowsPageViewModel
     private int _pictureCount;
 
     public BackgroundsViewModel(MainViewModel shell)
-        : base(shell, shell.Services.Settings.BackgroundsZoom)
+        : base(shell, LegacyZoom.ToRowZoom(shell.Services.Settings.BackgroundsTileSize))
     {
         ShowPictures = shell.Services.Settings.BackgroundsShowPictures;
     }
@@ -60,9 +60,10 @@ public partial class BackgroundsViewModel : RowsPageViewModel
 
     protected override void SaveZoom(int value)
     {
-        if (Shell.Services.Settings.BackgroundsZoom != value)
+        var size = LegacyZoom.FromRowZoom(value);
+        if (Shell.Services.Settings.BackgroundsTileSize != size)
         {
-            Shell.Services.UpdateSettings(Shell.Services.Settings with { BackgroundsZoom = value });
+            Shell.Services.UpdateSettings(Shell.Services.Settings with { BackgroundsTileSize = size });
         }
     }
 
