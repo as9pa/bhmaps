@@ -39,6 +39,10 @@ public partial class MainViewModel : ObservableObject
     /// map folder. A write replaces the entry of every map it named: removed when the thumbnail was written.</summary>
     private readonly Dictionary<string, string> _thumbnailNotes = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Game-relative paths a top-up of the Default pack has already tried this run, so a file that
+    /// cannot be copied is not tried again by every rescan after it.</summary>
+    private readonly HashSet<string> _defaultTopUpTried = new(StringComparer.OrdinalIgnoreCase);
+
     private readonly DispatcherTimer _gameTimer;
     private readonly DispatcherTimer _updateTimer;
 
@@ -1249,6 +1253,79 @@ public partial class MainViewModel : ObservableObject
             _updateCheckStarted = true;
             _updateTimer.Start();
         }
+
+        // Level data being re-read needs no wiring of its own: a re-read rebuilds the catalog, the next scan
+        // sees the new map's folder, and the top-up reads the snapshot in front of it rather than any history.
+        await TopUpDefaultAsync(snapshot);
+    }
+
+    /// <summary>Adds a new map's own art to the Default pack after a game update. The pack was captured before
+    /// the update, so the new map's files read as custom and Reset to default has nothing to put back. Only what
+    /// the pack lacks is copied, and only files nothing has applied over, so this can never write over the art
+    /// the pack already holds the way a capture would. No confirm: the first scan that sees the folder is the one
+    /// moment the app knows those files are the game's own.</summary>
+    private async Task TopUpDefaultAsync(ScanSnapshot snapshot)
+    {
+        // Without a Default pack there is nothing to add to, and a missing game folder has nothing to add from.
+        if (snapshot.DefaultPack is not { } defaultPack || GameFolderMissing || IsBusy)
+        {
+            return;
+        }
+
+        var applied = AppliedRecord.Load(AppliedRecord.PathFor(Services.AppDataDir));
+        var packed = new HashSet<string>(
+            snapshot.MapStatuses.Values
+                .SelectMany(s => s.Files)
+                .Where(f => f.State == MapFileState.Pack)
+                .Select(f => f.RelativePath),
+            StringComparer.OrdinalIgnoreCase);
+
+        // A file a pack matches, or one this app wrote, is applied art rather than the game's own. Default keeps
+        // lacking it, which is honest: the app has no way to know what the vanilla bytes were.
+        bool IsVanilla(string relative) => !packed.Contains(relative) && !applied.Entries.ContainsKey(relative);
+
+        var tree = snapshot.Tree;
+        var catalog = snapshot.Catalog;
+        var missing = await Task.Run(() => DefaultPack.FindMissing(tree, catalog, defaultPack, IsVanilla));
+        var fresh = new List<MissingDefault>();
+        foreach (var item in missing)
+        {
+            // A file that failed to copy is still missing at the next scan; tried once a run, not every rescan.
+            if (_defaultTopUpTried.Add(item.GameRelativePath))
+            {
+                fresh.Add(item);
+            }
+        }
+
+        if (fresh.Count == 0)
+        {
+            return;
+        }
+
+        var gamePath = Services.GamePath;
+        var library = Services.LibraryPath;
+        AddMissingResult? result = null;
+
+        // A library write: no undo snapshot and no game-running policy, as a capture is.
+        var ok = await RunBusyAsync(
+            "Adding to Default",
+            (progress, ct) => Task.Run(
+                () => { result = DefaultPack.AddMissing(gamePath, library, fresh, progress, ct); }, ct));
+        if (result is not null)
+        {
+            Dialogs.ShowFailures("Some files could not be added to Default", result.Failures);
+        }
+
+        if (ok && result is { MapsAdded.Count: > 0 })
+        {
+            SetLibraryDone(result.MapsAdded.Count == 1
+                ? $"Brawlhalla updated: {result.MapsAdded[0]} added to Default."
+                : $"Brawlhalla updated: {Count(result.MapsAdded.Count, "map")} added to Default.");
+        }
+
+        // The map reads as default art from here on. This rescan's own top-up finds nothing: the paths above are
+        // in the pack now, and whatever failed is in _defaultTopUpTried, so there is no way round again.
+        await RescanAsync();
     }
 
     /// <summary>Rebuilds the pages from the snapshot already in hand, for a setting that changes what the pages
