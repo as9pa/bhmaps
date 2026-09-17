@@ -25,8 +25,9 @@ public partial class WelcomeWindow : Window
 
     private void OnCloseRequested(bool ok) => DialogResult = ok;
 
-    /// <summary>The capture has no Cancel of its own, so neither the title bar nor Escape may leave while it
-    /// runs: closing here would start the shell on top of a copy still going on a thread pool thread.</summary>
+    /// <summary>Neither the title bar nor Escape may leave while the capture runs: closing here would start the
+    /// shell on top of a copy still going on a thread pool thread. The line's own Cancel is the way out (3.0),
+    /// and it stops the copy before this window can go anywhere.</summary>
     private void OnClosing(object sender, CancelEventArgs e)
     {
         if (DataContext is WelcomeViewModel { IsBusy: true })

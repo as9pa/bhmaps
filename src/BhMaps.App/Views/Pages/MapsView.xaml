@@ -511,15 +511,6 @@
       </ListBox>
     </Grid>
 
-    <!-- Spec 3.1: the only line a first-timer needs, and it goes when a pack arrives. -->
-    <TextBlock DockPanel.Dock="Top"
-               Margin="0,0,0,12"
-               Foreground="{StaticResource Text2Brush}"
-               TextWrapping="Wrap"
-               Visibility="{Binding ShowFirstRunLine, Converter={StaticResource BoolToVis}}">
-      <Run Text="No packs yet. Import a folder of map art on the " /><Hyperlink Command="{Binding DataContext.NavigatePacksCommand, RelativeSource={RelativeSource AncestorType=Window}}" Foreground="{StaticResource TextBrush}"><Run Text="Packs" /></Hyperlink><Run Text=" page, or add an image on " /><Hyperlink Command="{Binding DataContext.NavigateBackgroundsCommand, RelativeSource={RelativeSource AncestorType=Window}}" Foreground="{StaticResource TextBrush}"><Run Text="Backgrounds" /></Hyperlink><Run Text="." />
-    </TextBlock>
-
     <!-- The grid first and the panel second, because WPF tabs in declaration order: a DockPanel would have to
          declare the docked panel before the fill child and Tab would reach it before the cards. -->
     <Grid>

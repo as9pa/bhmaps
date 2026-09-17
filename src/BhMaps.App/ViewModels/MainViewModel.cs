@@ -148,14 +148,15 @@ public partial class MainViewModel : ObservableObject
         nameof(RefreshGameCommand),
         nameof(LaunchGameCommand),
         nameof(ImportCommand),
-        nameof(UndoCommand))]
+        nameof(UndoCommand),
+        nameof(CaptureDefaultsCommand))]
     public partial bool IsBusy { get; set; }
 
     /// <summary>Spec 7.8: the configured game folder is not there. The page header says so and every write into
     /// the game is off until a rescan finds it again. Recomputed around each scan, never guessed.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanWrite))]
-    [NotifyCanExecuteChangedFor(nameof(RefreshGameCommand), nameof(UndoCommand))]
+    [NotifyPropertyChangedFor(nameof(CanWrite), nameof(ShowFirstRunBanner))]
+    [NotifyCanExecuteChangedFor(nameof(RefreshGameCommand), nameof(UndoCommand), nameof(CaptureDefaultsCommand))]
     public partial bool GameFolderMissing { get; set; }
 
     /// <summary>The status strip's line (3.0): what is running, what the last operation did, or why it did
@@ -194,6 +195,12 @@ public partial class MainViewModel : ObservableObject
     /// to be there (spec 7.8).</summary>
     public bool CanWrite => !IsBusy && !GameFolderMissing;
 
+    /// <summary>3.0: whether the line under the top bar offering the first capture is up. A library with no pack
+    /// at all is a first run whichever page is open, and the capture it offers is the only thing that can end it;
+    /// with no game folder there is nothing to capture, so the line stays away. Null before the first scan: the
+    /// window would otherwise open saying the library is empty before anything has looked at it.</summary>
+    public bool ShowFirstRunBanner => !GameFolderMissing && Snapshot is { Packs.Count: 0 };
+
     private bool CanAct() => !IsBusy;
 
     /// <summary>Whether the configured game folder is there right now. The only test for GameFolderMissing, so a
@@ -210,7 +217,7 @@ public partial class MainViewModel : ObservableObject
     private void NavigatePlatforms() => CurrentPage = Platforms;
 
     [RelayCommand]
-    private void NavigatePacks() => CurrentPage = Packs;
+    public void NavigatePacks() => CurrentPage = Packs;
 
     [RelayCommand]
     private void NavigateSettings() => CurrentPage = SettingsPage;
@@ -1249,6 +1256,7 @@ public partial class MainViewModel : ObservableObject
         }
 
         Snapshot = snapshot;
+        OnPropertyChanged(nameof(ShowFirstRunBanner));
 
         // A file may be a different picture now, so the rows pages' decodes are forgotten before they rebuild.
         Services.RowThumbnails.Clear();
@@ -1484,6 +1492,7 @@ public partial class MainViewModel : ObservableObject
     /// <summary>Copies the game folder into the Default pack (spec 6.1), asking before replacing one that already
     /// exists. Shared by the Packs and Settings pages so the confirm text and the busy boundary are the same
     /// from both. A library-only write: no undo snapshot and no game-running policy.</summary>
+    [RelayCommand(CanExecute = nameof(CanWrite))]
     public async Task CaptureDefaultsAsync()
     {
         if (GameFolderMissing)
@@ -1882,7 +1891,9 @@ public partial class MainViewModel : ObservableObject
     /// <summary>What a failure says (3.0): the operation named as a verb, the reason, and the state things are in.
     /// The verbs are the ones the app's own labels open with; a label opening with anything else leaves the line to
     /// the exception's own words, which is all we could honestly say about it.</summary>
-    private static string FailureLine(string label, string message)
+    /// <summary>The strip's line for a failure: what could not be done, why, and that nothing changed. Public
+    /// because the welcome window's own capture runs before this view model exists and says it the same way.</summary>
+    public static string FailureLine(string label, string message)
     {
         var space = label.IndexOf(' ');
         var verb = (space < 0 ? label : label[..space]) switch

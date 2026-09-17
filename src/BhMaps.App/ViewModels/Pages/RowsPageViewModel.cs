@@ -95,13 +95,6 @@ public abstract partial class RowsPageViewModel : PageViewModel, ITileSized
 
     public bool ShowHiddenPacks => HiddenPackCount > 0;
 
-    /// <summary>Spec 3.1's first-run line, on this page too: nothing in the library but the Default pack, and no
-    /// any-map picture either.</summary>
-    public bool ShowFirstRunLine =>
-        Snapshot is { } s
-        && !s.Packs.Any(p => !p.Name.Equals(DefaultPack.Name, StringComparison.OrdinalIgnoreCase))
-        && s.CustomPictures.Count == 0;
-
     /// <summary>Why the list is empty, in one line (addendum B and C).</summary>
     public string EmptyText
     {
@@ -155,7 +148,6 @@ public abstract partial class RowsPageViewModel : PageViewModel, ITileSized
         RebuildChips(snapshot.Catalog);
         ApplyFilter();
         RebuildMenus();
-        OnPropertyChanged(nameof(ShowFirstRunLine));
 
         // The Default pack is never hidden, whatever the setting holds.
         HiddenPackCount = snapshot.Packs.Count(p =>

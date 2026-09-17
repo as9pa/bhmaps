@@ -129,13 +129,6 @@ public partial class MapsViewModel : PageViewModel, ITileSized
     /// to undo and the state is just the sentence.</summary>
     public string EmptyActionText => ShowClearSearch ? "Clear search" : "";
 
-    /// <summary>Spec 3.1's first-run line: nothing in the library but the Default pack, and no any-map picture
-    /// either (plan decision A-D6, settled here).</summary>
-    public bool ShowFirstRunLine =>
-        _snapshot is { } s
-        && !s.Packs.Any(p => !p.Name.Equals(DefaultPack.Name, StringComparison.OrdinalIgnoreCase))
-        && s.CustomPictures.Count == 0;
-
     /// <summary>Opens one map's right panel. A click on a card runs the generated command.</summary>
     [RelayCommand]
     public void OpenMap(string? folderName)
@@ -393,7 +386,6 @@ public partial class MapsViewModel : PageViewModel, ITileSized
 
         RebuildChips(snapshot.Catalog);
         ApplyFilter();
-        OnPropertyChanged(nameof(ShowFirstRunLine));
 
         // The card the panel was on is a new object now, so it is found again by folder name rather than left
         // pointing at one nothing draws.

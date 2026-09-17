@@ -27,6 +27,7 @@
   <Grid>
     <Grid.RowDefinitions>
       <RowDefinition Height="44" />
+      <RowDefinition Height="Auto" />
       <RowDefinition Height="*" />
       <RowDefinition Height="Auto" />
     </Grid.RowDefinitions>
@@ -152,11 +153,40 @@
       </Grid>
     </Border>
 
-    <ContentControl x:Name="PageHost" Grid.Row="1" Content="{Binding CurrentPage}" />
+    <!-- 3.0: the first run's one line, between the top bar and the page. A library with no pack at all cannot
+         reset anything, so the offer follows the user around rather than waiting on the Packs page; it goes by
+         itself the moment a pack exists, and the row gives its height back with it. Built like the strip, minus
+         the dot: nothing is running here, it is an offer. -->
+    <Border Grid.Row="1"
+            Margin="24,16,24,0"
+            AutomationProperties.Name="First run"
+            Background="{StaticResource Surface2Brush}"
+            BorderBrush="{StaticResource LineBrush}"
+            BorderThickness="1"
+            CornerRadius="{StaticResource Radius}"
+            IsEnabled="{Binding IsNotBusy}"
+            Padding="{StaticResource Gap12}"
+            Visibility="{Binding ShowFirstRunBanner, Converter={StaticResource BoolToVis}}">
+      <DockPanel>
+        <Button DockPanel.Dock="Right"
+                VerticalAlignment="Center"
+                Command="{Binding CaptureDefaultsCommand}"
+                Style="{StaticResource StripLink}">
+          <TextBlock Style="{StaticResource StripLinkText}" Text="Capture" />
+        </Button>
+        <TextBlock VerticalAlignment="Center"
+                   FontSize="{StaticResource FontBody}"
+                   Foreground="{StaticResource TextBrush}"
+                   Text="No Default pack yet. Capture it to have something to reset to."
+                   TextWrapping="Wrap" />
+      </DockPanel>
+    </Border>
+
+    <ContentControl x:Name="PageHost" Grid.Row="2" Content="{Binding CurrentPage}" />
 
     <!-- 3.0: the one place the shell says anything, at the foot of the content area. The side gutter is the
          pages' own 24 px, so the strip's left edge is the page content's; it collapses when there is nothing to
          say, and the row gives the height back to the page with it. -->
-    <controls:StatusStrip Grid.Row="2" Margin="24,0,24,16" DataContext="{Binding Status}" />
+    <controls:StatusStrip Grid.Row="3" Margin="24,0,24,16" DataContext="{Binding Status}" />
   </Grid>
 </Window>

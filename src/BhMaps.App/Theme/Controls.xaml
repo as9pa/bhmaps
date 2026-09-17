@@ -238,6 +238,20 @@
     </Setter>
   </Style>
 
+  <!-- The links the status strip offers, and the first-run line under the top bar with them: a link here is the
+       app's plain button with the text's own weight and rule on it, never a colour, because the strip's dot is
+       the only coloured thing on either line. -->
+  <Style x:Key="StripLink" TargetType="Button" BasedOn="{StaticResource PlainButton}">
+    <Setter Property="Padding" Value="{StaticResource Gap8}" />
+  </Style>
+
+  <Style x:Key="StripLinkText" TargetType="TextBlock">
+    <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+    <Setter Property="FontSize" Value="{StaticResource FontBody}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="TextDecorations" Value="Underline" />
+  </Style>
+
   <Style x:Key="ChipToggle" TargetType="ToggleButton">
     <Setter Property="FontFamily" Value="{StaticResource Sans}" />
     <Setter Property="FontSize" Value="{StaticResource FontBody}" />

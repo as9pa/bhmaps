@@ -4,20 +4,6 @@
              xmlns:controls="clr-namespace:BhMaps.App.Views.Controls"
              AutomationProperties.Name="Status"
              Visibility="{Binding IsVisible, Converter={StaticResource BoolToVis}}">
-  <UserControl.Resources>
-    <!-- The links the strip offers. A link here is the app's plain button with the text's own weight and rule on
-         it: never a colour, because the dot is the only coloured thing on the strip. -->
-    <Style x:Key="StripLink" TargetType="Button" BasedOn="{StaticResource PlainButton}">
-      <Setter Property="Padding" Value="{StaticResource Gap8}" />
-    </Style>
-    <Style x:Key="StripLinkText" TargetType="TextBlock">
-      <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
-      <Setter Property="FontSize" Value="{StaticResource FontBody}" />
-      <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="TextDecorations" Value="Underline" />
-    </Style>
-  </UserControl.Resources>
-
   <Border Background="{StaticResource Surface2Brush}"
           BorderBrush="{StaticResource LineBrush}"
           BorderThickness="1"

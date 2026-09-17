@@ -133,15 +133,6 @@
       </Button>
     </Grid>
 
-    <!-- Spec 3.1's first-run line, on this page too, and it goes when a pack arrives. -->
-    <TextBlock DockPanel.Dock="Top"
-               Margin="0,0,0,12"
-               Foreground="{StaticResource Text2Brush}"
-               TextWrapping="Wrap"
-               Visibility="{Binding ShowFirstRunLine, Converter={StaticResource BoolToVis}}">
-      <Run Text="No packs yet. Import a folder of map art on the " /><Hyperlink Command="{Binding DataContext.NavigatePacksCommand, RelativeSource={RelativeSource AncestorType=Window}}" Foreground="{StaticResource TextBrush}"><Run Text="Packs" /></Hyperlink><Run Text=" page, or add an image on " /><Hyperlink Command="{Binding AddPicturesCommand}" Foreground="{StaticResource TextBrush}"><Run Text="Backgrounds" /></Hyperlink><Run Text="." />
-    </TextBlock>
-
     <Grid>
       <Grid>
         <Grid.Style>

@@ -1,4 +1,4 @@
-<Window x:Class="BhMaps.App.Views.WelcomeWindow"
+﻿<Window x:Class="BhMaps.App.Views.WelcomeWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Welcome to BhMaps" Width="620" SizeToContent="Height" ResizeMode="NoResize"
@@ -6,6 +6,8 @@
         Background="{StaticResource BgBrush}"
         Closing="OnClosing">
   <Window.Resources>
+    <BooleanToVisibilityConverter x:Key="BoolToVis" />
+
     <!-- Geist Mono for the step numerals, in the quietest text colour: they are labels for the eye, not copy. -->
     <Style x:Key="StepNumber" TargetType="TextBlock" BasedOn="{StaticResource MonoText}">
       <Setter Property="Foreground" Value="{StaticResource Text3Brush}" />
@@ -71,7 +73,8 @@
                     Style="{StaticResource OutlineButton}" />
             <TextBox AutomationProperties.Name="Game folder"
                      Style="{StaticResource FieldTextBox}"
-                     Text="{Binding GamePath, UpdateSourceTrigger=PropertyChanged}" />
+                     Text="{Binding GamePath, UpdateSourceTrigger=PropertyChanged}"
+                     ToolTip="{Binding GamePath}" />
           </DockPanel>
           <TextBlock Style="{StaticResource ErrorText}" Text="{Binding GameError}" />
         </StackPanel>
@@ -97,7 +100,8 @@
                     Style="{StaticResource OutlineButton}" />
             <TextBox AutomationProperties.Name="Library folder"
                      Style="{StaticResource FieldTextBox}"
-                     Text="{Binding LibraryPath, UpdateSourceTrigger=PropertyChanged}" />
+                     Text="{Binding LibraryPath, UpdateSourceTrigger=PropertyChanged}"
+                     ToolTip="{Binding LibraryPath}" />
           </DockPanel>
           <TextBlock Style="{StaticResource ErrorText}" Text="{Binding LibraryError}" />
         </StackPanel>
@@ -133,32 +137,43 @@
         <ColumnDefinition Width="Auto" />
       </Grid.ColumnDefinitions>
 
-      <!-- Step 3's progress, the busy state's whole visible half. Its own Text drives the visibility, so an idle
-           window shows nothing here rather than an empty line holding the row open. A long relative path is
-           trimmed rather than wrapped, because a growing line would resize a window sized to its content. -->
-      <TextBlock VerticalAlignment="Center"
-                 Text="{Binding ProgressText}"
-                 TextTrimming="CharacterEllipsis"
-                 TextWrapping="NoWrap">
-        <TextBlock.Style>
-          <Style TargetType="TextBlock" BasedOn="{StaticResource StepText}">
-            <Setter Property="Margin" Value="0,0,16,0" />
-            <Style.Triggers>
-              <Trigger Property="Text" Value="">
-                <Setter Property="Visibility" Value="Collapsed" />
-              </Trigger>
-            </Style.Triggers>
-          </Style>
-        </TextBlock.Style>
-      </TextBlock>
-      <StackPanel Grid.Column="1" Orientation="Horizontal">
-        <!-- No Command: IsCancel closes the dialog with false, which App.xaml.cs shuts down on. Disabled while
-             step 3 runs, so Escape cannot walk out of a capture either. -->
+      <!-- Step 3 running, drawn like the status strip's running line so the first thing the app does looks the
+           way everything after it will: the white dot with its halo, what is being copied, and Cancel. It stands
+           where the buttons were, because there is nothing else to press while it runs. The line is trimmed
+           rather than wrapped, because a growing line would resize a window sized to its content. -->
+      <DockPanel AutomationProperties.Name="Capturing" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}">
+        <Grid Width="12" Height="12" Margin="0,0,12,0" DockPanel.Dock="Left" VerticalAlignment="Center">
+          <Ellipse Width="12" Height="12" Fill="{StaticResource AccentBrush}" Opacity="0.25" />
+          <Ellipse Width="6" Height="6" Fill="{StaticResource AccentBrush}" />
+        </Grid>
+        <Button DockPanel.Dock="Right"
+                VerticalAlignment="Center"
+                Command="{Binding CancelCaptureCommand}"
+                Style="{StaticResource StripLink}">
+          <TextBlock Style="{StaticResource StripLinkText}" Text="Cancel" />
+        </Button>
+        <!-- The automation name is the line itself, so a reader announces what is being copied rather than the
+             control it sits in. -->
+        <TextBlock Margin="0,0,16,0"
+                   VerticalAlignment="Center"
+                   AutomationProperties.LiveSetting="Polite"
+                   AutomationProperties.Name="{Binding ProgressText}"
+                   FontSize="{StaticResource FontBody}"
+                   Foreground="{StaticResource TextBrush}"
+                   Text="{Binding ProgressText}"
+                   TextTrimming="CharacterEllipsis"
+                   TextWrapping="NoWrap" />
+      </DockPanel>
+
+      <StackPanel Grid.Column="1"
+                  Orientation="Horizontal"
+                  Visibility="{Binding IsNotBusy, Converter={StaticResource BoolToVis}}">
+        <!-- No Command: IsCancel closes the dialog with false, which App.xaml.cs shuts down on. Gone while step 3
+             runs, so Escape cannot walk out of a capture either; the line's own Cancel stops that. -->
         <Button Margin="0,0,8,0"
                 Content="Cancel"
                 FocusVisualStyle="{StaticResource DialogFocusRing}"
                 IsCancel="True"
-                IsEnabled="{Binding IsNotBusy}"
                 Style="{StaticResource PlainButton}" />
         <Button Command="{Binding FinishCommand}"
                 Content="Finish"

@@ -53,14 +53,22 @@ public partial class App : Application
         // saved game path that has stopped working comes back here rather than to a crash or an empty grid.
         // Shown at most once: with a command-line override in play, Finish cannot change the path this run uses,
         // so a loop on the same condition would never end.
+        WelcomeCapture? captured = null;
+        var startOnPacks = false;
         if (!services.Settings.WelcomeDone || !SettingsStore.ValidateGamePath(services.GamePath, out _))
         {
-            var welcome = new WelcomeWindow { DataContext = new WelcomeViewModel(services, dialogs), ShowActivated = !Quiet };
+            var welcomeModel = new WelcomeViewModel(services, dialogs);
+            var welcome = new WelcomeWindow { DataContext = welcomeModel, ShowActivated = !Quiet };
             if (welcome.ShowDialog() != true)
             {
                 Shutdown(0);
                 return;
             }
+
+            // 3.0: step 3 answered No leaves a library with no pack in it, so the shell opens where the offer to
+            // capture one is: the Packs page's empty state, with the first-run line above it.
+            captured = welcomeModel.Capture;
+            startOnPacks = captured is null;
         }
 
         // Spec 3.5: an unchanged game starts from the cache; anything else re-reads while the window opens.
@@ -69,7 +77,28 @@ public partial class App : Application
             _ = services.LevelData.RefreshAsync();
         }
 
-        var window = new MainWindow { DataContext = new MainViewModel(services, dialogs), ShowActivated = !Quiet };
+        var model = new MainViewModel(services, dialogs);
+
+        // 3.0: a capture that ran before the shell existed still says what it did, on the strip the rest of the
+        // app says everything through. No Retry beside a failure: the welcome is over, and Settings offers the
+        // capture again.
+        if (captured is { } outcome)
+        {
+            if (outcome.Failed)
+            {
+                model.Status.Error(outcome.Text, retry: null);
+            }
+            else
+            {
+                model.Status.Done(outcome.Text, undoable: false);
+            }
+        }
+        else if (startOnPacks)
+        {
+            model.NavigatePacks();
+        }
+
+        var window = new MainWindow { DataContext = model, ShowActivated = !Quiet };
         MainWindow = window;
         window.Closed += (_, _) => Shutdown();
         window.Show();
