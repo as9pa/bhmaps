@@ -244,9 +244,10 @@ public partial class MapPanelViewModel : ObservableObject
         _snapshot.MapStatuses.TryGetValue(folderName, out var status);
         var matched = RecordReset.MatchedPacks(map, status, _snapshot.Packs);
         ResetOutcome? outcome = null;
+        var resetPaths = PackApplier.ResetMapPaths(_snapshot.Tree, _map, defaultPack);
         await _shell.RunGameWriteAsync(
             $"Resetting {DisplayName}",
-            PackApplier.ResetMapPaths(_snapshot.Tree, _map, defaultPack),
+            resetPaths,
             (_, ct) => Task.Run(
                 () =>
                 {
@@ -257,7 +258,8 @@ public partial class MapPanelViewModel : ObservableObject
             $"Reset {DisplayName} to default",
             libraryUndoPaths: RecordReset.UndoPaths(matched, _shell.Services.LibraryPath),
             artMaps: [map],
-            resetThumbnails: true);
+            resetThumbnails: true,
+            sources: AppliedSources.FromPack(defaultPack, resetPaths));
 
         if (outcome is not null)
         {

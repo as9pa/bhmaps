@@ -275,7 +275,8 @@ public partial class PacksViewModel : PageViewModel
             (progress, ct) => Task.Run(() => { result = PackApplier.ApplyPack(pack, gamePath, progress, ct); }, ct),
             $"{pack.Name} applied",
             packName: pack.Name,
-            artMaps: artMaps);
+            artMaps: artMaps,
+            sources: AppliedSources.FromPack(pack, pack.RelativePaths));
         if (result is not null)
         {
             Shell.Dialogs.ShowFailures("Some files could not be copied", result.Failures);

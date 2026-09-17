@@ -259,7 +259,9 @@ public partial class MapsViewModel : PageViewModel
             "Reset every map to default",
             libraryUndoPaths: RecordReset.UndoPaths(allMatched, Shell.Services.LibraryPath),
             artMaps: snapshot.Catalog.Maps,
-            resetThumbnails: true);
+            resetThumbnails: true,
+            // Without a Default pack the reset deletes rather than copies, so there is no source to record.
+            sources: defaultPack is null ? null : AppliedSources.FromPack(defaultPack, undoPaths));
 
         if (outcome is not null)
         {
@@ -278,15 +280,17 @@ public partial class MapsViewModel : PageViewModel
 
         var gamePath = Shell.Services.GamePath;
         ApplyResult? result = null;
+        var targetPaths = PackApplier.ApplyToMapsPaths(pack, maps);
         await Shell.RunGameWriteAsync(
             $"Applying {pack.Name}",
-            PackApplier.ApplyToMapsPaths(pack, maps),
+            targetPaths,
             (progress, ct) => Task.Run(
                 () => { result = PackApplier.ApplyToMaps(pack, maps, gamePath, progress, ct); }, ct),
             $"{pack.Name} applied to {MainViewModel.Count(maps.Count, "map")}",
             clearTicks,
             pack.Name,
-            artMaps: maps);
+            artMaps: maps,
+            sources: AppliedSources.FromPack(pack, targetPaths));
 
         if (result is not null)
         {
@@ -355,10 +359,11 @@ public partial class MapsViewModel : PageViewModel
             .DistinctBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
+        var resetPaths = maps.SelectMany(m => PackApplier.ResetMapPaths(snapshot.Tree, m, defaultPack))
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         await Shell.RunGameWriteAsync(
             "Resetting",
-            maps.SelectMany(m => PackApplier.ResetMapPaths(snapshot.Tree, m, defaultPack))
-                .Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
+            resetPaths,
             (progress, ct) => Task.Run(
                 () =>
                 {
@@ -376,7 +381,8 @@ public partial class MapsViewModel : PageViewModel
             clearTicks,
             libraryUndoPaths: RecordReset.UndoPaths(allMatched, Shell.Services.LibraryPath),
             artMaps: maps,
-            resetThumbnails: true);
+            resetThumbnails: true,
+            sources: AppliedSources.FromPack(defaultPack, resetPaths));
 
         Shell.Dialogs.ShowFailures("Some files could not be reset", failures);
     }

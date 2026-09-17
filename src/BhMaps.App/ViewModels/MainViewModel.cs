@@ -5,6 +5,7 @@ using BhMaps.App.Services;
 using BhMaps.App.ViewModels.Pages;
 using BhMaps.App.Views;
 using BhMaps.Core.Game;
+using BhMaps.Core.Hashing;
 using BhMaps.Core.LevelData;
 using BhMaps.Core.Maps;
 using BhMaps.Core.Model;
@@ -334,7 +335,11 @@ public partial class MainViewModel : ObservableObject
                 () =>
                 {
                     result = Services.Undo.Restore(
-                        session, gamePath, libraryPath, ThumbnailWriter.ThumbnailsDir(Services.GameRoot));
+                        session,
+                        gamePath,
+                        libraryPath,
+                        ThumbnailWriter.ThumbnailsDir(Services.GameRoot),
+                        AppliedRecord.PathFor(Services.AppDataDir));
                 },
                 ct),
             UndoDoneText,
@@ -453,6 +458,13 @@ public partial class MainViewModel : ObservableObject
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
+        // One source per slot the write lands on: the picture that map's turn uses, cycling as the loop below does.
+        IReadOnlyList<AppliedSource> sources = pictures.Count == 0
+            ? []
+            : [.. maps.SelectMany(
+                (m, i) => BackgroundApplier.TargetPaths(m.BackgroundSlots)
+                    .Select(p => new AppliedSource(p, pictures[i % pictures.Count], packName)))];
+
         var used = Math.Min(pictures.Count, maps.Count);
         var failures = new List<FileFailure>();
         await RunGameWriteAsync(
@@ -476,7 +488,8 @@ public partial class MainViewModel : ObservableObject
             // The undo paths are all in the shared backgrounds folder, so the maps whose slots were written are
             // named here rather than read back off them (spec 11).
             writtenFolders: [.. maps.Select(m => m.FolderName)],
-            artMaps: maps);
+            artMaps: maps,
+            sources: sources);
 
         Dialogs.ShowFailures("Some pictures could not be applied", failures);
     }
@@ -543,7 +556,8 @@ public partial class MainViewModel : ObservableObject
             // The undo paths are all in the shared backgrounds folder, so the maps whose slots were written are
             // named here rather than read back off them (spec 11).
             writtenFolders: [.. targets.Select(m => m.FolderName)],
-            artMaps: targets);
+            artMaps: targets,
+            sources: [.. undoPaths.Select(p => new AppliedSource(p, sourcePath, packName))]);
 
         Dialogs.ShowFailures("Some backgrounds could not be applied", failures);
     }
@@ -592,7 +606,8 @@ public partial class MainViewModel : ObservableObject
                 : $"{pack.Name} applied to {targets.Count} maps",
             clearTicks,
             pack.Name,
-            artMaps: targets);
+            artMaps: targets,
+            sources: AppliedSources.FromPack(pack, undoPaths));
 
         Dialogs.ShowFailures("Some files could not be applied", failures);
     }
@@ -649,9 +664,10 @@ public partial class MainViewModel : ObservableObject
             .Where(m => m.BackgroundSlots.Contains(slot, StringComparer.OrdinalIgnoreCase))
             .ToList();
         var failures = new List<FileFailure>();
+        var editorTargets = BackgroundApplier.TargetPaths([slot]);
         await RunGameWriteAsync(
             $"Applying {Path.GetFileName(source)}",
-            BackgroundApplier.TargetPaths([slot]),
+            editorTargets,
             (_, ct) => Task.Run(
                 () => failures.AddRange(BackgroundApplier.Apply(source, gamePath, [slot], null, ct).Failures),
                 ct),
@@ -660,7 +676,8 @@ public partial class MainViewModel : ObservableObject
             // One slot, and the maps that name it are the cards it changes: the backgrounds folder it is written
             // into belongs to no map of its own (spec 11).
             writtenFolders: [.. slotMaps.Select(m => m.FolderName)],
-            artMaps: slotMaps);
+            artMaps: slotMaps,
+            sources: [.. editorTargets.Select(p => new AppliedSource(p, source, saved.PackName))]);
 
         Dialogs.ShowFailures("Some backgrounds could not be applied", failures);
     }
@@ -1473,14 +1490,16 @@ public partial class MainViewModel : ObservableObject
         var gamePath = Services.GamePath;
         var failures = new List<FileFailure>();
         var maps = resets.Select(r => r.Map).ToList();
+        var resetPaths = resets
+            .SelectMany(r => (r.Platforms
+                    ? PackApplier.ResetPlatformPaths(snapshot.Tree, r.Map, defaultPack)
+                    : Array.Empty<string>())
+                .Concat(PackApplier.ResetBackgroundPaths(defaultPack, r.Slots)))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
         await RunGameWriteAsync(
             "Deleting",
-            [.. resets
-                .SelectMany(r => (r.Platforms
-                        ? PackApplier.ResetPlatformPaths(snapshot.Tree, r.Map, defaultPack)
-                        : Array.Empty<string>())
-                    .Concat(PackApplier.ResetBackgroundPaths(defaultPack, r.Slots)))
-                .Distinct(StringComparer.OrdinalIgnoreCase)],
+            resetPaths,
             (progress, ct) => Task.Run(
                 () =>
                 {
@@ -1513,7 +1532,10 @@ public partial class MainViewModel : ObservableObject
             artMaps: maps,
             // One flag for every map in the write, so it is only the kept original when every one of them ends
             // fully default; a map that keeps custom art elsewhere is re-rendered with the rest.
-            resetThumbnails: resets.All(r => EndsDefault(r, MapStatusOf(snapshot, r.Map))));
+            resetThumbnails: resets.All(r => EndsDefault(r, MapStatusOf(snapshot, r.Map))),
+            // The reset copies Default's files over these paths; a path Default has nothing for is deleted
+            // instead, and the note drops it because the game file is then missing.
+            sources: AppliedSources.FromPack(defaultPack, resetPaths));
 
         Dialogs.ShowFailures("Some files could not be deleted", failures);
     }
@@ -1572,6 +1594,28 @@ public partial class MainViewModel : ObservableObject
     public static string DoneSentence(bool gameRunning) =>
         gameRunning ? "Shows on the next match load." : "Shows when Brawlhalla starts.";
 
+    /// <summary>The hash of a game file as the undo session copied it just before the write, or null when the path
+    /// held nothing, the session did not capture it, or there was no session at all. It is what tells a write that
+    /// landed as different bytes, which a fitted picture does, from one that never ran.</summary>
+    private static string? CapturedHash(UndoSession? session, string relativePath)
+    {
+        if (session is null)
+        {
+            return null;
+        }
+
+        var captured = Path.Combine(session.Path, relativePath);
+        try
+        {
+            return File.Exists(captured) ? FileHasher.Hash(captured) : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // An unreadable copy is one we cannot compare against, so the write counts as landed.
+            return null;
+        }
+    }
+
     /// <summary>The line an undo leaves. Spec 11 names no string for it, so this is the plan's (A-D7).</summary>
     public const string UndoDoneText = "Last change undone.";
 
@@ -1596,7 +1640,10 @@ public partial class MainViewModel : ObservableObject
     /// (spec 11); left null it is read off the undo paths, which is what every write into a map's own folder
     /// wants. <paramref name="artMaps"/> names the maps whose art the write changes, so their map-select
     /// thumbnails are written after it when the switch is on (spec 10.4); <paramref name="resetThumbnails"/>
-    /// makes that step put the game's own thumbnail back instead, for a write that resets the art.</summary>
+    /// makes that step put the game's own thumbnail back instead, for a write that resets the art.
+    /// <paramref name="sources"/> names the library file behind every game path the write lays down, so the applied
+    /// record can remember what the app itself wrote; left null nothing is recorded, which is what a write of
+    /// thumbnails alone wants.</summary>
     public Task<bool> RunGameWriteAsync(
         string label,
         IReadOnlyList<string> undoPaths,
@@ -1607,7 +1654,8 @@ public partial class MainViewModel : ObservableObject
         IReadOnlyList<string>? libraryUndoPaths = null,
         IReadOnlyList<string>? writtenFolders = null,
         IReadOnlyList<MapEntry>? artMaps = null,
-        bool resetThumbnails = false) =>
+        bool resetThumbnails = false,
+        IReadOnlyList<AppliedSource>? sources = null) =>
         RunWriteCoreAsync(
             label,
             undoPaths,
@@ -1619,7 +1667,8 @@ public partial class MainViewModel : ObservableObject
             libraryUndoPaths,
             writtenFolders,
             artMaps,
-            resetThumbnails);
+            resetThumbnails,
+            sources: sources);
 
     /// <summary>The one path every game write takes. <paramref name="undoPaths"/> null means take no snapshot,
     /// which is Undo's case and only Undo's: the snapshot it is restoring is the only one there is, and Begin
@@ -1636,7 +1685,8 @@ public partial class MainViewModel : ObservableObject
         IReadOnlyList<string>? writtenFolders = null,
         IReadOnlyList<MapEntry>? artMaps = null,
         bool resetThumbnails = false,
-        IReadOnlyList<string>? thumbnailUndoNames = null)
+        IReadOnlyList<string>? thumbnailUndoNames = null,
+        IReadOnlyList<AppliedSource>? sources = null)
     {
         if (GameFolderMissing || IsBusy)
         {
@@ -1648,6 +1698,7 @@ public partial class MainViewModel : ObservableObject
         var gamePath = Services.GamePath;
         var libraryPath = Services.LibraryPath;
         var thumbnailsDir = ThumbnailWriter.ThumbnailsDir(Services.GameRoot);
+        var recordPath = AppliedRecord.PathFor(Services.AppDataDir);
         var thumbnailPlans = ThumbnailPlans(artMaps);
         var thumbnailWrites = 0;
         var ok = await RunBusyAsync(
@@ -1658,6 +1709,9 @@ public partial class MainViewModel : ObservableObject
                     label,
                     async () =>
                     {
+                        // The session is held past its capture: the note after the write reads the copies it took
+                        // to tell the files the write changed from the ones it left alone.
+                        UndoSession? session = null;
                         if (undoPaths is not null)
                         {
                             // The capture is the first step of the work, not a step before it: it is file copying,
@@ -1669,7 +1723,7 @@ public partial class MainViewModel : ObservableObject
                                 {
                                     // One session holds both sides: the library records a write clears go back
                                     // with the game files it cleared them for, in the same undo.
-                                    var session = Services.Undo.Begin();
+                                    session = Services.Undo.Begin();
                                     session.Capture(gamePath, undoPaths);
                                     if (libraryUndoPaths is { Count: > 0 })
                                     {
@@ -1686,11 +1740,31 @@ public partial class MainViewModel : ObservableObject
                                     {
                                         session.CaptureThumbnails(thumbnailsDir, thumbnailUndoNames);
                                     }
+
+                                    // The applied record describes the files this session is holding, so it goes
+                                    // into the same session and comes back with them.
+                                    session.CaptureRecord(recordPath);
                                 },
                                 ct);
                         }
 
                         await work(progress, ct);
+
+                        if (sources is { Count: > 0 })
+                        {
+                            // After the work, because the record is the hash of what really landed: a write that
+                            // failed part way must not leave the record claiming files it never wrote.
+                            var captured = session;
+                            await Task.Run(
+                                () => AppliedRecord.Note(
+                                    recordPath,
+                                    gamePath,
+                                    libraryPath,
+                                    sources,
+                                    DateTimeOffset.Now,
+                                    relativePath => CapturedHash(captured, relativePath)),
+                                ct);
+                        }
 
                         if (thumbnailPlans.Count > 0)
                         {
