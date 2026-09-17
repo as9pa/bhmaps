@@ -19,7 +19,7 @@ public static class PlatformBounds
     public static CameraBounds? For(LevelDesc level, double pad, double aspect) =>
         For(level, pad, aspect, null);
 
-    /// <summary>Spec 3.2: with a focus set, the box is the union of the focused assets alone, so Ticked only
+    /// <summary>Spec 3.2: with a focus set, the box is the union of the focused assets alone, so Selected only
     /// frames the ticked pieces. A set that matches no asset leaves the box empty and returns null, which is the
     /// same "render the whole level" answer a level with no platforms already gives.</summary>
     public static CameraBounds? For(LevelDesc level, double pad, double aspect, IReadOnlySet<string>? focus)

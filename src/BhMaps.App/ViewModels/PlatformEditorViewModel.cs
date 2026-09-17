@@ -63,11 +63,11 @@ public partial class PlatformEditorViewModel : ObservableObject
     public const string NoPackText = "In game";
     public const string NoFilesText = "This map has no platform art of its own.";
     public const string MixedText = "Mixed";
-    public const string TickHintText = "Tick a file to edit it.";
+    public const string TickHintText = "Select a file to edit it.";
 
-    /// <summary>Spec 3.2: Ticked only with nothing ticked ghosts the whole map, so the preview says what to do
+    /// <summary>Spec 3.2: Selected only with nothing selected ghosts the whole map, so the preview says what to do
     /// about it, in the same words TickHintText uses for the sliders.</summary>
-    public const string IsolateHintText = "Tick a file to see it on its own.";
+    public const string IsolateHintText = "Select a file to see it on its own.";
 
     /// <summary>Spec 5.2: the record's values are meant for the untouched art, and the game folder's file is the
     /// nearest thing to it when the Default pack has nothing.</summary>
@@ -267,7 +267,7 @@ public partial class PlatformEditorViewModel : ObservableObject
     [ObservableProperty]
     public partial double PanY { get; set; } = 0.5;
 
-    /// <summary>Spec 3.1: true is Ticked only, false is All pieces. Changing it schedules a render and writes the
+    /// <summary>Spec 3.1: true is Selected only, false is All pieces. Changing it schedules a render and writes the
     /// setting; nothing else is written anywhere.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowAllPieces))]
@@ -1516,7 +1516,7 @@ public partial class PlatformEditorViewModel : ObservableObject
         EditOutsideCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(IsolateHint));
 
-        // In All pieces a tick only moves the sliders, as in 2.3. In Ticked only it changes the picture, so the
+        // In All pieces a tick only moves the sliders, as in 2.3. In Selected only it changes the picture, so the
         // render is asked for; the 60 ms throttle collapses the run of ticks All, None and Solo produce.
         if (IsolatePreview)
         {

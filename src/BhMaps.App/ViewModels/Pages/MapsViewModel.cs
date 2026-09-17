@@ -22,6 +22,10 @@ public partial class MapsViewModel : PageViewModel
 
     private const string AllChip = "All";
 
+    /// <summary>The grid's content width in the default 1280 px window with the panel shut, which is what the
+    /// zoom steps were drawn against: 6 columns of a 188 px card and a 12 px gap.</summary>
+    private const double ReferenceGridWidth = 1200;
+
     /// <summary>Every card the last scan produced. Cards is this list under the chip and the search.</summary>
     private readonly List<MapCardViewModel> _all = [];
 
@@ -67,7 +71,8 @@ public partial class MapsViewModel : PageViewModel
     [ObservableProperty]
     public partial string SelectedChip { get; set; }
 
-    /// <summary>Columns in the grid, MinZoom to MaxZoom, persisted as mapsZoom.</summary>
+    /// <summary>The zoom step, MinZoom to MaxZoom, persisted as mapsZoom. It sets the card's width through
+    /// <see cref="CardWidth"/>; how many cards a row holds is whatever fits.</summary>
     [ObservableProperty]
     public partial int Zoom { get; set; }
 
@@ -80,8 +85,14 @@ public partial class MapsViewModel : PageViewModel
     [ObservableProperty]
     public partial MapPanelViewModel? Panel { get; set; }
 
-    /// <summary>Spec 3.1's density steps. At 7 and 8 the name shrinks and the tag goes; at 9 and 10 the name row
-    /// goes with it, the card tightens to 4 px padding and 8 px gaps, and Missing becomes a mark on the picture.
+    /// <summary>2.8: the slider sets a card width, not a column count, so the cards keep their size when the
+    /// right panel opens and the row simply holds fewer of them. The width is the one the step used to give in
+    /// the default window, so nothing moves at the same zoom with the panel shut.</summary>
+    public double CardWidth => Math.Round(ReferenceGridWidth / Zoom) - CardMargin.Right;
+
+    /// <summary>Spec 3.1's density steps, which follow the same steps the width does. At 7 and 8 the name
+    /// shrinks and the tag goes; at 9 and 10 the name row goes with it, the card tightens to 4 px padding and
+    /// 8 px gaps, and Missing becomes a mark on the picture.
     /// ShowTagRow is the zoom's answer for every card; MapCardViewModel.ShowTag is one card's own answer about
     /// whether it has a tag at all. Both have to be true for a tag to be drawn, so they keep different names.</summary>
     public bool ShowName => Zoom <= 8;
@@ -418,6 +429,7 @@ public partial class MapsViewModel : PageViewModel
         }
 
         // The card template reads these numbers rather than carrying a pile of triggers of its own.
+        OnPropertyChanged(nameof(CardWidth));
         OnPropertyChanged(nameof(ShowName));
         OnPropertyChanged(nameof(ShowTagRow));
         OnPropertyChanged(nameof(ShowMissingMark));

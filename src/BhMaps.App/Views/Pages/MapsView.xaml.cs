@@ -1,8 +1,8 @@
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using BhMaps.App.ViewModels;
 using BhMaps.App.ViewModels.Pages;
 using BhMaps.App.Views.Controls;
@@ -40,6 +40,7 @@ public partial class MapsView : UserControl
             }
 
             page.OpenMapCommand.Execute(card.FolderName);
+            ScrollOpenCardIntoView(item);
         }
     }
 
@@ -57,6 +58,7 @@ public partial class MapsView : UserControl
             // Open only, never close: Escape and the X button are what close the panel, and the card a keyboard
             // user is standing on is the one they just opened.
             page.OpenMapCommand.Execute(card.FolderName);
+            ScrollOpenCardIntoView(item);
             e.Handled = true;
             return;
         }
@@ -66,6 +68,22 @@ public partial class MapsView : UserControl
         {
             e.Handled = true;
         }
+    }
+
+    /// <summary>2.8: the panel takes its column out of the grid's width, and the cards keep their own width, so
+    /// the row the card sits on can lose it to the row below. The card that was just opened is brought back into
+    /// view once the reflow has been laid out. Opening only: closing the panel gives the width back, and a card
+    /// on screen stays on screen.</summary>
+    private static void ScrollOpenCardIntoView(ListBoxItem item)
+    {
+        if (ItemsControl.ItemsControlFromItemContainer(item) is not ListBox list)
+        {
+            return;
+        }
+
+        // Loaded is after the layout pass the panel's column causes, so by then the card is where the reflow
+        // put it rather than where it was clicked.
+        list.Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () => list.ScrollIntoView(item.DataContext));
     }
 
     /// <summary>Spec 3.1: the navigation keys move focus between cards and leave the open card selected. The
@@ -104,10 +122,13 @@ public partial class MapsView : UserControl
                 return true;
             }
 
-            // A page is the rows the viewport holds, and the columns are the items panel's own, so neither number
-            // is a second copy of the zoom.
+            // A page is the rows the viewport holds, and the columns are however many cards the wrap panel got
+            // on a row, so neither number is a second copy of the zoom.
             var row = item.ActualHeight + item.Margin.Top + item.Margin.Bottom;
-            var columns = VisualTreeHelper.GetParent(item) is UniformGrid grid && grid.Columns > 0 ? grid.Columns : 1;
+            var cell = item.ActualWidth + item.Margin.Left + item.Margin.Right;
+            var columns = VisualTreeHelper.GetParent(item) is WrapPanel wrap && cell > 0
+                ? Math.Max(1, (int)(wrap.ActualWidth / cell))
+                : 1;
             var page = columns * Math.Max(1, (int)(row > 0 ? list.ActualHeight / row : 1));
             var index = list.ItemContainerGenerator.IndexFromContainer(item);
             var target = key switch

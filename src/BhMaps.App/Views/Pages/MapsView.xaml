@@ -555,11 +555,13 @@
           </ListBox.Resources>
           <ListBox.ItemsPanel>
             <ItemsPanelTemplate>
-              <!-- Top aligned, or a short list comes out with enormous cards. A UniformGrid does not virtualise,
-                   which is the point: every container is realised, so the selection binding is exact (plan
-                   decision A-D10). -->
-              <UniformGrid VerticalAlignment="Top"
-                           Columns="{Binding DataContext.Zoom, RelativeSource={RelativeSource AncestorType=ListBox}}" />
+              <!-- Top aligned, or a short list comes out with a huge gap under it. 2.8: a WrapPanel rather than
+                   a UniformGrid, so the cards keep the width the zoom gives them and the row holds however many
+                   fit; opening the panel moves the last card of a row down instead of shrinking every card. No
+                   ItemWidth: the card sets its own width, and the item's margin is the gap. A WrapPanel does not
+                   virtualise either, which is the point: every container is realised, so the selection binding
+                   is exact (plan decision A-D10). -->
+              <WrapPanel VerticalAlignment="Top" Orientation="Horizontal" />
             </ItemsPanelTemplate>
           </ListBox.ItemsPanel>
           <ListBox.ItemTemplate>
@@ -567,11 +569,13 @@
               <!-- The name and the tag are the container's tooltip, which is the only place they are at the two
                    tightest zoom steps (spec 3.1), and a longer name than the card can draw at any step. -->
               <Border x:Name="Chrome"
+                      Width="{Binding DataContext.CardWidth, RelativeSource={RelativeSource AncestorType=ListBox}}"
                       Padding="{Binding DataContext.CardPadding, RelativeSource={RelativeSource AncestorType=ListBox}}"
                       Style="{StaticResource CardBorder}">
                 <StackPanel>
-                  <!-- The Viewbox holds the card source's shape at any column width, so a card that has not
-                       drawn its preview yet is the same size as one that has and nothing jumps. The size comes
+                  <!-- The Viewbox holds the card source's shape at any card width, so a card that has not
+                       drawn its preview yet is the same size as one that has and nothing jumps, and the card's
+                       height follows its width rather than being set anywhere. The size comes
                        from the compositor that renders it, so the two cannot drift apart. Through a OneTime
                        Binding rather than a bare x:Static: the constants are pixel counts and so int, and
                        setting a Double property from an int markup extension throws at load. -->
@@ -659,8 +663,8 @@
               </Border>
               <DataTemplate.Triggers>
                 <!-- Owner changes O1 and O6: a wide card carries the pill on the name's row; a narrow one
-                     carries it over the picture's bottom-left corner, so no card ever grows for its tag and the
-                     UniformGrid never equalises an empty line into every card. The card's own width decides,
+                     carries it over the picture's bottom-left corner, so no card ever grows for its tag and a
+                     row is never as tall as an empty line in one card. The card's own width decides,
                      rather than the zoom step, because the window can be any width and the panel takes 376 px
                      of it. 200 px is a 16 character pill (the ellipsis ceiling on a picture's name) plus the
                      8 px gap plus a 14 character name at 13 px, plus the card's padding and border. A pack name
