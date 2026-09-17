@@ -4,6 +4,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using BhMaps.App.Services;
 using BhMaps.Core.Imaging;
+using BhMaps.Core.Layout;
 using BhMaps.Core.LevelData;
 using BhMaps.Core.Maps;
 using BhMaps.Core.Model;
@@ -21,12 +22,8 @@ namespace BhMaps.App.ViewModels.Pages;
 /// A tile opens the drawer, which lists the halves of what the pack holds for that map (addendum F). Every row is
 /// shown and nothing is truncated (spec section 2, Packs). The pack comes from
 /// <see cref="MainViewModel.NavigateToPack" />, so the title is a pack name rather than a fixed word.</summary>
-public partial class PackDetailViewModel : PageViewModel
+public partial class PackDetailViewModel : PageViewModel, ITileSized
 {
-    public const int MinZoom = 2;
-
-    public const int MaxZoom = 10;
-
     public const string NoPackText = "No pack is open.";
 
     public const string NoMapsText = "This pack has no map folders.";
@@ -79,8 +76,7 @@ public partial class PackDetailViewModel : PageViewModel
             ClipboardHint = "";
         };
 
-        // A stored zoom from another version, or a hand-edited one, is clamped rather than trusted.
-        Zoom = LegacyZoom.ToGridZoom(shell.Services.Settings.PackTileSize);
+        TileSize = shell.Services.Settings.PackTileSize;
     }
 
     /// <summary>The pack the page is showing. Null until the shell navigates to one.</summary>
@@ -102,9 +98,13 @@ public partial class PackDetailViewModel : PageViewModel
 
     public bool HasPack => Pack is not null;
 
-    /// <summary>Columns in the grid, MinZoom to MaxZoom, persisted as packZoom.</summary>
+    /// <summary>How big the tiles are drawn, persisted as packTileSize. It sets the target width; how many
+    /// tiles a row holds, and the width they end up at, is the justified panel's (wireframe 8.1).</summary>
     [ObservableProperty]
-    public partial int Zoom { get; set; }
+    public partial TileSize TileSize { get; set; }
+
+    /// <summary>What a tile aims for, before the panel shares the row's spare width out over them.</summary>
+    public double TargetCardWidth => TileSizes.CardWidth(TileSize);
 
     /// <summary>Every map the pack touches, composed with the pack's own files over the background the pack ships
     /// for it, or the game's when it ships none (spec 5, addendum F).</summary>
@@ -679,13 +679,14 @@ public partial class PackDetailViewModel : PageViewModel
         }
     }
 
-    partial void OnZoomChanged(int value)
+    partial void OnTileSizeChanged(TileSize value)
     {
-        var size = LegacyZoom.FromGridZoom(value);
-        if (Shell.Services.Settings.PackTileSize != size)
+        if (Shell.Services.Settings.PackTileSize != value)
         {
-            Shell.Services.UpdateSettings(Shell.Services.Settings with { PackTileSize = size });
+            Shell.Services.UpdateSettings(Shell.Services.Settings with { PackTileSize = value });
         }
+
+        OnPropertyChanged(nameof(TargetCardWidth));
     }
 
     /// <summary>Throws away the previous pack's loads and starts this one's. The grid is built from the current

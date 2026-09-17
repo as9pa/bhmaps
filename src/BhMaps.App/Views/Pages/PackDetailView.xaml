@@ -5,7 +5,8 @@
              xmlns:controls="clr-namespace:BhMaps.App.Views.Controls"
              xmlns:converters="clr-namespace:BhMaps.App.Converters"
              xmlns:imaging="clr-namespace:BhMaps.Core.Imaging;assembly=BhMaps.Core"
-             xmlns:pages="clr-namespace:BhMaps.App.ViewModels.Pages">
+             xmlns:pages="clr-namespace:BhMaps.App.ViewModels.Pages"
+             behaviors:SizeShortcuts.Target="{Binding}">
   <UserControl.Resources>
     <BooleanToVisibilityConverter x:Key="BoolToVis" />
     <converters:NullToVisibilityConverter x:Key="NullToVis" />
@@ -31,10 +32,7 @@
           <TextBlock Margin="0,0,12,0" VerticalAlignment="Center" Foreground="{StaticResource Text3Brush}"
                      Text="{Binding ClipboardHint}"
                      Visibility="{Binding HasClipboardHint, Converter={StaticResource BoolToVis}}" />
-          <controls:ZoomSlider Margin="0,0,12,0" VerticalAlignment="Center"
-                               Maximum="{x:Static pages:PackDetailViewModel.MaxZoom}"
-                               Minimum="{x:Static pages:PackDetailViewModel.MinZoom}"
-                               Value="{Binding Zoom}" />
+          <controls:SizePicker Margin="0,0,12,0" VerticalAlignment="Center" Value="{Binding TileSize}" />
           <Button Margin="0,0,8,0" Command="{Binding ImportFromPackCommand}" Content="Import from pack"
                   controls:Icon.Glyph="{StaticResource Icon.FolderPlus}"
                   FocusVisualStyle="{StaticResource DialogFocusRing}"
@@ -91,7 +89,8 @@
                      keyboard opens with Enter, which the code-behind handles (spec 5). -->
                 <Style TargetType="ListBoxItem" BasedOn="{StaticResource TileListBoxItem}">
                   <Setter Property="AutomationProperties.Name" Value="{Binding Caption}" />
-                  <Setter Property="Margin" Value="0,0,12,12" />
+                  <!-- 3.0: no margin here, because the justified panel owns the gutter. -->
+                  <Setter Property="Margin" Value="0" />
                   <EventSetter Event="PreviewMouseLeftButtonUp" Handler="Tile_Click" />
                   <EventSetter Event="MouseEnter" Handler="Tile_MouseEnter" />
                   <EventSetter Event="MouseLeave" Handler="Tile_MouseLeave" />
@@ -99,7 +98,12 @@
               </ListBox.ItemContainerStyle>
               <ListBox.ItemsPanel>
                 <ItemsPanelTemplate>
-                  <UniformGrid Columns="{Binding DataContext.Zoom, RelativeSource={RelativeSource AncestorType=ListBox}}" />
+                  <!-- 3.0: the same justified grid the Maps page has. The size is a target width; the panel fits
+                       as many tiles across as it can and shares the rest of the row out over them, so the grid
+                       reaches the edge whatever the drawer is doing. -->
+                  <controls:JustifiedPanel VerticalAlignment="Top"
+                                           Gap="12"
+                                           TargetWidth="{Binding DataContext.TargetCardWidth, RelativeSource={RelativeSource AncestorType=ListBox}}" />
                 </ItemsPanelTemplate>
               </ListBox.ItemsPanel>
               <ListBox.ItemTemplate>

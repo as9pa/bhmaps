@@ -260,7 +260,7 @@ describes things by where they are and what they do. Nothing on disk changes sha
 
 The map art folder and the library are chosen in the welcome window and editable in Settings; the
 data files are wherever the game folder is. Only `<library>\packs` is read and written, so anything
-else kept in the library folder is left alone. The settings file holds the two paths, the zoom level
+else kept in the library folder is left alone. The settings file holds the two paths, the tile size
 each page remembers, when each pack was last applied, whether the Backgrounds page is showing your own
 pictures, whether the game's map-select thumbnails are updated, the names of the packs hidden from
 the lists, whether the welcome window has been
@@ -297,9 +297,9 @@ stops a long operation.
   filter: All and one per level set. The set
   chips are Ranked 1v1, Ranked 2v2 and
   Tournament when the game's data has the ranked sets, and the standard ones when it does not; the
-  other sets the game defines are read but not shown. The zoom slider in the header sets the card
-  size in nine steps, the fifth to begin with; the grid holds as many columns as fit, so opening the
-  panel moves cards down a row instead of shrinking them. Each card is a composed preview, the map's
+  other sets the game defines are read but not shown. The card size is the size control (Large,
+  Medium, Small) in the page header, or Ctrl and plus, minus, zero, or the wheel; the grid holds as
+  many columns as fit, so opening the panel moves cards down a row instead of shrinking them. Each card is a composed preview, the map's
   name, and a tag only when there is something to say: the pack the map matches, the name of the
   any-map picture on it, or Missing. A map that is entirely default draws no tag. Wide cards keep the
   tag on the name row; narrower ones draw it over the bottom-left corner of the picture instead, so
@@ -350,8 +350,8 @@ stops a long operation.
   in folder, and for a picture in a pack **Delete background**, which also puts the default back on
   any map showing it, or Save to My Backgrounds for a picture the game is showing that no pack
   holds. Search matches map names, pack names and file names. The chips are the ones Maps has.
-  The zoom slider sets the row height in five steps, the second to begin with. Add Image is in the
-  header. Up and Down move between rows, Left and Right along a strip, and Enter applies
+  The thumbnail size is the size control (Large, Medium, Small) in the page header, or Ctrl and
+  plus, minus, zero, or the wheel. Add Image is in the header. Up and Down move between rows, Left and Right along a strip, and Enter applies
   the thumbnail the keyboard is on.
 - **Platforms** is the same kind of row for the other half of a map's look. A platform set fits only
   the map it was drawn for, so a row holds exactly the packs that have a set for that map: the set in
@@ -364,7 +364,7 @@ stops a long operation.
   folder and, for a set that is not Default's, **Delete platform set**, which also puts the default
   platforms back if the map is showing that set; Show files belongs to the map panel, where the
   files are listed. Search matches map
-  and pack names, and the zoom slider has the same five steps, the third to begin with.
+  and pack names, and the size control is the one Backgrounds has.
 - **Packs** is one row per pack: a composed thumbnail of the pack's first map, the pack's name and
   what it holds, as in "3 maps, 12 backgrounds, applied 2 min ago", and a strip of previews of the
   maps it touches, as many as the width allows, with a count for the rest. `Default` comes first,
@@ -382,7 +382,7 @@ stops a long operation.
   for a pack that is wrong as a whole. **New pack** asks for a name and makes an empty pack you can
   fill later from Add Image or the editors. Clicking a row opens the pack.
 - **Pack detail** shows one pack as a single grid of its maps, each composed with the game's art
-  where the pack has nothing of its own, with zoom setting the column count. Clicking a tile opens a
+  where the pack has nothing of its own, at the size the header's size control sets. Clicking a tile opens a
   drawer listing that map's files, its background and its platforms, and where each came from.
   Hovering a tile shows a dots button, and the dots or a right-click opens the
   menu. A map's tile is headed with the map's name and holds **Apply to <map>**, **Copy to pack...**

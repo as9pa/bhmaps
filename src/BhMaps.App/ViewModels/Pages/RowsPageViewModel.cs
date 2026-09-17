@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using BhMaps.App.Services;
+using BhMaps.Core.Layout;
 using BhMaps.Core.Maps;
 using BhMaps.Core.Operations;
 using BhMaps.Core.Settings;
@@ -10,18 +11,11 @@ using CommunityToolkit.Mvvm.Input;
 namespace BhMaps.App.ViewModels.Pages;
 
 /// <summary>What the Backgrounds and Platforms pages have in common (addendum B and C): one row per map, a chip
-/// row, a search box, a zoom that sets the thumbnail height, and the rule that a row reads its pictures when it
-/// comes on screen. No selection of its own: selecting a map is the Maps page's (q4), and a tile menu here acts
-/// on the row it belongs to.</summary>
-public abstract partial class RowsPageViewModel : PageViewModel
+/// row, a search box, a size that sets the thumbnails, and the rule that a row reads its pictures when it comes
+/// on screen. No selection of its own: selecting a map is the Maps page's (q4), and a tile menu here acts on the
+/// row it belongs to.</summary>
+public abstract partial class RowsPageViewModel : PageViewModel, ITileSized
 {
-    /// <summary>The 2.8 thumbnail heights, 48 px to 128 px. Part 2 gives these pages the size picker the Maps
-    /// page has now, at which point the slider and this range go with it; until then the steps live here rather
-    /// than on AppSettings, whose zooms are tile sizes already.</summary>
-    public const int MinZoom = 1;
-
-    public const int MaxZoom = 5;
-
     protected const string AllChip = "All";
 
     /// <summary>Every row the last scan produced. Rows is this list under the chip and the search.</summary>
@@ -34,7 +28,7 @@ public abstract partial class RowsPageViewModel : PageViewModel
 
     private CancellationTokenSource? _loads;
 
-    protected RowsPageViewModel(MainViewModel shell, int storedZoom)
+    protected RowsPageViewModel(MainViewModel shell, TileSize storedSize)
         : base(shell)
     {
         Rows = [];
@@ -44,9 +38,8 @@ public abstract partial class RowsPageViewModel : PageViewModel
         SearchText = "";
         SelectedChip = AllChip;
 
-        // A stored zoom from another version, or a hand-edited one, is clamped rather than trusted. The value is
-        // handed in rather than read here, so the constructor calls nothing the subclass has overridden.
-        Zoom = Math.Clamp(storedZoom, MinZoom, MaxZoom);
+        // Handed in rather than read here, so the constructor reaches for nothing the subclass owns.
+        TileSize = storedSize;
     }
 
     /// <summary>The last scan, or null before the first one.</summary>
@@ -68,32 +61,24 @@ public abstract partial class RowsPageViewModel : PageViewModel
     [ObservableProperty]
     public partial string SelectedChip { get; set; }
 
-    /// <summary>MinZoom to MaxZoom, a thumbnail height rather than a column count (addendum B, q1).</summary>
+    /// <summary>How big the row's thumbnails are drawn, persisted by the page (wireframe 8.2). A rows page
+    /// picks a tile width like a grid page does, and the row height follows it, so one size means the same
+    /// thing on every page.</summary>
     [ObservableProperty]
-    public partial int Zoom { get; set; }
+    public partial TileSize TileSize { get; set; }
 
-    /// <summary>Addendum B, q1 answered dense: 48, 56, 72, 96, 128 px.</summary>
-    public double ThumbHeight => Zoom switch
-    {
-        1 => 48,
-        2 => 56,
-        3 => 72,
-        4 => 96,
-        _ => 128,
-    };
+    /// <summary>224, 150 or 96 px.</summary>
+    public double ThumbWidth => TileSizes.RowTileWidth(TileSize);
 
     /// <summary>16:9, rounded to a whole pixel so a strip of them measures the same on every row.</summary>
-    public double ThumbWidth => Math.Round(ThumbHeight * 16 / 9);
+    public double ThumbHeight => Math.Round(ThumbWidth * 9 / 16);
 
-    /// <summary>False at the two smallest steps, where a thumbnail is 85 or 100 px wide and the hover row has
-    /// room for the dots button alone. A click on the tile still applies, so nothing is lost but the label.</summary>
-    public bool ShowTileApply => Zoom >= 3;
+    /// <summary>False at Small, where a thumbnail is 96 px wide and the hover row has room for the dots button
+    /// alone. A click on the tile still applies, so nothing is lost but the label.</summary>
+    public bool ShowTileApply => TileSize != TileSize.Small;
 
     /// <summary>The words in the search box while it is empty, and its automation name.</summary>
     public abstract string SearchPlaceholder { get; }
-
-    /// <summary>The zoom slider's automation name: a rows page sizes thumbnails, it does not count columns.</summary>
-    public virtual string ZoomLabel => "Thumbnail size";
 
     public bool ShowClearSearch => SearchText.Length > 0;
 
@@ -136,8 +121,9 @@ public abstract partial class RowsPageViewModel : PageViewModel
     /// <summary>The line the search's own empty state uses, which quotes what was typed.</summary>
     protected abstract string NoResultsText { get; }
 
-    /// <summary>Writes the page's own zoom key. Called only from the change hook, never from the constructor.</summary>
-    protected abstract void SaveZoom(int value);
+    /// <summary>Writes the page's own tile size key. Called only from the change hook, never from the
+    /// constructor.</summary>
+    protected abstract void SaveSize(TileSize value);
 
     /// <summary>One row for one map. The page decides the tag, the chips' answers, the search haystack and the
     /// order of the strip; <see cref="MapChoices" /> decides what is in it.</summary>
@@ -213,11 +199,13 @@ public abstract partial class RowsPageViewModel : PageViewModel
 
     partial void OnSelectedChipChanged(string value) => ApplyFilter();
 
-    partial void OnZoomChanged(int value)
+    partial void OnTileSizeChanged(TileSize value)
     {
-        SaveZoom(value);
-        OnPropertyChanged(nameof(ThumbHeight));
+        SaveSize(value);
+
+        // The row template reads these numbers rather than carrying triggers of its own.
         OnPropertyChanged(nameof(ThumbWidth));
+        OnPropertyChanged(nameof(ThumbHeight));
         OnPropertyChanged(nameof(ShowTileApply));
     }
 
