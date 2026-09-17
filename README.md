@@ -10,8 +10,8 @@ Requires Windows 10 or 11, 64-bit, and Brawlhalla installed through Steam.
 
 | [Releases](https://github.com/as9pa/bhmaps/releases) | Size | Needs .NET? |
 |---|---|---|
-| `bhmaps-v2.6.0-win-x64.exe` | ~135 MB | No, the runtime is inside |
-| `bhmaps-v2.6.0-win-x64-dotnet.zip` | ~0.7 MB | Yes, [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) |
+| `bhmaps-v2.7.0-win-x64.exe` | ~135 MB | No, the runtime is inside |
+| `bhmaps-v2.7.0-win-x64-dotnet.zip` | ~0.7 MB | Yes, [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) |
 
 Take the `.exe` unless you already have .NET 10 installed. Windows may warn on first run because the
 exe is unsigned: choose "More info", then "Run anyway".
@@ -56,7 +56,8 @@ Brawlhalla open or closed, and show on the next match load.
 - Only `.png` and `.jpg` files inside `mapArt` are ever changed, plus the map-select thumbnails when
   that switch is on; the game's data files are read only.
 - Every tile in a pack has a menu. **Copy to pack...** and **Move to pack...**, or Ctrl+C, Ctrl+X and
-  Ctrl+V, take a map or a picture from one pack to another, and **Remove from** takes it out.
+  Ctrl+V, take a map or a picture from one pack to another, and the red **Delete** lines take a
+  picture, a platform set or a map out of a pack and put the default back on any map showing it.
 - **Import from pack** copies all of another pack's maps, or the ones you pick, into the pack you are
   looking at, and **Duplicate** in the Packs menu copies a whole pack under a new name.
 - BhMaps checks for a new release once a day and can download it and swap itself over when you close
