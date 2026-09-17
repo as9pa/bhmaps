@@ -201,6 +201,78 @@ public class MapResetTests
     }
 
     [Fact]
+    public void ResetPlatforms_RestoresTheFolderAndLeavesTheBackgroundsAlone()
+    {
+        using var tmp = new TempDir();
+        var game = Path.Combine(tmp.Path, "game");
+        new FakeGameTree(game).File("Grove", "a.png", "bad").File("Backgrounds", "BG_Grove.jpg", "mine");
+        var lib = Path.Combine(tmp.Path, "lib");
+        new FakeGameTree(PackPath(lib)).File("Grove", "a.png", "good").File("Backgrounds", "BG_Grove.jpg", "good-bg");
+
+        var outcome = MapReset.ResetPlatforms(game, "Grove", ScanDefault(lib));
+
+        Assert.Equal(1, outcome.Restored);
+        Assert.Equal(0, outcome.Failed);
+        Assert.Equal("good", Read(game, "Grove", "a.png"));
+        Assert.Equal("mine", Read(game, "Backgrounds", "BG_Grove.jpg"));
+    }
+
+    [Fact]
+    public void ResetPlatforms_DeletesTheFolderImagesWhenThereIsNoDefaultPack()
+    {
+        using var tmp = new TempDir();
+        var game = Path.Combine(tmp.Path, "game");
+        new FakeGameTree(game)
+            .File("Grove", "a.png", "x")
+            .File("Grove", "notes.txt", "x")
+            .File("Backgrounds", "BG_Grove.jpg", "keep");
+
+        var outcome = MapReset.ResetPlatforms(game, "Grove", defaultPack: null);
+
+        Assert.Equal(1, outcome.Deleted);
+        Assert.Equal(0, outcome.Failed);
+        Assert.Equal(new[] { "notes.txt" }, Directory.GetFiles(Path.Combine(game, "Grove")).Select(Path.GetFileName));
+        Assert.Equal("keep", Read(game, "Backgrounds", "BG_Grove.jpg"));
+    }
+
+    [Fact]
+    public void ResetBackgrounds_RestoresTheSlotsAndLeavesTheMapFolderAlone()
+    {
+        using var tmp = new TempDir();
+        var game = Path.Combine(tmp.Path, "game");
+        new FakeGameTree(game).File("Grove", "a.png", "mine").File("Backgrounds", "BG_Grove.jpg", "bad-bg");
+        var lib = Path.Combine(tmp.Path, "lib");
+        new FakeGameTree(PackPath(lib)).File("Grove", "a.png", "good").File("Backgrounds", "BG_Grove.jpg", "good-bg");
+
+        var outcome = MapReset.ResetBackgrounds(game, ["BG_Grove.jpg", "BG_Gone.jpg"], ScanDefault(lib));
+
+        Assert.Equal(1, outcome.Restored);
+        Assert.Empty(outcome.Failures);
+        Assert.Equal("good-bg", Read(game, "Backgrounds", "BG_Grove.jpg"));
+        Assert.Equal("mine", Read(game, "Grove", "a.png"));
+    }
+
+    [Fact]
+    public void ResetBackgrounds_DeletesTheSlotsWhenThereIsNoDefaultPack()
+    {
+        using var tmp = new TempDir();
+        var game = Path.Combine(tmp.Path, "game");
+        new FakeGameTree(game)
+            .File("Grove", "a.png", "keep")
+            .File("Backgrounds", "BG_Grove.jpg", "x")
+            .File("Backgrounds", "BG_Sewer.jpg", "keep");
+
+        var outcome = MapReset.ResetBackgrounds(game, ["BG_Grove.jpg"], defaultPack: null);
+
+        Assert.Equal(0, outcome.Restored);
+        Assert.Equal(1, outcome.Deleted);
+        Assert.Equal(0, outcome.Failed);
+        Assert.False(File.Exists(Path.Combine(game, "Backgrounds", "BG_Grove.jpg")));
+        Assert.Equal("keep", Read(game, "Backgrounds", "BG_Sewer.jpg"));
+        Assert.Equal("keep", Read(game, "Grove", "a.png"));
+    }
+
+    [Fact]
     public void ResetAll_AppliesTheWholeDefaultPackWhenThereIsOne()
     {
         using var tmp = new TempDir();

@@ -42,6 +42,19 @@ public class PackCopierTests
             packs.Single(p => p.Name == "stone"));
     }
 
+    /// <summary>A platform entry for the map and a background entry for one slot, written to the pack, so that a
+    /// narrow remove can be seen taking one of them and leaving the other where it was.</summary>
+    private static void Records(Pack pack, string slot)
+    {
+        var platforms = PlatformEditRecord.Load(pack.FullPath);
+        platforms.SetMap("BloodMoon", DateTimeOffset.UnixEpoch, new Dictionary<string, PlatformPieceEntry>());
+        platforms.Save(pack.FullPath);
+
+        var backgrounds = BackgroundEditRecord.Load(pack.FullPath);
+        backgrounds.Set(Path.Combine("Backgrounds", slot), new BackgroundSlotEntry { Picture = slot });
+        backgrounds.Save(pack.FullPath);
+    }
+
     [Fact]
     public void MapFiles_lists_the_folder_and_the_slot_the_map_owns()
     {
@@ -169,6 +182,54 @@ public class PackCopierTests
         Assert.False(Directory.Exists(Path.Combine(lib, "packs", "flower", "BloodMoon")));
         Assert.Equal("flower-other", File.ReadAllText(Path.Combine(lib, "packs", "flower", "Backgrounds", "BG_Other.jpg")));
         Assert.Null(PlatformEditRecord.Load(source.FullPath).Map("BloodMoon"));
+    }
+
+    [Fact]
+    public void RemovePlatforms_takes_the_folder_and_leaves_the_background_alone()
+    {
+        using var tmp = new TempDir();
+        var (lib, source, _) = Arrange(tmp, targetHasMap: false);
+        Records(source, slot: "BG_BloodMoon.jpg");
+
+        var result = PackCopier.RemovePlatforms(source, Catalog().Maps[0], Catalog());
+
+        Assert.Empty(result.Failures);
+        Assert.Contains(Path.Combine("packs", "flower", "BloodMoon", "a.png"), result.Removed);
+        Assert.False(Directory.Exists(Path.Combine(lib, "packs", "flower", "BloodMoon")));
+        Assert.Null(PlatformEditRecord.Load(source.FullPath).Map("BloodMoon"));
+        Assert.Equal("flower-bg", File.ReadAllText(Path.Combine(lib, "packs", "flower", "Backgrounds", "BG_BloodMoon.jpg")));
+        Assert.NotNull(BackgroundEditRecord.Load(source.FullPath).Entry(Path.Combine("Backgrounds", "BG_BloodMoon.jpg")));
+    }
+
+    [Fact]
+    public void RemoveBackground_takes_one_slot_and_leaves_the_map_alone()
+    {
+        using var tmp = new TempDir();
+        var (lib, source, _) = Arrange(tmp, targetHasMap: false);
+        Records(source, slot: "BG_BloodMoon.jpg");
+        Records(source, slot: "BG_Other.jpg");
+
+        var result = PackCopier.RemoveBackground(source, "BG_BloodMoon.jpg");
+
+        Assert.Empty(result.Failures);
+        Assert.Contains(Path.Combine("packs", "flower", "Backgrounds", "BG_BloodMoon.jpg"), result.Removed);
+        Assert.False(File.Exists(Path.Combine(lib, "packs", "flower", "Backgrounds", "BG_BloodMoon.jpg")));
+        Assert.Null(BackgroundEditRecord.Load(source.FullPath).Entry(Path.Combine("Backgrounds", "BG_BloodMoon.jpg")));
+        Assert.NotNull(BackgroundEditRecord.Load(source.FullPath).Entry(Path.Combine("Backgrounds", "BG_Other.jpg")));
+        Assert.Equal("flower-a", File.ReadAllText(Path.Combine(lib, "packs", "flower", "BloodMoon", "a.png")));
+        Assert.NotNull(PlatformEditRecord.Load(source.FullPath).Map("BloodMoon"));
+    }
+
+    [Fact]
+    public void RemoveBackground_on_a_picture_the_pack_no_longer_has_is_not_a_failure()
+    {
+        using var tmp = new TempDir();
+        var (_, source, _) = Arrange(tmp, targetHasMap: false);
+
+        var result = PackCopier.RemoveBackground(source, "BG_Gone.jpg");
+
+        Assert.Empty(result.Failures);
+        Assert.Equal(new[] { Path.Combine("packs", "flower", "Backgrounds", "BG_Gone.jpg") }, result.Removed);
     }
 
     [Fact]

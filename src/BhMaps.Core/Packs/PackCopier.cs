@@ -51,14 +51,22 @@ public static class PackCopier
 
     /// <summary>Spec 2: the map's folder in the pack, every file in it, plus every Backgrounds jpg whose slot
     /// this map owns. Pack-relative, in folder-then-backgrounds order.</summary>
-    public static IReadOnlyList<string> MapFiles(Pack pack, MapEntry map, MapCatalog catalog)
+    public static IReadOnlyList<string> MapFiles(Pack pack, MapEntry map, MapCatalog catalog) =>
+        [.. PlatformFiles(pack, map), .. BackgroundFiles(pack, map, catalog)];
+
+    /// <summary>The platforms half of MapFiles: what the pack holds in the map's own folder, pack-relative and in
+    /// enumeration order. A platform delete takes these and leaves the map's background slot where it is.</summary>
+    public static IReadOnlyList<string> PlatformFiles(Pack pack, MapEntry map) =>
+    [
+        .. (pack.FindFolder(map.FolderName)?.Files ?? Array.Empty<GameFile>())
+            .Select(file => Path.Combine(map.FolderName, file.Name)),
+    ];
+
+    /// <summary>The backgrounds half of MapFiles: every Backgrounds jpg in the pack whose slot this map owns,
+    /// pack-relative and in enumeration order.</summary>
+    public static IReadOnlyList<string> BackgroundFiles(Pack pack, MapEntry map, MapCatalog catalog)
     {
         var files = new List<string>();
-        foreach (var file in pack.FindFolder(map.FolderName)?.Files ?? Array.Empty<GameFile>())
-        {
-            files.Add(Path.Combine(map.FolderName, file.Name));
-        }
-
         foreach (var file in pack.FindFolder(BackgroundsFolder)?.Files ?? Array.Empty<GameFile>())
         {
             if (Path.GetExtension(file.Name).Equals(BackgroundExtension, StringComparison.OrdinalIgnoreCase)
@@ -153,57 +161,39 @@ public static class PackCopier
     {
         var removed = new List<string>();
         var failures = new List<FileFailure>();
-        foreach (var relativePath in MapFiles(pack, map, catalog))
-        {
-            var full = Path.Combine(pack.FullPath, relativePath);
-            try
-            {
-                if (File.Exists(full))
-                {
-                    File.Delete(full);
-                }
 
-                removed.Add(LibraryRelative(pack, relativePath));
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                failures.Add(new FileFailure(full, ex.Message));
-            }
-        }
+        // The same pieces the two narrow removes use, in the order this whole-map remove has always run them:
+        // both halves of the files first, so the folder is empty by the time we try to delete it, then one write
+        // of each record rather than one per slot.
+        DeleteFiles(pack, MapFiles(pack, map, catalog), removed, failures);
+        DeleteEmptyFolder(pack, map.FolderName);
+        DropPlatformEntry(pack, map.FolderName, removed);
+        DropBackgroundEntries(pack, map.BackgroundSlots, removed);
+        return new PackCopyResult([], removed, false, failures);
+    }
 
-        var folder = Path.Combine(pack.FullPath, map.FolderName);
-        try
-        {
-            if (Directory.Exists(folder) && !Directory.EnumerateFileSystemEntries(folder).Any())
-            {
-                Directory.Delete(folder);
-            }
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            // An empty folder we cannot delete is untidy, not a failure of the removal.
-        }
+    /// <summary>The platforms half of RemoveMap: the map's files in the pack's own folder for it, the folder
+    /// itself once it is empty, and its platform record entry. The map's background slot, its jpg and its
+    /// background record entry are left alone, because a platform delete is not a background delete.</summary>
+    public static PackCopyResult RemovePlatforms(Pack pack, MapEntry map, MapCatalog catalog)
+    {
+        var removed = new List<string>();
+        var failures = new List<FileFailure>();
+        DeleteFiles(pack, PlatformFiles(pack, map), removed, failures);
+        DeleteEmptyFolder(pack, map.FolderName);
+        DropPlatformEntry(pack, map.FolderName, removed);
+        return new PackCopyResult([], removed, false, failures);
+    }
 
-        var platforms = PlatformEditRecord.Load(pack.FullPath);
-        if (platforms.RemoveMap(map.FolderName))
-        {
-            platforms.Save(pack.FullPath);
-            removed.Add(LibraryRelative(pack, PlatformEditRecord.FileName));
-        }
-
-        var backgrounds = BackgroundEditRecord.Load(pack.FullPath);
-        var dropped = false;
-        foreach (var slot in map.BackgroundSlots)
-        {
-            dropped |= backgrounds.Remove(Path.Combine(BackgroundsFolder, slot));
-        }
-
-        if (dropped)
-        {
-            backgrounds.Save(pack.FullPath);
-            removed.Add(LibraryRelative(pack, BackgroundEditRecord.FileName));
-        }
-
+    /// <summary>The backgrounds half of RemoveMap, for one slot: the pack's Backgrounds jpg for it and that slot's
+    /// background record entry, and nothing else. A file the pack no longer holds is still named in Removed, the
+    /// way RemoveMap names a file that went missing between the scan and the delete, and is not a failure.</summary>
+    public static PackCopyResult RemoveBackground(Pack pack, string fileName)
+    {
+        var removed = new List<string>();
+        var failures = new List<FileFailure>();
+        DeleteFiles(pack, [Path.Combine(BackgroundsFolder, fileName)], removed, failures);
+        DropBackgroundEntries(pack, [fileName], removed);
         return new PackCopyResult([], removed, false, failures);
     }
 
@@ -383,6 +373,76 @@ public static class PackCopier
         written.AddRange(result.Written);
         removed.AddRange(result.Removed);
         failures.AddRange(result.Failures);
+    }
+
+    /// <summary>Each pack-relative file deleted and named, library-relative, in the order given. A file that is
+    /// already gone is named all the same: the caller asked for it to be gone and it is.</summary>
+    private static void DeleteFiles(
+        Pack pack, IEnumerable<string> relativePaths, List<string> removed, List<FileFailure> failures)
+    {
+        foreach (var relativePath in relativePaths)
+        {
+            var full = Path.Combine(pack.FullPath, relativePath);
+            try
+            {
+                if (File.Exists(full))
+                {
+                    File.Delete(full);
+                }
+
+                removed.Add(LibraryRelative(pack, relativePath));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                failures.Add(new FileFailure(full, ex.Message));
+            }
+        }
+    }
+
+    /// <summary>The map folder, gone if the delete left it empty. Backgrounds is never passed here, because it
+    /// holds other maps' slots.</summary>
+    private static void DeleteEmptyFolder(Pack pack, string folderName)
+    {
+        var folder = Path.Combine(pack.FullPath, folderName);
+        try
+        {
+            if (Directory.Exists(folder) && !Directory.EnumerateFileSystemEntries(folder).Any())
+            {
+                Directory.Delete(folder);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // An empty folder we cannot delete is untidy, not a failure of the removal.
+        }
+    }
+
+    /// <summary>The map's platform record entry, with the record rewritten and named only if it held one.</summary>
+    private static void DropPlatformEntry(Pack pack, string folderName, List<string> removed)
+    {
+        var platforms = PlatformEditRecord.Load(pack.FullPath);
+        if (platforms.RemoveMap(folderName))
+        {
+            platforms.Save(pack.FullPath);
+            removed.Add(LibraryRelative(pack, PlatformEditRecord.FileName));
+        }
+    }
+
+    /// <summary>These slots' background record entries, in one rewrite, named only if any of them was there.</summary>
+    private static void DropBackgroundEntries(Pack pack, IEnumerable<string> slots, List<string> removed)
+    {
+        var backgrounds = BackgroundEditRecord.Load(pack.FullPath);
+        var dropped = false;
+        foreach (var slot in slots)
+        {
+            dropped |= backgrounds.Remove(Path.Combine(BackgroundsFolder, slot));
+        }
+
+        if (dropped)
+        {
+            backgrounds.Save(pack.FullPath);
+            removed.Add(LibraryRelative(pack, BackgroundEditRecord.FileName));
+        }
     }
 
     /// <summary>The map's entry in each record, copied over whatever the target held for it.</summary>

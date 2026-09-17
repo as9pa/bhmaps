@@ -214,6 +214,31 @@ public class PackApplierTests
     }
 
     [Fact]
+    public void ResetPlatformPaths_NameTheFolderAsItIsAndThePacksFilesForIt()
+    {
+        using var tmp = new TempDir();
+        var (pack, game) = Arrange(tmp);
+
+        var paths = PackApplier.ResetPlatformPaths(
+            GameTreeScanner.Scan(game), Map("BloodMoon", "BG_Sewer.jpg"), pack);
+
+        Assert.Equal(
+            new[] { Path.Combine("BloodMoon", "A.png"), Path.Combine("BloodMoon", "B.png") },
+            paths);
+    }
+
+    [Fact]
+    public void ResetBackgroundPaths_NameOnlyTheSlotsThePackCanRestore()
+    {
+        using var tmp = new TempDir();
+        var (pack, _) = Arrange(tmp);
+
+        var paths = PackApplier.ResetBackgroundPaths(pack, ["BG_Sewer.jpg", "BG_Gone.jpg"]);
+
+        Assert.Equal(new[] { Path.Combine("Backgrounds", "BG_Sewer.jpg") }, paths);
+    }
+
+    [Fact]
     public void ResetMapPaths_WithNoSlotsAndNothingInThePackStillNamesTheFolderAsItIs()
     {
         using var tmp = new TempDir();
