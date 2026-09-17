@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using BhMaps.App.Services;
 using BhMaps.App.ViewModels.Pages;
@@ -1596,26 +1597,34 @@ public partial class MainViewModel : ObservableObject
             progress.Report("Map-select thumbnail " + map.DisplayName);
             try
             {
-                // One render for the map, however many of its own files it is written over.
-                var composite = reset ? null : ThumbnailWriter.Render(map, gamePath);
+                // One render per level of the map, not one for the map: each of its own files is the picture of
+                // the level that names it, so a folder holding a big and a small level writes each file from
+                // its own level. Levels that share a file share the one render.
+                var composites = new Dictionary<string, BitmapSource>(StringComparer.OrdinalIgnoreCase);
                 foreach (var target in plan.Targets)
                 {
                     // The game's own picture is kept before the first write over it, so every write can be
                     // undone even after the undo snapshot it was taken with has been replaced. One kept copy
                     // per file, under that file's own name.
                     ThumbnailWriter.KeepOriginal(target);
-                    if (composite is null)
+                    if (reset)
                     {
                         if (ThumbnailWriter.RestoreOriginal(target))
                         {
                             written++;
                         }
+
+                        continue;
                     }
-                    else
+
+                    if (!composites.TryGetValue(target.Level.LevelName, out var composite))
                     {
-                        ThumbnailWriter.Write(composite, target.TargetPath);
-                        written++;
+                        composite = ThumbnailWriter.Render(target.Level, gamePath);
+                        composites[target.Level.LevelName] = composite;
                     }
+
+                    ThumbnailWriter.Write(composite, target.TargetPath);
+                    written++;
                 }
 
                 if (note.Length == 0)

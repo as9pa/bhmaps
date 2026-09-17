@@ -1,6 +1,7 @@
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using BhMaps.Core.Imaging;
+using BhMaps.Core.LevelData;
 using BhMaps.Core.Maps;
 using BhMaps.Core.Storage;
 
@@ -14,8 +15,9 @@ public enum ThumbnailSkip
     Missing,
 }
 
-/// <summary>Where a map's thumbnail lives and where its original is kept.</summary>
-public sealed record ThumbnailTarget(string FileName, string TargetPath, string OriginalPath);
+/// <summary>Where a map's thumbnail lives, where its original is kept, and the level it is the picture of: a
+/// folder's files are one per level, so each is rendered from its own level and not from the map.</summary>
+public sealed record ThumbnailTarget(string FileName, string TargetPath, string OriginalPath, LevelDesc Level);
 
 /// <summary>One picture a map's levels name: a target when the map owns it and the game's jpg is there,
 /// otherwise the reason it is left alone, and for Shared the display name of the map that also names it.</summary>
@@ -82,7 +84,11 @@ public static class ThumbnailWriter
             files.Add(File.Exists(targetPath)
                 ? new ThumbnailFilePlan(
                     fileName,
-                    new ThumbnailTarget(fileName, targetPath, Path.Combine(originalsDir, fileName)),
+                    new ThumbnailTarget(
+                        fileName,
+                        targetPath,
+                        Path.Combine(originalsDir, fileName),
+                        map.LevelFor(fileName)),
                     ThumbnailSkip.None,
                     null)
                 : new ThumbnailFilePlan(fileName, null, ThumbnailSkip.Missing, null));
@@ -91,11 +97,11 @@ public static class ThumbnailWriter
         return new ThumbnailPlan(files);
     }
 
-    /// <summary>Renders the map from the game folder at RenderWidth by RenderHeight and returns the frozen
+    /// <summary>Renders one level from the game folder at RenderWidth by RenderHeight and returns the frozen
     /// composite. Runs on any thread (MapCompositor.Render is thread free once the sources are read).</summary>
-    public static BitmapSource Render(MapEntry map, string gamePath)
+    public static BitmapSource Render(LevelDesc level, string gamePath)
     {
-        var composite = MapCompositor.Render(map.BaseLevel, RenderWidth, RenderHeight, new AssetSources(gamePath));
+        var composite = MapCompositor.Render(level, RenderWidth, RenderHeight, new AssetSources(gamePath));
         if (composite.CanFreeze)
         {
             composite.Freeze();
