@@ -502,6 +502,25 @@ The words the menus use mean the same thing everywhere:
 There is no universal setting for a picture. "Apply to all maps" writes the picture onto every map
 now, and a later apply to one map replaces it there.
 
+## Words the app uses
+
+One action, one verb, wherever it appears. The label tells you what is about to happen; the confirm
+repeats it with the number of maps in it.
+
+| Action | The label | Where it appears |
+|---|---|---|
+| Apply | "Apply all", "Apply to a map...", "Apply to all maps", "Apply to N maps" | The row button on a pack, the tile and card menus, and the confirm button |
+| Reset | "Reset map", "Reset this map", "Reset all maps", "Reset N maps" | The card menu, the open map's panel, the Maps page menu, and the confirm |
+| Capture | "Capture the Default pack" | The Packs page menu and the third step of the welcome window |
+| Refresh | "Refresh" | The top bar. Re-copies the app's own files over what the game holds now |
+| Rescan | "Rescan", F5 | The top bar. Re-reads the game folder and the library without writing anything |
+| Import | "Import folder", "Import from pack" | The Packs page and a pack's own page |
+| New | "New pack", "Add image" | The Packs page and a pack's own page |
+| Undo | "Undo", Ctrl+Z | The line a write leaves in the page header |
+
+Reset and Capture are the two that talk about the Default pack: Capture makes it out of the game's
+own art, and Reset puts that art back.
+
 ## How it works
 
 - **Level data.** The app reads, and never writes, four files in the folder above `mapArt`:

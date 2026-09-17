@@ -110,9 +110,9 @@
         </Grid.ColumnDefinitions>
         <TextBlock Style="{StaticResource StepNumber}" Text="3" />
         <StackPanel Grid.Column="1">
-          <TextBlock Style="{StaticResource StepTitle}" Text="Capture defaults now?" />
+          <TextBlock Style="{StaticResource StepTitle}" Text="Capture the Default pack now?" />
           <TextBlock Style="{StaticResource StepText}"
-                     Text="This copies the game's art into a pack named Default, which is what Reset to default puts back. To be sure the capture is vanilla, verify the game files through Steam first." />
+                     Text="Copies the game's own art into a pack named Default, which is what Reset puts back. Verify the game files through Steam first if you are not sure they are vanilla." />
           <StackPanel Margin="0,10,0,0" Orientation="Horizontal">
             <!-- Only Yes carries the binding: the two share a group, so choosing No unchecks Yes and the
                  two-way binding writes the false. -->

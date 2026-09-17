@@ -503,8 +503,8 @@ public partial class MainViewModel : ObservableObject
         if (ok)
         {
             SetLibraryDone(result?.Copied == 1
-                ? $"Imported 1 picture into {packName}"
-                : $"Imported {result?.Copied ?? 0} pictures into {packName}");
+                ? $"Imported 1 picture into {packName}."
+                : $"Imported {result?.Copied ?? 0} pictures into {packName}.");
         }
 
         await RescanAsync();
@@ -535,7 +535,10 @@ public partial class MainViewModel : ObservableObject
         if (maps.Count > 1
             && !Dialogs.Confirm(
                 "Apply pictures",
-                $"Apply these pictures to these {maps.Count} maps?\n\n{string.Join(", ", maps.Select(m => m.DisplayName))}"))
+                ConfirmBody(
+                    $"Apply these pictures to {Count(maps.Count, "map")}?",
+                    WritesBackgrounds,
+                    [.. maps.Select(m => m.DisplayName)])))
         {
             await RescanAsync();
             return;
@@ -575,7 +578,7 @@ public partial class MainViewModel : ObservableObject
                     }
                 },
                 ct),
-            $"{Count(used, "picture")} applied to {Count(maps.Count, "map")}",
+            $"{Count(used, "picture")} applied to {Count(maps.Count, "map")}.",
             packName,
             // The undo paths are all in the shared backgrounds folder, so the maps whose slots were written are
             // named here rather than read back off them (spec 11).
@@ -613,7 +616,10 @@ public partial class MainViewModel : ObservableObject
         if (targets.Count > 1
             && !Dialogs.Confirm(
                 "Apply picture",
-                $"Apply {name} to these {targets.Count} maps?\n\n{string.Join(", ", targets.Select(m => m.DisplayName))}"))
+                ConfirmBody(
+                    $"Apply {name} to {Count(targets.Count, "map")}?",
+                    WritesBackgrounds,
+                    [.. targets.Select(m => m.DisplayName)])))
         {
             return;
         }
@@ -666,7 +672,10 @@ public partial class MainViewModel : ObservableObject
         if (targets.Count > 1
             && !Dialogs.Confirm(
                 "Apply platform set",
-                $"Apply {pack.Name} to these {targets.Count} maps?\n\n{string.Join(", ", targets.Select(m => m.DisplayName))}"))
+                ConfirmBody(
+                    $"Apply {pack.Name} to {Count(targets.Count, "map")}?",
+                    WritesPlatforms,
+                    [.. targets.Select(m => m.DisplayName)])))
         {
             return;
         }
@@ -704,8 +713,31 @@ public partial class MainViewModel : ObservableObject
     /// <summary>"1 map" or "3 maps": the done lines count things and every one of them can be one.</summary>
     public static string Count(int n, string noun) => n == 1 ? $"1 {noun}" : $"{n} {noun}s";
 
+    /// <summary>What an apply writes, for the confirm that asks about it (3.0's verb table). One sentence per
+    /// kind of write, so two pages cannot word the same effect differently.</summary>
+    public const string WritesArt = "Their backgrounds and platforms are written into the game.";
+
+    public const string WritesBackgrounds = "Their backgrounds are written into the game.";
+
+    public const string WritesPlatforms = "Their platforms are written into the game.";
+
+    /// <summary>Reset's own effect sentence: the files go back rather than in.</summary>
+    public const string RestoresArt = "Their backgrounds and platforms go back to the game's own art.";
+
+    /// <summary>The maps a confirm lists under its question: eight names at most, then a count, because a confirm
+    /// is read, not scanned.</summary>
+    public static string NameList(IReadOnlyList<string> names) =>
+        names.Count <= 8
+            ? string.Join(", ", names)
+            : $"{string.Join(", ", names.Take(8))}, and {Count(names.Count - 8, "other map")}";
+
+    /// <summary>The body of a write confirm (3.0): the question with the count in it, what the write touches,
+    /// that Undo puts it back, then the maps themselves.</summary>
+    public static string ConfirmBody(string question, string effect, IReadOnlyList<string> names) =>
+        $"{question} {effect} Undo puts them back.\n\n{NameList(names)}";
+
     /// <summary>Spec 7.2: the editor fits a picture and saves it into a pack, which is a library write of its own.
-    /// The "Apply to game now" it offers is a game write, so the pack file it left is copied into the slot here,
+    /// The "Apply to game" it offers is a game write, so the pack file it left is copied into the slot here,
     /// with the boundary, the snapshot and the undo every other write gets.</summary>
     public async Task OpenBackgroundEditorAsync(BackgroundEditorRequest request)
     {
@@ -1005,7 +1037,7 @@ public partial class MainViewModel : ObservableObject
     }
 
     /// <summary>Spec 6: the editor recolours a map's own pieces into a pack, which is a library write of its own.
-    /// The "Apply to game now" it offers is a game write, so the set it left is applied here, with the boundary,
+    /// The "Apply to game" it offers is a game write, so the set it left is applied here, with the boundary,
     /// the snapshot and the undo every other write gets. The rescan comes first either way, because the pack the
     /// apply needs is one the last scan may never have seen. <paramref name="onlyFile" /> is the one file the
     /// editor opens ticked, for the panel row that asked for it (ruling 7). Spec 9: the editor opens on a set of
@@ -1176,7 +1208,8 @@ public partial class MainViewModel : ObservableObject
         Dialogs.ShowFailures("Some files could not be imported", failures);
         if (ok)
         {
-            SetLibraryDone(jobs.Count == 1 ? $"Imported {jobs[0].PackName}" : $"Imported {jobs.Count} packs");
+            SetLibraryDone(
+                jobs.Count == 1 ? $"Imported {jobs[0].PackName}." : $"Imported {Count(jobs.Count, "pack")}.");
         }
 
         await RescanAsync();
@@ -1457,7 +1490,7 @@ public partial class MainViewModel : ObservableObject
         var gamePath = Services.GamePath;
         ApplyResult? result = null;
         var ok = await RunBusyAsync(
-            "Capturing defaults",
+            "Capturing the Default pack",
             (progress, ct) => Task.Run(() => { result = DefaultPack.Capture(gamePath, library, progress, ct); }, ct));
         if (result is not null)
         {
@@ -1466,7 +1499,9 @@ public partial class MainViewModel : ObservableObject
 
         if (ok)
         {
-            SetLibraryDone("Captured defaults");
+            SetLibraryDone(result is { } captured
+                ? $"Captured the Default pack, {Count(captured.Copied, "file")}."
+                : "Captured the Default pack.");
         }
 
         await RescanAsync();
@@ -1784,7 +1819,7 @@ public partial class MainViewModel : ObservableObject
     }
 
     /// <summary>The line an undo leaves. Spec 11 names no string for it, so this is the plan's (A-D7).</summary>
-    public const string UndoDoneText = "Last change undone.";
+    public const string UndoDoneText = "Undone.";
 
     /// <summary>The whole done line: the page's fragment, then the shared sentence, with exactly one period
     /// between them however the fragment was punctuated. The wrapper settles the period for the same reason it

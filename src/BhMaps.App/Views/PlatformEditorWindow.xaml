@@ -483,7 +483,7 @@
         <ColumnDefinition Width="Auto" />
       </Grid.ColumnDefinitions>
       <CheckBox VerticalAlignment="Center"
-                Content="Apply to game now"
+                Content="Apply to game"
                 FocusVisualStyle="{StaticResource DialogFocusRing}"
                 IsChecked="{Binding ApplyNow}" />
       <StackPanel Grid.Column="1" Orientation="Horizontal">

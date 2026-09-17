@@ -72,7 +72,7 @@
       <controls:PageHeader.Actions>
         <!-- Disabled while the shell is busy, the same hop past the page to the window's MainViewModel the header
              itself makes (decision D11), so a second operation cannot be started from a live-looking button. Both
-             are library-only and stop there; Capture defaults and Open library, which no longer need a button of
+             are library-only and stop there; Capture the Default pack and Open library, which no longer need a button of
              their own, moved into the page menu (3.0). New pack is the solid one: making a pack is what this page
              is for, and importing a folder is the same thing done from files. -->
         <StackPanel IsEnabled="{Binding DataContext.IsNotBusy, RelativeSource={RelativeSource AncestorType=Window}}" Orientation="Horizontal">
@@ -249,8 +249,9 @@
         </ItemsControl>
       </ScrollViewer>
 
-      <!-- Empty library (addendum E): the line and Import folder on one line, with Capture defaults beside it,
-           because an empty library on a machine that has the game is one click from being a full one. -->
+      <!-- Empty library (addendum E): the line and Import folder on one line, with Capture the Default pack
+           beside it, because an empty library on a machine that has the game is one click from being a full
+           one. -->
       <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Orientation="Horizontal">
         <StackPanel.Style>
           <Style TargetType="StackPanel">
@@ -268,7 +269,7 @@
         <Button Margin="12,0,0,0"
                 Command="{Binding ImportCommand}"
                 Content="Import folder"
-                controls:Icon.Glyph="{StaticResource Icon.Plus}"
+                controls:Icon.Glyph="{StaticResource Icon.FolderPlus}"
                 Style="{StaticResource PrimaryButton}" />
         <Button Margin="8,0,0,0"
                 Command="{Binding NewPackCommand}"
@@ -277,7 +278,7 @@
                 Style="{StaticResource OutlineButton}" />
         <Button Margin="8,0,0,0"
                 Command="{Binding CaptureDefaultsCommand}"
-                Content="Capture defaults"
+                Content="Capture the Default pack"
                 controls:Icon.Glyph="{StaticResource Icon.Camera}"
                 IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}"
                 Style="{StaticResource OutlineButton}" />

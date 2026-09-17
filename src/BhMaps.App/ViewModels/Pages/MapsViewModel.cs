@@ -169,7 +169,7 @@ public partial class MapsViewModel : PageViewModel
     /// the menu rather than as a button one slip away from the zoom. CanWrite, not IsNotBusy: it writes into the
     /// game folder, so the line is dead while that folder is missing (spec 7.8), the way a tile's menu is
     /// built.</summary>
-    public IReadOnlyList<TileMenuCommand> PageMenu =>
+    public override IReadOnlyList<TileMenuCommand>? PageMenu =>
         [new TileMenuCommand("Reset all maps", ResetAllCommand, IsEnabled: Shell.CanWrite, IsDestructive: true)];
 
     /// <summary>Spec 7.2's one page action: every folder in the game tree back to the Default pack, or deleted for
@@ -185,9 +185,9 @@ public partial class MapsViewModel : PageViewModel
         var count = snapshot.Tree.Folders.Count;
         var defaultPack = snapshot.DefaultPack;
         var message = defaultPack is null
-            ? $"Reset the map art in all {count} folders? The files are deleted and Brawlhalla regenerates the defaults on its next launch."
-            : $"Reset the map art in all {count} folders to the Default pack?";
-        if (!Shell.Dialogs.Confirm("Reset all to default", message))
+            ? $"Reset the map art in {MainViewModel.Count(count, "folder")}? The files are deleted and Brawlhalla regenerates its defaults on the next launch."
+            : $"Reset {MainViewModel.Count(count, "map")} to the Default pack? {MainViewModel.RestoresArt} Undo puts them back.";
+        if (!Shell.Dialogs.Confirm("Reset all maps", message))
         {
             return;
         }
@@ -218,7 +218,7 @@ public partial class MapsViewModel : PageViewModel
 
         ResetOutcome? outcome = null;
         await Shell.RunGameWriteAsync(
-            "Resetting all",
+            $"Resetting {MainViewModel.Count(count, "map")}",
             undoPaths,
             (progress, ct) => Task.Run(
                 () =>
@@ -230,7 +230,7 @@ public partial class MapsViewModel : PageViewModel
                     }
                 },
                 ct),
-            "Reset every map to default",
+            $"Reset {MainViewModel.Count(count, "map")} to the Default pack.",
             libraryUndoPaths: RecordReset.UndoPaths(allMatched, Shell.Services.LibraryPath),
             artMaps: snapshot.Catalog.Maps,
             resetThumbnails: true,
@@ -246,7 +246,12 @@ public partial class MapsViewModel : PageViewModel
     /// <summary>Spec 4.3: one pack onto the maps given, whoever gave them.</summary>
     public async Task ApplyPackToAsync(IReadOnlyList<MapEntry> maps, Pack pack)
     {
-        if (maps.Count == 0 || !Confirm($"Apply {pack.Name}", $"Apply {pack.Name}", maps))
+        if (maps.Count == 0
+            || !Confirm(
+                $"Apply {pack.Name}",
+                $"Apply {pack.Name} to {MainViewModel.Count(maps.Count, "map")}?",
+                MainViewModel.WritesArt,
+                maps))
         {
             return;
         }
@@ -259,7 +264,7 @@ public partial class MapsViewModel : PageViewModel
             targetPaths,
             (progress, ct) => Task.Run(
                 () => { result = PackApplier.ApplyToMaps(pack, maps, gamePath, progress, ct); }, ct),
-            $"{pack.Name} applied to {MainViewModel.Count(maps.Count, "map")}",
+            $"{pack.Name} applied to {MainViewModel.Count(maps.Count, "map")}.",
             pack.Name,
             artMaps: maps,
             sources: AppliedSources.FromPack(pack, targetPaths));
@@ -292,7 +297,13 @@ public partial class MapsViewModel : PageViewModel
     public async Task ResetAsync(IReadOnlyList<MapEntry> maps)
     {
         if (_snapshot is not { } snapshot || snapshot.DefaultPack is not { } defaultPack || maps.Count == 0
-            || !Confirm("Reset to default", "Reset", maps))
+            || !Confirm(
+                maps.Count == 1
+                    ? $"Reset {maps[0].DisplayName}"
+                    : $"Reset {MainViewModel.Count(maps.Count, "map")}",
+                $"Reset {MainViewModel.Count(maps.Count, "map")} to the Default pack?",
+                MainViewModel.RestoresArt,
+                maps))
         {
             return;
         }
@@ -332,7 +343,7 @@ public partial class MapsViewModel : PageViewModel
                     }
                 },
                 ct),
-            $"Reset {MainViewModel.Count(maps.Count, "map")} to default",
+            $"Reset {MainViewModel.Count(maps.Count, "map")} to the Default pack.",
             libraryUndoPaths: RecordReset.UndoPaths(allMatched, Shell.Services.LibraryPath),
             artMaps: maps,
             resetThumbnails: true,
@@ -345,11 +356,11 @@ public partial class MapsViewModel : PageViewModel
     public bool CanReset => _snapshot?.DefaultPack is not null;
 
     /// <summary>Spec 3.3: a write to more than one map names the count and the maps first; one map is one click.</summary>
-    private bool Confirm(string title, string verb, IReadOnlyList<MapEntry> maps) =>
+    private bool Confirm(string title, string question, string effect, IReadOnlyList<MapEntry> maps) =>
         maps.Count <= 1
         || Shell.Dialogs.Confirm(
             title,
-            $"{verb} to these {maps.Count} maps?\n\n{string.Join(", ", maps.Select(m => m.DisplayName))}");
+            MainViewModel.ConfirmBody(question, effect, [.. maps.Select(m => m.DisplayName)]));
 
     public override void Refresh(ScanSnapshot snapshot) => Refresh(snapshot, null);
 
@@ -618,7 +629,7 @@ public partial class MapsViewModel : PageViewModel
                 new AsyncRelayCommand(() => Shell.OpenPlatformEditorAsync(target, null))),
             TileMenuCommand.Separator(),
             new TileMenuCommand(
-                "Reset to default",
+                "Reset map",
                 new AsyncRelayCommand(() => ResetAsync(target)),
                 IsEnabled: CanReset,
                 ToolTip: CanReset ? null : "There is no Default pack to reset to."),

@@ -138,7 +138,7 @@
             <!-- The only row here that reads the game folder, so the only one that also needs CanWrite; the
                  panel above already ands in IsNotBusy for every row (spec 7.8). -->
             <Button Command="{Binding CaptureDefaultsCommand}"
-                    Content="Capture defaults"
+                    Content="Capture the Default pack"
                     controls:Icon.Glyph="{StaticResource Icon.Refresh}"
                     IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}"
                     Style="{StaticResource OutlineButton}" />

@@ -76,7 +76,7 @@ public partial class MapPanelViewModel : ObservableObject
     public const int SetWidth = 312;
     public const int SetHeight = 176;
 
-    public const string NoDefaultPackText = "No Default pack yet. Capture defaults first.";
+    public const string NoDefaultPackText = "No Default pack yet. Capture it from the Packs page menu.";
 
     private readonly MainViewModel _shell;
     private readonly MapEntry _map;
@@ -255,7 +255,7 @@ public partial class MapPanelViewModel : ObservableObject
                     RecordReset.Clear(map, matched);
                 },
                 ct),
-            $"Reset {DisplayName} to default",
+            $"Reset {DisplayName} to the Default pack.",
             libraryUndoPaths: RecordReset.UndoPaths(matched, _shell.Services.LibraryPath),
             artMaps: [map],
             resetThumbnails: true,

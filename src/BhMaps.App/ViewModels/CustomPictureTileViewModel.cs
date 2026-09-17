@@ -289,7 +289,7 @@ public sealed partial class CustomPictureTileViewModel : PictureTileViewModel
         // Only a copy that landed changes what a scan would find, so a cancelled or failed import costs no rescan.
         if (ok && result is { Copied: > 0 })
         {
-            Shell.SetLibraryDone($"Saved {Title} into {pack}");
+            Shell.SetLibraryDone($"Saved {Title} into {pack}.");
             await Shell.RescanAsync();
         }
     }

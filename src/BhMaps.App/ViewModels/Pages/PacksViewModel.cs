@@ -257,7 +257,10 @@ public partial class PacksViewModel : PageViewModel
         if (maps.Count > 1
             && !Shell.Dialogs.Confirm(
                 $"Apply {pack.Name}",
-                $"Apply {pack.Name} to these {maps.Count} maps?\n\n{string.Join(", ", maps)}"))
+                MainViewModel.ConfirmBody(
+                    $"Apply {pack.Name} to {MainViewModel.Count(maps.Count, "map")}?",
+                    MainViewModel.WritesArt,
+                    maps)))
         {
             return;
         }
@@ -273,7 +276,7 @@ public partial class PacksViewModel : PageViewModel
             $"Applying {pack.Name}",
             pack.RelativePaths,
             (progress, ct) => Task.Run(() => { result = PackApplier.ApplyPack(pack, gamePath, progress, ct); }, ct),
-            $"{pack.Name} applied",
+            $"{pack.Name} applied to {MainViewModel.Count(maps.Count, "map")}.",
             packName: pack.Name,
             artMaps: artMaps,
             sources: AppliedSources.FromPack(pack, pack.RelativePaths));
@@ -292,7 +295,7 @@ public partial class PacksViewModel : PageViewModel
     /// <summary>The header's menu (3.0): the two actions that are not what the page is for. Capture writes into
     /// the game folder and carries the CanWrite its button carried; Open library is library-only and stops at the
     /// shell being busy, which is the gate the header's row of buttons put on it (spec 7.8).</summary>
-    public IReadOnlyList<TileMenuCommand> PageMenu =>
+    public override IReadOnlyList<TileMenuCommand>? PageMenu =>
     [
         new TileMenuCommand("Capture the Default pack", CaptureDefaultsCommand, IsEnabled: Shell.CanWrite),
         new TileMenuCommand("Open library", OpenLibraryCommand, IsEnabled: Shell.IsNotBusy),
@@ -340,7 +343,7 @@ public partial class PacksViewModel : PageViewModel
         }
         else if (ok)
         {
-            Shell.SetLibraryDone($"Deleted {pack.Name}");
+            Shell.SetLibraryDone($"Deleted {pack.Name}.");
             if (Shell.PackClipboard is { } held && held.Source.Name.Equals(pack.Name, StringComparison.OrdinalIgnoreCase))
             {
                 Shell.PackClipboard = null;
@@ -377,7 +380,7 @@ public partial class PacksViewModel : PageViewModel
 
         if (ok)
         {
-            Shell.SetLibraryDone($"Exported {pack.Name}");
+            Shell.SetLibraryDone($"Exported {pack.Name}.");
         }
     }
 
@@ -419,7 +422,7 @@ public partial class PacksViewModel : PageViewModel
         {
             // The copy took its own half-written folder with it, so there is nothing to undo and nothing to say
             // but what went wrong: the line the write boundary left is written over, as an import's is.
-            Shell.SetLibraryDone($"Could not duplicate {pack.Name}");
+            Shell.SetLibraryDone($"Could not duplicate {pack.Name}.");
             Shell.Dialogs.Error("Could not duplicate pack", $"Could not duplicate {pack.Name}: {error}");
         }
     }

@@ -629,7 +629,7 @@ public partial class PackDetailViewModel : PageViewModel
 
         if (ok)
         {
-            Shell.SetLibraryDone($"Removed {PackRowViewModel.Plural(files.Count - failures.Count, "file")}");
+            Shell.SetLibraryDone($"Removed {PackRowViewModel.Plural(files.Count - failures.Count, "file")}.");
         }
 
         await Shell.RescanAsync();

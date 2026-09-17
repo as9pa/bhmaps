@@ -11,7 +11,7 @@ namespace BhMaps.App.ViewModels;
 /// first-run backup prompt; firstRunDone stays in settings for compatibility and is not read here.</summary>
 public partial class WelcomeViewModel : ObservableObject
 {
-    private const string CaptureLabel = "Capturing defaults";
+    private const string CaptureLabel = "Capturing the Default pack";
 
     private readonly AppServices _services;
     private readonly IDialogs _dialogs;

@@ -1555,7 +1555,7 @@ public partial class PlatformEditorViewModel : ObservableObject
     private bool IsMixed(Func<PlatformPieceViewModel, int> value) =>
         TickedRows().Select(value).Distinct().Count() > 1;
 
-    /// <summary>Saves the recoloured sets into the pack and nothing else; the "Apply to game now" box is the
+    /// <summary>Saves the recoloured sets into the pack and nothing else; the "Apply to game" box is the
     /// shell's business, because a game write needs the boundary, the snapshot and the undo (spec 8). Spec 9: one
     /// Save writes every map of the set, one map at a time, and the question is asked once for all of them.
     /// Cancel is read between maps only, so a map is written whole or not at all.</summary>

@@ -182,8 +182,8 @@ public partial class BackgroundEditorViewModel : ObservableObject
 
     public string Slot => SelectedMap?.Slot ?? "";
 
-    /// <summary>Spec 5: "Apply to all maps now" under All maps, because the tick then writes every map's slot.</summary>
-    public string ApplyNowText => SelectedMap is { IsAllMaps: true } ? "Apply to all maps now" : "Apply to game now";
+    /// <summary>Spec 5: "Apply to all maps" under All maps, because the tick then writes every map's slot.</summary>
+    public string ApplyNowText => SelectedMap is { IsAllMaps: true } ? "Apply to all maps" : "Apply to game";
 
     /// <summary>Spec 7.2, shown only when Save would replace a file that is already in the pack.</summary>
     public string OverwriteHint =>
@@ -365,7 +365,7 @@ public partial class BackgroundEditorViewModel : ObservableObject
         _ => FitMode.Cover,
     };
 
-    /// <summary>Saves the fitted picture into the pack and nothing else; the "Apply to game now" box is the
+    /// <summary>Saves the fitted picture into the pack and nothing else; the "Apply to game" box is the
     /// shell's business, because a game write needs the boundary, the snapshot and the undo (spec 8).</summary>
     [RelayCommand(CanExecute = nameof(CanSave))]
     private async Task SaveAsync()
