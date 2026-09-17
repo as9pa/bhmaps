@@ -76,7 +76,11 @@ public partial class MapPanelViewModel : ObservableObject
     public const int SetWidth = 312;
     public const int SetHeight = 176;
 
-    public const string NoDefaultPackText = "No Default pack yet. Capture it from the Packs page menu.";
+    public const string NoDefaultPackText = "Needs the Default pack. Capture it on the Packs page.";
+
+    /// <summary>3.0: the same reason in the width a tooltip has, for the Reset controls that have no room for
+    /// the sentence above.</summary>
+    public const string NoDefaultPackTip = "Needs the Default pack.";
 
     private readonly MainViewModel _shell;
     private readonly MapEntry _map;
@@ -99,7 +103,8 @@ public partial class MapPanelViewModel : ObservableObject
         _status = status;
         _snapshot = snapshot;
         DisplayName = map.DisplayName;
-        SetsText = string.Join(", ", map.Sets.Select(MapCatalog.LabelFor));
+        SetsText = MapCatalog.SetsSentence(map.Sets);
+        SetsToolTip = string.Join(", ", map.Sets);
         ThumbnailNote = shell.ThumbnailNotes.GetValueOrDefault(map.FolderName, "");
         StatusText = BuildStatusText();
         HasDefaultPack = snapshot.DefaultPack is not null;
@@ -140,8 +145,12 @@ public partial class MapPanelViewModel : ObservableObject
 
     public string DisplayName { get; }
 
-    /// <summary>The sets the map is in, labelled the way the chip row labels them.</summary>
+    /// <summary>3.0: the sets the map is in, said in the words a player uses.</summary>
     public string SetsText { get; }
+
+    /// <summary>Every set the game lists the map in, raw, so the codes the sentence drops are still one hover
+    /// away for anyone who wants them.</summary>
+    public string SetsToolTip { get; }
 
     /// <summary>Spec 10.4: why the last write left this map's map-select thumbnail alone, or empty when it wrote
     /// it or never aimed at it. Fixed for the life of the panel: a new scan builds a new panel.</summary>
@@ -182,6 +191,9 @@ public partial class MapPanelViewModel : ObservableObject
 
     /// <summary>Why Reset is off, or empty when it is on.</summary>
     public string ResetHint { get; }
+
+    /// <summary>Why Reset is off, in a tooltip, or null while it is on and there is nothing to explain.</summary>
+    public string? ResetToolTip => HasDefaultPack ? null : NoDefaultPackTip;
 
     /// <summary>Fills every tile's menu, which the panel does once, when it is built.</summary>
     public void RebuildMenus()
@@ -288,14 +300,15 @@ public partial class MapPanelViewModel : ObservableObject
     private Task AddPictureAsync() =>
         _shell.OpenAddPicturesAsync(new AddPicturesTarget(AddPicturesTargetKind.Map, _map));
 
-    /// <summary>Spec 3.2's one sentence: "Missing 2 files", "sunset, from My Backgrounds", "Default", or
-    /// "In game: flowermap background, Default platforms".</summary>
+    /// <summary>Spec 3.2's one sentence, said in words as of 3.0: "Missing 2 files.", "sunset, from My
+    /// Backgrounds.", "From the Default pack.", "From dark." or "In game only.". No file name, no slot code and
+    /// no pack the app cannot name: a person reads this line, not the folder.</summary>
     private string BuildStatusText()
     {
         var missing = _status?.Files.Count(f => f.State == MapFileState.Missing) ?? 0;
         if (missing > 0)
         {
-            return missing == 1 ? "Missing 1 file" : $"Missing {missing} files";
+            return missing == 1 ? "Missing 1 file." : $"Missing {missing} files.";
         }
 
         var slot = _map.BackgroundSlots.Count > 0 ? _map.BackgroundSlots[0] : null;
@@ -303,32 +316,43 @@ public partial class MapPanelViewModel : ObservableObject
         if (file is { State: MapFileState.Custom })
         {
             // The picture the game is showing names the pack it lives in, which is where the user would look for
-            // it again; a picture no pack holds is in the game and nowhere else (spec 3).
+            // it again. A file the library no longer holds has no name a person would know, and its slot code is
+            // not one, so the line says only where the art is (spec 3).
             var fileName = Path.GetFileName(AssetPath.Background(slot!));
             var picture = _snapshot.CustomPictures.FirstOrDefault(
                 p => p.InGameSlots.Contains(fileName, StringComparer.OrdinalIgnoreCase));
-            var name = Path.GetFileNameWithoutExtension(picture?.DisplayName ?? fileName);
-            return picture?.PackName is { } pack ? $"{name}, from {pack}" : $"{name}, in game only";
+            return picture is { PackName: { } pack }
+                ? $"{Path.GetFileNameWithoutExtension(picture.DisplayName)}, from {pack}."
+                : "In game only.";
         }
 
-        var background = file is { State: MapFileState.Pack, PackNames.Count: > 0 }
+        // The background names the source when a pack put it there; otherwise the platforms are the only thing
+        // left that a pack could have touched.
+        var source = file is { State: MapFileState.Pack, PackNames.Count: > 0 }
             ? file.PackNames[0]
-            : DefaultPack.Name;
-        var platforms = PlatformSource();
-        return background == DefaultPack.Name && platforms == DefaultPack.Name
-            ? "Default"
-            : $"In game: {background} background, {platforms} platforms";
+            : PlatformSource();
+        if (source is null)
+        {
+            return "In game only.";
+        }
+
+        // Without a captured Default pack the game's own files match nothing the app holds, so "the Default pack"
+        // would name something that is not there.
+        return source.Equals(DefaultPack.Name, StringComparison.OrdinalIgnoreCase)
+            ? _snapshot.DefaultPack is null ? "In game only." : "From the Default pack."
+            : $"From {source}.";
     }
 
-    /// <summary>The game's own art beats a pack beats Default, over this map's own folder only.</summary>
-    private string PlatformSource()
+    /// <summary>The game's own art beats a pack beats Default, over this map's own folder only. Null is the
+    /// game's own art, which belongs to no pack this app can name.</summary>
+    private string? PlatformSource()
     {
         var files = (_status?.Files ?? Array.Empty<MapFileStatus>())
             .Where(f => f.RelativePath.StartsWith(_map.FolderName + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
             .ToList();
         if (files.Any(f => f.State == MapFileState.Custom))
         {
-            return "in game only";
+            return null;
         }
 
         return files.SelectMany(f => f.PackNames).FirstOrDefault() ?? DefaultPack.Name;

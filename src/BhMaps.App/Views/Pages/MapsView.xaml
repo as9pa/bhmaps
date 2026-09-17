@@ -335,6 +335,19 @@
                     StrokeThickness="1.6" />
             </Border>
 
+            <!-- 3.0: a map whose level places no platforms has nothing a set could change, so the tile keeps its
+                 size and says that in words instead of showing an empty picture with an Apply over it. -->
+            <TextBlock x:Name="NoArt"
+                       Margin="8,0"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       FontSize="{StaticResource FontCaption}"
+                       Foreground="{StaticResource Text3Brush}"
+                       Text="{Binding NoArt}"
+                       TextAlignment="Center"
+                       TextWrapping="Wrap"
+                       Visibility="Collapsed" />
+
             <StackPanel x:Name="Actions"
                         HorizontalAlignment="Center"
                         VerticalAlignment="Center"
@@ -354,7 +367,7 @@
             </StackPanel>
           </Grid>
 
-          <TextBlock Margin="0,6,0,0" Style="{StaticResource TileCaption}" Text="{Binding PackName}" />
+          <TextBlock Margin="0,6,0,0" Style="{StaticResource TileCaption}" Text="{Binding Title}" />
         </StackPanel>
       </Border>
       <DataTemplate.Triggers>
@@ -375,6 +388,15 @@
              TileMenu is x:Shared="False". -->
         <DataTrigger Binding="{Binding ContextMenu.IsOpen, ElementName=Tile}" Value="True">
           <Setter TargetName="Actions" Property="Opacity" Value="1" />
+        </DataTrigger>
+
+        <!-- Last, so it wins over the hover and focus triggers above: a placeholder is not a choice, so it takes
+             no click and opens no menu. -->
+        <DataTrigger Binding="{Binding HasNoArt}" Value="True">
+          <Setter TargetName="NoArt" Property="Visibility" Value="Visible" />
+          <Setter TargetName="Actions" Property="Visibility" Value="Collapsed" />
+          <Setter TargetName="Tile" Property="ContextMenu" Value="{x:Null}" />
+          <Setter TargetName="Tile" Property="AutomationProperties.Name" Value="No platform art" />
         </DataTrigger>
       </DataTemplate.Triggers>
     </DataTemplate>
@@ -730,7 +752,12 @@
 
               <StackPanel VerticalAlignment="Center">
                 <TextBlock FontSize="{StaticResource FontEmphasis}" FontWeight="SemiBold" Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" />
-                <TextBlock Margin="0,2,0,0" Style="{StaticResource QuietNote}" Text="{Binding SetsText}" TextTrimming="CharacterEllipsis" />
+                <!-- 3.0: the sentence is the sets a player knows; the game's own list is one hover away. -->
+                <TextBlock Margin="0,2,0,0"
+                           Style="{StaticResource QuietNote}"
+                           Text="{Binding SetsText}"
+                           TextTrimming="CharacterEllipsis"
+                           ToolTip="{Binding SetsToolTip}" />
                 <TextBlock Margin="0,2,0,0"
                            Style="{StaticResource QuietNote}"
                            Text="{Binding ThumbnailNote}"
@@ -773,11 +800,15 @@
 
                 <StackPanel Margin="0,12,0,0" Orientation="Horizontal">
                   <!-- CanWrite, not IsNotBusy: a reset writes into the game folder (spec 7.8). -->
+                  <!-- 3.0: a disabled WPF button swallows its tooltip, so the one thing that says why Reset is
+                       off would never be read. ShowOnDisabled is what lets it through. -->
                   <Button Command="{Binding ResetCommand}"
                           Content="Reset this map"
                           controls:Icon.Glyph="{StaticResource Icon.Undo}"
                           IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}"
-                          Style="{StaticResource OutlineButton}" />
+                          Style="{StaticResource OutlineButton}"
+                          ToolTip="{Binding ResetToolTip}"
+                          ToolTipService.ShowOnDisabled="True" />
                   <Button Margin="8,0,0,0"
                           Command="{Binding OpenFolderCommand}"
                           Content="Open folder"

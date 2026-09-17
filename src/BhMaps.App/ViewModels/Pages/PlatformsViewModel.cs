@@ -94,7 +94,7 @@ public partial class PlatformsViewModel : RowsPageViewModel
     /// the render leaves the tile grey, which is what every other preview path in the app does.</summary>
     private async Task ComposeSetAsync(PlatformSetTileViewModel tile, CancellationToken ct)
     {
-        if (Snapshot is not { } snapshot)
+        if (Snapshot is not { } snapshot || tile.HasNoArt)
         {
             return;
         }

@@ -88,13 +88,17 @@ public static class CustomPictureLibrary
     /// <summary>Spec 3.1: what to call the picture the game is showing in <paramref name="slot"/>. The library's
     /// own name for it, or the slot's file name when no picture matches, which is a picture the last scan did not
     /// see. One rule in one place, so a map's card and its panel can never name the same picture differently.</summary>
-    public static string NameFor(IReadOnlyList<CustomPicture> pictures, string slot)
+    public static string NameFor(IReadOnlyList<CustomPicture> pictures, string slot) =>
+        NamedFor(pictures, slot) ?? Path.GetFileName(AssetPath.Background(slot));
+
+    /// <summary>The library's own name for the picture in <paramref name="slot"/>, or null when no picture
+    /// matches. 3.0: the callers that would rather print nothing than print a file name ask this one.</summary>
+    public static string? NamedFor(IReadOnlyList<CustomPicture> pictures, string slot)
     {
         var fileName = Path.GetFileName(AssetPath.Background(slot));
         return pictures
-                   .FirstOrDefault(p => p.InGameSlots.Contains(fileName, StringComparer.OrdinalIgnoreCase))
-                   ?.DisplayName
-               ?? fileName;
+            .FirstOrDefault(p => p.InGameSlots.Contains(fileName, StringComparer.OrdinalIgnoreCase))
+            ?.DisplayName;
     }
 
     /// <summary>Renames the picture: its file in the library takes <paramref name="newBaseName"/>, keeping its

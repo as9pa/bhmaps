@@ -633,7 +633,7 @@ public partial class MapsViewModel : PageViewModel, ITileSized
                 "Reset map",
                 new AsyncRelayCommand(() => ResetAsync(target)),
                 IsEnabled: CanReset,
-                ToolTip: CanReset ? null : "There is no Default pack to reset to."),
+                ToolTip: CanReset ? null : MapPanelViewModel.NoDefaultPackTip),
             new TileMenuCommand("Show in game folder", new RelayCommand(() => ShowMapFolder(one))),
         ];
     }

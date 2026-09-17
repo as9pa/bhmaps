@@ -1,6 +1,7 @@
 using System.Windows.Input;
 using System.Windows.Media;
 using BhMaps.App.Services;
+using BhMaps.Core.Imaging;
 using BhMaps.Core.Maps;
 using BhMaps.Core.Model;
 using BhMaps.Core.Operations;
@@ -16,6 +17,9 @@ namespace BhMaps.App.ViewModels;
 /// open (spec 9).</summary>
 public sealed partial class PlatformSetTileViewModel : ObservableObject
 {
+    /// <summary>3.0: what a tile says instead of a picture when the map's level places no platforms.</summary>
+    public const string NoArtText = "No platform art";
+
     private readonly MainViewModel _shell;
     private readonly Action? _showFiles;
     private readonly Action _edit;
@@ -30,6 +34,7 @@ public sealed partial class PlatformSetTileViewModel : ObservableObject
         Map = map;
         Pack = pack;
         InGame = inGame;
+        HasNoArt = !PlatformBounds.HasPlatformArt(map.BaseLevel);
         TileWidth = width;
         TileHeight = height;
         MenuItems = [];
@@ -43,8 +48,16 @@ public sealed partial class PlatformSetTileViewModel : ObservableObject
     public string PackName => Pack.Name;
 
     /// <summary>The caption under the thumbnail, and the tile's automation name. The same member the picture
-    /// tiles carry, so one row template draws both (addendum C).</summary>
-    public string Title => Pack.Name;
+    /// tiles carry, so one row template draws both (addendum C). Empty on a tile with no art to show: naming the
+    /// pack there would offer an apply that could not change anything (3.0).</summary>
+    public string Title => HasNoArt ? "" : Pack.Name;
+
+    /// <summary>3.0: true when the map's level places no platforms, so no pack's set could change what is drawn.
+    /// The tile keeps its size and reads <see cref="NoArtText"/>, with no caption, no apply and no menu.</summary>
+    public bool HasNoArt { get; }
+
+    /// <summary>The placeholder's own text, so the templates bind it rather than spelling it twice.</summary>
+    public string NoArt => NoArtText;
 
     /// <summary>The picture tiles' name for <see cref="InGame" />, for the same reason.</summary>
     public bool IsInGame => InGame;
@@ -63,7 +76,7 @@ public sealed partial class PlatformSetTileViewModel : ObservableObject
     public ICommand ApplyCommand => ApplyToMapCommand;
 
     /// <summary>Addendum C: a set tile's tooltip is the pack it came from, which is also its caption.</summary>
-    public string ToolTipText => Pack.Name;
+    public string ToolTipText => HasNoArt ? NoArtText : Pack.Name;
 
     /// <summary>True when every file the set would write is the file that is there, as the last scan measured it.</summary>
     public bool InGame { get; }
@@ -84,6 +97,13 @@ public sealed partial class PlatformSetTileViewModel : ObservableObject
     /// <summary>Fills <see cref="MenuItems" />, which the tile does once, when it is built.</summary>
     public void RebuildMenu()
     {
+        // 3.0: a placeholder is not a choice, so it has no menu either.
+        if (HasNoArt)
+        {
+            MenuItems = [];
+            return;
+        }
+
         // No "Apply to <map>": a click on the tile is that apply, and so is the panel's Apply button, and a menu
         // holds only what the tile cannot do on its own (spec 9).
         var items = new List<TileMenuCommand>

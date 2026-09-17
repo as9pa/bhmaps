@@ -66,6 +66,18 @@ public sealed class MapCatalog
         ["Standard2v2"] = "Standard 2v2",
     };
 
+    /// <summary>3.0: the words <see cref="SetsSentence"/> may use, in the order it says them. Several game sets
+    /// share one word, because a player picks "Standard", not "Standard3v3" and "StandardBig" apart.</summary>
+    private static readonly (string Word, string[] Sets)[] SetWords =
+    [
+        ("Ranked 1v1", ["Ranked1v1"]),
+        ("Ranked 2v2", ["Ranked2v2"]),
+        ("Tournament", ["Tournament1v1", "Tournament2v2"]),
+        ("Standard", ["StandardAll", "Standard1v1", "Standard2v2", "Standard3v3", "StandardFFA", "StandardBig"]),
+        ("Experimental", ["Experimental1v1"]),
+        ("Minigames", ["GameModeAll"]),
+    ];
+
     private readonly Dictionary<string, MapEntry> byFolder;
 
     private MapCatalog(IReadOnlyList<MapEntry> maps, IReadOnlyList<string> uiSetNames, bool hasLevelData)
@@ -100,6 +112,17 @@ public sealed class MapCatalog
     /// <summary>The chip label for a set name; an unlabelled set is shown under its own name.</summary>
     public static string LabelFor(string setName) =>
         SetLabels.TryGetValue(setName, out var label) ? label : setName;
+
+    /// <summary>3.0: the sets a player would recognise, in one fixed order, for the sentence under a map's name.
+    /// The game's own list holds codes nobody outside it reads ("StandardAll", "TableTopAL"), so a set with no
+    /// word of its own is left out rather than spelled at the reader, and a map left with nothing reads as the
+    /// one thing that is still true of it. The raw list stays on the map for the tooltip.</summary>
+    public static string SetsSentence(IEnumerable<string> sets)
+    {
+        var names = new HashSet<string>(sets, StringComparer.OrdinalIgnoreCase);
+        var words = SetWords.Where(w => w.Sets.Any(names.Contains)).Select(w => w.Word).ToList();
+        return words.Count > 0 ? string.Join(", ", words) : "Other modes";
+    }
 
     public static MapCatalog Build(LevelDataModel data)
     {
