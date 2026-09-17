@@ -10,8 +10,8 @@ Requires Windows 10 or 11, 64-bit, and Brawlhalla installed through Steam.
 
 | [Releases](https://github.com/as9pa/bhmaps/releases) | Size | Needs .NET? |
 |---|---|---|
-| `bhmaps-v2.7.0-win-x64.exe` | ~135 MB | No, the runtime is inside |
-| `bhmaps-v2.7.0-win-x64-dotnet.zip` | ~0.7 MB | Yes, [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) |
+| `bhmaps-v2.6.0-win-x64.exe` | ~135 MB | No, the runtime is inside |
+| `bhmaps-v2.6.0-win-x64-dotnet.zip` | ~0.7 MB | Yes, [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) |
 
 Take the `.exe` unless you already have .NET 10 installed. Windows may warn on first run because the
 exe is unsigned: choose "More info", then "Run anyway".
