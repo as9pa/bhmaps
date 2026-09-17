@@ -150,9 +150,12 @@
 
                       <StackPanel Grid.Column="1" Margin="14,0,12,0" VerticalAlignment="Center">
                         <TextBlock FontWeight="Medium" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
-                        <!-- Wraps rather than trims: ", hidden from lists" is the end of the line and the part that matters. -->
-                        <TextBlock Margin="0,3,0,0" Foreground="{StaticResource Text2Brush}" Text="{Binding CountsText}"
-                                   TextWrapping="Wrap" />
+                        <!-- Two lines, each trimmed rather than wrapped (3.0): one line broke mid-sentence in a
+                             narrow column, as in "0 maps, 1 background. Not" over "in game.". -->
+                        <TextBlock Margin="0,3,0,0" Foreground="{StaticResource Text2Brush}" Text="{Binding CountsLine}"
+                                   TextTrimming="CharacterEllipsis" />
+                        <TextBlock Foreground="{StaticResource Text2Brush}" Text="{Binding StateLine}"
+                                   TextTrimming="CharacterEllipsis" />
                       </StackPanel>
 
                       <!-- The strip and its count share one star column: a count in an Auto column of its own
@@ -188,11 +191,18 @@
                           </ItemsControl.ItemsPanel>
                         </ItemsControl>
 
-                        <TextBlock HorizontalAlignment="Right"
-                                   VerticalAlignment="Center"
-                                   Foreground="{StaticResource Text2Brush}"
-                                   Text="{Binding MoreText}"
-                                   Visibility="{Binding ShowMore, Converter={StaticResource BoolToVis}}" />
+                        <!-- 3.0: a link rather than a bare count, because the maps it is counting are on the
+                             pack's own page and the "+58" never said so. The nearest ItemsControl above it is the
+                             list, not the strip: the strip's own ItemsControl is a sibling of this. -->
+                        <Button HorizontalAlignment="Right"
+                                VerticalAlignment="Center"
+                                AutomationProperties.Name="{Binding MoreName}"
+                                Command="{Binding DataContext.OpenCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                CommandParameter="{Binding}"
+                                Style="{StaticResource StripLink}"
+                                Visibility="{Binding ShowMore, Converter={StaticResource BoolToVis}}">
+                          <TextBlock Style="{StaticResource StripLinkText}" Text="{Binding MoreText}" />
+                        </Button>
                       </Grid>
                     </Grid>
                   </Button>

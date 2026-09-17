@@ -1,6 +1,5 @@
 using System.Collections.ObjectModel;
 using System.Windows.Media;
-using System.Windows.Threading;
 using BhMaps.App.Services;
 using BhMaps.Core.Imaging;
 using BhMaps.Core.Maps;
@@ -24,9 +23,6 @@ public partial class PacksViewModel : PageViewModel
     /// <summary>What a background is: the game ships every one of its background slots as a JPEG.</summary>
     private const string BackgroundExtension = ".jpg";
 
-    /// <summary>Spec 8: how often "applied just now" is read again, which is as often as it can change.</summary>
-    private static readonly TimeSpan AppliedInterval = TimeSpan.FromSeconds(60);
-
     /// <summary>The snapshot the rows were built from, which the composites are drawn against.</summary>
     private ScanSnapshot? _snapshot;
 
@@ -34,18 +30,10 @@ public partial class PacksViewModel : PageViewModel
     /// PackDetailViewModel does, because those loads still hold the token.</summary>
     private CancellationTokenSource? _cts;
 
-    /// <summary>Re-reads the rows' apply times once a minute. It runs for as long as the window does, because a
-    /// page is not told when it is shown; the tick itself does nothing unless Packs is the page on screen, so a
-    /// window sitting on Maps pays a comparison a minute for it.</summary>
-    private readonly DispatcherTimer _appliedTimer;
-
     public PacksViewModel(MainViewModel shell)
         : base(shell)
     {
         Rows = [];
-        _appliedTimer = new DispatcherTimer { Interval = AppliedInterval };
-        _appliedTimer.Tick += (_, _) => RefreshApplied();
-        _appliedTimer.Start();
     }
 
     public override string Title => "Packs";
@@ -69,9 +57,11 @@ public partial class PacksViewModel : PageViewModel
         _snapshot = snapshot;
         Rows.Clear();
 
-        // Spec 8: the packs arrive sorted by the shell, so the row that was just applied is already near the top;
-        // all the page adds is the time each one carries on its counts line.
-        var stamps = Shell.Services.Settings.LastApplied;
+        // 3.0: where each pack's art actually is, read once for the whole list rather than once a row. The record
+        // names the pack behind every game file the app wrote, so a pack the owner has since reset away from
+        // drops back to "Not in game." without anything having to tell this page so.
+        var appliedMaps = AppliedRecord.Load(AppliedRecord.PathFor(Shell.Services.AppDataDir))
+            .MapsPerPack(MapFolders.Of(snapshot.Catalog.Maps));
         foreach (var pack in snapshot.Packs)
         {
             var row = new PackRowViewModel(pack, MapsIn(snapshot.Catalog, pack));
@@ -79,25 +69,11 @@ public partial class PacksViewModel : PageViewModel
             // 2.8: the eye's state is read before the menu is built, because the menu's line names it.
             row.IsHidden = Shell.Services.Settings.IsHidden(pack.Name);
             row.SetMenu(BuildMenu(row));
-            row.SetLastApplied(stamps.TryGetValue(pack.Name, out var stamp) ? stamp : null);
+            row.SetAppliedMaps(appliedMaps.TryGetValue(pack.Name, out var count) ? count : 0);
             Rows.Add(row);
         }
 
         IsEmpty = Rows.Count == 0;
-    }
-
-    /// <summary>The apply times, read again from the stamps the rows already hold.</summary>
-    private void RefreshApplied()
-    {
-        if (!ReferenceEquals(Shell.CurrentPage, this))
-        {
-            return;
-        }
-
-        foreach (var row in Rows)
-        {
-            row.RefreshCountsText();
-        }
     }
 
     /// <summary>Addendum E: a row reads its files when it comes on screen and not before, so a library of forty
@@ -476,7 +452,7 @@ public partial class PacksViewModel : PageViewModel
 
         Shell.Services.UpdateSettings(Shell.Services.Settings with { HiddenPackNames = names });
         row.IsHidden = hide;
-        row.RefreshCountsText();
+        row.RefreshLines();
         row.SetMenu(BuildMenu(row));
 
         // 2.8: the other pages read the setting when they build their rows, and nothing else tells them it moved.

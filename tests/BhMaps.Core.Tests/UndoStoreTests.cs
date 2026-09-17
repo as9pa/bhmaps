@@ -1,3 +1,5 @@
+using BhMaps.Core.LevelData;
+using BhMaps.Core.Maps;
 using BhMaps.Core.Operations;
 using BhMaps.Core.Scanning;
 using BhMaps.Core.Tests.Helpers;
@@ -14,6 +16,18 @@ public class UndoStoreTests
         new FakeGameTree(game).File("Grove", "a.png", "x").File("Grove", "b.png", "bee");
         return (new UndoStore(Path.Combine(tmp.Path, "appdata")), game);
     }
+
+    /// <summary>The lookup a catalog of these maps makes: each one named by its folder, holding the background
+    /// slots listed after it. Nothing else of a map's is read by the count.</summary>
+    private static MapFolders Folders(params (string Folder, string[] Slots)[] maps) =>
+        MapFolders.Of(maps.Select(map => new MapEntry(
+            map.Folder,
+            map.Folder,
+            new LevelDesc(map.Folder, map.Folder, new CameraBounds(0, 0, 100, 50), [], []),
+            [],
+            [],
+            map.Slots,
+            [])));
 
     [Fact]
     public void Begin_CreatesATimestampedFolderUnderUndo()
@@ -91,9 +105,26 @@ public class UndoStoreTests
 
         session.Capture(game, ["Grove\\a.png", "Backgrounds\\BG_Sewer.jpg", "Gone\\old.png"]);
 
-        // The shared Backgrounds folder and a folder for a map the game no longer has are no map of the catalog's,
-        // so the undo's done line does not count them. The match ignores case, as the game paths do.
-        Assert.Equal(1, session.MapFolderCount(["grove", "Swamp"]));
+        // A background no map's levels name and a folder for a map the game no longer has are no map of the
+        // catalog's, so the undo's done line does not count them. The match ignores case, as the game paths do.
+        Assert.Equal(1, session.MapFolderCount(Folders(("grove", []), ("Swamp", []))));
+    }
+
+    [Fact]
+    public void MapFolderCount_CountsABackgroundForEveryMapWhoseLevelsUseIt()
+    {
+        using var tmp = new TempDir();
+        var (store, game) = Arrange(tmp);
+        var session = store.Begin(Stamp);
+
+        session.Capture(game, ["Grove\\a.png", "Backgrounds\\BG_Sewer.jpg"]);
+
+        // A restore that put back one map folder and one shared background is back on three maps: the folder's
+        // own, and the two whose levels name that background.
+        Assert.Equal(
+            3,
+            session.MapFolderCount(Folders(
+                ("Grove", ["BG_Grove.jpg"]), ("Swamp", ["BG_Sewer.jpg"]), ("Sewer", ["BG_Sewer.jpg"]))));
     }
 
     [Fact]

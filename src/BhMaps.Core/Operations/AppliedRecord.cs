@@ -1,5 +1,6 @@
 using System.Text.Json;
 using BhMaps.Core.Hashing;
+using BhMaps.Core.Maps;
 using BhMaps.Core.Model;
 using BhMaps.Core.Storage;
 
@@ -52,6 +53,37 @@ public sealed class AppliedRecord
 
     /// <summary>What the app wrote, keyed by game-relative path, compared ignoring case as Windows does.</summary>
     public IReadOnlyDictionary<string, AppliedEntry> Entries => _entries;
+
+    /// <summary>How many of the catalog's map folders each pack's bytes are sitting in right now, keyed by pack
+    /// name and compared ignoring case. A folder counts once for a pack however many of its files came from it,
+    /// a pack with nothing in the game is absent rather than zero, and an entry with no pack, which is a picture
+    /// of the owner's own, counts for nobody. <paramref name="mapFolders"/> says which maps a path counts for, the
+    /// same lookup <see cref="UndoSession.MapFolderCount" /> reads, so a pack that wrote only backgrounds counts
+    /// for every map whose levels name them.</summary>
+    public IReadOnlyDictionary<string, int> MapsPerPack(MapFolders mapFolders)
+    {
+        var folders = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (gameRelativePath, entry) in _entries)
+        {
+            if (entry.Pack is not { } pack)
+            {
+                continue;
+            }
+
+            foreach (var folder in mapFolders.Of(gameRelativePath))
+            {
+                if (!folders.TryGetValue(pack, out var packFolders))
+                {
+                    packFolders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    folders[pack] = packFolders;
+                }
+
+                packFolders.Add(folder);
+            }
+        }
+
+        return folders.ToDictionary(pair => pair.Key, pair => pair.Value.Count, StringComparer.OrdinalIgnoreCase);
+    }
 
     /// <summary>A missing, unreadable, malformed or older-version file loads as an empty record. The record is a
     /// hint about what is on, never the truth about it, so losing it costs nothing a rescan cannot rebuild.</summary>

@@ -14,7 +14,7 @@ nothing else in the game install is touched.
 
 - **A pack can step out of the lists.** Every Packs row except Default has an eye button before Apply
   all, and its menu has **Hide from lists** / **Show in lists**. A hidden pack stays on the Packs page,
-  dimmed, with ", hidden from lists" on its counts line, and Apply all still works on it; its pictures
+  dimmed, with "Hidden from lists." last on its counts line, and Apply all still works on it; its pictures
   and platform sets stop showing up along the rows on Backgrounds and Platforms and in a map's panel,
   except on a map where the game is showing that pack's art right now. That tile stays, with a muted
   "hidden" after its name, until something else is applied to the map; Undo brings it back with the
@@ -222,9 +222,9 @@ describes things by where they are and what they do. Nothing on disk changes sha
 - **The map panel is one list, Background over Platforms.** The two-part switch is gone, so both halves
   of a map's look are in front of you at once.
 - **The Packs order follows what you used last.** Default first, then the packs with a last-applied
-  stamp, newest first, then the packs never applied, by name. Each pack row says when it was last
-  applied, as in "applied 2 min ago". The order is the same on the Packs page, in the map panel, on the
-  rows pages and in the editors' pack pickers.
+  stamp, newest first, then the packs never applied, by name. Each pack row says how many maps are
+  wearing that pack's art right now, as in "On 12 maps.". The order is the same on the Packs page, in
+  the map panel, on the rows pages and in the editors' pack pickers.
 - **Tile menus hold only what the tile cannot do on its own.** "Show files" is offered only in the map
   panel, where it does something, and "Apply to <map>" is dropped wherever the tile already carries an
   Apply button. Edit is on every platform set.
@@ -367,14 +367,16 @@ stops a long operation.
   files are listed. Search matches map
   and pack names, and the size control is the one Backgrounds has.
 - **Packs** is one row per pack: a composed thumbnail of the pack's first map, the pack's name and
-  what it holds, as in "3 maps, 12 backgrounds, applied 2 min ago", and a strip of previews of the
-  maps it touches, as many as the width allows, with a count for the rest. `Default` comes first,
+  what it holds and where it is, as in "3 maps, 12 backgrounds. On 12 maps.", and a strip of previews
+  of the maps it touches, as many as the width allows, with a "+56 more" link to the pack's own page
+  for the rest. A pack with nothing of its in the game says "Not in game."; `Default` says "What Reset
+  puts back.", because it is the art every reset lands on rather than a pack you apply. `Default` comes first,
   then the packs that have been applied, the most recent first, then the ones never applied, by
   name; every list of packs in the app follows that order. Apply all is a button on the row; a dots
   button beside it holds **Duplicate**, **Import from another pack...**, Export, Open folder and
   **Delete pack**; `Default` has no Delete pack. Every row but Default also has an eye before Apply
   all: click it and the pack is hidden from the lists on Backgrounds, Platforms and the map panel,
-  the row dims and its counts line ends ", hidden from lists"; click again to show it. The dots menu
+  the row dims and its counts line ends "Hidden from lists."; click again to show it. The dots menu
   says the same in words, **Hide from lists** / **Show in lists**. The header has Import folder, New
   pack, Capture defaults and Open library. After a game update, the first scan that finds a map
   folder or a background slot the game has and Default lacks copies exactly those files into Default

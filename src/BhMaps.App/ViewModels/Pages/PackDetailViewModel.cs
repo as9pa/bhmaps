@@ -68,6 +68,7 @@ public partial class PackDetailViewModel : PageViewModel, ITileSized
         : base(shell)
     {
         Items = [];
+        Subtitle = "";
         TransparentText = "";
         ClipboardHint = "";
         _hintTimer.Tick += (_, _) =>
@@ -105,6 +106,20 @@ public partial class PackDetailViewModel : PageViewModel, ITileSized
 
     /// <summary>What a tile aims for, before the panel shares the row's spare width out over them.</summary>
     public double TargetCardWidth => TileSizes.CardWidth(TileSize);
+
+    /// <summary>3.0: the card's name goes at Small, exactly as the Maps grid does it, because a card that size
+    /// has no room for one. The tile's tooltip still carries it.</summary>
+    public bool ShowName => TileSize != TileSize.Small;
+
+    /// <summary>The line under the title (3.0): the same two sentences the pack's row on the Packs page carries,
+    /// so the page opens saying what the row said. Empty while no pack is open.</summary>
+    [ObservableProperty]
+    public partial string Subtitle { get; set; }
+
+    /// <summary>The tile the backdrop band draws, which is the first card, so the band is the pack's own face
+    /// rather than a second picture to load. Null for a pack with no cards, and the band is then its gradient
+    /// alone; the tile's own Preview lands later, and the band's binding follows it in.</summary>
+    public PackTileViewModel? BackdropTile => Items.FirstOrDefault();
 
     /// <summary>Every map the pack touches, composed with the pack's own files over the background the pack ships
     /// for it, or the game's when it ships none (spec 5, addendum F).</summary>
@@ -688,6 +703,7 @@ public partial class PackDetailViewModel : PageViewModel, ITileSized
         }
 
         OnPropertyChanged(nameof(TargetCardWidth));
+        OnPropertyChanged(nameof(ShowName));
     }
 
     /// <summary>Throws away the previous pack's loads and starts this one's. The grid is built from the current
@@ -706,10 +722,21 @@ public partial class PackDetailViewModel : PageViewModel, ITileSized
         Items.Clear();
         _transparentFiles = Array.Empty<string>();
         TransparentText = "";
+        Subtitle = "";
+        OnPropertyChanged(nameof(BackdropTile));
         if (_snapshot is not { } snapshot || Pack is not { } pack)
         {
             return;
         }
+
+        // 3.0: the same sentences the Packs row carries, built from the same two helpers, so the page and the
+        // list cannot drift apart. The applied record is read here because Rebuild is what a rescan ends with.
+        var (mapCount, backgroundCount) = PackRowViewModel.Counts(pack);
+        var appliedMaps = AppliedRecord.Load(AppliedRecord.PathFor(Shell.Services.AppDataDir))
+            .MapsPerPack(MapFolders.Of(snapshot.Catalog.Maps));
+        Subtitle = PackRowViewModel.Describe(
+            pack.Name, mapCount, backgroundCount,
+            appliedMaps.TryGetValue(pack.Name, out var count) ? count : 0);
 
         foreach (var map in MapsIn(snapshot.Catalog, pack))
         {
@@ -753,6 +780,7 @@ public partial class PackDetailViewModel : PageViewModel, ITileSized
         }
 
         OnPropertyChanged(nameof(Items));
+        OnPropertyChanged(nameof(BackdropTile));
         Load([.. Items], pack, _cts.Token);
         LoadTransparent(pack, _cts.Token);
 

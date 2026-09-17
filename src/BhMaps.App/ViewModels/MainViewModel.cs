@@ -442,7 +442,7 @@ public partial class MainViewModel : ObservableObject
                 UndoneLine(
                     result,
                     session,
-                    Snapshot is { } snapshot ? [.. snapshot.Catalog.Maps.Select(map => map.FolderName)] : null),
+                    Snapshot is { } snapshot ? MapFolders.Of(snapshot.Catalog.Maps) : null),
                 GameRunning));
         }
 
@@ -1902,7 +1902,7 @@ public partial class MainViewModel : ObservableObject
     /// the map folders it captured, and a map is what the owner sees go back. Only the catalog's own map folders
     /// count, so the number matches the one the apply said; with no catalog to hand every folder counts. A restore
     /// that copied nothing back, or that put back nothing outside the library, says only that it is undone.</summary>
-    private static string UndoneLine(ApplyResult? result, UndoSession session, IEnumerable<string>? mapFolders) => result?.Copied switch
+    private static string UndoneLine(ApplyResult? result, UndoSession session, MapFolders? mapFolders) => result?.Copied switch
     {
         null or 0 => UndoDoneText,
         _ => session.MapFolderCount(mapFolders) switch
