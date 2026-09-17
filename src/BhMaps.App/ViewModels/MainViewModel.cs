@@ -374,7 +374,8 @@ public partial class MainViewModel : ObservableObject
         var copies = plan.Copies;
         var catalog = snapshot.Catalog;
         var failures = new List<FileFailure>();
-        var mapsTouched = copies.Count > 0 ? plan.Folders.Count : artMaps.Count;
+        var touched = MapsTouched(catalog, copies);
+        var mapsTouched = copies.Count > 0 ? touched.Count : artMaps.Count;
         var doneText = $"Refreshed {Count(mapsTouched, "map")}";
         if (plan.Skipped.Count > 0)
         {
@@ -396,9 +397,9 @@ public partial class MainViewModel : ObservableObject
                 },
                 ct),
             doneText,
-            // The copies can land in the shared backgrounds folder as well as a map's own, so the folders come
-            // from the plan rather than off the undo paths (spec 11).
-            writtenFolders: plan.Folders,
+            // The copies can land in the shared backgrounds folder as well as a map's own, so the folders are the
+            // maps the copies touch rather than the top folders of the undo paths (spec 11).
+            writtenFolders: touched,
             artMaps: artMaps,
             sources: [.. copies.Select(c => new AppliedSource(c.GameRelativePath, c.SourceFullPath, c.PackName))]);
 
@@ -2164,6 +2165,36 @@ public partial class MainViewModel : ObservableObject
     /// <summary>Spec 11: the map folders a write touched, read off the paths it took its undo snapshot of. The
     /// backgrounds folder is shared by every map rather than owned by one, so it names no map and is left out;
     /// the callers that write only backgrounds pass the folders themselves.</summary>
+    /// <summary>The folders of the maps a set of refresh copies touches, for the done line's count and the rescan.
+    /// A copy in the shared Backgrounds folder belongs to every map whose slot it fills, not to a folder called
+    /// Backgrounds: counting first path segments would call two slot pictures one map, and one map's platform
+    /// file plus its slot two.</summary>
+    private static IReadOnlyList<string> MapsTouched(MapCatalog catalog, IReadOnlyList<RefreshCopy> copies)
+    {
+        var folders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var copy in copies)
+        {
+            var top = TopFolder(copy.GameRelativePath);
+            if (top.Equals(PictureImporter.BackgroundsFolder, StringComparison.OrdinalIgnoreCase))
+            {
+                var slot = Path.GetFileName(copy.GameRelativePath);
+                foreach (var map in catalog.Maps)
+                {
+                    if (map.BackgroundSlots.Contains(slot, StringComparer.OrdinalIgnoreCase))
+                    {
+                        folders.Add(map.FolderName);
+                    }
+                }
+            }
+            else if (top.Length > 0)
+            {
+                folders.Add(top);
+            }
+        }
+
+        return [.. folders];
+    }
+
     private static IReadOnlyList<string> WrittenFolders(IReadOnlyList<string>? undoPaths) =>
         undoPaths is null
             ? []
