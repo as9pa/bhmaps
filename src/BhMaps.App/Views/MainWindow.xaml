@@ -7,7 +7,7 @@
   <!-- Nothing on a page triggers a rescan, so the keyboard does; Ctrl+1..5 are the five tabs (addendum A).
        Ctrl+K is in the code-behind: it navigates and then focuses, which a command cannot do. -->
   <Window.InputBindings>
-    <KeyBinding Key="F5" Command="{Binding RefreshCommand}" />
+    <KeyBinding Key="F5" Command="{Binding RescanFromKeyCommand}" />
     <KeyBinding Key="D1" Modifiers="Control" Command="{Binding NavigateMapsCommand}" />
     <KeyBinding Key="D2" Modifiers="Control" Command="{Binding NavigateBackgroundsCommand}" />
     <KeyBinding Key="D3" Modifiers="Control" Command="{Binding NavigatePlatformsCommand}" />
@@ -68,6 +68,25 @@
                     ToolTip="Dismiss"
                     controls:Icon.Glyph="{StaticResource Icon.X}" />
           </StackPanel>
+
+          <!-- Spec 2.8: writes the game back to what the app says is on. It stands whether the game is up or
+               down, because the write path already handles a running game; only the missing folder takes it
+               away, as it takes away every other write. -->
+          <Button Margin="0,0,12,0"
+                  Command="{Binding RefreshGameCommand}"
+                  Content="Refresh"
+                  ToolTip="Re-applies what is on, restores missing files and rewrites the map-select thumbnails"
+                  controls:Icon.Glyph="{StaticResource Icon.Refresh}">
+            <Button.Style>
+              <Style BasedOn="{StaticResource PlainButton}" TargetType="Button">
+                <Style.Triggers>
+                  <DataTrigger Binding="{Binding GameFolderMissing}" Value="True">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                  </DataTrigger>
+                </Style.Triggers>
+              </Style>
+            </Button.Style>
+          </Button>
 
           <!-- Three states, one at a time: the folder is gone, the game is up, the game is down. The missing
                folder outranks the other two, so its trigger is the only one that does not test it. -->

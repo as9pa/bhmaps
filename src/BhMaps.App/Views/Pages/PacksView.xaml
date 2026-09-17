@@ -84,7 +84,7 @@
           <Button Margin="8,0,0,0"
                   Command="{Binding CaptureDefaultsCommand}"
                   Content="Capture defaults"
-                  controls:Icon.Glyph="{StaticResource Icon.Refresh}"
+                  controls:Icon.Glyph="{StaticResource Icon.Camera}"
                   IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}"
                   Style="{StaticResource OutlineButton}" />
           <Button Margin="8,0,0,0"
@@ -284,7 +284,7 @@
         <Button Margin="8,0,0,0"
                 Command="{Binding CaptureDefaultsCommand}"
                 Content="Capture defaults"
-                controls:Icon.Glyph="{StaticResource Icon.Refresh}"
+                controls:Icon.Glyph="{StaticResource Icon.Camera}"
                 IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}"
                 Style="{StaticResource OutlineButton}" />
       </StackPanel>

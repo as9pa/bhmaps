@@ -139,7 +139,8 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsNotBusy), nameof(CanWrite))]
     [NotifyCanExecuteChangedFor(
-        nameof(RefreshCommand),
+        nameof(RescanFromKeyCommand),
+        nameof(RefreshGameCommand),
         nameof(LaunchGameCommand),
         nameof(ImportCommand),
         nameof(UndoCommand))]
@@ -149,7 +150,7 @@ public partial class MainViewModel : ObservableObject
     /// the game is off until a rescan finds it again. Recomputed around each scan, never guessed.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanWrite))]
-    [NotifyCanExecuteChangedFor(nameof(UndoCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RefreshGameCommand), nameof(UndoCommand))]
     public partial bool GameFolderMissing { get; set; }
 
     [ObservableProperty]
@@ -287,8 +288,10 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
+    /// <summary>F5's read-only rescan. The keyboard is the only thing that asks for it, so the command carries
+    /// the key in its name and leaves "Refresh" to the top bar's game write.</summary>
     [RelayCommand(CanExecute = nameof(CanAct))]
-    private Task RefreshAsync() => RescanAsync();
+    private Task RescanFromKeyAsync() => RescanAsync();
 
     [RelayCommand]
     private void Cancel() => _cts?.Cancel();
@@ -313,6 +316,120 @@ public partial class MainViewModel : ObservableObject
 
         await RunImportAsync(vm.Jobs);
     }
+
+    /// <summary>Spec 2.8: makes the game match what the app says is on. Every file the app wrote whose source has
+    /// been edited since goes in again, every file a map folder has lost comes back from the pack the rest of the
+    /// folder matches, and the map-select thumbnails are written again. A file someone else wrote over since is
+    /// left alone and counted in the done line: the refresh only ever puts back the app's own writes. It is a game
+    /// write like any other, so it goes through the wrapper with its undo snapshot.</summary>
+    [RelayCommand(CanExecute = nameof(CanWrite))]
+    private async Task RefreshGameAsync()
+    {
+        if (Snapshot is not { } snapshot || GameFolderMissing)
+        {
+            return;
+        }
+
+        var gamePath = Services.GamePath;
+        var libraryPath = Services.LibraryPath;
+        var hashes = Services.HashCache;
+        var recordPath = AppliedRecord.PathFor(Services.AppDataDir);
+
+        string? HashOf(string fullPath)
+        {
+            var file = new FileInfo(fullPath);
+            return file.Exists ? hashes.GetOrCompute(fullPath, file.Length, file.LastWriteTimeUtc.Ticks) : null;
+        }
+
+        // Hashing a source for every recorded file is file reading, so it waits off the UI thread like a write.
+        var plan = await Task.Run(() => RefreshPlanner.Plan(
+            gamePath,
+            libraryPath,
+            snapshot.Tree,
+            snapshot.Packs,
+            snapshot.DefaultPack,
+            snapshot.MapStatuses,
+            AppliedRecord.Load(recordPath),
+            HashOf));
+
+        // Art the game did not ship is what a map-select thumbnail is for, whether a pack put it there or the
+        // user did, so a refresh writes the thumbnail of every map showing either.
+        var artMaps = snapshot.Catalog.Maps
+            .Where(map => snapshot.MapStatuses.TryGetValue(map.FolderName, out var status)
+                && status.State is MapState.Packs or MapState.Custom)
+            .ToList();
+
+        if (plan.Copies.Count == 0 && ThumbnailPlans(artMaps).Count == 0)
+        {
+            // Nothing to write, so nothing takes an undo snapshot: a refresh that does nothing must not throw the
+            // last write's undo away.
+            SetLibraryDone("Nothing to refresh.");
+            return;
+        }
+
+        var copies = plan.Copies;
+        var catalog = snapshot.Catalog;
+        var failures = new List<FileFailure>();
+        var mapsTouched = copies.Count > 0 ? plan.Folders.Count : artMaps.Count;
+        var doneText = $"Refreshed {Count(mapsTouched, "map")}";
+        if (plan.Skipped.Count > 0)
+        {
+            doneText += $". {Count(plan.Skipped.Count, "file")} changed by hand, left alone";
+        }
+
+        await RunGameWriteAsync(
+            "Refreshing",
+            [.. copies.Select(c => c.GameRelativePath)],
+            (progress, ct) => Task.Run(
+                () =>
+                {
+                    foreach (var copy in copies)
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        progress.Report(RefreshedName(catalog, copy.GameRelativePath));
+                        failures.AddRange(RefreshOne(copy, gamePath, ct));
+                    }
+                },
+                ct),
+            doneText,
+            // The copies can land in the shared backgrounds folder as well as a map's own, so the folders come
+            // from the plan rather than off the undo paths (spec 11).
+            writtenFolders: plan.Folders,
+            artMaps: artMaps,
+            sources: [.. copies.Select(c => new AppliedSource(c.GameRelativePath, c.SourceFullPath, c.PackName))]);
+
+        Dialogs.ShowFailures("Some files could not be refreshed", failures);
+    }
+
+    /// <summary>One file of a refresh. A picture goes back through the fitter that sized it for the slot the
+    /// first time, never in raw: the slot is the file's own name, which is what the applier joined to the
+    /// backgrounds folder to build the path. Everything else is the raw copy a pack write makes.</summary>
+    private static IReadOnlyList<FileFailure> RefreshOne(RefreshCopy copy, string gamePath, CancellationToken ct)
+    {
+        if (copy.Fit)
+        {
+            return BackgroundApplier
+                .Apply(copy.SourceFullPath, gamePath, [Path.GetFileName(copy.GameRelativePath)], null, ct)
+                .Failures;
+        }
+
+        var target = Path.Combine(gamePath, copy.GameRelativePath);
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.Copy(copy.SourceFullPath, target, overwrite: true);
+            return [];
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return [new FileFailure(target, ex.Message)];
+        }
+    }
+
+    /// <summary>What a refreshed file is called in the progress line: the map whose folder it lands in, or the
+    /// file's own name for a background, which belongs to no one map.</summary>
+    private static string RefreshedName(MapCatalog catalog, string gameRelativePath) =>
+        catalog.ByFolder(AssetPath.FolderOf(gameRelativePath))?.DisplayName ?? Path.GetFileName(gameRelativePath);
 
     /// <summary>Spec 6.4 and 8: puts back the files the last game write was about to overwrite or delete, through
     /// the same wrapper as every other write. It is a game write, so it is off while the folder is missing, and

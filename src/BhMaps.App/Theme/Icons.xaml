@@ -21,6 +21,7 @@
   <Geometry x:Key="Icon.FolderOpen">M5 4h4l3 3h7a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-11a2 2 0 0 1 2 -2</Geometry>
   <Geometry x:Key="Icon.Undo">M9 14l-4 -4l4 -4 M5 10h11a4 4 0 1 1 0 8h-1</Geometry>
   <Geometry x:Key="Icon.Refresh">M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4 M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4</Geometry>
+  <Geometry x:Key="Icon.Camera">M5 7h1a2 2 0 0 0 2 -2a1 1 0 0 1 1 -1h6a1 1 0 0 1 1 1a2 2 0 0 0 2 2h1a2 2 0 0 1 2 2v9a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-9a2 2 0 0 1 2 -2 M9 13A3 3 0 0 1 15 13A3 3 0 0 1 9 13Z</Geometry>
   <Geometry x:Key="Icon.Trash">M4 7h16 M10 11v6 M14 11v6 M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12 M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3</Geometry>
   <Geometry x:Key="Icon.X">M18 6l-12 12 M6 6l12 12</Geometry>
   <Geometry x:Key="Icon.Check">M5 12l5 5l9 -9</Geometry>
