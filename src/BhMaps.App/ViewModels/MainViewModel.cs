@@ -1412,11 +1412,13 @@ public partial class MainViewModel : ObservableObject
         Func<PackCopyResult> delete,
         IReadOnlyList<PartReset> resets)
     {
-        // A reset needs a Default pack to restore from, and the Maps page refuses to reset without one. The
-        // delete still goes ahead, so the promise the confirm makes is dropped rather than broken.
+        // A reset needs a Default pack to restore from, and the Maps page refuses to reset without one; it also
+        // needs the game folder, and a game write is refused outright while that is missing, which would take
+        // the library delete down with it. In both cases the delete still goes ahead on its own, so the promise
+        // the confirm makes is dropped rather than broken.
         var snapshot = Snapshot;
         var defaultPack = snapshot?.DefaultPack;
-        if (defaultPack is null)
+        if (defaultPack is null || GameFolderMissing)
         {
             resets = [];
         }

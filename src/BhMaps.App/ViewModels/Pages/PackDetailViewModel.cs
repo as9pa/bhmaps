@@ -243,7 +243,7 @@ public partial class PackDetailViewModel : PageViewModel
                 new AsyncRelayCommand(() => DeleteMapFromPackAsync(removable)),
                 IsDestructive: true));
         }
-        else if (tile.Map is null && tile.PicturePath is { } file)
+        else if (tile.Map is null && tile.PicturePath is { } file && !isDefault)
         {
             items.Add(TileMenuCommand.Separator());
             items.Add(new TileMenuCommand(

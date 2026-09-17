@@ -67,7 +67,7 @@ public sealed partial class CustomPictureTileViewModel : PictureTileViewModel
     public override ICommand? ApplyCommand => Map is null ? null : ApplyToMapCommand;
 
     /// <summary>False for a picture that is only in the game folder, which is offered Save to My Backgrounds
-    /// instead of Remove from its pack.</summary>
+    /// instead of Delete background.</summary>
     private bool InLibrary => _picture.LibraryPaths.Count > 0;
 
     public override void RebuildMenu(int tickedCount)

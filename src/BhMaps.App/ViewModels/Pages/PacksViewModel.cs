@@ -191,18 +191,30 @@ public partial class PacksViewModel : PageViewModel
     }
 
     /// <summary>The row's dots menu (addendum E, q7). Each line wraps the page's own command with this row as
-    /// its parameter, because a TileMenuCommand carries no parameter of its own. Remove is last: it is the
-    /// destructive one, and the pointer should not have to pass over it to reach another line.</summary>
-    private IReadOnlyList<TileMenuCommand> BuildMenu(PackRowViewModel row) =>
-    [
-        TileMenuCommand.Header(row.Name),
-        new TileMenuCommand("Duplicate", new RelayCommand(() => DuplicateCommand.Execute(row))),
-        new TileMenuCommand("Import from another pack...", new RelayCommand(() => ImportIntoCommand.Execute(row))),
-        new TileMenuCommand("Export", new RelayCommand(() => ExportCommand.Execute(row))),
-        new TileMenuCommand("Open folder", new RelayCommand(() => OpenFolderCommand.Execute(row))),
-        TileMenuCommand.Separator(),
-        new TileMenuCommand("Delete pack", new RelayCommand(() => RemoveCommand.Execute(row)), IsDestructive: true),
-    ];
+    /// its parameter, because a TileMenuCommand carries no parameter of its own. Delete pack is last: it is the
+    /// destructive one, and the pointer should not have to pass over it to reach another line. The Default pack
+    /// has no Delete line: it is the game's own art, and every Reset to default restores from it.</summary>
+    private IReadOnlyList<TileMenuCommand> BuildMenu(PackRowViewModel row)
+    {
+        var items = new List<TileMenuCommand>
+        {
+            TileMenuCommand.Header(row.Name),
+            new("Duplicate", new RelayCommand(() => DuplicateCommand.Execute(row))),
+            new("Import from another pack...", new RelayCommand(() => ImportIntoCommand.Execute(row))),
+            new("Export", new RelayCommand(() => ExportCommand.Execute(row))),
+            new("Open folder", new RelayCommand(() => OpenFolderCommand.Execute(row))),
+        };
+        if (!row.Name.Equals(DefaultPack.Name, StringComparison.OrdinalIgnoreCase))
+        {
+            items.Add(TileMenuCommand.Separator());
+            items.Add(new TileMenuCommand(
+                "Delete pack",
+                new RelayCommand(() => RemoveCommand.Execute(row)),
+                IsDestructive: true));
+        }
+
+        return items;
+    }
 
     /// <summary>The maps the pack touches: the catalog maps it has at least one file for, in catalog order. A
     /// pack folder that is not a map, such as a theme folder other maps borrow from (spec 4), is not one of
