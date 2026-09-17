@@ -7,8 +7,7 @@ using CommunityToolkit.Mvvm.Input;
 namespace BhMaps.App.ViewModels;
 
 /// <summary>One row of the Backgrounds or Platforms page (addendum B and C): one map, the tag that says what it
-/// is showing, and every choice that map has on that page. No tick box: a row is for clicking the choice you
-/// want, and the ticked set the tile menus write to is made on Maps (q4).</summary>
+/// is showing, and every choice that map has on that page. A row is for clicking the choice you want.</summary>
 public sealed partial class MapRowViewModel : ObservableObject
 {
     private readonly IReadOnlyList<object> _alwaysShown;
@@ -93,17 +92,17 @@ public sealed partial class MapRowViewModel : ObservableObject
 
     public bool ShowMore => Overflow > 0 && !IsUnfolded;
 
-    /// <summary>Every tile's menu names the ticked maps, so the count changing rewords every one of them.</summary>
-    public void RebuildMenus(int tickedCount)
+    /// <summary>Fills every tile's menu, which the row does once, when it is built.</summary>
+    public void RebuildMenus()
     {
         foreach (var tile in Pictures)
         {
-            tile.RebuildMenu(tickedCount);
+            tile.RebuildMenu();
         }
 
         foreach (var tile in Sets)
         {
-            tile.RebuildMenu(tickedCount);
+            tile.RebuildMenu();
         }
     }
 

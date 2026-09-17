@@ -192,7 +192,7 @@ public partial class PackDetailViewModel : PageViewModel
 
     /// <summary>Spec 2.6 section 3: every tile has a menu. A map tile leads with the map, a file tile with the
     /// file name, and both end with the line that takes the tile out of the pack. Built when the menu opens, so
-    /// the ticked count is the one the user can see.</summary>
+    /// it names what the last scan found.</summary>
     public void BuildTileMenu(PackTileViewModel tile)
     {
         if (Pack is not { } pack)
@@ -208,7 +208,7 @@ public partial class PackDetailViewModel : PageViewModel
             items.Add(TileMenuCommand.Header(owner.DisplayName));
             items.Add(new TileMenuCommand(
                 $"Apply to {owner.DisplayName}",
-                new AsyncRelayCommand(() => Shell.ApplySetAsync(pack, [owner], clearTicks: false)),
+                new AsyncRelayCommand(() => Shell.ApplySetAsync(pack, [owner])),
                 IsEnabled: Shell.CanWrite));
         }
         else
@@ -255,22 +255,12 @@ public partial class PackDetailViewModel : PageViewModel
         tile.MenuItems = items;
     }
 
-    /// <summary>The 2.5 picture lines, in their order: the ticked apply, the chooser, every map, then Edit. The
-    /// per-map apply of 2.5 is gone: on a map tile Apply to {map} above it already names that map.</summary>
+    /// <summary>The 2.5 picture lines, in their order: the chooser, every map, then Edit. The per-map apply of
+    /// 2.5 is gone: on a map tile Apply to {map} above it already names that map.</summary>
     private void AddPictureLines(List<TileMenuCommand> items, PackTileViewModel tile, Pack pack, string path)
     {
         var name = Path.GetFileName(path);
-        var ticked = Shell.SelectedMapCount;
         var slot = tile.Map?.BackgroundSlots.FirstOrDefault();
-        if (ticked > 0)
-        {
-            var text = ticked == 1 ? "Apply to the 1 selected map" : $"Apply to the {ticked} selected maps";
-            items.Add(new TileMenuCommand(
-                text,
-                new AsyncRelayCommand(
-                    () => Shell.ApplyPictureAsync(path, Shell.SelectedMaps, true, name, pack.Name))));
-        }
-
         items.Add(new TileMenuCommand(
             "Apply to a map...", new AsyncRelayCommand(() => ApplyToChosenMapAsync(path, name, pack.Name))));
         items.Add(new TileMenuCommand(
@@ -518,7 +508,7 @@ public partial class PackDetailViewModel : PageViewModel
     {
         if (await Shell.ChooseMapAsync(path, name) is { } map)
         {
-            await Shell.ApplyPictureAsync(path, [map], clearTicks: false, name, packName);
+            await Shell.ApplyPictureAsync(path, [map], name, packName);
         }
     }
 
@@ -526,7 +516,7 @@ public partial class PackDetailViewModel : PageViewModel
     /// "Apply {name} to these {N} maps?" confirm, the undo snapshot and the done line with it.</summary>
     private Task ApplyToAllMapsAsync(string path, string name, string packName) =>
         Shell.Snapshot is { } snapshot
-            ? Shell.ApplyPictureAsync(path, snapshot.Catalog.Maps, clearTicks: false, name, packName)
+            ? Shell.ApplyPictureAsync(path, snapshot.Catalog.Maps, name, packName)
             : Task.CompletedTask;
 
     private void ShowInFolder(string path)
@@ -932,8 +922,7 @@ public partial class PackTileViewModel : ObservableObject
     public partial ImageSource? Preview { get; set; }
 
     /// <summary>The lines of this tile's menu (spec 4.1), filled by PackDetailViewModel.BuildTileMenu when the
-    /// menu opens. Built then and not before, because the ticked line names a count that changes on another page
-    /// and there is one of these per tile.</summary>
+    /// menu opens. Built then and not before, because there is one of these per tile.</summary>
     [ObservableProperty]
     public partial IReadOnlyList<TileMenuCommand> MenuItems { get; set; } = [];
 

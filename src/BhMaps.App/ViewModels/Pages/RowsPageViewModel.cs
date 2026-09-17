@@ -11,8 +11,8 @@ namespace BhMaps.App.ViewModels.Pages;
 
 /// <summary>What the Backgrounds and Platforms pages have in common (addendum B and C): one row per map, a chip
 /// row, a search box, a zoom that sets the thumbnail height, and the rule that a row reads its pictures when it
-/// comes on screen. No ticks: ticking is the Maps page's (q4), and this page reads the ticked count only so a
-/// tile menu can say "Apply to the 3 selected maps".</summary>
+/// comes on screen. No selection of its own: selecting a map is the Maps page's (q4), and a tile menu here acts
+/// on the row it belongs to.</summary>
 public abstract partial class RowsPageViewModel : PageViewModel
 {
     public const int MinZoom = AppSettings.MinRowZoom;
@@ -43,10 +43,6 @@ public abstract partial class RowsPageViewModel : PageViewModel
         // A stored zoom from another version, or a hand-edited one, is clamped rather than trusted. The value is
         // handed in rather than read here, so the constructor calls nothing the subclass has overridden.
         Zoom = Math.Clamp(storedZoom, MinZoom, MaxZoom);
-
-        // A tile's menu names the ticked count, which is the shell's. The page lives as long as the shell, so
-        // there is nothing to unsubscribe from.
-        shell.PropertyChanged += OnShellChanged;
     }
 
     /// <summary>The last scan, or null before the first one.</summary>
@@ -221,20 +217,11 @@ public abstract partial class RowsPageViewModel : PageViewModel
         OnPropertyChanged(nameof(ShowTileApply));
     }
 
-    private void OnShellChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        // Every open tile menu names the ticked maps, so the count is what rewords them (addendum B, q4).
-        if (e.PropertyName == nameof(MainViewModel.SelectedMapCount))
-        {
-            RebuildMenus();
-        }
-    }
-
     private void RebuildMenus()
     {
         foreach (var row in _all)
         {
-            row.RebuildMenus(Shell.SelectedMapCount);
+            row.RebuildMenus();
         }
     }
 

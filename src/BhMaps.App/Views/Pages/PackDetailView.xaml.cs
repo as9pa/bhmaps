@@ -86,8 +86,8 @@ public partial class PackDetailView : UserControl
         }
     }
 
-    /// <summary>Spec 2.6 section 3: the lines are built here, not when the ticks change, so the ticked line names
-    /// the count the user can see. Every tile has a menu now, so nothing is handled away.</summary>
+    /// <summary>Spec 2.6 section 3: the lines are built here, when the menu opens, so they name what the last
+    /// scan found. Every tile has a menu now, so nothing is handled away.</summary>
     private void OnTileMenuOpening(object sender, ContextMenuEventArgs e)
     {
         if (sender is FrameworkElement { DataContext: PackTileViewModel tile }

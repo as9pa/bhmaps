@@ -59,16 +59,15 @@ public partial class MapCardViewModel : ObservableObject
     [ObservableProperty]
     public partial ImageSource? Preview { get; set; }
 
-    /// <summary>Spec 3.3: whether this map is in the ticked set. The grid's ListBoxItem binds its own IsSelected
-    /// to it two ways, so a click, a Ctrl click, a shift range, Space and the tick box all say the same thing.
-    /// MapsViewModel watches it and tells the shell.</summary>
+    /// <summary>2.8: whether this is the one card the grid shows selected, which is the card whose panel is
+    /// open. The grid's ListBoxItem binds its own IsSelected to it two ways; MapsViewModel is what sets it, from
+    /// the map the panel is on.</summary>
     [ObservableProperty]
     public partial bool IsSelected { get; set; }
 
     /// <summary>Spec 4.3: the lines of this card's menu, filled by MapsViewModel.BuildCardMenu when the menu
-    /// opens. The building lives on the page, not here, because the lines need the packs, the pictures and the
-    /// ticked set, and because building one card's menu per open is cheaper than rebuilding every card's on
-    /// every tick.</summary>
+    /// opens. The building lives on the page, not here, because the lines need the packs and the pictures, and
+    /// because building one card's menu per open is cheaper than rebuilding every card's.</summary>
     [ObservableProperty]
     public partial IReadOnlyList<TileMenuCommand> MenuItems { get; set; } = [];
 

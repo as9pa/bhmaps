@@ -11,26 +11,16 @@ namespace BhMaps.App.Views.Pages;
 
 public partial class MapsView : UserControl
 {
-    /// <summary>The ticked cards as they were when a right press landed on a card, so the menu can put them back:
-    /// the ListBox ticks the card it is pressed on whichever button it was, and spec 4.3 says a right click
-    /// changes neither the ticks nor the panel. Null between menus.</summary>
-    private List<MapCardViewModel>? _ticksBeforeMenu;
-
     public MapsView()
     {
         InitializeComponent();
     }
 
-    /// <summary>Spec 3.1: a plain click on the card body opens the map panel and leaves the ticks alone; a Ctrl
-    /// or Shift click is the ListBox's, and so is a click on the tick box itself.</summary>
+    /// <summary>2.8: a click on the card opens the map panel, whatever is held down with it. The page handles it
+    /// rather than the ListBox, so no modifier can select a second map.</summary>
     private void OnCardMouseDown(object sender, MouseButtonEventArgs e)
     {
-        // Ctrl and Shift by name rather than "no modifier at all": every other combination, Alt+click above all,
-        // would otherwise fall through to the Extended ListBox, which reads it as a plain click and replaces the
-        // whole ticked set with the one card.
-        if (sender is not ListBoxItem item
-            || (Keyboard.Modifiers & (ModifierKeys.Control | ModifierKeys.Shift)) != ModifierKeys.None
-            || IsInsideTick(e.OriginalSource, item))
+        if (sender is not ListBoxItem item)
         {
             return;
         }
@@ -53,20 +43,12 @@ public partial class MapsView : UserControl
         }
     }
 
-    /// <summary>Space toggles the focused card (spec 3.1). Extended selection would otherwise make Space replace
-    /// the whole set with that one card. Enter opens the card's panel, which is what Enter did while the card was
-    /// a Button: without it the panel is mouse-only.</summary>
+    /// <summary>Enter opens the focused card's panel, which is what Enter did while the card was a Button:
+    /// without it the panel is mouse-only. Space is left to the ListBox and does nothing of its own (2.8).</summary>
     private void OnCardKeyDown(object sender, KeyEventArgs e)
     {
         if (sender is not ListBoxItem item)
         {
-            return;
-        }
-
-        if (e.Key == Key.Space)
-        {
-            item.IsSelected = !item.IsSelected;
-            e.Handled = true;
             return;
         }
 
@@ -79,18 +61,17 @@ public partial class MapsView : UserControl
             return;
         }
 
-        // Shift keeps the control's range meaning, and Ctrl already navigates without selecting.
+        // Only the bare keys are the page's: Ctrl already navigates without selecting.
         if (Keyboard.Modifiers == ModifierKeys.None && MoveFocusTo(item, e.Key))
         {
             e.Handled = true;
         }
     }
 
-    /// <summary>Spec 3.1: the navigation keys move focus between cards and leave the ticks alone. Extended
-    /// selection makes every bare one of them replace the whole ticked set with the card focus lands on, which is
-    /// ten ticks gone on one keystroke, so the page moves focus itself before the ListBox sees the key. The
-    /// arrows move the way Ctrl+arrow already does. False for any other key, which the ListBox then handles as
-    /// usual.</summary>
+    /// <summary>Spec 3.1: the navigation keys move focus between cards and leave the open card selected. The
+    /// ListBox would make whichever card focus lands on the selection, which is the light border off the map the
+    /// panel is open on, so the page moves focus itself before the ListBox sees the key. The arrows move the way
+    /// Ctrl+arrow already does. False for any other key, which the ListBox then handles as usual.</summary>
     private static bool MoveFocusTo(ListBoxItem item, Key key)
     {
         FocusNavigationDirection? direction = key switch
@@ -108,11 +89,10 @@ public partial class MapsView : UserControl
             return false;
         }
 
-        // Moving the focus is not enough on its own: while the keyboard is the most recent input device, an
-        // Extended ListBox makes whichever card takes focus the whole selection, so the ticks would go anyway.
-        // Multiple is the one mode where focus is only focus, and it is on for the length of the move, so Shift
-        // keeps the control's range and Ctrl+A still ticks the grid. Both modes select many, so the set itself
-        // survives the round trip.
+        // Moving the focus is not enough on its own: while the keyboard is the most recent input device, the
+        // ListBox makes whichever card takes focus the selection, so the border would move anyway. Multiple is
+        // the one mode where focus is only focus, and it is on for the length of the move, so the card the panel
+        // is open on survives the round trip.
         var mode = list.SelectionMode;
         list.SelectionMode = SelectionMode.Multiple;
         try
@@ -153,8 +133,8 @@ public partial class MapsView : UserControl
     }
 
     /// <summary>Spec 3.1: Escape in the search box clears what was typed and stops there, so the page's own
-    /// Escape order (owner change O4: the ticks, then the panel) is left for an empty or unfocused box. The same
-    /// command the Clear search button runs, so there is one way to empty the box.
+    /// Escape, which closes the panel, is left for an empty or unfocused box. The same command the Clear search
+    /// button runs, so there is one way to empty the box.
     /// Spec section 13's menu key and Shift+F10 are handled from here too, because a UserControl has one
     /// PreviewKeyDown: TileMenus takes those two keys and leaves every other one alone, so the two do not
     /// collide over Escape.</summary>
@@ -185,34 +165,14 @@ public partial class MapsView : UserControl
         }
     }
 
-    /// <summary>The ticks are read here rather than stopped here: handling the press would keep the ListBox from
-    /// ticking the card but would take the context menu with it, so the set is remembered and put back when the
-    /// menu opens instead.</summary>
-    private void OnCardRightButtonDown(object sender, MouseButtonEventArgs e)
-    {
-        if (DataContext is MapsViewModel page)
-        {
-            _ticksBeforeMenu = page.AllCards.Where(c => c.IsSelected).ToList();
-        }
-    }
-
-    /// <summary>Spec 4.3: the card's lines are built when the menu opens, because the target depends on the ticks
-    /// and there are as many cards as the game has maps. The ticks the press moved are put back first, so the
-    /// target rule reads the set the user can see.</summary>
+    /// <summary>Spec 4.3: the card's lines are built when the menu opens, because there are as many cards as the
+    /// game has maps. The selection is put back first: the ListBox selects the card it is pressed on whichever
+    /// button it was, and a right click leaves the panel, and with it the light border, where they were.</summary>
     private void OnCardMenuOpening(object sender, ContextMenuEventArgs e)
     {
         if (sender is ListBoxItem { DataContext: MapCardViewModel card } && DataContext is MapsViewModel page)
         {
-            if (_ticksBeforeMenu is { } before)
-            {
-                foreach (var other in page.AllCards)
-                {
-                    other.IsSelected = before.Contains(other);
-                }
-
-                _ticksBeforeMenu = null;
-            }
-
+            page.RestoreSelectedCard();
             page.BuildCardMenu(card);
         }
     }
@@ -220,32 +180,4 @@ public partial class MapsView : UserControl
     /// <summary>The three-dot button on a panel tile. The button carries no menu of its own, so TileMenus walks
     /// up to the tile that does.</summary>
     private void OnTileMenuButton(object sender, RoutedEventArgs e) => TileMenus.OpenFor(sender);
-
-    /// <summary>Opens a bar button's menu on a left click, above the bar. The menu lives outside the visual
-    /// tree, so it is given the button's DataContext: its items bind the page through it.</summary>
-    private void OnOpenMenu(object sender, RoutedEventArgs e)
-    {
-        if (sender is Button { ContextMenu: { } menu } button)
-        {
-            menu.DataContext = button.DataContext;
-            menu.PlacementTarget = button;
-            menu.Placement = PlacementMode.Top;
-            menu.IsOpen = true;
-        }
-    }
-
-    /// <summary>Whether the click landed on the card's tick box. The walk stops at the card, because that is as
-    /// far as a tick box can be from what was clicked.</summary>
-    private static bool IsInsideTick(object? source, ListBoxItem item)
-    {
-        for (var d = source as DependencyObject; d is not null && d != item; d = VisualTreeHelper.GetParent(d))
-        {
-            if (d is CheckBox)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
 }

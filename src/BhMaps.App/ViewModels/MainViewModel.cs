@@ -116,13 +116,6 @@ public partial class MainViewModel : ObservableObject
 
     public SettingsPageViewModel SettingsPage { get; }
 
-    /// <summary>The ticked maps, in display order (spec 3.3). One list for the whole app: a tile on any page
-    /// aims at these. Read from the Maps page's unfiltered cards, not its visible ones, so a search does not
-    /// silently shrink what a write is about to touch (plan decision A-D1).</summary>
-    public IReadOnlyList<MapEntry> SelectedMaps => Maps.TickedMaps;
-
-    public int SelectedMapCount => SelectedMaps.Count;
-
     /// <summary>Whether Brawlhalla is running, as of the last poll. The top bar's game line shows it.</summary>
     [ObservableProperty]
     public partial bool GameRunning { get; set; }
@@ -273,24 +266,6 @@ public partial class MainViewModel : ObservableObject
     /// <summary>Spec 2.6 4.3: the one tile Ctrl+C or Ctrl+X remembered, held by the shell so it survives moving
     /// between pack pages. Never the Windows clipboard: this carries a pack, a tile and how it was taken.</summary>
     public PackClipboardItem? PackClipboard { get; set; }
-
-    /// <summary>SelectedMaps is computed, so the pages bound to it are told by hand when it changes. Public:
-    /// the Maps page raises it when a card is ticked.</summary>
-    public void NotifySelectionChanged()
-    {
-        OnPropertyChanged(nameof(SelectedMaps));
-        OnPropertyChanged(nameof(SelectedMapCount));
-    }
-
-    /// <summary>Unticks every map. The selection bar offers it as "Clear".</summary>
-    [RelayCommand]
-    private void ClearSelection()
-    {
-        foreach (var card in Maps.AllCards)
-        {
-            card.IsSelected = false;
-        }
-    }
 
     /// <summary>F5's read-only rescan. The keyboard is the only thing that asks for it, so the command carries
     /// the key in its name and leaves "Refresh" to the top bar's game write.</summary>
@@ -465,8 +440,7 @@ public partial class MainViewModel : ObservableObject
                 },
                 ct),
             UndoDoneText,
-            undoable: false,
-            clearTicks: false);
+            undoable: false);
 
         if (result is not null)
         {
@@ -489,7 +463,6 @@ public partial class MainViewModel : ObservableObject
             snapshot.Packs.Select(p => p.Name).ToList(),
             target.Kind,
             mapName,
-            SelectedMapCount,
             snapshot.Catalog.Maps.Count);
         var window = new AddPicturesWindow { DataContext = vm, Owner = Application.Current.MainWindow, ShowActivated = !App.Quiet };
         if (window.ShowDialog() != true)
@@ -523,7 +496,7 @@ public partial class MainViewModel : ObservableObject
         if (ok && maps.Count > 0 && result is { Written.Count: > 0 })
         {
             // The apply rescans on its way out, and its done line is the one that ends up in the header.
-            await ApplyPicturesAsync(maps, packName, result.Written, vm.Then == AddPicturesThen.Ticked);
+            await ApplyPicturesAsync(maps, packName, result.Written);
             return;
         }
 
@@ -544,7 +517,6 @@ public partial class MainViewModel : ObservableObject
         IEnumerable<MapEntry> maps = then switch
         {
             AddPicturesThen.Map => target.Map is null ? [] : [target.Map],
-            AddPicturesThen.Ticked => SelectedMaps,
             AddPicturesThen.All => snapshot.Catalog.Maps,
             _ => [],
         };
@@ -556,11 +528,10 @@ public partial class MainViewModel : ObservableObject
     /// starting again from the first picture when there are more maps than pictures, and a picture past the last
     /// map is imported only.</summary>
     private async Task ApplyPicturesAsync(
-        IReadOnlyList<MapEntry> maps, string packName, IReadOnlyList<string> written, bool clearTicks)
+        IReadOnlyList<MapEntry> maps, string packName, IReadOnlyList<string> written)
     {
         // Spec 6.3: the maps are named before more than one of them is written. The import has already run, so
-        // declining still rescans: the library has changed even though nothing was applied. Nothing reached the
-        // game folder, so the ticks stay as they are.
+        // declining still rescans: the library has changed even though nothing was applied.
         if (maps.Count > 1
             && !Dialogs.Confirm(
                 "Apply pictures",
@@ -605,7 +576,6 @@ public partial class MainViewModel : ObservableObject
                 },
                 ct),
             $"{Count(used, "picture")} applied to {Count(maps.Count, "map")}",
-            clearTicks,
             packName,
             // The undo paths are all in the shared backgrounds folder, so the maps whose slots were written are
             // named here rather than read back off them (spec 11).
@@ -617,7 +587,7 @@ public partial class MainViewModel : ObservableObject
     }
 
     /// <summary>Spec 3.2 and 4: one picture into the background slots of every map given, as one game write.
-    /// More than one map confirms with the count first (spec 3.3) and clears the ticks on success.
+    /// More than one map confirms with the count first (spec 3.3).
     /// displayName is the name the user chose the picture by, which is the pack on a panel tile and the picture's
     /// own name in the custom library: spec 2.2 words the done line "flowermap applied to Brawlhaven", never the
     /// file name inside the pack, which the user never picked. Null for a caller with no such name, and then the
@@ -626,7 +596,6 @@ public partial class MainViewModel : ObservableObject
     public async Task ApplyPictureAsync(
         string sourcePath,
         IReadOnlyList<MapEntry> maps,
-        bool clearTicks,
         string? displayName = null,
         string? packName = null)
     {
@@ -673,7 +642,6 @@ public partial class MainViewModel : ObservableObject
             targets.Count == 1
                 ? $"{name} applied to {targets[0].DisplayName}"
                 : $"{name} applied to {targets.Count} maps",
-            clearTicks,
             packName,
             // The undo paths are all in the shared backgrounds folder, so the maps whose slots were written are
             // named here rather than read back off them (spec 11).
@@ -686,7 +654,7 @@ public partial class MainViewModel : ObservableObject
 
     /// <summary>Spec 3.2: one pack's platform art onto every map given, each map getting its own set from the
     /// same pack. A map the pack has nothing for is left out rather than cleared.</summary>
-    public async Task ApplySetAsync(Pack pack, IReadOnlyList<MapEntry> maps, bool clearTicks)
+    public async Task ApplySetAsync(Pack pack, IReadOnlyList<MapEntry> maps)
     {
         var targets = maps.Where(m => pack.FindFolder(m.FolderName) is { Files.Count: > 0 }).ToList();
         if (targets.Count == 0)
@@ -726,7 +694,6 @@ public partial class MainViewModel : ObservableObject
             targets.Count == 1
                 ? $"{pack.Name} applied to {targets[0].DisplayName}"
                 : $"{pack.Name} applied to {targets.Count} maps",
-            clearTicks,
             pack.Name,
             artMaps: targets,
             sources: AppliedSources.FromPack(pack, undoPaths));
@@ -773,7 +740,6 @@ public partial class MainViewModel : ObservableObject
             await ApplyPictureAsync(
                 saved.PackFile,
                 snapshot.Catalog.Maps,
-                clearTicks: false,
                 Path.GetFileNameWithoutExtension(saved.PackFile),
                 saved.PackName);
             return;
@@ -1043,7 +1009,7 @@ public partial class MainViewModel : ObservableObject
     /// the snapshot and the undo every other write gets. The rescan comes first either way, because the pack the
     /// apply needs is one the last scan may never have seen. <paramref name="onlyFile" /> is the one file the
     /// editor opens ticked, for the panel row that asked for it (ruling 7). Spec 9: the editor opens on a set of
-    /// maps, which is one map for every way in but the ticked selection, and one Save writes all of them.</summary>
+    /// maps, which is one map for every way in, and one Save writes all of them.</summary>
     public async Task OpenPlatformEditorAsync(IReadOnlyList<MapEntry> maps, Pack? pack, string? onlyFile = null)
     {
         if (Snapshot is not { } snapshot || maps.Count == 0)
@@ -1098,7 +1064,7 @@ public partial class MainViewModel : ObservableObject
         if (Snapshot?.Packs.FirstOrDefault(p => p.Name.Equals(saved.PackName, StringComparison.OrdinalIgnoreCase))
             is { } target)
         {
-            await ApplySetAsync(target, saved.Maps, clearTicks: false);
+            await ApplySetAsync(target, saved.Maps);
         }
     }
 
@@ -1239,7 +1205,7 @@ public partial class MainViewModel : ObservableObject
         // A file may be a different picture now, so the rows pages' decodes are forgotten before they rebuild.
         Services.RowThumbnails.Clear();
 
-        // Maps rebuilds its cards first, because SelectedMaps reads them and a page's Refresh may ask for it.
+        // Maps rebuilds its cards first, because the rows pages build their own rows from its cards.
         foreach (var page in _pages)
         {
             page.Refresh(snapshot, writtenFolders);
@@ -1450,7 +1416,6 @@ public partial class MainViewModel : ObservableObject
                 (_, ct) => Task.Run(() => ThumbnailWriter.RestoreAll(originalsDir, thumbnailsDir), ct),
                 "Map-select thumbnails restored",
                 undoable: true,
-                clearTicks: false,
                 // The setting is already off, so the capture has to be told the names itself: the thumbnails side
                 // of this undo is the whole of what it restores.
                 thumbnailUndoNames: names);
@@ -1825,9 +1790,9 @@ public partial class MainViewModel : ObservableObject
     }
 
     /// <summary>One write into the game folder (spec 8): the busy boundary, an undo snapshot of the paths it is
-    /// about to touch, a done line the wrapper finishes with the period and the shared sentence, the ticks
-    /// cleared when the write was aimed at them, and a rescan. False when the folder was missing, another
-    /// operation held the boundary, or the write was cancelled or failed. <paramref name="packName"/> is the pack
+    /// about to touch, a done line the wrapper finishes with the period and the shared sentence, and a rescan.
+    /// False when the folder was missing, another operation held the boundary, or the write was cancelled or
+    /// failed. <paramref name="packName"/> is the pack
     /// the write came out of, stamped as last applied when it succeeds; null for undo, reset and a picture that
     /// was only ever in the game folder. <paramref name="libraryUndoPaths"/> names library files the write also
     /// changes, relative to the library folder, so the undo puts them back with the game files (spec 7).
@@ -1844,7 +1809,6 @@ public partial class MainViewModel : ObservableObject
         IReadOnlyList<string> undoPaths,
         Func<IProgress<string>, CancellationToken, Task> work,
         string doneText,
-        bool clearTicks = false,
         string? packName = null,
         IReadOnlyList<string>? libraryUndoPaths = null,
         IReadOnlyList<string>? writtenFolders = null,
@@ -1857,7 +1821,6 @@ public partial class MainViewModel : ObservableObject
             work,
             doneText,
             undoable: true,
-            clearTicks,
             packName,
             libraryUndoPaths,
             writtenFolders,
@@ -1874,7 +1837,6 @@ public partial class MainViewModel : ObservableObject
         Func<IProgress<string>, CancellationToken, Task> work,
         string doneText,
         bool undoable,
-        bool clearTicks,
         string? packName = null,
         IReadOnlyList<string>? libraryUndoPaths = null,
         IReadOnlyList<string>? writtenFolders = null,
@@ -1979,13 +1941,6 @@ public partial class MainViewModel : ObservableObject
         // A restore that fully succeeds discards its snapshot, so what can be undone is always read back from the
         // store rather than remembered.
         CanUndo = Services.Undo.Latest is not null;
-        if (ok && clearTicks)
-        {
-            // Spec 3.3 (S3): a write aimed at the ticked maps is finished with them. A cancelled or failed write
-            // keeps them, which is why this is inside the ok branch.
-            ClearSelection();
-        }
-
         if (ok && packName is not null)
         {
             // Spec 8: the stamp is written before the rescan, so the scan this write ends with already sorts the

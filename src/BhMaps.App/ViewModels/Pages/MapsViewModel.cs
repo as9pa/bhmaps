@@ -12,9 +12,6 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace BhMaps.App.ViewModels.Pages;
 
-/// <summary>One row of the Apply picture menu. A null Picture is the "Add Image..." row.</summary>
-public sealed record PictureMenuItem(string Header, CustomPicture? Picture);
-
 /// <summary>Spec 3.1: the chip row with "Select all" at its right end, and the grid of composed map cards.
 /// No summary bar and no composition bars; the header carries the search box, the zoom and Reset all to
 /// default, so nothing the chips do can move the slider.</summary>
@@ -48,10 +45,6 @@ public partial class MapsViewModel : PageViewModel
 
         // A stored zoom from another version, or a hand-edited one, is clamped rather than trusted.
         Zoom = Math.Clamp(shell.Services.Settings.MapsZoom, MinZoom, MaxZoom);
-
-        // The ticked count is the shell's, and this page's own cards are what it counts. The page lives as long
-        // as the shell, so there is nothing to unsubscribe from.
-        shell.PropertyChanged += OnShellChanged;
     }
 
     public override string Title => "Maps";
@@ -59,11 +52,8 @@ public partial class MapsViewModel : PageViewModel
     /// <summary>The cards the chip and the search leave visible, in display-name order.</summary>
     public ObservableCollection<MapCardViewModel> Cards { get; }
 
-    /// <summary>Every card the last scan produced, filtered or not. The shell's ticked set reads this.</summary>
+    /// <summary>Every card the last scan produced, filtered or not. The rows pages build their rows from it.</summary>
     public IReadOnlyList<MapCardViewModel> AllCards => _all;
-
-    /// <summary>The ticked maps as catalog entries, in display order.</summary>
-    public IReadOnlyList<MapEntry> TickedMaps => _all.Where(c => c.IsSelected).Select(c => c.Map).ToList();
 
     /// <summary>The header's search box (spec 3.1). The page's own string now; the shell has no search box left.</summary>
     [ObservableProperty]
@@ -71,8 +61,7 @@ public partial class MapsViewModel : PageViewModel
 
     /// <summary>"All" and the UI set labels. Without level data the set chips are gone entirely (spec 3.6). An
     /// ObservableCollection behind the read-only surface, because the row changes when the level data does.
-    /// Owner change 2026-09-13: the "Selected" chip that used to appear once anything was ticked is gone; the
-    /// selection bar already says how many maps are ticked.</summary>
+    /// Owner change 2026-09-13: the "Selected" chip that used to appear with a selection is gone.</summary>
     public IReadOnlyList<string> Chips => _chips;
 
     [ObservableProperty]
@@ -139,18 +128,6 @@ public partial class MapsViewModel : PageViewModel
         && !s.Packs.Any(p => !p.Name.Equals(DefaultPack.Name, StringComparison.OrdinalIgnoreCase))
         && s.CustomPictures.Count == 0;
 
-    /// <summary>Spec 11: "3 of 67 maps selected". The second number is every map, not the shown ones.</summary>
-    public string SelectionText => $"{Shell.SelectedMapCount} of {_all.Count} maps selected";
-
-    public bool HasTicks => Shell.SelectedMapCount > 0;
-
-    /// <summary>The packs the Apply pack menu offers, in library order.</summary>
-    public IReadOnlyList<Pack> PackChoices => _snapshot?.Packs ?? [];
-
-    /// <summary>The Apply picture menu: the library's any-map pictures, then "Add Image..." (spec 3.3).
-    /// Rebuilt by every scan, so a picture that has just been imported is on the menu the next time it opens.</summary>
-    public IReadOnlyList<PictureMenuItem> PictureChoices { get; private set; } = [];
-
     /// <summary>Opens one map's right panel. A click on a card runs the generated command.</summary>
     [RelayCommand]
     public void OpenMap(string? folderName)
@@ -168,35 +145,14 @@ public partial class MapsViewModel : PageViewModel
         Shell.LastOpenedMap = folderName;
     }
 
-    /// <summary>Spec 3.1: ticks every map the chips and the search currently show, which is what makes a preset
-    /// two clicks: a chip, then this.</summary>
-    [RelayCommand]
-    private void SelectAllShown()
-    {
-        foreach (var card in Cards.ToList())
-        {
-            card.IsSelected = true;
-        }
-    }
-
     /// <summary>The no-results state's way back when a search caused it (spec 3.1).</summary>
     [RelayCommand]
     private void ClearSearch() => SearchText = "";
 
-    /// <summary>Owner change O4, which turns spec 3.2's order around: Escape cancels the selection first, because
-    /// someone mid-selection who reaches for Escape means the ticks, and closes the panel once nothing is ticked.
-    /// The search box takes Escape before either of them, in MapsView.OnPageKeyDown.</summary>
+    /// <summary>Spec 3.2: Escape closes the panel. The search box takes Escape before it does, in
+    /// MapsView.OnPageKeyDown.</summary>
     [RelayCommand]
-    private void Escape()
-    {
-        if (HasTicks)
-        {
-            Shell.ClearSelectionCommand.Execute(null);
-            return;
-        }
-
-        Selected = null;
-    }
+    private void Escape() => Selected = null;
 
     /// <summary>Spec 7.2's one page action: every folder in the game tree back to the Default pack, or deleted for
     /// the game to regenerate when there is no Default pack.</summary>
@@ -269,9 +225,8 @@ public partial class MapsViewModel : PageViewModel
         }
     }
 
-    /// <summary>Spec 4.3: one pack onto the maps given, whoever gave them. The bar hands the ticked set and clears
-    /// the ticks; a card menu hands its own target and leaves the ticks alone.</summary>
-    public async Task ApplyPackToAsync(IReadOnlyList<MapEntry> maps, Pack pack, bool clearTicks)
+    /// <summary>Spec 4.3: one pack onto the maps given, whoever gave them.</summary>
+    public async Task ApplyPackToAsync(IReadOnlyList<MapEntry> maps, Pack pack)
     {
         if (maps.Count == 0 || !Confirm($"Apply {pack.Name}", $"Apply {pack.Name}", maps))
         {
@@ -287,7 +242,6 @@ public partial class MapsViewModel : PageViewModel
             (progress, ct) => Task.Run(
                 () => { result = PackApplier.ApplyToMaps(pack, maps, gamePath, progress, ct); }, ct),
             $"{pack.Name} applied to {MainViewModel.Count(maps.Count, "map")}",
-            clearTicks,
             pack.Name,
             artMaps: maps,
             sources: AppliedSources.FromPack(pack, targetPaths));
@@ -298,21 +252,9 @@ public partial class MapsViewModel : PageViewModel
         }
     }
 
-    /// <summary>Spec 3.3: the pack, on the ticked maps only.</summary>
-    [RelayCommand]
-    private Task ApplyPackToTickedAsync(Pack? pack) =>
-        pack is null ? Task.CompletedTask : ApplyPackToAsync(Shell.SelectedMaps, pack, clearTicks: true);
-
-    /// <summary>Spec 4.3: one picture onto the maps given. The last menu row carries no picture: it opens Add Image
-    /// on the same target (spec 7.1).</summary>
-    public async Task ApplyPictureToAsync(IReadOnlyList<MapEntry> maps, PictureMenuItem item, bool clearTicks)
+    /// <summary>Spec 4.3: one picture onto the maps given.</summary>
+    public async Task ApplyPictureToAsync(IReadOnlyList<MapEntry> maps, CustomPicture picture)
     {
-        if (item.Picture is not { } picture)
-        {
-            await Shell.OpenAddPicturesAsync(new AddPicturesTarget(AddPicturesTargetKind.Ticked, null, maps));
-            return;
-        }
-
         // A custom picture need not be in a pack: one the user put in the game folder by hand has no library copy
         // at all, so the file is resolved by the rule a tile's own menu uses rather than by indexing the packs.
         if (CustomPictureTileViewModel.SourcePath(picture, Shell.Services.GamePath) is not { } source)
@@ -324,17 +266,12 @@ public partial class MapsViewModel : PageViewModel
         }
 
         // The name the menu row was labelled with, so the done line reports the row that was clicked (spec 2.2).
-        await Shell.ApplyPictureAsync(source, maps, clearTicks, picture.DisplayName, picture.PackName);
+        await Shell.ApplyPictureAsync(source, maps, picture.DisplayName, picture.PackName);
     }
-
-    /// <summary>Spec 3.3: one picture into every ticked map's own slots.</summary>
-    [RelayCommand]
-    private Task ApplyPictureToTickedAsync(PictureMenuItem? item) =>
-        item is null ? Task.CompletedTask : ApplyPictureToAsync(Shell.SelectedMaps, item, clearTicks: true);
 
     /// <summary>Spec 4.3: the maps given, back to the Default pack. One map resets without asking; more than one
     /// names the count and the maps first.</summary>
-    public async Task ResetAsync(IReadOnlyList<MapEntry> maps, bool clearTicks)
+    public async Task ResetAsync(IReadOnlyList<MapEntry> maps)
     {
         if (_snapshot is not { } snapshot || snapshot.DefaultPack is not { } defaultPack || maps.Count == 0
             || !Confirm("Reset to default", "Reset", maps))
@@ -378,7 +315,6 @@ public partial class MapsViewModel : PageViewModel
                 },
                 ct),
             $"Reset {MainViewModel.Count(maps.Count, "map")} to default",
-            clearTicks,
             libraryUndoPaths: RecordReset.UndoPaths(allMatched, Shell.Services.LibraryPath),
             artMaps: maps,
             resetThumbnails: true,
@@ -387,14 +323,8 @@ public partial class MapsViewModel : PageViewModel
         Shell.Dialogs.ShowFailures("Some files could not be reset", failures);
     }
 
-    /// <summary>Spec 3.3: the ticked maps back to the Default pack.</summary>
-    [RelayCommand(CanExecute = nameof(CanResetTicked))]
-    private Task ResetTickedAsync() => ResetAsync(Shell.SelectedMaps, clearTicks: true);
-
     /// <summary>True once a scan has found a Default pack, which is the only thing a reset needs.</summary>
     public bool CanReset => _snapshot?.DefaultPack is not null;
-
-    private bool CanResetTicked() => CanReset;
 
     /// <summary>Spec 3.3: a write to more than one map names the count and the maps first; one map is one click.</summary>
     private bool Confirm(string title, string verb, IReadOnlyList<MapEntry> maps) =>
@@ -415,24 +345,12 @@ public partial class MapsViewModel : PageViewModel
         _previews = new CancellationTokenSource();
 
         var opened = Selected?.FolderName;
-        var ticked = _all.Where(c => c.IsSelected).Select(c => c.FolderName).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        foreach (var old in _all)
-        {
-            old.PropertyChanged -= OnCardChanged;
-        }
-
         _all.Clear();
         foreach (var map in snapshot.Catalog.Maps)
         {
             snapshot.MapStatuses.TryGetValue(map.FolderName, out var status);
 
-            // Ticked before subscribing, so restoring the set is not mistaken for the user changing it.
-            var card = new MapCardViewModel(map, status, snapshot.CustomPictures)
-            {
-                IsSelected = ticked.Contains(map.FolderName),
-            };
-            card.PropertyChanged += OnCardChanged;
-            _all.Add(card);
+            _all.Add(new MapCardViewModel(map, status, snapshot.CustomPictures));
         }
 
         RebuildChips(snapshot.Catalog);
@@ -455,22 +373,6 @@ public partial class MapsViewModel : PageViewModel
 
         var order = LoadOrder.Prioritise([.. _all.Select(c => c.FolderName)], writtenFolders);
         _ = LoadPreviewsAsync([.. order.Select(folder => byFolder[folder])], snapshot.Catalog.HasLevelData, _previews.Token);
-
-        // Spec 3.3: the two menus the selection bar opens, rebuilt from the scan they describe. The Add Custom
-        // Image row is last and is always there, so the menu is never empty.
-        PictureChoices =
-        [
-            .. CustomPictures().Select(p => new PictureMenuItem(p.DisplayName, p)),
-            new PictureMenuItem("Add Image...", null),
-        ];
-        OnPropertyChanged(nameof(PackChoices));
-        OnPropertyChanged(nameof(PictureChoices));
-
-        // The reset is off until a scan finds a Default pack, and this is the only thing that changes that answer.
-        ResetTickedCommand.NotifyCanExecuteChanged();
-
-        // Last, because a map that has gone from the catalog has just left the ticked set.
-        Shell.NotifySelectionChanged();
     }
 
     partial void OnSelectedChipChanged(string value) => ApplyFilter();
@@ -482,6 +384,7 @@ public partial class MapsViewModel : PageViewModel
     partial void OnSelectedChanged(MapCardViewModel? value)
     {
         Panel?.Cancel();
+        RestoreSelectedCard();
         if (value is null || _snapshot is not { } snapshot)
         {
             Panel = null;
@@ -494,6 +397,17 @@ public partial class MapsViewModel : PageViewModel
 
         // Fire and forget: the panel turns its own file failures into fallbacks, so there is nothing to await for.
         _ = panel.LoadAsync();
+    }
+
+    /// <summary>2.8: one map is selected at a time, and it is the map the panel is open on. The grid's own
+    /// selection is what draws the light border, so it is put back here whenever something else has moved it: a
+    /// right press selects the card it lands on, and a card the filter removed loses its container with it.</summary>
+    public void RestoreSelectedCard()
+    {
+        foreach (var card in _all)
+        {
+            card.IsSelected = ReferenceEquals(card, Selected);
+        }
     }
 
     partial void OnZoomChanged(int value)
@@ -510,28 +424,6 @@ public partial class MapsViewModel : PageViewModel
         OnPropertyChanged(nameof(NameFontSize));
         OnPropertyChanged(nameof(CardPadding));
         OnPropertyChanged(nameof(CardMargin));
-    }
-
-    private void OnShellChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        // SelectedMaps is raised alongside this one; reacting to the count alone does the work once. A10 hangs
-        // the selection bar's lines on this branch.
-        if (e.PropertyName == nameof(MainViewModel.SelectedMapCount))
-        {
-            OnPropertyChanged(nameof(SelectionText));
-            OnPropertyChanged(nameof(HasTicks));
-
-            // Every open tile menu names the ticked maps, so the count is what rewords them (spec 4).
-            Panel?.RebuildMenus(Shell.SelectedMapCount);
-        }
-    }
-
-    private void OnCardChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName == nameof(MapCardViewModel.IsSelected))
-        {
-            Shell.NotifySelectionChanged();
-        }
     }
 
     /// <summary>The library's custom pictures, as the last scan built them (spec 4). Empty before the first scan.</summary>
@@ -562,7 +454,7 @@ public partial class MapsViewModel : PageViewModel
     }
 
     /// <summary>Rebuilt only when the row actually changes, because replacing the items would clear the chip
-    /// ListBox's selection and push a null back through it. The catalog is nullable because the tick hook can
+    /// ListBox's selection and push a null back through it. The catalog is nullable because the chip hook can
     /// reach this before the first scan, and there is no row to build then.</summary>
     private void RebuildChips(MapCatalog? catalog)
     {
@@ -585,7 +477,7 @@ public partial class MapsViewModel : PageViewModel
 
         // Synced in place rather than cleared and refilled: clearing the row pushes a null SelectedChip through
         // the two-way binding, and the ApplyFilter answering it empties and refills Cards, which disturbs the
-        // ticks. Inserting and removing single chips disturbs neither the chip ListBox's selection nor Cards.
+        // selection. Inserting and removing single chips disturbs neither the chip ListBox's selection nor Cards.
         for (var i = _chips.Count - 1; i >= 0; i--)
         {
             if (!wanted.Contains(_chips[i]))
@@ -609,7 +501,6 @@ public partial class MapsViewModel : PageViewModel
 
     private void ApplyFilter()
     {
-        var ticked = _all.Where(c => c.IsSelected).Select(c => c.FolderName).ToHashSet(StringComparer.OrdinalIgnoreCase);
         Cards.Clear();
         foreach (var card in _all.Where(Matches))
         {
@@ -617,17 +508,8 @@ public partial class MapsViewModel : PageViewModel
         }
 
         // A card the filter just removed loses its container, and a released ListBoxItem clears its own
-        // IsSelected, which the two-way binding would write back as an untick. The set is restored by name.
-        // Only the cards whose value actually changed are written: this runs on every keystroke, and each write
-        // raises PropertyChanged twice and rebuilds the chip row through A7's hook.
-        foreach (var card in _all)
-        {
-            var wanted = ticked.Contains(card.FolderName);
-            if (card.IsSelected != wanted)
-            {
-                card.IsSelected = wanted;
-            }
-        }
+        // IsSelected, which the two-way binding writes back, so the open card's border is put back here.
+        RestoreSelectedCard();
 
         OnPropertyChanged(nameof(EmptyText));
         OnPropertyChanged(nameof(ShowClearSearch));
@@ -649,13 +531,8 @@ public partial class MapsViewModel : PageViewModel
         };
     }
 
-    /// <summary>Spec 4.3's target rule: a ticked card with other ticked cards acts on the whole ticked set;
-    /// anything else acts on itself alone. Right click never changes the ticks (spec 9.2, owner answer q2).</summary>
-    private IReadOnlyList<MapEntry> TargetFor(MapCardViewModel card) =>
-        card.IsSelected && Shell.SelectedMapCount > 1 ? Shell.SelectedMaps : [card.Map];
-
-    /// <summary>Spec 4.3: one card's menu, built when it opens. A set target disables the three lines that only
-    /// mean something for one map rather than hiding them, so the menu's shape does not move under the cursor.</summary>
+    /// <summary>Spec 4.3: one card's menu, built when it opens. 2.8: the card under the pointer is the whole
+    /// subject, so every line is about that one map.</summary>
     public void BuildCardMenu(MapCardViewModel card)
     {
         if (_snapshot is not { } snapshot)
@@ -664,85 +541,66 @@ public partial class MapsViewModel : PageViewModel
             return;
         }
 
-        var target = TargetFor(card);
-        var single = target.Count == 1;
-        var one = target[0];
-        var setNote = single ? null : "Not for more than one map at a time.";
+        var one = card.Map;
+        IReadOnlyList<MapEntry> target = [one];
 
         var packs = new List<TileMenuCommand>();
         foreach (var pack in snapshot.Packs)
         {
             var has = PackApplier.ApplyToMapsPaths(pack, target).Count > 0;
-            var why = single
-                ? $"Nothing for {one.DisplayName} in this pack"
-                : "Nothing for these maps in this pack";
+
             // 2.8: hiding a pack is for the browsing lists, not for acting, so a hidden pack is still offered
             // here and only says that it is hidden.
             var hidden = !pack.Name.Equals(DefaultPack.Name, StringComparison.OrdinalIgnoreCase)
                 && Shell.Services.Settings.IsHidden(pack.Name);
             packs.Add(new TileMenuCommand(
                 hidden ? $"{pack.Name} \u00b7 hidden" : pack.Name,
-                new AsyncRelayCommand(() => ApplyPackToAsync(target, pack, clearTicks: false)),
+                new AsyncRelayCommand(() => ApplyPackToAsync(target, pack)),
                 IsEnabled: has,
-                ToolTip: has ? null : why));
+                ToolTip: has ? null : $"Nothing for {one.DisplayName} in this pack"));
         }
 
         // Spec 9.2, owner answer q3: eight My Backgrounds pictures inline, then the chooser, then Add.
         var pictures = new List<TileMenuCommand>();
         foreach (var picture in CustomPictures().Take(8))
         {
-            var item = new PictureMenuItem(picture.DisplayName, picture);
             pictures.Add(new TileMenuCommand(
                 picture.DisplayName,
-                new AsyncRelayCommand(() => ApplyPictureToAsync(target, item, clearTicks: false))));
+                new AsyncRelayCommand(() => ApplyPictureToAsync(target, picture))));
         }
 
         pictures.Add(new TileMenuCommand(
             "More pictures...",
-            new AsyncRelayCommand(() => ChoosePictureForAsync(one)),
-            IsEnabled: single,
-            ToolTip: setNote));
+            new AsyncRelayCommand(() => ChoosePictureForAsync(one))));
 
-        // Owner ruling 8: the Add window is given the one map it would land on, and the ticked set only when the
-        // target is the set, so the window's own target line says what the menu's header said.
+        // Owner ruling 8: the Add window is given the one map it would land on, so the window's own target line
+        // says what the menu's header said.
         pictures.Add(new TileMenuCommand(
             "Add Custom Image...",
             new AsyncRelayCommand(() => Shell.OpenAddPicturesAsync(
-                single
-                    ? new AddPicturesTarget(AddPicturesTargetKind.Map, one, null)
-                    : new AddPicturesTarget(AddPicturesTargetKind.Ticked, null, target)))));
+                new AddPicturesTarget(AddPicturesTargetKind.Map, one)))));
 
         var slot = one.BackgroundSlots.FirstOrDefault();
-
-        // The detail line is about one map's art, so a set target has none: the count is the whole subject.
-        string? detail = null;
-        if (single)
-        {
-            snapshot.MapStatuses.TryGetValue(one.FolderName, out var status);
-            detail = MapArtText.Describe(one, status, snapshot);
-        }
+        snapshot.MapStatuses.TryGetValue(one.FolderName, out var status);
 
         card.MenuItems =
         [
-            single
-                ? TileMenuCommand.Header(one.DisplayName, detail)
-                : TileMenuCommand.Header($"{target.Count} selected maps"),
+            TileMenuCommand.Header(one.DisplayName, MapArtText.Describe(one, status, snapshot)),
             TileMenuCommand.Flyout("Apply pack", packs),
             TileMenuCommand.Flyout("Apply picture", pictures),
             TileMenuCommand.Separator(),
             new TileMenuCommand(
                 "Edit background",
                 new AsyncRelayCommand(() => EditBackgroundAsync(one, slot)),
-                IsEnabled: single && slot is not null,
-                ToolTip: single ? null : setNote),
-            // Spec 9: the editor takes the whole ticked set, so the row is on whatever the menu's header named.
+                IsEnabled: slot is not null),
+            // Spec 9: the editor still opens on a set of maps, and from here that set is the one map named above.
             new TileMenuCommand(
                 "Edit platforms",
                 new AsyncRelayCommand(() => Shell.OpenPlatformEditorAsync(target, null))),
             TileMenuCommand.Separator(),
             new TileMenuCommand(
                 "Reset to default",
-                new AsyncRelayCommand(() => ResetAsync(target, clearTicks: false)),
+                new AsyncRelayCommand(() => ResetAsync(target)),
                 IsEnabled: CanReset,
                 ToolTip: CanReset ? null : "There is no Default pack to reset to."),
             new TileMenuCommand("Show in game folder", new RelayCommand(() => ShowMapFolder(one))),
@@ -754,8 +612,7 @@ public partial class MapsViewModel : PageViewModel
     {
         if (await Shell.ChoosePictureAsync(map) is { } path)
         {
-            await Shell.ApplyPictureAsync(
-                path, [map], clearTicks: false, Path.GetFileNameWithoutExtension(path));
+            await Shell.ApplyPictureAsync(path, [map], Path.GetFileNameWithoutExtension(path));
         }
     }
 

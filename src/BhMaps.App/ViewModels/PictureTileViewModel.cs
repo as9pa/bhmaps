@@ -73,12 +73,8 @@ public abstract partial class PictureTileViewModel : ObservableObject
     [ObservableProperty]
     public partial IReadOnlyList<TileMenuCommand> MenuItems { get; set; }
 
-    /// <summary>Rebuilt whenever the ticked count changes, because the ticked line names it and is dropped at zero.</summary>
-    public abstract void RebuildMenu(int tickedCount);
-
-    /// <summary>The ticked row's words, in one place, so no two tiles can word the same row differently.</summary>
-    protected static string TickedText(int tickedCount) =>
-        tickedCount == 1 ? "Apply to the 1 selected map" : $"Apply to the {tickedCount} selected maps";
+    /// <summary>Fills <see cref="MenuItems" />, which the tile does once, when it is built.</summary>
+    public abstract void RebuildMenu();
 
     /// <summary>Every file touch is off the UI thread. A picture that cannot be read leaves the tile blank.</summary>
     public async Task LoadThumbnailAsync(AppServices services, CancellationToken ct)
@@ -130,7 +126,7 @@ public sealed partial class MapPictureTileViewModel : PictureTileViewModel
 
     public override ICommand? ApplyCommand => ApplyToMapCommand;
 
-    public override void RebuildMenu(int tickedCount)
+    public override void RebuildMenu()
     {
         // No "Apply to <map>": the tile's own button already does exactly that, and a menu holds only what the
         // tile cannot do on its own (spec 9).
@@ -139,11 +135,6 @@ public sealed partial class MapPictureTileViewModel : PictureTileViewModel
             // The subtitle is the pack or the slot, which is exactly what a header's detail line is for.
             TileMenuCommand.Header(Title, Subtitle.Length > 0 ? Subtitle : null),
         };
-        if (tickedCount > 0)
-        {
-            items.Add(new TileMenuCommand(TickedText(tickedCount), ApplyToTickedCommand));
-        }
-
         items.Add(new TileMenuCommand("Apply to a map...", ApplyToChosenMapCommand));
         items.Add(new TileMenuCommand("Apply to all maps", ApplyToAllCommand));
         items.Add(new TileMenuCommand("Edit", EditCommand));
@@ -153,7 +144,7 @@ public sealed partial class MapPictureTileViewModel : PictureTileViewModel
 
     // Title, not the file name: it is the caption the tile shows, so the done line names what was clicked.
     [RelayCommand]
-    private Task ApplyToMapAsync() => Shell.ApplyPictureAsync(FullPath, [Map], clearTicks: false, Title, PackName);
+    private Task ApplyToMapAsync() => Shell.ApplyPictureAsync(FullPath, [Map], Title, PackName);
 
     /// <summary>Spec 4.4: the chooser in map mode, then the shell's apply on the one map it returned.</summary>
     [RelayCommand]
@@ -161,18 +152,14 @@ public sealed partial class MapPictureTileViewModel : PictureTileViewModel
     {
         if (await Shell.ChooseMapAsync(FullPath, Title) is { } map)
         {
-            await Shell.ApplyPictureAsync(FullPath, [map], clearTicks: false, Title, PackName);
+            await Shell.ApplyPictureAsync(FullPath, [map], Title, PackName);
         }
     }
 
     [RelayCommand]
-    private Task ApplyToTickedAsync() =>
-        Shell.ApplyPictureAsync(FullPath, Shell.SelectedMaps, clearTicks: true, Title, PackName);
-
-    [RelayCommand]
     private Task ApplyToAllAsync() =>
         Shell.Snapshot is { } snapshot
-            ? Shell.ApplyPictureAsync(FullPath, snapshot.Catalog.Maps, clearTicks: false, Title, PackName)
+            ? Shell.ApplyPictureAsync(FullPath, snapshot.Catalog.Maps, Title, PackName)
             : Task.CompletedTask;
 
     [RelayCommand]
