@@ -75,6 +75,9 @@ public partial class PacksViewModel : PageViewModel
         foreach (var pack in snapshot.Packs)
         {
             var row = new PackRowViewModel(pack, MapsIn(snapshot.Catalog, pack));
+
+            // 2.8: the eye's state is read before the menu is built, because the menu's line names it.
+            row.IsHidden = Shell.Services.Settings.IsHidden(pack.Name);
             row.SetMenu(BuildMenu(row));
             row.SetLastApplied(stamps.TryGetValue(pack.Name, out var stamp) ? stamp : null);
             Rows.Add(row);
@@ -193,7 +196,8 @@ public partial class PacksViewModel : PageViewModel
     /// <summary>The row's dots menu (addendum E, q7). Each line wraps the page's own command with this row as
     /// its parameter, because a TileMenuCommand carries no parameter of its own. Delete pack is last: it is the
     /// destructive one, and the pointer should not have to pass over it to reach another line. The Default pack
-    /// has no Delete line: it is the game's own art, and every Reset to default restores from it.</summary>
+    /// has no Delete line and no Hide from lists line: it is the game's own art, every Reset to default restores
+    /// from it, and the lists fall back to it.</summary>
     private IReadOnlyList<TileMenuCommand> BuildMenu(PackRowViewModel row)
     {
         var items = new List<TileMenuCommand>
@@ -204,8 +208,11 @@ public partial class PacksViewModel : PageViewModel
             new("Export", new RelayCommand(() => ExportCommand.Execute(row))),
             new("Open folder", new RelayCommand(() => OpenFolderCommand.Execute(row))),
         };
-        if (!row.Name.Equals(DefaultPack.Name, StringComparison.OrdinalIgnoreCase))
+        if (!row.IsDefault)
         {
+            items.Add(new TileMenuCommand(
+                row.IsHidden ? "Show in lists" : "Hide from lists",
+                new RelayCommand(() => ToggleHiddenCommand.Execute(row))));
             items.Add(TileMenuCommand.Separator());
             items.Add(new TileMenuCommand(
                 "Delete pack",
@@ -421,6 +428,33 @@ public partial class PacksViewModel : PageViewModel
         }
 
         OpenInExplorer(row.Pack.FullPath);
+    }
+
+    /// <summary>2.8: the eye on the row. Hiding a pack keeps it out of the Backgrounds and Platforms lists and
+    /// nothing else: the files stay where they are, nothing is written into the game, and the Default pack is
+    /// never hidden, because the lists fall back to it. The list itself is rebuilt from the name it holds, so a
+    /// name hidden twice is stored once.</summary>
+    [RelayCommand]
+    private void ToggleHidden(PackRowViewModel? row)
+    {
+        if (row is null || row.IsDefault)
+        {
+            return;
+        }
+
+        var hide = !row.IsHidden;
+        var names = Shell.Services.Settings.HiddenPacks
+            .Where(name => !name.Equals(row.Name, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (hide)
+        {
+            names.Add(row.Name);
+        }
+
+        Shell.Services.UpdateSettings(Shell.Services.Settings with { HiddenPackNames = names });
+        row.IsHidden = hide;
+        row.RefreshCountsText();
+        row.SetMenu(BuildMenu(row));
     }
 
     [RelayCommand]

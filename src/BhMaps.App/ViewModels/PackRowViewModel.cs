@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Windows.Media;
 using BhMaps.Core.Maps;
 using BhMaps.Core.Model;
+using BhMaps.Core.Operations;
 using BhMaps.Core.Status;
 using CommunityToolkit.Mvvm.ComponentModel;
 
@@ -63,6 +64,10 @@ public sealed partial class PackRowViewModel : ObservableObject
 
     public string Name => Pack.Name;
 
+    /// <summary>The game's own art, which every Reset to default restores from. It has no Delete line and no eye:
+    /// the lists cannot be asked to do without it.</summary>
+    public bool IsDefault => Name.Equals(DefaultPack.Name, StringComparison.OrdinalIgnoreCase);
+
     /// <summary>The catalog maps the pack has files for, in catalog order. The strip's order, and the first of
     /// them is the lead.</summary>
     public IReadOnlyList<MapEntry> Maps { get; }
@@ -73,12 +78,24 @@ public sealed partial class PackRowViewModel : ObservableObject
     /// <summary>Files in the pack's Backgrounds folder.</summary>
     public int BackgroundCount { get; }
 
+    /// <summary>2.8: whether the pack is kept out of the Backgrounds and Platforms lists. A view preference the
+    /// page reads out of the settings and hands the row; the eye on the row is what flips it.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CountsText))]
+    public partial bool IsHidden { get; set; }
+
     /// <summary>The line under the name, as in "1 map, 3 backgrounds", with ", applied 2 min ago" after it once
-    /// the pack has been applied (spec 8).</summary>
-    public string CountsText =>
-        _lastApplied is { } stamp
-            ? $"{_counts}, applied {RelativeTime.Describe(stamp, DateTimeOffset.Now)}"
-            : _counts;
+    /// the pack has been applied (spec 8), and ", hidden from lists" last when the eye is off (2.8).</summary>
+    public string CountsText
+    {
+        get
+        {
+            var text = _lastApplied is { } stamp
+                ? $"{_counts}, applied {RelativeTime.Describe(stamp, DateTimeOffset.Now)}"
+                : _counts;
+            return IsHidden ? $"{text}, hidden from lists" : text;
+        }
+    }
 
     /// <summary>The strip, capped at <see cref="MaxPreviews" />. Filled in when the row comes on screen.</summary>
     public ObservableCollection<PackPreviewTileViewModel> Previews { get; }
@@ -107,7 +124,13 @@ public sealed partial class PackRowViewModel : ObservableObject
 
     private int Remaining => Math.Max(0, Maps.Count - Math.Max(0, Previews.Count - Overflow));
 
-    public void SetMenu(IReadOnlyList<TileMenuCommand> items) => MenuItems = items;
+    /// <summary>The menu again, with a property change, because a line's words can change while the row is on
+    /// screen: hiding a pack turns Hide from lists into Show in lists (2.8).</summary>
+    public void SetMenu(IReadOnlyList<TileMenuCommand> items)
+    {
+        MenuItems = items;
+        OnPropertyChanged(nameof(MenuItems));
+    }
 
     /// <summary>True the first time it is called and false ever after, so the row reads its files once. The
     /// row template's Loaded fires again every time the list scrolls it back into view.</summary>

@@ -442,4 +442,35 @@ public class SettingsStoreTests
         Assert.True(settings.CheckForUpdates);
         Assert.Null(settings.Unknown);
     }
+
+    [Fact]
+    public void Save_ThenLoad_RoundTripsTheHiddenPacks()
+    {
+        using var tmp = new TempDir();
+        var path = tmp.Sub("settings.json");
+        var settings = AppSettings.Default with { HiddenPackNames = ["dark", "b&w maps"] };
+
+        SettingsStore.Save(path, settings);
+
+        var loaded = SettingsStore.Load(path);
+        Assert.Equal(new[] { "dark", "b&w maps" }, loaded.HiddenPacks);
+        Assert.True(loaded.IsHidden("DARK"));
+        Assert.False(loaded.IsHidden("flowermap"));
+    }
+
+    [Fact]
+    public void Load_WithoutKey_GivesNoHiddenPacks()
+    {
+        using var tmp = new TempDir();
+        var path = tmp.Sub("settings.json");
+        File.WriteAllText(path, """{"gamePath":"C:\\g"}""");
+
+        var loaded = SettingsStore.Load(path);
+
+        Assert.Empty(loaded.HiddenPacks);
+        Assert.False(loaded.IsHidden("dark"));
+
+        SettingsStore.Save(path, loaded);
+        Assert.DoesNotContain("hiddenPacks", File.ReadAllText(path));
+    }
 }

@@ -28,6 +28,11 @@
   <Geometry x:Key="Icon.ChevronRight">M9 6l6 6l-6 6</Geometry>
   <Geometry x:Key="Icon.ChevronLeft">M15 6l-6 6l6 6</Geometry>
 
+  <!-- The eye on a pack row (2.8), in the same 24 unit box and the same line weight: an open lens with a pupil for
+       a pack the lists show, and the same lens under a slash for one they do not. -->
+  <Geometry x:Key="Icon.Eye">M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6Z M9.5 12A2.5 2.5 0 0 1 14.5 12A2.5 2.5 0 0 1 9.5 12Z</Geometry>
+  <Geometry x:Key="Icon.EyeOff">M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6Z M9.5 12A2.5 2.5 0 0 1 14.5 12A2.5 2.5 0 0 1 9.5 12Z M4 20l16 -16</Geometry>
+
   <!-- Three dots, drawn as three zero length strokes: the Icon control caps every stroke round, so each one comes
        out a 2 unit disc and no fill geometry is needed. -->
   <Geometry x:Key="Icon.Dots">M5 12h.01 M12 12h.01 M19 12h.01</Geometry>

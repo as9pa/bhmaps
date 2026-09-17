@@ -20,7 +20,7 @@ public static class SettingsStore
         "gamePath", "libraryPath", "firstRunDone", "mapsZoom", "backgroundsRowZoom", "packZoom", "platformsZoom",
         "welcomeDone", "homeZoom", "whileRunning", "backgroundsZoom", "packLastApplied",
         "backgroundsShowPictures", "platformPreviewIsolate", "writeGameThumbnails",
-        "checkForUpdates", "lastUpdateCheck", "dismissedUpdate",
+        "checkForUpdates", "lastUpdateCheck", "dismissedUpdate", "hiddenPacks",
     ];
 
     public static string DefaultAppDataDir =>
@@ -97,7 +97,8 @@ public static class SettingsStore
             Bool(obj, "writeGameThumbnails"),
             Bool(obj, "checkForUpdates", fallback: true),
             Time(obj, "lastUpdateCheck"),
-            Str(obj, "dismissedUpdate") is { Length: > 0 } tag ? tag : null)
+            Str(obj, "dismissedUpdate") is { Length: > 0 } tag ? tag : null,
+            Hidden(obj))
         {
             Unknown = unknown.Count == 0 ? null : unknown,
         };
@@ -134,6 +135,18 @@ public static class SettingsStore
             }
 
             obj["packLastApplied"] = stamps;
+        }
+
+        // 2.8: a library with nothing hidden writes no key at all, the same way the stamps do.
+        if (settings.HiddenPacks.Count > 0)
+        {
+            var hidden = new JsonArray();
+            foreach (var pack in settings.HiddenPacks)
+            {
+                hidden.Add(pack);
+            }
+
+            obj["hiddenPacks"] = hidden;
         }
 
         if (settings.Unknown is { } extra)
@@ -262,6 +275,28 @@ public static class SettingsStore
                     value.GetValue<string>(), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var stamp))
             {
                 read[key] = stamp;
+            }
+        }
+
+        return read;
+    }
+
+    /// <summary>2.8's hidden packs, as [ "&lt;pack&gt;", ... ]. An entry that is not a string, and a name that is
+    /// empty, is skipped rather than failing the whole file: a hand-edited list costs its own line and nothing
+    /// else.</summary>
+    private static IReadOnlyList<string>? Hidden(JsonObject obj)
+    {
+        if (obj["hiddenPacks"] is not JsonArray names)
+        {
+            return null;
+        }
+
+        var read = new List<string>();
+        foreach (var name in names)
+        {
+            if (name?.GetValueKind() == JsonValueKind.String && name.GetValue<string>() is { Length: > 0 } pack)
+            {
+                read.Add(pack);
             }
         }
 
