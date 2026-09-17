@@ -27,7 +27,15 @@
       <Setter Property="Margin" Value="{Binding DataContext.CardMargin, RelativeSource={RelativeSource AncestorType=ListBox}}" />
       <Setter Property="Cursor" Value="Hand" />
       <Setter Property="AutomationProperties.Name" Value="{Binding DisplayName}" />
-      <Setter Property="ToolTip" Value="{Binding ToolTipText}" />
+      <!-- 3.0: a ToolTip element rather than the bare string, because a tooltip already on screen when the card's
+           menu opens has to be closed, and only an element can be. The text comes off the card the tooltip is
+           placed on rather than off the DataContext, so one instance shared by every card still says the right
+           thing about the card under the pointer. -->
+      <Setter Property="ToolTip">
+        <Setter.Value>
+          <ToolTip Content="{Binding PlacementTarget.DataContext.ToolTipText, RelativeSource={RelativeSource Self}}" />
+        </Setter.Value>
+      </Setter>
       <Setter Property="ContextMenu" Value="{StaticResource TileMenu}" />
       <EventSetter Event="ContextMenuOpening" Handler="OnCardMenuOpening" />
       <EventSetter Event="PreviewMouseLeftButtonDown" Handler="OnCardMouseDown" />
@@ -118,8 +126,8 @@
                 <ContentPresenter />
               </Border>
               <Border x:Name="Ring"
-                      BorderBrush="{StaticResource TextBrush}"
-                      BorderThickness="1"
+                      BorderBrush="{StaticResource FocusRingBrush}"
+                      BorderThickness="2"
                       CornerRadius="{StaticResource Radius}"
                       IsHitTestVisible="False"
                       Opacity="0" />
@@ -129,7 +137,7 @@
                 <Setter TargetName="Chrome" Property="Background" Value="{StaticResource Surface2Brush}" />
               </Trigger>
               <Trigger Property="IsKeyboardFocused" Value="True">
-                <Setter TargetName="Ring" Property="Opacity" Value="0.6" />
+                <Setter TargetName="Ring" Property="Opacity" Value="1" />
               </Trigger>
               <Trigger Property="IsEnabled" Value="False">
                 <Setter TargetName="Chrome" Property="Opacity" Value="0.4" />
@@ -181,8 +189,8 @@
                 </StackPanel>
               </Border>
               <Border x:Name="Ring"
-                      BorderBrush="{StaticResource TextBrush}"
-                      BorderThickness="1"
+                      BorderBrush="{StaticResource FocusRingBrush}"
+                      BorderThickness="2"
                       CornerRadius="{StaticResource Radius}"
                       IsHitTestVisible="False"
                       Opacity="0" />
@@ -192,7 +200,7 @@
                 <Setter TargetName="Chrome" Property="Background" Value="{StaticResource Surface2Brush}" />
               </Trigger>
               <Trigger Property="IsKeyboardFocused" Value="True">
-                <Setter TargetName="Ring" Property="Opacity" Value="0.6" />
+                <Setter TargetName="Ring" Property="Opacity" Value="1" />
               </Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
@@ -232,12 +240,12 @@
                     Margin="0,4,4,0"
                     HorizontalAlignment="Right"
                     VerticalAlignment="Top"
-                    Background="{StaticResource BgBrush}"
+                    Background="{StaticResource AccentBrush}"
                     CornerRadius="4"
                     Padding="4,3"
                     Visibility="Collapsed">
               <Path Data="M0,3.4 L2.8,6.2 L8,0.6"
-                    Stroke="{StaticResource TextBrush}"
+                    Stroke="{StaticResource BgBrush}"
                     StrokeEndLineCap="Round"
                     StrokeLineJoin="Round"
                     StrokeStartLineCap="Round"
@@ -271,7 +279,7 @@
       </Border>
       <DataTemplate.Triggers>
         <DataTrigger Binding="{Binding IsInGame}" Value="True">
-          <Setter TargetName="Tile" Property="BorderBrush" Value="{StaticResource TextBrush}" />
+          <Setter TargetName="Tile" Property="BorderBrush" Value="{StaticResource AccentBrush}" />
           <Setter TargetName="InGameTick" Property="Visibility" Value="Visible" />
         </DataTrigger>
         <Trigger SourceName="Tile" Property="IsMouseOver" Value="True">
@@ -313,12 +321,12 @@
                     Margin="0,4,4,0"
                     HorizontalAlignment="Right"
                     VerticalAlignment="Top"
-                    Background="{StaticResource BgBrush}"
+                    Background="{StaticResource AccentBrush}"
                     CornerRadius="4"
                     Padding="4,3"
                     Visibility="Collapsed">
               <Path Data="M0,3.4 L2.8,6.2 L8,0.6"
-                    Stroke="{StaticResource TextBrush}"
+                    Stroke="{StaticResource BgBrush}"
                     StrokeEndLineCap="Round"
                     StrokeLineJoin="Round"
                     StrokeStartLineCap="Round"
@@ -349,7 +357,7 @@
       </Border>
       <DataTemplate.Triggers>
         <DataTrigger Binding="{Binding InGame}" Value="True">
-          <Setter TargetName="Tile" Property="BorderBrush" Value="{StaticResource TextBrush}" />
+          <Setter TargetName="Tile" Property="BorderBrush" Value="{StaticResource AccentBrush}" />
           <Setter TargetName="InGameTick" Property="Visibility" Value="Visible" />
         </DataTrigger>
         <Trigger SourceName="Tile" Property="IsMouseOver" Value="True">
@@ -670,6 +678,14 @@
                 <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
                   <Setter TargetName="Chrome" Property="Background" Value="{StaticResource Surface2Brush}" />
                 </DataTrigger>
+
+                <!-- 3.0: the open card wears the hover fill for as long as its panel is open, so the accent ring
+                     the container draws is not the only thing saying which card the panel belongs to. A fill
+                     rather than anything sized: the ring is an overlay at the card's edge and the picture sits
+                     inside the card's padding, so neither one covers the picture or moves a card. -->
+                <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
+                  <Setter TargetName="Chrome" Property="Background" Value="{StaticResource Surface2Brush}" />
+                </DataTrigger>
               </DataTemplate.Triggers>
             </DataTemplate>
           </ListBox.ItemTemplate>
@@ -721,7 +737,7 @@
             </Grid.ColumnDefinitions>
 
             <StackPanel VerticalAlignment="Center">
-              <TextBlock FontSize="16" FontWeight="SemiBold" Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" />
+              <TextBlock FontSize="{StaticResource FontEmphasis}" FontWeight="SemiBold" Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" />
               <TextBlock Margin="0,2,0,0" Style="{StaticResource QuietNote}" Text="{Binding SetsText}" TextTrimming="CharacterEllipsis" />
               <TextBlock Margin="0,2,0,0"
                          Style="{StaticResource QuietNote}"

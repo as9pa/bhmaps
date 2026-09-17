@@ -41,7 +41,7 @@
                          TextTrimming="CharacterEllipsis"
                          ToolTip="{Binding Path}" />
               <TextBlock Margin="0,3,0,0"
-                         FontSize="12"
+                         FontSize="{StaticResource FontCaption}"
                          Foreground="{StaticResource MissingFgBrush}"
                          Text="{Binding Error}"
                          TextWrapping="Wrap" />

@@ -90,9 +90,9 @@ public partial class MapsViewModel : PageViewModel
     /// the default window, so nothing moves at the same zoom with the panel shut.</summary>
     public double CardWidth => Math.Round(ReferenceGridWidth / Zoom) - CardMargin.Right;
 
-    /// <summary>Spec 3.1's density steps, which follow the same steps the width does. At 7 and 8 the name
-    /// shrinks and the tag goes; at 9 and 10 the name row goes with it, the card tightens to 4 px padding and
-    /// 8 px gaps, and Missing becomes a mark on the picture.
+    /// <summary>Spec 3.1's density steps, which follow the same steps the width does. At 2 to 4 the widest
+    /// cards carry the name at 15; at 7 and 8 the name shrinks and the tag goes; at 9 and 10 the name row goes
+    /// with it, the card tightens to 4 px padding and 8 px gaps, and Missing becomes a mark on the picture.
     /// ShowTagRow is the zoom's answer for every card; MapCardViewModel.ShowTag is one card's own answer about
     /// whether it has a tag at all. Both have to be true for a tag to be drawn, so they keep different names.</summary>
     public bool ShowName => Zoom <= 8;
@@ -101,7 +101,7 @@ public partial class MapsViewModel : PageViewModel
 
     public bool ShowMissingMark => Zoom >= 9;
 
-    public double NameFontSize => Zoom <= 6 ? 13 : 12;
+    public double NameFontSize => Zoom <= 4 ? 15 : Zoom <= 6 ? 13 : 12;
 
     public Thickness CardPadding => Zoom <= 8 ? new Thickness(8) : new Thickness(4);
 

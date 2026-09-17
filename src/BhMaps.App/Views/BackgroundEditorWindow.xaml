@@ -107,7 +107,7 @@
         <TextBlock Margin="0,0,22,22"
                    HorizontalAlignment="Right"
                    VerticalAlignment="Bottom"
-                   FontSize="11"
+                   FontSize="{StaticResource FontCaption}"
                    Foreground="{StaticResource Text3Brush}"
                    Text="{x:Static vm:BackgroundEditorViewModel.PreviewSizeText}" />
       </Grid>

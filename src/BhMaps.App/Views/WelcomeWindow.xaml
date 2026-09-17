@@ -43,7 +43,7 @@
   </Window.Resources>
 
   <StackPanel Margin="24">
-    <TextBlock FontSize="20" FontWeight="SemiBold" Text="Welcome to BhMaps" />
+    <TextBlock FontSize="{StaticResource FontTitle}" FontWeight="SemiBold" Text="Welcome to BhMaps" />
     <TextBlock Style="{StaticResource StepText}"
                Margin="0,6,0,0"
                Text="Three things to set up. All of them can be changed later in Settings." />

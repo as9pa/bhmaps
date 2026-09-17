@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -52,10 +53,38 @@ public static class TileMenus
             return false;
         }
 
+        CloseToolTip(element);
         menu.PlacementTarget = element;
         menu.Placement = PlacementMode.Bottom;
         menu.IsOpen = true;
         return true;
+    }
+
+    /// <summary>A tooltip already on screen when the menu opens stays there under it, because the menu takes the
+    /// mouse without the tile ever hearing it leave. A ToolTip element is closed outright; a plain string has no
+    /// object to close, so the service goes off for as long as the menu is up and is put back when it closes.</summary>
+    public static void CloseToolTip(FrameworkElement element)
+    {
+        if (ToolTipService.GetToolTip(element) is ToolTip tip)
+        {
+            tip.IsOpen = false;
+            return;
+        }
+
+        if (element.ContextMenu is not { } menu)
+        {
+            return;
+        }
+
+        ToolTipService.SetIsEnabled(element, false);
+        menu.Closed += OnClosed;
+        return;
+
+        void OnClosed(object sender, RoutedEventArgs e)
+        {
+            menu.Closed -= OnClosed;
+            ToolTipService.SetIsEnabled(element, true);
+        }
     }
 
     /// <summary>Set on a button inside a tile template: clicking it opens the menu of the first element above it

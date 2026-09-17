@@ -29,8 +29,8 @@
                 <ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Center" />
               </Border>
               <Border x:Name="Ring"
-                      BorderBrush="{StaticResource TextBrush}"
-                      BorderThickness="1"
+                      BorderBrush="{StaticResource FocusRingBrush}"
+                      BorderThickness="2"
                       CornerRadius="{StaticResource Radius}"
                       IsHitTestVisible="False"
                       Opacity="0" />
@@ -40,7 +40,7 @@
                 <Setter TargetName="Chrome" Property="Background" Value="{StaticResource Surface2Brush}" />
               </Trigger>
               <Trigger Property="IsKeyboardFocused" Value="True">
-                <Setter TargetName="Ring" Property="Opacity" Value="0.6" />
+                <Setter TargetName="Ring" Property="Opacity" Value="1" />
               </Trigger>
               <Trigger Property="IsEnabled" Value="False">
                 <Setter TargetName="Chrome" Property="Opacity" Value="0.4" />
@@ -169,6 +169,8 @@
                                 <DataTrigger Binding="{Binding ShowMore}" Value="True">
                                   <Setter Property="OpacityMask">
                                     <Setter.Value>
+                                      <!-- Alpha, not colour: these two stops are the mask's own black and
+                                           transparent, so they stay literals rather than becoming tokens. -->
                                       <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
                                         <GradientStop Offset="0.84" Color="#FF000000" />
                                         <GradientStop Offset="1" Color="#00000000" />

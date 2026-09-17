@@ -191,8 +191,9 @@ public partial class MapsView : UserControl
     /// button it was, and a right click leaves the panel, and with it the light border, where they were.</summary>
     private void OnCardMenuOpening(object sender, ContextMenuEventArgs e)
     {
-        if (sender is ListBoxItem { DataContext: MapCardViewModel card } && DataContext is MapsViewModel page)
+        if (sender is ListBoxItem { DataContext: MapCardViewModel card } item && DataContext is MapsViewModel page)
         {
+            TileMenus.CloseToolTip(item);
             page.RestoreSelectedCard();
             page.BuildCardMenu(card);
         }

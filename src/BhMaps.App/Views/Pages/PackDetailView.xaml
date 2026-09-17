@@ -197,9 +197,9 @@ AutomationProperties.Name="{Binding DisplayName}" behaviors:Fold.Animate="True"
                 <ColumnDefinition Width="Auto" />
               </Grid.ColumnDefinitions>
               <StackPanel VerticalAlignment="Center">
-                <TextBlock FontSize="16" FontWeight="SemiBold" Text="{Binding DisplayName}"
+                <TextBlock FontSize="{StaticResource FontEmphasis}" FontWeight="SemiBold" Text="{Binding DisplayName}"
                            TextTrimming="CharacterEllipsis" />
-                <TextBlock Margin="0,2,0,0" FontSize="12" Foreground="{StaticResource Text3Brush}"
+                <TextBlock Margin="0,2,0,0" FontSize="{StaticResource FontCaption}" Foreground="{StaticResource Text3Brush}"
                            Text="{Binding SetsText}" TextTrimming="CharacterEllipsis" />
               </StackPanel>
               <Button Grid.Column="1" VerticalAlignment="Top" AutomationProperties.Name="Close"
@@ -235,8 +235,8 @@ AutomationProperties.Name="{Binding DisplayName}" behaviors:Fold.Animate="True"
                         <TextBlock Style="{StaticResource MonoText}" Text="{Binding Name}"
                                    TextTrimming="CharacterEllipsis" />
                         <StackPanel Grid.Column="1" Margin="10,0,0,0" Orientation="Horizontal">
-                          <TextBlock FontSize="11" Foreground="{StaticResource Text3Brush}" Text="{Binding SizeText}" />
-                          <TextBlock Margin="8,0,0,0" FontSize="11" Foreground="{StaticResource Text3Brush}"
+                          <TextBlock FontSize="{StaticResource FontCaption}" Foreground="{StaticResource Text3Brush}" Text="{Binding SizeText}" />
+                          <TextBlock Margin="8,0,0,0" FontSize="{StaticResource FontCaption}" Foreground="{StaticResource Text3Brush}"
                                      Text="{Binding Dimensions}" />
                         </StackPanel>
                       </Grid>
