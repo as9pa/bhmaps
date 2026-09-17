@@ -146,6 +146,31 @@ public sealed class AppliedRecord
         }
     }
 
+    /// <summary>Points every entry that came from <paramref name="fromFullPath"/> at <paramref name="toFullPath"/>,
+    /// for a library file that has been renamed. The game files keep their bytes and their entries: the write did
+    /// come from this file, and only its name changed, so forgetting the entries instead would make every map the
+    /// picture is on read as art nobody applied.</summary>
+    public static void Renamed(string recordPath, string libraryPath, string fromFullPath, string toFullPath)
+    {
+        var record = Load(recordPath);
+        var from = RelativeToLibrary(fromFullPath, libraryPath);
+        var to = RelativeToLibrary(toFullPath, libraryPath);
+        var changed = false;
+        foreach (var (gameRelativePath, entry) in record._entries.ToList())
+        {
+            if (entry.Source.Equals(from, StringComparison.OrdinalIgnoreCase))
+            {
+                record._entries[gameRelativePath] = entry with { Source = to };
+                changed = true;
+            }
+        }
+
+        if (changed)
+        {
+            SaveQuietly(record, recordPath);
+        }
+    }
+
     /// <summary>Drops these game-relative paths from the record, for a caller that knows the files have gone.</summary>
     public static void Forget(string recordPath, IEnumerable<string> gameRelativePaths)
     {

@@ -596,7 +596,7 @@ public partial class MapsViewModel : PageViewModel, ITileSized
         foreach (var picture in CustomPictures().Take(8))
         {
             pictures.Add(new TileMenuCommand(
-                picture.DisplayName,
+                Path.GetFileNameWithoutExtension(picture.DisplayName),
                 new AsyncRelayCommand(() => ApplyPictureToAsync(target, picture))));
         }
 

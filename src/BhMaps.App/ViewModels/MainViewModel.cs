@@ -477,12 +477,21 @@ public partial class MainViewModel : ObservableObject
         var sources = vm.Files.Select(f => f.FullPath).ToList();
         var packName = vm.EffectivePackName;
 
+        // 3.0 C: a picture is called what its file is called, so the names are settled before the copy. One
+        // picture is worth asking about; a batch takes the cleaned names rather than a dialog per file.
+        var existing = PictureImporter.ExistingNames(Services.LibraryPath, packName);
+        var names = PictureNames.ForImport(sources.Select(PictureImporter.TargetFileName), existing);
+        if (sources.Count == 1 && NameForOnePicture(sources[0], existing) is { } chosen)
+        {
+            names = [chosen];
+        }
+
         // A library write: no undo snapshot and no game-running policy, so RunBusyAsync rather than a game write.
         PictureImportResult? result = null;
         var ok = await RunBusyAsync(
             $"Importing into {packName}",
             (progress, ct) => Task.Run(
-                () => { result = PictureImporter.Import(sources, Services.LibraryPath, packName, vm.Fit, progress, ct); },
+                () => { result = PictureImporter.Import(sources, Services.LibraryPath, packName, vm.Fit, progress, ct, names); },
                 ct));
         if (result is not null)
         {
@@ -514,6 +523,22 @@ public partial class MainViewModel : ObservableObject
         }
 
         await RescanAsync();
+    }
+
+    /// <summary>Asks what to call the one picture being imported, offered the cleaned name to start from. Null
+    /// when the prompt was cancelled or left empty, which takes the cleaned name: the question is an offer to
+    /// name the picture, not a thing the import waits on.</summary>
+    private string? NameForOnePicture(string source, IReadOnlyList<string> existing)
+    {
+        var cleaned = PictureNames.Clean(PictureImporter.TargetFileName(source));
+        var typed = Dialogs.PromptText(
+            "Name this picture",
+            "Shown on its tile and on the maps it goes on.",
+            Path.GetFileNameWithoutExtension(cleaned));
+
+        return string.IsNullOrWhiteSpace(typed)
+            ? null
+            : PictureNames.Unique(PictureNames.FileName(typed, Path.GetExtension(cleaned)), existing);
     }
 
     /// <summary>The maps the chosen radio names. A map with no background slots is left out: without level data

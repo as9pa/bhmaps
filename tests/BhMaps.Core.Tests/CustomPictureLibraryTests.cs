@@ -183,6 +183,69 @@ public class CustomPictureLibraryTests
         Assert.Equal("My Backgrounds", picture.PackName);
     }
 
+    /// <summary>A picture whose only copy is <paramref name="name"/> in My Backgrounds, and the folder it is in.
+    /// </summary>
+    private static (CustomPicture Picture, string Folder) Imported(TempDir tmp, string name)
+    {
+        var folder = Path.Combine(tmp.Path, "lib", "packs", "My Backgrounds", "Backgrounds");
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, name), "sun");
+        return (
+            new CustomPicture("hash", name, [Path.Combine(folder, name)], [], "My Backgrounds"),
+            folder);
+    }
+
+    [Fact]
+    public void Rename_GivesTheLibraryFileTheNewNameAndKeepsItsFolderAndExtension()
+    {
+        using var tmp = new TempDir();
+        var (picture, folder) = Imported(tmp, "sunset.jpg");
+
+        var result = CustomPictureLibrary.Rename(picture, "Grove at night");
+
+        Assert.Empty(result.Failures);
+        Assert.Equal(Path.Combine(folder, "Grove at night.jpg"), Assert.Single(result.Renamed).To);
+        Assert.True(File.Exists(Path.Combine(folder, "Grove at night.jpg")));
+        Assert.False(File.Exists(Path.Combine(folder, "sunset.jpg")));
+    }
+
+    [Fact]
+    public void Rename_CountsUpWhenTheFolderAlreadyHoldsTheName()
+    {
+        using var tmp = new TempDir();
+        var (picture, folder) = Imported(tmp, "sunset.jpg");
+        File.WriteAllText(Path.Combine(folder, "grove.jpg"), "grove");
+
+        var result = CustomPictureLibrary.Rename(picture, "grove");
+
+        Assert.Equal(Path.Combine(folder, "grove (2).jpg"), Assert.Single(result.Renamed).To);
+        Assert.Equal("grove", File.ReadAllText(Path.Combine(folder, "grove.jpg")));
+    }
+
+    [Fact]
+    public void Rename_ToTheNameItAlreadyHasMovesNothing()
+    {
+        using var tmp = new TempDir();
+        var (picture, folder) = Imported(tmp, "sunset.jpg");
+
+        var result = CustomPictureLibrary.Rename(picture, "sunset");
+
+        Assert.Empty(result.Renamed);
+        Assert.Empty(result.Failures);
+        Assert.True(File.Exists(Path.Combine(folder, "sunset.jpg")));
+    }
+
+    [Fact]
+    public void Rename_TakesANameTypedWithCharactersAFileNameCannotHold()
+    {
+        using var tmp = new TempDir();
+        var (picture, folder) = Imported(tmp, "sunset.jpg");
+
+        var result = CustomPictureLibrary.Rename(picture, "grove: at   night?");
+
+        Assert.Equal(Path.Combine(folder, "grove at night.jpg"), Assert.Single(result.Renamed).To);
+    }
+
     [Fact]
     public void Build_GameFileMatchingDefaultNonSlotFile_IsNotInGameOnly()
     {

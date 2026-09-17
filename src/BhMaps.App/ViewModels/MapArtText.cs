@@ -42,7 +42,7 @@ public static class MapArtText
         var fileName = Path.GetFileName(AssetPath.Background(slot));
         var picture = snapshot.CustomPictures.FirstOrDefault(
             p => p.InGameSlots.Contains(fileName, StringComparer.OrdinalIgnoreCase));
-        var name = picture?.DisplayName ?? fileName;
+        var name = Path.GetFileNameWithoutExtension(picture?.DisplayName ?? fileName);
         return picture?.PackName is { } pack ? $"{name} from {pack}" : $"{name} in game only";
     }
 }

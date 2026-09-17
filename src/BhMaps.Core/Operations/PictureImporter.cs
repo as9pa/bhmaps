@@ -40,9 +40,27 @@ public static class PictureImporter
     /// <summary>The name a source image will take in the pack: its file name with a .jpg extension.</summary>
     public static string TargetFileName(string sourcePath) => Path.ChangeExtension(Path.GetFileName(sourcePath), ".jpg");
 
-    /// <summary>Each image becomes &lt;library&gt;\packs\&lt;packName&gt;\Backgrounds\&lt;source name&gt;.jpg at 2048x1151. A source that will not decode is a failure, not an abort.</summary>
+    /// <summary>The background file names a pack already holds, which is what the names of an import have to
+    /// dodge. A pack that does not exist yet holds nothing.</summary>
+    public static IReadOnlyList<string> ExistingNames(string libraryPath, string packName)
+    {
+        var folder = Path.Combine(PackScanner.PacksRoot(libraryPath), packName, BackgroundsFolder);
+        try
+        {
+            return [.. Directory.EnumerateFiles(folder).Select(Path.GetFileName).OfType<string>()];
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return [];
+        }
+    }
+
+    /// <summary>Each image becomes &lt;library&gt;\packs\&lt;packName&gt;\Backgrounds\&lt;source name&gt;.jpg at 2048x1151. A source that will not decode is a failure, not an abort.
+    /// <paramref name="names"/> gives the file name for each source in order, for a caller that has already settled
+    /// what the pictures are called (3.0 C); without it each source keeps its own name.</summary>
     public static PictureImportResult Import(IReadOnlyList<string> sourcePaths, string libraryPath, string packName,
-        PictureFit fit, IProgress<string>? progress = null, CancellationToken ct = default)
+        PictureFit fit, IProgress<string>? progress = null, CancellationToken ct = default,
+        IReadOnlyList<string>? names = null)
     {
         if (!PackNameValidator.IsValid(packName, out var error))
         {
@@ -54,10 +72,12 @@ public static class PictureImporter
         var written = new List<string>();
         var failures = new List<FileFailure>();
         var taken = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var source in sourcePaths)
+        for (var i = 0; i < sourcePaths.Count; i++)
         {
+            var source = sourcePaths[i];
             ct.ThrowIfCancellationRequested();
-            var name = FreeName(TargetFileName(source), taken);
+            var name = FreeName(
+                names is not null && i < names.Count ? names[i] : TargetFileName(source), taken);
             var target = Path.Combine(targetDir, name);
             progress?.Report(Path.Combine(BackgroundsFolder, name));
             try

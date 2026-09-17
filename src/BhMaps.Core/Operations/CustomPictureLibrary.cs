@@ -17,6 +17,14 @@ public sealed record CustomPicture(
     IReadOnlyList<string> InGameSlots,
     string? PackName);
 
+/// <summary>One library copy that took a new name: where it was and where it is now, so the caller can point the
+/// applied record at the file the game's bytes came from.</summary>
+public sealed record PictureRename(string From, string To);
+
+/// <summary>What a rename did. No pairs and no failures is the no-op: renaming a picture to the name it already
+/// has moves nothing.</summary>
+public sealed record PictureRenameResult(IReadOnlyList<PictureRename> Renamed, IReadOnlyList<FileFailure> Failures);
+
 /// <summary>Builds the custom picture list once per scan, off the UI thread, through the scan's own hash cache.</summary>
 public static class CustomPictureLibrary
 {
@@ -87,6 +95,58 @@ public static class CustomPictureLibrary
                    .FirstOrDefault(p => p.InGameSlots.Contains(fileName, StringComparer.OrdinalIgnoreCase))
                    ?.DisplayName
                ?? fileName;
+    }
+
+    /// <summary>Renames the picture: its file in the library takes <paramref name="newBaseName"/>, keeping its
+    /// folder and its extension, and the name is made unique when that folder already holds it. One picture is
+    /// one entry however many copies of it exist, so every copy is renamed together, the way deleting one
+    /// deletes them all. Nothing in the game folder is touched: the bytes the game is showing came from this
+    /// file and still did after it changed its name, which is why the caller points the applied record at the
+    /// new path rather than forgetting the entry.</summary>
+    public static PictureRenameResult Rename(CustomPicture picture, string newBaseName)
+    {
+        var renamed = new List<PictureRename>();
+        var failures = new List<FileFailure>();
+        foreach (var path in picture.LibraryPaths)
+        {
+            var folder = Path.GetDirectoryName(path);
+            var current = Path.GetFileName(path);
+            var wanted = PictureNames.FileName(newBaseName, Path.GetExtension(path));
+            if (folder is null || wanted.Equals(current, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            try
+            {
+                // The file's own name is not a name it has to dodge, so a picture renamed only in its casing
+                // becomes "Sunset.jpg" rather than "Sunset (2).jpg".
+                var taken = Names(folder).Where(n => !n.Equals(current, StringComparison.OrdinalIgnoreCase));
+                var target = Path.Combine(folder, PictureNames.Unique(wanted, taken));
+                File.Move(path, target);
+                renamed.Add(new PictureRename(path, target));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                failures.Add(new FileFailure(path, ex.Message));
+            }
+        }
+
+        return new PictureRenameResult(renamed, failures);
+    }
+
+    /// <summary>The file names a folder holds, or none when it has gone since the scan, which a rename into it
+    /// then fails on its own rather than here.</summary>
+    private static IEnumerable<string> Names(string folder)
+    {
+        try
+        {
+            return [.. Directory.EnumerateFiles(folder).Select(Path.GetFileName).OfType<string>()];
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return [];
+        }
     }
 
     /// <summary>Every name a map's background slot resolves to, so a slot borrowed from a theme folder through

@@ -9,7 +9,7 @@ public class AppliedRecordTests
 {
     private static readonly DateTimeOffset Noted = new(2026, 9, 16, 11, 30, 0, TimeSpan.Zero);
 
-    /// <summary>A library with one pack holding Grove\a.png, the game folder that pack was applied to, and the
+    /// <summary>A library with one pack holding Grove\\a.png, the game folder that pack was applied to, and the
     /// record path beside them.</summary>
     private static (string Record, string Game, string Library, Pack Pack) Arrange(TempDir tmp, string gameBytes)
     {
@@ -226,5 +226,52 @@ public class AppliedRecordTests
 
         // applied.json lives at the session root, so a restore must not mistake it for a game file.
         Assert.False(File.Exists(Path.Combine(game, "applied.json")));
+    }
+
+    [Fact]
+    public void Renamed_PointsEveryEntryFromTheOldPathAtTheNewOne()
+    {
+        using var tmp = new TempDir();
+        var (record, game, library, pack) = Arrange(tmp, "art");
+        new FakeGameTree(game).File("Grove", "b.png", "art");
+        AppliedRecord.Note(
+            record,
+            game,
+            library,
+            [Source(pack), new AppliedSource("Grove\\b.png", Path.Combine(pack.FullPath, "Grove", "a.png"), "dark")],
+            Noted, Nothing);
+
+        AppliedRecord.Renamed(
+            record,
+            library,
+            Path.Combine(pack.FullPath, "Grove", "a.png"),
+            Path.Combine(pack.FullPath, "Grove", "sunset.png"));
+
+        var loaded = AppliedRecord.Load(record);
+        var renamed = Path.Combine("packs", "dark", "Grove", "sunset.png");
+        Assert.Equal(renamed, loaded.Entries["Grove\\a.png"].Source);
+        Assert.Equal(renamed, loaded.Entries["Grove\\b.png"].Source);
+
+        // Only the name moved: the hashes say the game still holds the bytes that file gave it.
+        Assert.Equal("dark", loaded.Entries["Grove\\a.png"].Pack);
+        Assert.Equal(Noted, loaded.Entries["Grove\\a.png"].At);
+    }
+
+    [Fact]
+    public void Renamed_LeavesAnEntryFromAnotherFileAlone()
+    {
+        using var tmp = new TempDir();
+        var (record, game, library, pack) = Arrange(tmp, "art");
+        AppliedRecord.Note(record, game, library, [Source(pack)], Noted, Nothing);
+
+        AppliedRecord.Renamed(
+            record,
+            library,
+            Path.Combine(pack.FullPath, "Grove", "other.png"),
+            Path.Combine(pack.FullPath, "Grove", "sunset.png"));
+
+        Assert.Equal(
+            Path.Combine("packs", "dark", "Grove", "a.png"),
+            AppliedRecord.Load(record).Entries["Grove\\a.png"].Source);
     }
 }

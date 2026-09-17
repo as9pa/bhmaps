@@ -347,7 +347,8 @@ stops a long operation.
   goes to Packs.
   One click on a thumbnail applies it to that map, with no confirmation to answer. Hovering shows
   Apply and a dots button, and the menu offers to apply the picture to all maps, then Edit and Show
-  in folder, and for a picture in a pack **Delete background**, which also puts the default back on
+  in folder, and for a picture in a pack **Rename**, which renames its file in the library and leaves
+  the maps it is on showing it, and **Delete background**, which also puts the default back on
   any map showing it, or Save to My Backgrounds for a picture the game is showing that no pack
   holds. Search matches map names, pack names and file names. The chips are the ones Maps has.
   The thumbnail size is the size control (Large, Medium, Small) in the page header, or Ctrl and
@@ -417,7 +418,10 @@ These windows open on top of the pages:
   of choices headed "Then" decides what happens after that: add them to the library and stop; add and
   apply to the map the window was opened from; or add and apply
   to every map. Applying goes in order and starts again from the first picture when there are more
-  maps than pictures. The pictures it reads are never changed.
+  maps than pictures. The pictures it reads are never changed. A picture is called what its file is
+  called: adding one picture asks for its name first, offering the file's own name tidied up
+  (underscores and hyphens become spaces), and adding several takes those tidied names without
+  asking. A name another picture in the pack already has gets " (2)" after it.
 - **Chooser**, from "Apply to a map..." on a picture's menu or "More pictures..." on a map card's
   menu, is one list with a search box: every map, each with a thumbnail and the art it shows now, or
   every picture you imported, each with the pack that holds it. The button reads "Apply to <name>"
