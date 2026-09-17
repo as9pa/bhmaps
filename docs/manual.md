@@ -9,6 +9,60 @@ and `.jpg` files inside the `mapArt` folder and inside its own library, plus its
 folder, and it keeps a copy of every original so it can put it back. The game's data files are read and never written, and
 nothing else in the game install is touched.
 
+## What is new in 3.0
+
+3.0 is a redraw. The pages, the words and the dialogs were reworked from one design pass over the
+whole app, so most of what changed is how things read and where they sit rather than what the app
+can do. Nothing about the files it writes changed.
+
+- **Rows that fill the width.** Maps, Backgrounds, Platforms and a pack's page lay their cards out
+  in justified rows: every row is as wide as the page, and the cards in it share the leftover space.
+  The zoom slider is gone. A three-step size picker at the top right of each page, Large, Medium
+  and Small, takes its place, and Ctrl and the mouse wheel, Ctrl and plus, Ctrl and minus and Ctrl
+  and 0 do the same from the keyboard. Each page remembers its own size. At Small the names go and
+  the pictures speak for themselves.
+- **One status line.** Everything the app is doing or has just done reads on one line at the foot of
+  the page, with a coloured dot for its state: running, done, undone, cancelled, an error, or a note.
+  A running line has Cancel, a done line has Undo, an error has Retry, and every other line has an
+  × to put it away. Ctrl+Z undoes the last write and Escape cancels the one running. The header no
+  longer carries status text.
+- **Dialogs say what the button does.** A confirm names the action on its button, "Apply to 23
+  maps", "Reset 68 maps", "Delete b&w maps", and a button that throws something away is red. Only
+  one dialog opens at a time.
+- **Empty pages say why.** A search with no match says so and offers to clear it. A page whose game
+  folder is gone says "Game folder not found. Choose the Brawlhalla mapArt folder to continue." with
+  a Choose folder button, and the app notices the folder going or coming back within a few seconds
+  on its own. A library with no packs yet shows a banner offering to capture the Default pack.
+- **The Welcome window shows its progress.** Capturing the Default pack on first run reads as a
+  progress line inside Welcome, and the main window opens with the done line on its status strip.
+  Paths in Welcome and in Settings are shortened in the middle so they fit on one line.
+- **Pictures have names.** A picture added to My Backgrounds is named when it is added, from its
+  file name with the underscores and hyphens turned into spaces, and can be renamed from its tile's
+  menu. The name is what every list, chooser and status line calls it; the file name is never shown
+  as a name again.
+- **Words, not codes.** A map's level sets read as words in a fixed order, "Ranked 1v1, Ranked 2v2,
+  Tournament, Standard, Experimental, Minigames", and everything the panel says ends in a full stop.
+  A map whose Reset needs the Default pack says "Needs the Default pack." on the button.
+- **Packs rows say where a pack is.** Each row says "On N maps." when the pack is on the game, "Not
+  in game." when it is not, "What Reset puts back." for Default and "Hidden from lists." for a pack
+  stepped out, and a "+N more" link opens the pack's page, which has a picture band across its top.
+- **Settings is three sections.** Folders, Game and Updates, each row a label, a value and one
+  button. The Map-select thumbnails switch is gone: thumbnails are always written with the art. The
+  Version row says "Latest. Last checked yesterday, 20:44." or "Update available: 3.1.0." with a Get
+  button, and Updates is one switch, "Check for updates when BhMaps starts".
+- **The game's version.** Settings says which Brawlhalla the game data came from and when it was
+  read, "From Brawlhalla 10.10, read 17 September 2026.", and the data is read again on its own when
+  the game has updated: at start, and when Brawlhalla is seen starting or stopping. The Refresh
+  button in the top bar is an icon with its explanation in the tooltip.
+- **Minigames.** A Minigames chip after Tournament holds the ten maps only a game mode uses,
+  Brawlball, Bombsketball, Horde and the rest, and All leaves them out. A typed search still finds
+  them.
+- **Editors end in two buttons.** The background and platform editors end in "Save and apply" and
+  "Save only" instead of a Save button and an Apply to game box. Platform pieces are "Piece 1",
+  "Piece 2" and so on, with the file name under each, and both editors offer the same four fits,
+  Fill, Fit, Center and Stretch. The map chooser's button says what it will do, "Apply to Grove" or
+  "Apply to 3 maps", and Add Image counts the pictures picked.
+
 ## What is new in 2.8
 
 - **A pack can step out of the lists.** Every Packs row except Default has an eye button before Apply
