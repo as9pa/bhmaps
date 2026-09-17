@@ -16,18 +16,20 @@
   <!-- The ground a label needs when it is drawn over map art rather than over a surface: the page's own
        near-black at 85 percent, so the art it covers is still felt through it. -->
   <SolidColorBrush x:Key="ScrimBrush" Color="#D9161514" />
-  <!-- The one restrained accent, a cool slate against the warm greys: selected or checked state, the keyboard
-       focus ring, one primary action per page, and text links. Nothing else takes it. -->
-  <SolidColorBrush x:Key="AccentBrush" Color="#7FA7C9" />
-  <!-- The accent at 16 percent over Surface: a checked chip's fill, quiet enough to read as a ground. -->
-  <SolidColorBrush x:Key="AccentSurfaceBrush" Color="#2C3136" />
-  <!-- The accent darkened about 6 percent, for a pressed primary. -->
-  <SolidColorBrush x:Key="AccentPressedBrush" Color="#78A0C1" />
-  <SolidColorBrush x:Key="FocusRingBrush" Color="#7FA7C9" />
+  <!-- The accent is the text colour itself: one primary action per page, the selected or checked state, the
+       keyboard focus ring, and text links. There is no second hue. -->
+  <SolidColorBrush x:Key="AccentBrush" Color="#F1EFEA" />
+  <!-- A quiet ground the accent can sit on. No longer the checked chip's fill, but the key stays so nothing
+       that asks for it breaks. -->
+  <SolidColorBrush x:Key="AccentSurfaceBrush" Color="#2A2827" />
+  <!-- The accent darkened about 10 percent, for a pressed primary. -->
+  <SolidColorBrush x:Key="AccentPressedBrush" Color="#D9D6D0" />
+  <SolidColorBrush x:Key="FocusRingBrush" Color="#F1EFEA" />
 
   <CornerRadius x:Key="Radius">6</CornerRadius>
-  <!-- Larger than any chip is tall, so a pill stays a pill whatever its line height. -->
-  <CornerRadius x:Key="RadiusPill">999</CornerRadius>
+  <!-- The chip's radius. WPF distorts a Border whose CornerRadius is more than half its height, so this is half
+       of the 28 px a chip measures rather than some large number; only controls that short may take it. -->
+  <CornerRadius x:Key="RadiusPill">14</CornerRadius>
   <sys:Double x:Key="PanelWidth">360</sys:Double>
 
   <!-- The type scale. Five sizes, so nothing in the app picks a size of its own. -->

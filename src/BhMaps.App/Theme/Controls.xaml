@@ -241,7 +241,7 @@
       <Setter.Value>
         <ControlTemplate TargetType="ToggleButton">
           <ControlTemplate.Resources>
-            <!-- See PrimaryButton: the checked chip's accent label needs the same handover. -->
+            <!-- See PrimaryButton: the checked chip's Bg-coloured label needs the same handover. -->
             <DataTemplate DataType="{x:Type sys:String}">
               <TextBlock Text="{Binding}"
                          FontFamily="{Binding FontFamily, RelativeSource={RelativeSource AncestorType={x:Type ButtonBase}}}"
@@ -262,9 +262,9 @@
               <Setter TargetName="Chrome" Property="Background" Value="{StaticResource Surface2Brush}" />
             </Trigger>
             <Trigger Property="IsChecked" Value="True">
-              <Setter TargetName="Chrome" Property="Background" Value="{StaticResource AccentSurfaceBrush}" />
-              <Setter TargetName="Chrome" Property="BorderBrush" Value="{StaticResource AccentBrush}" />
-              <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+              <Setter TargetName="Chrome" Property="Background" Value="{StaticResource TextBrush}" />
+              <Setter TargetName="Chrome" Property="BorderBrush" Value="{StaticResource TextBrush}" />
+              <Setter Property="Foreground" Value="{StaticResource BgBrush}" />
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
               <Setter TargetName="Chrome" Property="Opacity" Value="0.4" />
