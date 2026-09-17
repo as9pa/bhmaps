@@ -82,6 +82,10 @@ public abstract partial class RowsPageViewModel : PageViewModel, ITileSized
 
     public bool ShowClearSearch => SearchText.Length > 0;
 
+    /// <summary>The empty state's one action, which only a search gives it: with nothing typed there is nothing
+    /// to undo and the state is just the sentence.</summary>
+    public string EmptyActionText => ShowClearSearch ? "Clear search" : "";
+
     /// <summary>2.8: how many packs the Packs page is hiding from these rows. Written by <see cref="Refresh" />,
     /// because a list quietly missing a pack reads as a bug.</summary>
     public int HiddenPackCount { get; private set; }
@@ -194,6 +198,7 @@ public abstract partial class RowsPageViewModel : PageViewModel, ITileSized
     partial void OnSearchTextChanged(string value)
     {
         OnPropertyChanged(nameof(ShowClearSearch));
+        OnPropertyChanged(nameof(EmptyActionText));
         ApplyFilter();
     }
 

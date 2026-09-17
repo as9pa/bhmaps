@@ -125,6 +125,10 @@ public partial class MapsViewModel : PageViewModel, ITileSized
 
     public bool ShowClearSearch => SearchText.Length > 0;
 
+    /// <summary>The empty state's one action, which only a search gives it: with nothing typed there is nothing
+    /// to undo and the state is just the sentence.</summary>
+    public string EmptyActionText => ShowClearSearch ? "Clear search" : "";
+
     /// <summary>Spec 3.1's first-run line: nothing in the library but the Default pack, and no any-map picture
     /// either (plan decision A-D6, settled here).</summary>
     public bool ShowFirstRunLine =>
@@ -183,7 +187,13 @@ public partial class MapsViewModel : PageViewModel, ITileSized
         var message = defaultPack is null
             ? $"Reset the map art in {MainViewModel.Count(count, "folder")}? The files are deleted and Brawlhalla regenerates its defaults on the next launch."
             : $"Reset {MainViewModel.Count(count, "map")} to the Default pack? {MainViewModel.RestoresArt} Undo puts them back.";
-        if (!Shell.Dialogs.Confirm("Reset all maps", message))
+
+        // The button names what it resets, in the same noun the message counts in: folders when there is no
+        // Default pack to put back, maps when there is.
+        var verb = defaultPack is null
+            ? $"Reset {MainViewModel.Count(count, "folder")}"
+            : $"Reset {MainViewModel.Count(count, "map")}";
+        if (!Shell.Dialogs.Confirm("Reset all maps", message, verb))
         {
             return;
         }
@@ -247,6 +257,7 @@ public partial class MapsViewModel : PageViewModel, ITileSized
                 $"Apply {pack.Name}",
                 $"Apply {pack.Name} to {MainViewModel.Count(maps.Count, "map")}?",
                 MainViewModel.WritesArt,
+                $"Apply to {MainViewModel.Count(maps.Count, "map")}",
                 maps))
         {
             return;
@@ -299,6 +310,7 @@ public partial class MapsViewModel : PageViewModel, ITileSized
                     : $"Reset {MainViewModel.Count(maps.Count, "map")}",
                 $"Reset {MainViewModel.Count(maps.Count, "map")} to the Default pack?",
                 MainViewModel.RestoresArt,
+                $"Reset {MainViewModel.Count(maps.Count, "map")}",
                 maps))
         {
             return;
@@ -352,11 +364,12 @@ public partial class MapsViewModel : PageViewModel, ITileSized
     public bool CanReset => _snapshot?.DefaultPack is not null;
 
     /// <summary>Spec 3.3: a write to more than one map names the count and the maps first; one map is one click.</summary>
-    private bool Confirm(string title, string question, string effect, IReadOnlyList<MapEntry> maps) =>
+    private bool Confirm(string title, string question, string effect, string primary, IReadOnlyList<MapEntry> maps) =>
         maps.Count <= 1
         || Shell.Dialogs.Confirm(
             title,
-            MainViewModel.ConfirmBody(question, effect, [.. maps.Select(m => m.DisplayName)]));
+            MainViewModel.ConfirmBody(question, effect, [.. maps.Select(m => m.DisplayName)]),
+            primary);
 
     public override void Refresh(ScanSnapshot snapshot) => Refresh(snapshot, null);
 
@@ -538,6 +551,7 @@ public partial class MapsViewModel : PageViewModel, ITileSized
 
         OnPropertyChanged(nameof(EmptyText));
         OnPropertyChanged(nameof(ShowClearSearch));
+        OnPropertyChanged(nameof(EmptyActionText));
     }
 
     /// <summary>The chip filter, then the header search box on top of it.</summary>

@@ -57,7 +57,7 @@
                   Command="{Binding AddPicturesCommand}"
                   Content="Add image"
                   controls:Icon.Glyph="{StaticResource Icon.Plus}"
-                  IsEnabled="{Binding DataContext.IsNotBusy, RelativeSource={RelativeSource AncestorType=Window}}"
+                  IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}"
                   Style="{StaticResource PrimaryButton}" />
         </StackPanel>
       </controls:PageHeader.Actions>
@@ -143,61 +143,71 @@
     </TextBlock>
 
     <Grid>
-      <!-- The rows virtualise (addendum B). Recycling is safe here because nothing in a row binds a container
-           property back into the view model: a row has no IsSelected to be written by a container that has just
-           been handed to a different row. -->
-      <ItemsControl ItemTemplate="{StaticResource MapRow}"
-                    ItemsSource="{Binding Rows}"
-                    KeyboardNavigation.DirectionalNavigation="Continue"
-                    KeyboardNavigation.TabNavigation="Continue"
-                    ScrollViewer.CanContentScroll="True"
-                    ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                    ScrollViewer.VerticalScrollBarVisibility="Auto"
-                    VirtualizingPanel.IsVirtualizing="True"
-                    VirtualizingPanel.ScrollUnit="Pixel"
-                    VirtualizingPanel.VirtualizationMode="Recycling">
-        <ItemsControl.Template>
-          <!-- An ItemsControl has no ScrollViewer of its own, and without one the VirtualizingStackPanel is
-               handed infinite height and realises every row. -->
-          <ControlTemplate TargetType="ItemsControl">
-            <ScrollViewer CanContentScroll="True"
-                          Focusable="False"
-                          Padding="{TemplateBinding Padding}"
-                          behaviors:SmoothScroll.IsEnabled="True">
-              <ItemsPresenter />
-            </ScrollViewer>
-          </ControlTemplate>
-        </ItemsControl.Template>
-        <ItemsControl.ItemsPanel>
-          <ItemsPanelTemplate>
-            <VirtualizingStackPanel />
-          </ItemsPanelTemplate>
-        </ItemsControl.ItemsPanel>
-      </ItemsControl>
-
-      <!-- Addendum B: an empty list says why in one line, and offers the way back when a search caused it. -->
-      <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-        <StackPanel.Style>
-          <Style TargetType="StackPanel">
-            <Setter Property="Visibility" Value="Collapsed" />
+      <Grid>
+        <Grid.Style>
+          <Style TargetType="Grid">
             <Style.Triggers>
-              <DataTrigger Binding="{Binding Rows.Count}" Value="0">
-                <Setter Property="Visibility" Value="Visible" />
+              <DataTrigger Binding="{Binding DataContext.GameFolderMissing, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                <Setter Property="Visibility" Value="Collapsed" />
               </DataTrigger>
             </Style.Triggers>
           </Style>
-        </StackPanel.Style>
-        <TextBlock HorizontalAlignment="Center"
-                   Foreground="{StaticResource Text2Brush}"
-                   Text="{Binding EmptyText}"
-                   TextWrapping="Wrap" />
-        <Button Margin="0,8,0,0"
-                HorizontalAlignment="Center"
-                Command="{Binding ClearSearchCommand}"
-                Content="Clear"
-                Style="{StaticResource PlainButton}"
-                Visibility="{Binding ShowClearSearch, Converter={StaticResource BoolToVis}}" />
-      </StackPanel>
+        </Grid.Style>
+        <!-- The rows virtualise (addendum B). Recycling is safe here because nothing in a row binds a container
+             property back into the view model: a row has no IsSelected to be written by a container that has just
+             been handed to a different row. -->
+        <ItemsControl ItemTemplate="{StaticResource MapRow}"
+                      ItemsSource="{Binding Rows}"
+                      KeyboardNavigation.DirectionalNavigation="Continue"
+                      KeyboardNavigation.TabNavigation="Continue"
+                      ScrollViewer.CanContentScroll="True"
+                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                      ScrollViewer.VerticalScrollBarVisibility="Auto"
+                      VirtualizingPanel.IsVirtualizing="True"
+                      VirtualizingPanel.ScrollUnit="Pixel"
+                      VirtualizingPanel.VirtualizationMode="Recycling">
+          <ItemsControl.Template>
+            <!-- An ItemsControl has no ScrollViewer of its own, and without one the VirtualizingStackPanel is
+                 handed infinite height and realises every row. -->
+            <ControlTemplate TargetType="ItemsControl">
+              <ScrollViewer CanContentScroll="True"
+                            Focusable="False"
+                            Padding="{TemplateBinding Padding}"
+                            behaviors:SmoothScroll.IsEnabled="True">
+                <ItemsPresenter />
+              </ScrollViewer>
+            </ControlTemplate>
+          </ItemsControl.Template>
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <VirtualizingStackPanel />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+        </ItemsControl>
+
+        <!-- Addendum B: an empty list says why in one line, and offers the way back when a search caused it. -->
+        <controls:EmptyState ActionCommand="{Binding ClearSearchCommand}"
+                             ActionText="{Binding EmptyActionText}"
+                             Text="{Binding EmptyText}">
+          <controls:EmptyState.Style>
+            <Style TargetType="controls:EmptyState">
+              <Setter Property="Visibility" Value="Collapsed" />
+              <Style.Triggers>
+                <DataTrigger Binding="{Binding Rows.Count}" Value="0">
+                  <Setter Property="Visibility" Value="Visible" />
+                </DataTrigger>
+              </Style.Triggers>
+            </Style>
+          </controls:EmptyState.Style>
+        </controls:EmptyState>
+      </Grid>
+      <!-- 3.0: with no game folder there is nothing on this page to read or write, so the page itself says so
+           and offers the one thing that fixes it. The picker, the save and the rescan behind it are the Settings
+           page's own command; there is one of them. -->
+      <controls:EmptyState ActionCommand="{Binding DataContext.SettingsPage.ChangeGameCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                           ActionText="Choose folder"
+                           Text="Game folder not found. Choose the Brawlhalla mapArt folder to continue."
+                           Visibility="{Binding DataContext.GameFolderMissing, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}" />
     </Grid>
   </DockPanel>
 </UserControl>

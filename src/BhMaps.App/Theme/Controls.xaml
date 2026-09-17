@@ -50,6 +50,9 @@
     <Setter Property="FontSize" Value="{StaticResource FontBody}" />
     <Setter Property="Background" Value="{StaticResource AccentBrush}" />
     <Setter Property="Foreground" Value="{StaticResource BgBrush}" />
+    <!-- The pressed fill travels on BorderBrush, which a borderless template has no other use for: a style
+         BasedOn this one, such as DangerButton, then gives the press its own colour without a second template. -->
+    <Setter Property="BorderBrush" Value="{StaticResource AccentPressedBrush}" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Padding" Value="14,7" />
     <Setter Property="Cursor" Value="Hand" />
@@ -95,7 +98,7 @@
             </Trigger>
             <!-- After hover, so pressing replaces the lift rather than compounding with it. -->
             <Trigger Property="IsPressed" Value="True">
-              <Setter TargetName="Chrome" Property="Background" Value="{StaticResource AccentPressedBrush}" />
+              <Setter TargetName="Chrome" Property="Background" Value="{Binding BorderBrush, RelativeSource={RelativeSource TemplatedParent}}" />
               <Setter TargetName="Chrome" Property="Opacity" Value="1" />
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
@@ -105,6 +108,13 @@
         </ControlTemplate>
       </Setter.Value>
     </Setter>
+  </Style>
+
+  <!-- The primary of a confirm whose verb deletes or removes something: PrimaryButton's shape, padding and
+       states in Missing's colour, which is already the colour the app gives art that is gone. -->
+  <Style x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+    <Setter Property="Background" Value="{StaticResource MissingFgBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource MissingPressedBrush}" />
   </Style>
 
   <Style x:Key="OutlineButton" TargetType="Button">

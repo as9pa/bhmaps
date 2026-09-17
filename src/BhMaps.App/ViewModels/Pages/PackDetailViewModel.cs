@@ -321,7 +321,7 @@ public partial class PackDetailViewModel : PageViewModel, ITileSized
 
         var result = await RunPasteAsync(source, target, tile, catalog, cut, replace: false, name, undoPaths);
         if (result is { Skipped: true }
-            && Shell.Dialogs.Confirm("Replace", $"{target.Name} already has {name}. Replace it?"))
+            && Shell.Dialogs.Confirm("Replace", $"{target.Name} already has {name}. Replace it?", "Replace"))
         {
             result = await RunPasteAsync(source, target, tile, catalog, cut, replace: true, name, undoPaths);
         }
@@ -613,7 +613,7 @@ public partial class PackDetailViewModel : PageViewModel, ITileSized
         }
 
         var files = _transparentFiles;
-        if (!Shell.Dialogs.Confirm("Remove files", RemoveQuestion(files.Count, pack.Name)))
+        if (!Shell.Dialogs.Confirm("Remove files", RemoveQuestion(files.Count, pack.Name), "Remove", destructive: true))
         {
             return;
         }

@@ -81,9 +81,18 @@ public partial class MainViewModel : ObservableObject
         services.LevelData.Changed += OnLevelDataChanged;
 
         // Nothing tells the app when Brawlhalla starts or stops, so the top bar's game line asks every 3 seconds.
+        // The same tick watches the game folder (3.0): a folder renamed or unmounted under the app shows the
+        // pages' missing-folder state on its own, without waiting for a scan to fail on it.
         GameRunning = GameProcess.IsRunning();
         _gameTimer = new DispatcherTimer { Interval = GamePollInterval };
-        _gameTimer.Tick += (_, _) => GameRunning = GameProcess.IsRunning();
+        _gameTimer.Tick += (_, _) =>
+        {
+            GameRunning = GameProcess.IsRunning();
+            if (!IsBusy)
+            {
+                GameFolderMissing = !GameFolderExists();
+            }
+        };
         _gameTimer.Start();
 
         // One shot: the tick stops the timer and starts the check.
@@ -528,7 +537,8 @@ public partial class MainViewModel : ObservableObject
                 ConfirmBody(
                     $"Apply these pictures to {Count(maps.Count, "map")}?",
                     WritesBackgrounds,
-                    [.. maps.Select(m => m.DisplayName)])))
+                    [.. maps.Select(m => m.DisplayName)]),
+                $"Apply to {Count(maps.Count, "map")}"))
         {
             await RescanAsync();
             return;
@@ -609,7 +619,8 @@ public partial class MainViewModel : ObservableObject
                 ConfirmBody(
                     $"Apply {name} to {Count(targets.Count, "map")}?",
                     WritesBackgrounds,
-                    [.. targets.Select(m => m.DisplayName)])))
+                    [.. targets.Select(m => m.DisplayName)]),
+                $"Apply to {Count(targets.Count, "map")}"))
         {
             return;
         }
@@ -668,7 +679,8 @@ public partial class MainViewModel : ObservableObject
                 ConfirmBody(
                     $"Apply {pack.Name} to {Count(targets.Count, "map")}?",
                     WritesPlatforms,
-                    [.. targets.Select(m => m.DisplayName)])))
+                    [.. targets.Select(m => m.DisplayName)]),
+                $"Apply to {Count(targets.Count, "map")}"))
         {
             return;
         }
@@ -729,6 +741,11 @@ public partial class MainViewModel : ObservableObject
 
     /// <summary>The body of a write confirm (3.0): the question with the count in it, what the write touches,
     /// that Undo puts it back, then the maps themselves.</summary>
+    /// <summary>A confirm's verb with the thing it acts on named after it, when that name is short enough to
+    /// sit on a button. A longer one takes the bare verb: the title already says which one it is, and a button
+    /// that wraps is not a button.</summary>
+    public static string Verb(string verb, string name) => name.Length <= 20 ? $"{verb} {name}" : verb;
+
     public static string ConfirmBody(string question, string effect, IReadOnlyList<string> names) =>
         $"{question} {effect} Undo puts them back.\n\n{NameList(names)}";
 
@@ -1480,7 +1497,8 @@ public partial class MainViewModel : ObservableObject
             && !Dialogs.Confirm(
                 "Replace the Default pack",
                 "A Default pack already exists. Replace it with the game folder as it is now?\n\n"
-                + "To be sure the capture is vanilla, verify the game files through Steam first."))
+                + "To be sure the capture is vanilla, verify the game files through Steam first.",
+                "Capture"))
         {
             return;
         }
@@ -1681,7 +1699,9 @@ public partial class MainViewModel : ObservableObject
                 $"Delete {name}?",
                 who is null
                     ? $"It will be removed from {packName}."
-                    : $"It will be removed from {packName} and {who.Value.Who} will reset to default."))
+                    : $"It will be removed from {packName} and {who.Value.Who} will reset to default.",
+                Verb("Remove", name),
+                destructive: true))
         {
             return;
         }

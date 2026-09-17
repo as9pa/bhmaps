@@ -88,52 +88,29 @@
                   controls:Icon.Glyph="{StaticResource Icon.Refresh}">
             <Button.Style>
               <!-- Outlined rather than plain (3.0): it writes into the game folder, and a write does not read as
-                   quietly as Launch beside it. -->
+                   quietly as Launch beside it. Disabled rather than gone while the folder is missing (3.0): the
+                   pages say the folder is missing, so the top bar only has to stop being clickable. -->
               <Style BasedOn="{StaticResource OutlineButton}" TargetType="Button">
                 <Style.Triggers>
                   <DataTrigger Binding="{Binding GameFolderMissing}" Value="True">
-                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Setter Property="IsEnabled" Value="False" />
                   </DataTrigger>
                 </Style.Triggers>
               </Style>
             </Button.Style>
           </Button>
 
-          <!-- Three states, one at a time: the folder is gone, the game is up, the game is down. The missing
-               folder outranks the other two, so its trigger is the only one that does not test it. -->
+          <!-- Two states, one at a time: the game is up or the game is down. A missing game folder is the pages'
+               news now (3.0), not the top bar's; here it only takes Launch away. -->
           <Grid VerticalAlignment="Center">
             <StackPanel Orientation="Horizontal">
               <StackPanel.Style>
                 <Style TargetType="StackPanel">
                   <Setter Property="Visibility" Value="Collapsed" />
                   <Style.Triggers>
-                    <DataTrigger Binding="{Binding GameFolderMissing}" Value="True">
+                    <DataTrigger Binding="{Binding GameRunning}" Value="True">
                       <Setter Property="Visibility" Value="Visible" />
                     </DataTrigger>
-                  </Style.Triggers>
-                </Style>
-              </StackPanel.Style>
-              <TextBlock VerticalAlignment="Center"
-                         Foreground="{StaticResource MissingFgBrush}"
-                         Text="Game folder not found" />
-              <Button Margin="8,0,0,0"
-                      Command="{Binding NavigateSettingsCommand}"
-                      Content="Choose folder"
-                      Style="{StaticResource PlainButton}" />
-            </StackPanel>
-
-            <StackPanel Orientation="Horizontal">
-              <StackPanel.Style>
-                <Style TargetType="StackPanel">
-                  <Setter Property="Visibility" Value="Collapsed" />
-                  <Style.Triggers>
-                    <MultiDataTrigger>
-                      <MultiDataTrigger.Conditions>
-                        <Condition Binding="{Binding GameFolderMissing}" Value="False" />
-                        <Condition Binding="{Binding GameRunning}" Value="True" />
-                      </MultiDataTrigger.Conditions>
-                      <Setter Property="Visibility" Value="Visible" />
-                    </MultiDataTrigger>
                   </Style.Triggers>
                 </Style>
               </StackPanel.Style>
@@ -146,13 +123,9 @@
                 <Style TargetType="StackPanel">
                   <Setter Property="Visibility" Value="Collapsed" />
                   <Style.Triggers>
-                    <MultiDataTrigger>
-                      <MultiDataTrigger.Conditions>
-                        <Condition Binding="{Binding GameFolderMissing}" Value="False" />
-                        <Condition Binding="{Binding GameRunning}" Value="False" />
-                      </MultiDataTrigger.Conditions>
+                    <DataTrigger Binding="{Binding GameRunning}" Value="False">
                       <Setter Property="Visibility" Value="Visible" />
-                    </MultiDataTrigger>
+                    </DataTrigger>
                   </Style.Triggers>
                 </Style>
               </StackPanel.Style>
@@ -161,8 +134,18 @@
               <Button Margin="8,0,0,0"
                       Command="{Binding LaunchGameCommand}"
                       Content="Launch"
-                      controls:Icon.Glyph="{StaticResource Icon.Play}"
-                      Style="{StaticResource PlainButton}" />
+                      controls:Icon.Glyph="{StaticResource Icon.Play}">
+                <Button.Style>
+                  <!-- Nothing to launch without the folder the game lives in. -->
+                  <Style BasedOn="{StaticResource PlainButton}" TargetType="Button">
+                    <Style.Triggers>
+                      <DataTrigger Binding="{Binding GameFolderMissing}" Value="True">
+                        <Setter Property="IsEnabled" Value="False" />
+                      </DataTrigger>
+                    </Style.Triggers>
+                  </Style>
+                </Button.Style>
+              </Button>
             </StackPanel>
           </Grid>
         </StackPanel>

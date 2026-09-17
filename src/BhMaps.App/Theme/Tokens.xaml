@@ -13,6 +13,7 @@
   <SolidColorBrush x:Key="TileBrush" Color="#2F2D2B" />
   <SolidColorBrush x:Key="MissingBgBrush" Color="#3A1A1C" />
   <SolidColorBrush x:Key="MissingFgBrush" Color="#E57A7A" />
+  <SolidColorBrush x:Key="MissingPressedBrush" Color="#D06A6A" />
   <!-- The status strip's dot and nothing else (3.0). The dot is the one coloured thing in the app that is not a
        missing state, so these two keys have exactly one caller each and no text is ever painted with them. -->
   <SolidColorBrush x:Key="OkBrush" Color="#86B98B" />

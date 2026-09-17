@@ -16,7 +16,7 @@ namespace BhMaps.App.ViewModels.Pages;
 public partial class PacksViewModel : PageViewModel
 {
     /// <summary>Addendum E: the empty library's line. "No packs yet." was the v2 wording and said less.</summary>
-    public const string EmptyText = "No packs in the library.";
+    public const string EmptyText = "No packs yet.";
 
     /// <summary>The folder a pack keeps its background images in. Every other folder is a map.</summary>
     private const string BackgroundsFolder = "Backgrounds";
@@ -260,7 +260,8 @@ public partial class PacksViewModel : PageViewModel
                 MainViewModel.ConfirmBody(
                     $"Apply {pack.Name} to {MainViewModel.Count(maps.Count, "map")}?",
                     MainViewModel.WritesArt,
-                    maps)))
+                    maps),
+                $"Apply to {MainViewModel.Count(maps.Count, "map")}"))
         {
             return;
         }
@@ -334,7 +335,9 @@ public partial class PacksViewModel : PageViewModel
         var pack = row.Pack;
         if (!Shell.Dialogs.Confirm(
             $"Delete {pack.Name}?",
-            $"Its {PackRowViewModel.Plural(pack.FileCount, "file")} will be deleted. This cannot be undone."))
+            $"Its {PackRowViewModel.Plural(pack.FileCount, "file")} will be deleted. This cannot be undone.",
+            MainViewModel.Verb("Delete", pack.Name),
+            destructive: true))
         {
             return;
         }

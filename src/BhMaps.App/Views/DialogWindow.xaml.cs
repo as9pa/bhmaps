@@ -12,6 +12,10 @@ public partial class DialogWindow : Window
         DataContext = model;
         Title = model.Title;
 
+        // A Style cannot be swapped from inside a Style, so the destructive fill is chosen here, where the model
+        // that knows about it is already to hand. Both styles are the app's own, from Controls.xaml.
+        OkButton.Style = (Style)FindResource(model.IsDestructive ? "DangerButton" : "PrimaryButton");
+
         // Nothing here is an input, so focus starts on the button the dialog is asking for.
         Loaded += (_, _) => OkButton.Focus();
     }

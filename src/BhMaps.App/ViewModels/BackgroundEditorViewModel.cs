@@ -376,7 +376,8 @@ public partial class BackgroundEditorViewModel : ObservableObject
         if (File.Exists(packFile)
             && !_dialogs.Confirm(
                 "Replace background?",
-                $"{Path.GetFileNameWithoutExtension(packFile)} already exists in {EffectivePackName}. Replace it?"))
+                $"{Path.GetFileNameWithoutExtension(packFile)} already exists in {EffectivePackName}. Replace it?",
+                "Replace"))
         {
             return;
         }

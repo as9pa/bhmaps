@@ -1218,7 +1218,8 @@ public partial class PlatformEditorViewModel : ObservableObject
                 "Put the original art back?",
                 copies.Count == 1
                     ? $"{copies[0].FileName} in {where} was changed in another app. Reset replaces it with the piece's original art."
-                    : $"{copies.Count} files in {where} were changed in another app. Reset replaces them with the pieces' original art."))
+                    : $"{copies.Count} files in {where} were changed in another app. Reset replaces them with the pieces' original art.",
+                copies.Count == 1 ? "Reset" : $"Reset {MainViewModel.Count(copies.Count, "file")}"))
             {
                 // The question was about all of the ticked rows, so a no leaves every one of them alone.
                 return;
@@ -1570,7 +1571,8 @@ public partial class PlatformEditorViewModel : ObservableObject
                 _sets.Count == 1
                     ? $"{EffectivePackName} already has platforms for {CurrentMap.DisplayName}. Replace them?"
                     : $"{EffectivePackName} already has platforms for {MainViewModel.Count(replacing, "map")}."
-                        + " Replace them?"))
+                        + " Replace them?",
+                _sets.Count == 1 ? "Replace" : $"Replace {MainViewModel.Count(replacing, "map")}"))
         {
             return;
         }

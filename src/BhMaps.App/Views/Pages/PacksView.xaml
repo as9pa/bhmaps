@@ -249,12 +249,14 @@
         </ItemsControl>
       </ScrollViewer>
 
-      <!-- Empty library (addendum E): the line and Import folder on one line, with Capture the Default pack
-           beside it, because an empty library on a machine that has the game is one click from being a full
-           one. -->
-      <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Orientation="Horizontal">
-        <StackPanel.Style>
-          <Style TargetType="StackPanel">
+      <!-- Empty library (addendum E): the page's own empty state, with the one action the other two cannot be
+           (Import folder and New pack are already on the header). A machine that has the game is one click from
+           a full library, so Capture is the click this offers. -->
+      <controls:EmptyState ActionCommand="{Binding CaptureDefaultsCommand}"
+                           ActionText="Capture the Default pack"
+                           Text="{x:Static pages:PacksViewModel.EmptyText}">
+        <controls:EmptyState.Style>
+          <Style TargetType="controls:EmptyState">
             <Setter Property="Visibility" Value="Collapsed" />
             <Style.Triggers>
               <DataTrigger Binding="{Binding IsEmpty}" Value="True">
@@ -262,27 +264,8 @@
               </DataTrigger>
             </Style.Triggers>
           </Style>
-        </StackPanel.Style>
-        <TextBlock VerticalAlignment="Center"
-                   Foreground="{StaticResource Text2Brush}"
-                   Text="{x:Static pages:PacksViewModel.EmptyText}" />
-        <Button Margin="12,0,0,0"
-                Command="{Binding ImportCommand}"
-                Content="Import folder"
-                controls:Icon.Glyph="{StaticResource Icon.FolderPlus}"
-                Style="{StaticResource PrimaryButton}" />
-        <Button Margin="8,0,0,0"
-                Command="{Binding NewPackCommand}"
-                Content="New pack"
-                controls:Icon.Glyph="{StaticResource Icon.Plus}"
-                Style="{StaticResource OutlineButton}" />
-        <Button Margin="8,0,0,0"
-                Command="{Binding CaptureDefaultsCommand}"
-                Content="Capture the Default pack"
-                controls:Icon.Glyph="{StaticResource Icon.Camera}"
-                IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}"
-                Style="{StaticResource OutlineButton}" />
-      </StackPanel>
+        </controls:EmptyState.Style>
+      </controls:EmptyState>
     </Grid>
   </DockPanel>
 </UserControl>
