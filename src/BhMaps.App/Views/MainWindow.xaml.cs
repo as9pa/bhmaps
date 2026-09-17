@@ -23,7 +23,18 @@ public partial class MainWindow : Window
         Loaded -= OnLoaded;
         if (DataContext is MainViewModel vm)
         {
-            await vm.RescanAsync();
+            // A first run, or a game that updated since the last run, reads the game's data before the first
+            // scan rather than after it (3.0): the read ends in the scan it needs, so the window's first page is
+            // the real one instead of an empty grid that fills in a moment later. With the data current the scan
+            // runs alone.
+            if (vm.Services.LevelData.IsStale())
+            {
+                await vm.RefreshGameDataIfStaleAsync();
+            }
+            else
+            {
+                await vm.RescanAsync();
+            }
         }
     }
 

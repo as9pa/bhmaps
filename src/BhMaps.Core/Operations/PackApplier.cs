@@ -6,13 +6,46 @@ namespace BhMaps.Core.Operations;
 /// <summary>Copies pack files into the game folder, overwriting. Never deletes anything.</summary>
 public static class PackApplier
 {
-    public static ApplyResult ApplyPack(Pack pack, string gamePath, IProgress<string>? progress = null, CancellationToken ct = default)
+    /// <summary>The whole pack into the game folder. The progress line names maps rather than files (3.0): one
+    /// report per map folder that has files, as "{name}, {i} of {n}", in the order the folders are written.
+    /// <paramref name="mapNames"/> carries the catalog's display name for a folder, since the applier has no
+    /// catalog of its own. When it is given, n counts only the folders it names, so the strip's total is the
+    /// catalog maps the confirm and the done line count; a folder the catalog does not know (a map the game no
+    /// longer has, say) reports under its bare folder name with no count, so the strip keeps moving without
+    /// claiming to be a step towards n. With no dictionary every folder counts, under its folder name. The
+    /// Backgrounds folder belongs to no one map, so its files report their path as they always did.</summary>
+    public static ApplyResult ApplyPack(
+        Pack pack,
+        string gamePath,
+        IProgress<string>? progress = null,
+        CancellationToken ct = default,
+        IReadOnlyDictionary<string, string>? mapNames = null)
     {
         var copied = 0;
         var failures = new List<FileFailure>();
+        var maps = pack.Folders.Count(folder => IsMapFolder(folder) && CatalogName(folder, mapNames) is not null);
+        var index = 0;
         foreach (var folder in pack.Folders)
         {
-            CopyFolder(folder, gamePath, progress, ct, ref copied, failures);
+            if (IsMapFolder(folder))
+            {
+                if (CatalogName(folder, mapNames) is { } name)
+                {
+                    index++;
+                    progress?.Report($"{name}, {index} of {maps}");
+                }
+                else
+                {
+                    progress?.Report(folder.Name);
+                }
+
+                // The map's own line stands for all of its files, so the copies below say nothing further.
+                CopyFolder(folder, gamePath, null, ct, ref copied, failures);
+            }
+            else
+            {
+                CopyFolder(folder, gamePath, progress, ct, ref copied, failures);
+            }
         }
 
         return new ApplyResult(copied, failures);
@@ -134,6 +167,16 @@ public static class PackApplier
         return BackgroundApplier.TargetPaths(
             [.. slots.Where(slot => backgrounds?.FindFile(slot) is not null)]);
     }
+
+    /// <summary>A pack folder that stands for one map: anything with files in it that is not the shared
+    /// Backgrounds folder.</summary>
+    private static bool IsMapFolder(GameFolder folder) =>
+        folder.Files.Count > 0 && !folder.Name.Equals(BackgroundsFolder, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>What to call a map folder in a counted progress line, or null when the folder is not a catalog map
+    /// and so is not one of the n. With no dictionary every folder counts, under its folder name.</summary>
+    private static string? CatalogName(GameFolder folder, IReadOnlyDictionary<string, string>? mapNames) =>
+        mapNames is null ? folder.Name : mapNames.GetValueOrDefault(folder.Name);
 
     /// <summary>The pack's pictures for one map's slots, in slot order, each at most once.</summary>
     private static IEnumerable<GameFile> SlotFiles(GameFolder? backgrounds, MapEntry map) =>

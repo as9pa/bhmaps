@@ -3,7 +3,6 @@ using System.Windows.Media;
 using BhMaps.Core.Maps;
 using BhMaps.Core.Model;
 using BhMaps.Core.Operations;
-using BhMaps.Core.Status;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace BhMaps.App.ViewModels;
@@ -40,22 +39,30 @@ public sealed partial class PackRowViewModel : ObservableObject
     /// <summary>The folder a pack keeps its background images in. Every other folder is a map.</summary>
     private const string BackgroundsFolder = "Backgrounds";
 
+    /// <summary>The second sentence for a pack whose bytes are in no map.</summary>
+    private const string NotInGameText = "Not in game.";
+
+    /// <summary>The second sentence for the Default pack, which is the floor every Reset to default lands on.</summary>
+    private const string DefaultWhereText = "What Reset puts back.";
+
+    /// <summary>The last sentence while the eye is off (2.8).</summary>
+    private const string HiddenText = "Hidden from lists.";
+
     private bool _realised;
 
     /// <summary>The counts on their own, which is the half of the line that never changes.</summary>
     private readonly string _counts;
 
-    /// <summary>When the pack was last applied (spec 8), null for a pack never applied. Handed to the row by the
-    /// page, because a row reads no settings of its own.</summary>
-    private DateTimeOffset? _lastApplied;
+    /// <summary>How many catalog map folders currently hold this pack's bytes (3.0). Handed to the row by the
+    /// page, because a row reads no applied record of its own.</summary>
+    private int _appliedMaps;
 
     public PackRowViewModel(Pack pack, IReadOnlyList<MapEntry> maps)
     {
         Pack = pack;
         Maps = maps;
-        MapCount = pack.Folders.Count(f => !f.Name.Equals(BackgroundsFolder, StringComparison.OrdinalIgnoreCase));
-        BackgroundCount = pack.FindFolder(BackgroundsFolder)?.Files.Count ?? 0;
-        _counts = $"{Plural(MapCount, "map")}, {Plural(BackgroundCount, "background")}";
+        (MapCount, BackgroundCount) = Counts(pack);
+        _counts = HoldsText(MapCount, BackgroundCount);
         Previews = [.. maps.Take(MaxPreviews).Select(map => new PackPreviewTileViewModel(map))];
         MenuItems = [];
     }
@@ -81,19 +88,22 @@ public sealed partial class PackRowViewModel : ObservableObject
     /// <summary>2.8: whether the pack is kept out of the Backgrounds and Platforms lists. A view preference the
     /// page reads out of the settings and hands the row; the eye on the row is what flips it.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CountsText))]
+    [NotifyPropertyChangedFor(nameof(StateLine))]
     public partial bool IsHidden { get; set; }
 
-    /// <summary>The line under the name, as in "1 map, 3 backgrounds", with ", applied 2 min ago" after it once
-    /// the pack has been applied (spec 8), and ", hidden from lists" last when the eye is off (2.8).</summary>
-    public string CountsText
+    /// <summary>The first line under the name (3.0): what the pack holds, as in "25 maps, 27 backgrounds.".
+    /// Two lines rather than one sentence, because a narrow column broke the joined form mid-sentence.</summary>
+    public string CountsLine => _counts;
+
+    /// <summary>The second line under the name (3.0): where the pack's art actually is, then "Hidden from lists."
+    /// when the eye is off (2.8). The time of the last Apply all is gone from it; where the art sits answers the
+    /// same question and keeps answering it after a reset.</summary>
+    public string StateLine
     {
         get
         {
-            var text = _lastApplied is { } stamp
-                ? $"{_counts}, applied {RelativeTime.Describe(stamp, DateTimeOffset.Now)}"
-                : _counts;
-            return IsHidden ? $"{text}, hidden from lists" : text;
+            var text = WhereText(Name, _appliedMaps);
+            return IsHidden ? $"{text} {HiddenText}" : text;
         }
     }
 
@@ -113,12 +123,16 @@ public sealed partial class PackRowViewModel : ObservableObject
     /// OneWayToSource binding in the row template.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(MoreText))]
+    [NotifyPropertyChangedFor(nameof(MoreName))]
     [NotifyPropertyChangedFor(nameof(ShowMore))]
     public partial int Overflow { get; set; }
 
-    /// <summary>Addendum E's "+58": every map the strip is not showing, whether it was cut by the width or never
-    /// given a tile.</summary>
-    public string MoreText => $"+{Remaining}";
+    /// <summary>Addendum E's "+58", as 3.0 words it: every map the strip is not showing, whether it was cut by
+    /// the width or never given a tile. A link now, so what it does is on it.</summary>
+    public string MoreText => $"+{Remaining} more";
+
+    /// <summary>The link's name for the screen reader, which cannot see the strip the "+58" is counting.</summary>
+    public string MoreName => $"{Remaining} more in {Name}";
 
     public bool ShowMore => Remaining > 0;
 
@@ -145,16 +159,38 @@ public sealed partial class PackRowViewModel : ObservableObject
         return true;
     }
 
-    /// <summary>The stamp the page read out of the settings, or null for a pack never applied.</summary>
-    public void SetLastApplied(DateTimeOffset? stamp)
+    /// <summary>The count the page read out of the applied record, zero for a pack with nothing in the game.</summary>
+    public void SetAppliedMaps(int count)
     {
-        _lastApplied = stamp;
-        RefreshCountsText();
+        _appliedMaps = count;
+        RefreshLines();
     }
 
-    /// <summary>Reads the words again from the same stamp: "just now" becomes "2 min ago" while the page is open.</summary>
-    public void RefreshCountsText() => OnPropertyChanged(nameof(CountsText));
+    /// <summary>Reads the state line again, for a caller that changed something the line names.</summary>
+    public void RefreshLines() => OnPropertyChanged(nameof(StateLine));
+
+    /// <summary>What a pack holds: the folders that are maps and the files in Backgrounds. Shared with the pack's
+    /// own page, whose subtitle carries the same sentence (3.0).</summary>
+    public static (int Maps, int Backgrounds) Counts(Pack pack) => (
+        pack.Folders.Count(f => !f.Name.Equals(BackgroundsFolder, StringComparison.OrdinalIgnoreCase)),
+        pack.FindFolder(BackgroundsFolder)?.Files.Count ?? 0);
+
+    /// <summary>The two sentences joined, for the pack's own page, whose subtitle has the width for one line.
+    /// The row shows the same two as <see cref="CountsLine" /> and <see cref="StateLine" /> (3.0).</summary>
+    public static string Describe(string packName, int mapCount, int backgroundCount, int appliedMaps) =>
+        $"{HoldsText(mapCount, backgroundCount)} {WhereText(packName, appliedMaps)}";
 
     /// <summary>"1 map" but "0 maps" and "3 maps". Shared with the page's confirm text, which counts files.</summary>
     public static string Plural(int count, string noun) => count == 1 ? $"{count} {noun}" : $"{count} {noun}s";
+
+    /// <summary>The first sentence, as in "25 maps, 27 backgrounds."</summary>
+    private static string HoldsText(int mapCount, int backgroundCount) =>
+        $"{Plural(mapCount, "map")}, {Plural(backgroundCount, "background")}.";
+
+    /// <summary>The second sentence: where the pack's art is. The Default pack is never applied as such, so
+    /// instead of a count it says what it is for.</summary>
+    private static string WhereText(string packName, int appliedMaps) =>
+        packName.Equals(DefaultPack.Name, StringComparison.OrdinalIgnoreCase)
+            ? DefaultWhereText
+            : appliedMaps == 0 ? NotInGameText : $"On {Plural(appliedMaps, "map")}.";
 }

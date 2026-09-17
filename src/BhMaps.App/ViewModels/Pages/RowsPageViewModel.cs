@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using BhMaps.App.Services;
+using BhMaps.Core.Layout;
 using BhMaps.Core.Maps;
 using BhMaps.Core.Operations;
 using BhMaps.Core.Settings;
@@ -10,14 +11,11 @@ using CommunityToolkit.Mvvm.Input;
 namespace BhMaps.App.ViewModels.Pages;
 
 /// <summary>What the Backgrounds and Platforms pages have in common (addendum B and C): one row per map, a chip
-/// row, a search box, a zoom that sets the thumbnail height, and the rule that a row reads its pictures when it
-/// comes on screen. No selection of its own: selecting a map is the Maps page's (q4), and a tile menu here acts
-/// on the row it belongs to.</summary>
-public abstract partial class RowsPageViewModel : PageViewModel
+/// row, a search box, a size that sets the thumbnails, and the rule that a row reads its pictures when it comes
+/// on screen. No selection of its own: selecting a map is the Maps page's (q4), and a tile menu here acts on the
+/// row it belongs to.</summary>
+public abstract partial class RowsPageViewModel : PageViewModel, ITileSized
 {
-    public const int MinZoom = AppSettings.MinRowZoom;
-    public const int MaxZoom = AppSettings.MaxRowZoom;
-
     protected const string AllChip = "All";
 
     /// <summary>Every row the last scan produced. Rows is this list under the chip and the search.</summary>
@@ -30,7 +28,7 @@ public abstract partial class RowsPageViewModel : PageViewModel
 
     private CancellationTokenSource? _loads;
 
-    protected RowsPageViewModel(MainViewModel shell, int storedZoom)
+    protected RowsPageViewModel(MainViewModel shell, TileSize storedSize)
         : base(shell)
     {
         Rows = [];
@@ -40,9 +38,8 @@ public abstract partial class RowsPageViewModel : PageViewModel
         SearchText = "";
         SelectedChip = AllChip;
 
-        // A stored zoom from another version, or a hand-edited one, is clamped rather than trusted. The value is
-        // handed in rather than read here, so the constructor calls nothing the subclass has overridden.
-        Zoom = Math.Clamp(storedZoom, MinZoom, MaxZoom);
+        // Handed in rather than read here, so the constructor reaches for nothing the subclass owns.
+        TileSize = storedSize;
     }
 
     /// <summary>The last scan, or null before the first one.</summary>
@@ -64,34 +61,30 @@ public abstract partial class RowsPageViewModel : PageViewModel
     [ObservableProperty]
     public partial string SelectedChip { get; set; }
 
-    /// <summary>MinZoom to MaxZoom, a thumbnail height rather than a column count (addendum B, q1).</summary>
+    /// <summary>How big the row's thumbnails are drawn, persisted by the page (wireframe 8.2). A rows page
+    /// picks a tile width like a grid page does, and the row height follows it, so one size means the same
+    /// thing on every page.</summary>
     [ObservableProperty]
-    public partial int Zoom { get; set; }
+    public partial TileSize TileSize { get; set; }
 
-    /// <summary>Addendum B, q1 answered dense: 48, 56, 72, 96, 128 px.</summary>
-    public double ThumbHeight => Zoom switch
-    {
-        1 => 48,
-        2 => 56,
-        3 => 72,
-        4 => 96,
-        _ => 128,
-    };
+    /// <summary>224, 150 or 96 px.</summary>
+    public double ThumbWidth => TileSizes.RowTileWidth(TileSize);
 
     /// <summary>16:9, rounded to a whole pixel so a strip of them measures the same on every row.</summary>
-    public double ThumbWidth => Math.Round(ThumbHeight * 16 / 9);
+    public double ThumbHeight => Math.Round(ThumbWidth * 9 / 16);
 
-    /// <summary>False at the two smallest steps, where a thumbnail is 85 or 100 px wide and the hover row has
-    /// room for the dots button alone. A click on the tile still applies, so nothing is lost but the label.</summary>
-    public bool ShowTileApply => Zoom >= 3;
+    /// <summary>False at Small, where a thumbnail is 96 px wide and the hover row has room for the dots button
+    /// alone. A click on the tile still applies, so nothing is lost but the label.</summary>
+    public bool ShowTileApply => TileSize != TileSize.Small;
 
     /// <summary>The words in the search box while it is empty, and its automation name.</summary>
     public abstract string SearchPlaceholder { get; }
 
-    /// <summary>The zoom slider's automation name: a rows page sizes thumbnails, it does not count columns.</summary>
-    public virtual string ZoomLabel => "Thumbnail size";
-
     public bool ShowClearSearch => SearchText.Length > 0;
+
+    /// <summary>The empty state's one action, which only a search gives it: with nothing typed there is nothing
+    /// to undo and the state is just the sentence.</summary>
+    public string EmptyActionText => ShowClearSearch ? "Clear search" : "";
 
     /// <summary>2.8: how many packs the Packs page is hiding from these rows. Written by <see cref="Refresh" />,
     /// because a list quietly missing a pack reads as a bug.</summary>
@@ -101,13 +94,6 @@ public abstract partial class RowsPageViewModel : PageViewModel
     public string HiddenPacksText => $"{MainViewModel.Count(HiddenPackCount, "pack")} hidden";
 
     public bool ShowHiddenPacks => HiddenPackCount > 0;
-
-    /// <summary>Spec 3.1's first-run line, on this page too: nothing in the library but the Default pack, and no
-    /// any-map picture either.</summary>
-    public bool ShowFirstRunLine =>
-        Snapshot is { } s
-        && !s.Packs.Any(p => !p.Name.Equals(DefaultPack.Name, StringComparison.OrdinalIgnoreCase))
-        && s.CustomPictures.Count == 0;
 
     /// <summary>Why the list is empty, in one line (addendum B and C).</summary>
     public string EmptyText
@@ -124,6 +110,7 @@ public abstract partial class RowsPageViewModel : PageViewModel
             return SelectedChip switch
             {
                 null or "" or AllChip => "No map to show.",
+                MapCatalog.MinigameLabel => "No minigame map to show.",
                 _ => $"No {SelectedChip.ToLowerInvariant()} map to show.",
             };
         }
@@ -132,8 +119,9 @@ public abstract partial class RowsPageViewModel : PageViewModel
     /// <summary>The line the search's own empty state uses, which quotes what was typed.</summary>
     protected abstract string NoResultsText { get; }
 
-    /// <summary>Writes the page's own zoom key. Called only from the change hook, never from the constructor.</summary>
-    protected abstract void SaveZoom(int value);
+    /// <summary>Writes the page's own tile size key. Called only from the change hook, never from the
+    /// constructor.</summary>
+    protected abstract void SaveSize(TileSize value);
 
     /// <summary>One row for one map. The page decides the tag, the chips' answers, the search haystack and the
     /// order of the strip; <see cref="MapChoices" /> decides what is in it.</summary>
@@ -161,7 +149,6 @@ public abstract partial class RowsPageViewModel : PageViewModel
         RebuildChips(snapshot.Catalog);
         ApplyFilter();
         RebuildMenus();
-        OnPropertyChanged(nameof(ShowFirstRunLine));
 
         // The Default pack is never hidden, whatever the setting holds.
         HiddenPackCount = snapshot.Packs.Count(p =>
@@ -204,16 +191,19 @@ public abstract partial class RowsPageViewModel : PageViewModel
     partial void OnSearchTextChanged(string value)
     {
         OnPropertyChanged(nameof(ShowClearSearch));
+        OnPropertyChanged(nameof(EmptyActionText));
         ApplyFilter();
     }
 
     partial void OnSelectedChipChanged(string value) => ApplyFilter();
 
-    partial void OnZoomChanged(int value)
+    partial void OnTileSizeChanged(TileSize value)
     {
-        SaveZoom(value);
-        OnPropertyChanged(nameof(ThumbHeight));
+        SaveSize(value);
+
+        // The row template reads these numbers rather than carrying triggers of its own.
         OnPropertyChanged(nameof(ThumbWidth));
+        OnPropertyChanged(nameof(ThumbHeight));
         OnPropertyChanged(nameof(ShowTileApply));
     }
 
@@ -276,17 +266,21 @@ public abstract partial class RowsPageViewModel : PageViewModel
     private bool Matches(MapRowViewModel row)
     {
         var search = SearchText;
-        if (search.Length > 0 && !row.Haystack.Contains(search, StringComparison.OrdinalIgnoreCase))
+        if (search.Length > 0)
         {
-            return false;
+            // 3.0: a search reads every map, whatever the chip says, so a typed name still reaches a minigame
+            // map that the All chip leaves out.
+            return row.Haystack.Contains(search, StringComparison.OrdinalIgnoreCase);
         }
 
         return SelectedChip switch
         {
-            AllChip => true,
+            AllChip => !MapCatalog.IsMinigame(row.Map),
             null or "" => true,
             _ => _uiSets.FirstOrDefault(s => s.Label == SelectedChip) is { } set
-                && row.Map.Sets.Contains(set.Name, StringComparer.OrdinalIgnoreCase),
+                && (set.Name == MapCatalog.MinigameSetName
+                    ? MapCatalog.IsMinigame(row.Map)
+                    : row.Map.Sets.Contains(set.Name, StringComparer.OrdinalIgnoreCase)),
         };
     }
 }

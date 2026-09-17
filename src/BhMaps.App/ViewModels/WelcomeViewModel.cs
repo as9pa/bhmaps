@@ -11,10 +11,14 @@ namespace BhMaps.App.ViewModels;
 /// first-run backup prompt; firstRunDone stays in settings for compatibility and is not read here.</summary>
 public partial class WelcomeViewModel : ObservableObject
 {
-    private const string CaptureLabel = "Capturing defaults";
+    private const string CaptureLabel = "Capturing the Default pack";
 
     private readonly AppServices _services;
     private readonly IDialogs _dialogs;
+
+    /// <summary>Step 3's own cancel, because the shell's busy boundary does not exist yet. Null when nothing is
+    /// capturing.</summary>
+    private CancellationTokenSource? _cts;
 
     public WelcomeViewModel(AppServices services, IDialogs dialogs)
     {
@@ -37,6 +41,10 @@ public partial class WelcomeViewModel : ObservableObject
 
     public event Action<bool>? CloseRequested;
 
+    /// <summary>What step 3's capture did, or null when it was not run, was cancelled, or has not finished. The
+    /// window is gone by the time the outcome can be read, so the shell's strip says it instead.</summary>
+    public WelcomeCapture? Capture { get; private set; }
+
     [ObservableProperty]
     public partial string GamePath { get; set; }
 
@@ -58,7 +66,8 @@ public partial class WelcomeViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(
         nameof(ChangeGameCommand),
         nameof(ChangeLibraryCommand),
-        nameof(FinishCommand))]
+        nameof(FinishCommand),
+        nameof(CancelCaptureCommand))]
     public partial bool IsBusy { get; set; }
 
     [ObservableProperty]
@@ -94,10 +103,8 @@ public partial class WelcomeViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanAct))]
     private async Task FinishAsync()
     {
-        var game = Normalize(GamePath);
-        var library = Normalize(LibraryPath);
-        GamePath = game;
-        LibraryPath = library;
+        var game = GamePath;
+        var library = LibraryPath;
         var gameOk = SettingsStore.ValidateGamePath(game, out var gameError);
         var libraryOk = SettingsStore.ValidateLibraryPath(library, out var libraryError);
         GameError = gameOk ? "" : gameError;
@@ -121,53 +128,77 @@ public partial class WelcomeViewModel : ObservableObject
 
         if (CaptureNow)
         {
-            await CaptureAsync(game, library);
+            if (!await CaptureAsync(game, library))
+            {
+                // Cancelled: the window goes back to step 3 rather than out, because the answer it is asking for
+                // has not been given yet.
+                return;
+            }
         }
 
         CloseRequested?.Invoke(true);
     }
 
-    /// <summary>An error next to a path the user has since changed is worse than no error at all, so any edit,
-    /// typed or picked, clears it; Finish is what puts one back.</summary>
+    /// <summary>An error next to a path the user has since picked again is worse than no error at all, so
+    /// choosing a folder clears it; Finish is what puts one back.</summary>
     partial void OnGamePathChanged(string value) => GameError = "";
 
     partial void OnLibraryPathChanged(string value) => LibraryError = "";
 
     /// <summary>Step 3, spec 6.1. The shell and its busy boundary do not exist yet, so this is the window's own:
-    /// the buttons are disabled through IsNotBusy and the progress line says what is being copied. The paths are
-    /// the ones the user just confirmed, not the run's, so the capture matches what the two steps say.</summary>
-    private async Task CaptureAsync(string game, string library)
+    /// the rows are disabled through IsNotBusy, the progress line stands where the buttons were and Cancel beside
+    /// it stops the copy. The paths are the ones the user just confirmed, not the run's, so the capture matches
+    /// what the two steps say. False when the user cancelled, which is the one outcome that keeps the window
+    /// open; a failure closes with the rest and the shell's strip carries it (3.0), because a dialog to dismiss
+    /// before the window behind it can be read says no more than the line does.</summary>
+    private async Task<bool> CaptureAsync(string game, string library)
     {
         IsBusy = true;
         ProgressText = CaptureLabel;
         ApplyResult? result = null;
+        _cts = new CancellationTokenSource();
         var progress = new Progress<string>(message => ProgressText = $"{CaptureLabel}: {message}");
         try
         {
-            await Task.Run(() => { result = DefaultPack.Capture(game, library, progress); });
+            var ct = _cts.Token;
+            await Task.Run(() => { result = DefaultPack.Capture(game, library, progress, ct); }, ct);
+            Capture = new WelcomeCapture(
+                result is { } captured
+                    ? $"Captured the Default pack, {MainViewModel.Count(captured.Copied, "file")}."
+                    : "Captured the Default pack.",
+                Failed: false);
+        }
+        catch (OperationCanceledException)
+        {
+            // Whatever the capture undoes on its way out it has already undone; nothing here is left to say.
+            return false;
         }
         catch (Exception ex)
         {
-            _dialogs.Error("Something went wrong", ex.Message);
+            Capture = new WelcomeCapture(MainViewModel.FailureLine(CaptureLabel, ex.Message), Failed: true);
         }
         finally
         {
             IsBusy = false;
             ProgressText = "";
+            _cts.Dispose();
+            _cts = null;
         }
 
         if (result is not null)
         {
             _dialogs.ShowFailures("Some files could not be captured", result.Failures);
         }
+
+        return true;
     }
 
-    /// <summary>Explorer's "Copy as path" wraps the path in quotes; strip one surrounding pair so it still resolves.</summary>
-    private static string Normalize(string path)
-    {
-        var trimmed = path.Trim();
-        return trimmed.Length >= 2 && trimmed.StartsWith('"') && trimmed.EndsWith('"')
-            ? trimmed[1..^1]
-            : trimmed;
-    }
+    /// <summary>Step 3's Cancel, the strip's link before there is a strip. The token is what stops the copy; the
+    /// capture's own cleanup is what puts the library back.</summary>
+    [RelayCommand(CanExecute = nameof(IsBusy))]
+    private void CancelCapture() => _cts?.Cancel();
 }
+
+/// <summary>What step 3's capture did, in the line the status strip will show: the done line the in-app capture
+/// says, or the failure line, which the shell tells apart by <paramref name="Failed"/>.</summary>
+public readonly record struct WelcomeCapture(string Text, bool Failed);

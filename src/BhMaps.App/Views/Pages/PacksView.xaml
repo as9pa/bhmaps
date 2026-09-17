@@ -29,7 +29,7 @@
                 <ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Center" />
               </Border>
               <Border x:Name="Ring"
-                      BorderBrush="{StaticResource TextBrush}"
+                      BorderBrush="{StaticResource FocusRingBrush}"
                       BorderThickness="1"
                       CornerRadius="{StaticResource Radius}"
                       IsHitTestVisible="False"
@@ -68,30 +68,20 @@
   </UserControl.Resources>
 
   <DockPanel Margin="24,16,24,24">
-    <controls:PageHeader DockPanel.Dock="Top" Title="Packs">
+    <controls:PageHeader DockPanel.Dock="Top" PageMenu="{Binding PageMenu}" Title="Packs">
       <controls:PageHeader.Actions>
         <!-- Disabled while the shell is busy, the same hop past the page to the window's MainViewModel the header
-             itself makes (decision D11), so a second operation cannot be started from a live-looking button.
-             Import and Open library are library-only and stop there; Capture defaults reads the game folder, so
-             it takes CanWrite on top, which WPF ands with this one (spec 7.8). -->
+             itself makes (decision D11), so a second operation cannot be started from a live-looking button. Both
+             are library-only and stop there; Capture the Default pack and Open library, which no longer need a button of
+             their own, moved into the page menu (3.0). New pack is the solid one: making a pack is what this page
+             is for, and importing a folder is the same thing done from files. -->
         <StackPanel IsEnabled="{Binding DataContext.IsNotBusy, RelativeSource={RelativeSource AncestorType=Window}}" Orientation="Horizontal">
-          <Button Command="{Binding ImportCommand}" Content="Import folder" controls:Icon.Glyph="{StaticResource Icon.Plus}" Style="{StaticResource OutlineButton}" />
+          <Button Command="{Binding ImportCommand}" Content="Import folder" controls:Icon.Glyph="{StaticResource Icon.FolderPlus}" Style="{StaticResource OutlineButton}" />
           <Button Margin="8,0,0,0"
                   Command="{Binding NewPackCommand}"
                   Content="New pack"
                   controls:Icon.Glyph="{StaticResource Icon.Plus}"
-                  Style="{StaticResource OutlineButton}" />
-          <Button Margin="8,0,0,0"
-                  Command="{Binding CaptureDefaultsCommand}"
-                  Content="Capture defaults"
-                  controls:Icon.Glyph="{StaticResource Icon.Camera}"
-                  IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}"
-                  Style="{StaticResource OutlineButton}" />
-          <Button Margin="8,0,0,0"
-                  Command="{Binding OpenLibraryCommand}"
-                  Content="Open library"
-                  controls:Icon.Glyph="{StaticResource Icon.FolderOpen}"
-                  Style="{StaticResource PlainButton}" />
+                  Style="{StaticResource PrimaryButton}" />
         </StackPanel>
       </controls:PageHeader.Actions>
     </controls:PageHeader>
@@ -160,9 +150,12 @@
 
                       <StackPanel Grid.Column="1" Margin="14,0,12,0" VerticalAlignment="Center">
                         <TextBlock FontWeight="Medium" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
-                        <!-- Wraps rather than trims: ", hidden from lists" is the end of the line and the part that matters. -->
-                        <TextBlock Margin="0,3,0,0" Foreground="{StaticResource Text2Brush}" Text="{Binding CountsText}"
-                                   TextWrapping="Wrap" />
+                        <!-- Two lines, each trimmed rather than wrapped (3.0): one line broke mid-sentence in a
+                             narrow column, as in "0 maps, 1 background. Not" over "in game.". -->
+                        <TextBlock Margin="0,3,0,0" Foreground="{StaticResource Text2Brush}" Text="{Binding CountsLine}"
+                                   TextTrimming="CharacterEllipsis" />
+                        <TextBlock Foreground="{StaticResource Text2Brush}" Text="{Binding StateLine}"
+                                   TextTrimming="CharacterEllipsis" />
                       </StackPanel>
 
                       <!-- The strip and its count share one star column: a count in an Auto column of its own
@@ -179,6 +172,8 @@
                                 <DataTrigger Binding="{Binding ShowMore}" Value="True">
                                   <Setter Property="OpacityMask">
                                     <Setter.Value>
+                                      <!-- Alpha, not colour: these two stops are the mask's own black and
+                                           transparent, so they stay literals rather than becoming tokens. -->
                                       <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
                                         <GradientStop Offset="0.84" Color="#FF000000" />
                                         <GradientStop Offset="1" Color="#00000000" />
@@ -196,11 +191,18 @@
                           </ItemsControl.ItemsPanel>
                         </ItemsControl>
 
-                        <TextBlock HorizontalAlignment="Right"
-                                   VerticalAlignment="Center"
-                                   Foreground="{StaticResource Text2Brush}"
-                                   Text="{Binding MoreText}"
-                                   Visibility="{Binding ShowMore, Converter={StaticResource BoolToVis}}" />
+                        <!-- 3.0: a link rather than a bare count, because the maps it is counting are on the
+                             pack's own page and the "+58" never said so. The nearest ItemsControl above it is the
+                             list, not the strip: the strip's own ItemsControl is a sibling of this. -->
+                        <Button HorizontalAlignment="Right"
+                                VerticalAlignment="Center"
+                                AutomationProperties.Name="{Binding MoreName}"
+                                Command="{Binding DataContext.OpenCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                CommandParameter="{Binding}"
+                                Style="{StaticResource StripLink}"
+                                Visibility="{Binding ShowMore, Converter={StaticResource BoolToVis}}">
+                          <TextBlock Style="{StaticResource StripLinkText}" Text="{Binding MoreText}" />
+                        </Button>
                       </Grid>
                     </Grid>
                   </Button>
@@ -257,11 +259,14 @@
         </ItemsControl>
       </ScrollViewer>
 
-      <!-- Empty library (addendum E): the line and Import folder on one line, with Capture defaults beside it,
-           because an empty library on a machine that has the game is one click from being a full one. -->
-      <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Orientation="Horizontal">
-        <StackPanel.Style>
-          <Style TargetType="StackPanel">
+      <!-- Empty library (addendum E): the page's own empty state, with the one action the other two cannot be
+           (Import folder and New pack are already on the header). A machine that has the game is one click from
+           a full library, so Capture is the click this offers. -->
+      <controls:EmptyState ActionCommand="{Binding CaptureDefaultsCommand}"
+                           ActionText="Capture the Default pack"
+                           Text="{x:Static pages:PacksViewModel.EmptyText}">
+        <controls:EmptyState.Style>
+          <Style TargetType="controls:EmptyState">
             <Setter Property="Visibility" Value="Collapsed" />
             <Style.Triggers>
               <DataTrigger Binding="{Binding IsEmpty}" Value="True">
@@ -269,27 +274,8 @@
               </DataTrigger>
             </Style.Triggers>
           </Style>
-        </StackPanel.Style>
-        <TextBlock VerticalAlignment="Center"
-                   Foreground="{StaticResource Text2Brush}"
-                   Text="{x:Static pages:PacksViewModel.EmptyText}" />
-        <Button Margin="12,0,0,0"
-                Command="{Binding ImportCommand}"
-                Content="Import folder"
-                controls:Icon.Glyph="{StaticResource Icon.Plus}"
-                Style="{StaticResource PrimaryButton}" />
-        <Button Margin="8,0,0,0"
-                Command="{Binding NewPackCommand}"
-                Content="New pack"
-                controls:Icon.Glyph="{StaticResource Icon.Plus}"
-                Style="{StaticResource OutlineButton}" />
-        <Button Margin="8,0,0,0"
-                Command="{Binding CaptureDefaultsCommand}"
-                Content="Capture defaults"
-                controls:Icon.Glyph="{StaticResource Icon.Camera}"
-                IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}"
-                Style="{StaticResource OutlineButton}" />
-      </StackPanel>
+        </controls:EmptyState.Style>
+      </controls:EmptyState>
     </Grid>
   </DockPanel>
 </UserControl>

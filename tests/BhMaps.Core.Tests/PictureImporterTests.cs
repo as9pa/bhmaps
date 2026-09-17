@@ -21,7 +21,7 @@ public class PictureImporterTests
     public void ToFitOptions_MapsTheFourLabelsOntoTheFitterModes()
     {
         Assert.Equal(new FitOptions(FitMode.Stretch), PictureImporter.ToFitOptions(PictureFit.Stretch));
-        Assert.Equal(new FitOptions(FitMode.Contain, NoUpscale: true), PictureImporter.ToFitOptions(PictureFit.Center));
+        Assert.Equal(new FitOptions(FitMode.Center), PictureImporter.ToFitOptions(PictureFit.Center));
         Assert.Equal(new FitOptions(FitMode.Cover), PictureImporter.ToFitOptions(PictureFit.Fill));
         Assert.Equal(new FitOptions(FitMode.Contain), PictureImporter.ToFitOptions(PictureFit.Fit));
         Assert.False(PictureImporter.ToFitOptions(PictureFit.Fit).NoUpscale);

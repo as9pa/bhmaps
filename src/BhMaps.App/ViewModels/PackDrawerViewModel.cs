@@ -62,7 +62,7 @@ public partial class PackDrawerViewModel : ObservableObject
         _map = map;
         Preview = preview;
         DisplayName = map?.DisplayName ?? preview.Caption;
-        SetsText = map is null ? "" : string.Join(", ", map.Sets.Select(MapCatalog.LabelFor));
+        SetsText = map is null ? "" : MapCatalog.SetsSentence(map.Sets);
         InGameText = map is null
             ? "In game: nothing uses this picture"
             : $"In game: {status?.Text ?? "Default"}";

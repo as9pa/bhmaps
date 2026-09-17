@@ -53,11 +53,11 @@ Brawlhalla open or closed, and show on the next match load.
 - Refresh, next to Launch, applies again what changed at the source, restores missing files and
   rewrites the map-select thumbnails, in one write with one Undo. After a game update, a new map's
   own art goes into the Default pack by itself.
-- Map-select thumbnails, switched on in Settings, put each map's new art on the game's map select
-  screen as well, keeping the original so a reset, an Undo or switching it off puts it back.
+- Map-select thumbnails put each map's new art on the game's map select screen as well, keeping
+  the original so a reset or an Undo puts it back.
 - Undo puts back whatever the last write into the game folder overwrote or deleted.
-- Only `.png` and `.jpg` files inside `mapArt` are ever changed, plus the map-select thumbnails when
-  that switch is on; the game's data files are read only.
+- Only `.png` and `.jpg` files inside `mapArt` are ever changed, plus the map-select thumbnails;
+  the game's data files are read only.
 - Every tile in a pack has a menu. **Copy to pack...** and **Move to pack...**, or Ctrl+C, Ctrl+X and
   Ctrl+V, take a map or a picture from one pack to another, and the red **Delete** lines take a
   picture, a platform set or a map out of a pack and put the default back on any map showing it.

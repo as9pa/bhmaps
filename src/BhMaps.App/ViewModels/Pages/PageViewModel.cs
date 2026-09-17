@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using BhMaps.App.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 
@@ -10,11 +11,18 @@ public abstract partial class PageViewModel : ObservableObject
     protected PageViewModel(MainViewModel shell)
     {
         Shell = shell;
+
+        // A page menu bakes the shell's gates into its lines, so a change in either one has to make a new list
+        // (3.0): the header binds PageMenu once and reads the enabled flags off the objects it was given.
+        Shell.PropertyChanged += OnShellPropertyChanged;
     }
 
     protected MainViewModel Shell { get; }
 
     public abstract string Title { get; }
+
+    /// <summary>The lines behind the page header's menu button, or null for a page with no menu (3.0).</summary>
+    public virtual IReadOnlyList<TileMenuCommand>? PageMenu => null;
 
     /// <summary>Called after every scan. Rebuild the page's collections here.</summary>
     public abstract void Refresh(ScanSnapshot snapshot);
@@ -22,4 +30,13 @@ public abstract partial class PageViewModel : ObservableObject
     /// <summary>Spec 11: the same refresh, told which map folders the write that led to the scan touched. Only the
     /// page that shows those maps has anything to do with them, so every other page falls through.</summary>
     public virtual void Refresh(ScanSnapshot snapshot, IReadOnlyList<string>? writtenFolders) => Refresh(snapshot);
+
+    private void OnShellPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(MainViewModel.CanWrite) or nameof(MainViewModel.IsBusy)
+            or nameof(MainViewModel.IsNotBusy))
+        {
+            OnPropertyChanged(nameof(PageMenu));
+        }
+    }
 }

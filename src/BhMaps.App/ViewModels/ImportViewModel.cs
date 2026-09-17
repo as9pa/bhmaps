@@ -211,7 +211,8 @@ public partial class ImportViewModel : ObservableObject
         if (existing.Count > 0
             && !_dialogs.Confirm(
                 existing.Count == 1 ? "Add to existing pack" : "Add to existing packs",
-                AddToExistingMessage(existing)))
+                AddToExistingMessage(existing),
+                existing.Count == 1 ? MainViewModel.Verb("Add to", existing[0]) : "Add"))
         {
             return;
         }

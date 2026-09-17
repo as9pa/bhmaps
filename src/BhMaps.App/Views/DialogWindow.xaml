@@ -71,12 +71,14 @@
                 IsCancel="True"
                 Style="{StaticResource PlainButton}"
                 Visibility="{Binding HasCancel, Converter={StaticResource BoolToVis}}" />
+        <!-- The label is the verb, so it is also the name a screen reader reads. The style itself is picked in
+             the code-behind, because a Style cannot be swapped from inside one. -->
         <Button x:Name="OkButton"
+                AutomationProperties.Name="{Binding Primary}"
                 Click="Ok_Click"
-                Content="OK"
+                Content="{Binding Primary}"
                 FocusVisualStyle="{StaticResource DialogFocusRing}"
-                IsDefault="True"
-                Style="{StaticResource PrimaryButton}" />
+                IsDefault="True" />
       </StackPanel>
     </StackPanel>
   </Border>

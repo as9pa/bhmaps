@@ -7,6 +7,7 @@
              xmlns:imaging="clr-namespace:BhMaps.Core.Imaging;assembly=BhMaps.Core"
              xmlns:pages="clr-namespace:BhMaps.App.ViewModels.Pages"
              xmlns:primitives="clr-namespace:System.Windows.Controls.Primitives;assembly=PresentationFramework"
+             behaviors:SizeShortcuts.Target="{Binding}"
              PreviewKeyDown="OnPageKeyDown">
   <!-- Spec 3.2: Escape closes the panel. Escape in the search box is the typed text's first; OnPageKeyDown
        handles that one before this binding can see it. -->
@@ -20,14 +21,23 @@
     <converters:WidthAtLeastConverter x:Key="WidthAtLeast" />
 
     <!-- 2.8: one map is selected at a time, and it is the map the panel is open on. The card is a ListBoxItem,
-         so the light border is the control's own selection and the page keeps it on the open card. The gap is the
-         zoom's (spec 3.1), read off the page rather than set here, so the two tightest steps can tighten it. -->
+         so the light border is the control's own selection and the page keeps it on the open card. 3.0: no margin
+         here, because the justified panel owns the gutter; the open card's 2 px ring is drawn inside the
+         container, so it needs no room of its own either. -->
     <Style x:Key="MapCardItem" TargetType="ListBoxItem" BasedOn="{StaticResource TileListBoxItem}">
       <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
-      <Setter Property="Margin" Value="{Binding DataContext.CardMargin, RelativeSource={RelativeSource AncestorType=ListBox}}" />
+      <Setter Property="Margin" Value="0" />
       <Setter Property="Cursor" Value="Hand" />
       <Setter Property="AutomationProperties.Name" Value="{Binding DisplayName}" />
-      <Setter Property="ToolTip" Value="{Binding ToolTipText}" />
+      <!-- 3.0: a ToolTip element rather than the bare string, because a tooltip already on screen when the card's
+           menu opens has to be closed, and only an element can be. The text comes off the card the tooltip is
+           placed on rather than off the DataContext, so one instance shared by every card still says the right
+           thing about the card under the pointer. -->
+      <Setter Property="ToolTip">
+        <Setter.Value>
+          <ToolTip Content="{Binding PlacementTarget.DataContext.ToolTipText, RelativeSource={RelativeSource Self}}" />
+        </Setter.Value>
+      </Setter>
       <Setter Property="ContextMenu" Value="{StaticResource TileMenu}" />
       <EventSetter Event="ContextMenuOpening" Handler="OnCardMenuOpening" />
       <EventSetter Event="PreviewMouseLeftButtonDown" Handler="OnCardMouseDown" />
@@ -118,7 +128,7 @@
                 <ContentPresenter />
               </Border>
               <Border x:Name="Ring"
-                      BorderBrush="{StaticResource TextBrush}"
+                      BorderBrush="{StaticResource FocusRingBrush}"
                       BorderThickness="1"
                       CornerRadius="{StaticResource Radius}"
                       IsHitTestVisible="False"
@@ -181,7 +191,7 @@
                 </StackPanel>
               </Border>
               <Border x:Name="Ring"
-                      BorderBrush="{StaticResource TextBrush}"
+                      BorderBrush="{StaticResource FocusRingBrush}"
                       BorderThickness="1"
                       CornerRadius="{StaticResource Radius}"
                       IsHitTestVisible="False"
@@ -271,7 +281,7 @@
       </Border>
       <DataTemplate.Triggers>
         <DataTrigger Binding="{Binding IsInGame}" Value="True">
-          <Setter TargetName="Tile" Property="BorderBrush" Value="{StaticResource TextBrush}" />
+          <Setter TargetName="Tile" Property="BorderBrush" Value="{StaticResource AccentBrush}" />
           <Setter TargetName="InGameTick" Property="Visibility" Value="Visible" />
         </DataTrigger>
         <Trigger SourceName="Tile" Property="IsMouseOver" Value="True">
@@ -325,6 +335,19 @@
                     StrokeThickness="1.6" />
             </Border>
 
+            <!-- 3.0: a map whose level places no platforms has nothing a set could change, so the tile keeps its
+                 size and says that in words instead of showing an empty picture with an Apply over it. -->
+            <TextBlock x:Name="NoArt"
+                       Margin="8,0"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       FontSize="{StaticResource FontCaption}"
+                       Foreground="{StaticResource Text3Brush}"
+                       Text="{Binding NoArt}"
+                       TextAlignment="Center"
+                       TextWrapping="Wrap"
+                       Visibility="Collapsed" />
+
             <StackPanel x:Name="Actions"
                         HorizontalAlignment="Center"
                         VerticalAlignment="Center"
@@ -344,12 +367,12 @@
             </StackPanel>
           </Grid>
 
-          <TextBlock Margin="0,6,0,0" Style="{StaticResource TileCaption}" Text="{Binding PackName}" />
+          <TextBlock Margin="0,6,0,0" Style="{StaticResource TileCaption}" Text="{Binding Title}" />
         </StackPanel>
       </Border>
       <DataTemplate.Triggers>
         <DataTrigger Binding="{Binding InGame}" Value="True">
-          <Setter TargetName="Tile" Property="BorderBrush" Value="{StaticResource TextBrush}" />
+          <Setter TargetName="Tile" Property="BorderBrush" Value="{StaticResource AccentBrush}" />
           <Setter TargetName="InGameTick" Property="Visibility" Value="Visible" />
         </DataTrigger>
         <Trigger SourceName="Tile" Property="IsMouseOver" Value="True">
@@ -365,6 +388,15 @@
              TileMenu is x:Shared="False". -->
         <DataTrigger Binding="{Binding ContextMenu.IsOpen, ElementName=Tile}" Value="True">
           <Setter TargetName="Actions" Property="Opacity" Value="1" />
+        </DataTrigger>
+
+        <!-- Last, so it wins over the hover and focus triggers above: a placeholder is not a choice, so it takes
+             no click and opens no menu. -->
+        <DataTrigger Binding="{Binding HasNoArt}" Value="True">
+          <Setter TargetName="NoArt" Property="Visibility" Value="Visible" />
+          <Setter TargetName="Actions" Property="Visibility" Value="Collapsed" />
+          <Setter TargetName="Tile" Property="ContextMenu" Value="{x:Null}" />
+          <Setter TargetName="Tile" Property="AutomationProperties.Name" Value="No platform art" />
         </DataTrigger>
       </DataTemplate.Triggers>
     </DataTemplate>
@@ -437,7 +469,7 @@
   </UserControl.Resources>
 
   <DockPanel Margin="24,16,24,24">
-    <controls:PageHeader DockPanel.Dock="Top" Title="Maps">
+    <controls:PageHeader DockPanel.Dock="Top" PageMenu="{Binding PageMenu}" Title="Maps">
       <controls:PageHeader.Actions>
         <StackPanel Orientation="Horizontal">
           <!-- Spec 3.1: the page's own search string, bound straight to the page view model. Centred at the
@@ -481,21 +513,8 @@
             </TextBlock>
           </Grid>
 
-          <!-- Spec 3.1: the zoom belongs to the header row, where nothing the chip row does can move it. -->
-          <controls:ZoomSlider Margin="16,0,0,0"
-                               VerticalAlignment="Center"
-                               Maximum="{x:Static pages:MapsViewModel.MaxZoom}"
-                               Minimum="{x:Static pages:MapsViewModel.MinZoom}"
-                               Value="{Binding Zoom}" />
-
-          <!-- CanWrite, not IsNotBusy: this writes into the game folder, so it is also off while that folder is
-               missing and its confirm cannot be reached from a live-looking button (spec 7.8). -->
-          <Button Margin="8,0,0,0"
-                  Command="{Binding ResetAllCommand}"
-                  Content="Reset all to default"
-                  controls:Icon.Glyph="{StaticResource Icon.Undo}"
-                  IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}"
-                  Style="{StaticResource OutlineButton}" />
+          <!-- Spec 3.1: the size belongs to the header row, where nothing the chip row does can move it. -->
+          <controls:SizePicker Margin="16,0,0,0" VerticalAlignment="Center" Value="{Binding TileSize}" />
         </StackPanel>
       </controls:PageHeader.Actions>
     </controls:PageHeader>
@@ -514,406 +533,424 @@
       </ListBox>
     </Grid>
 
-    <!-- Spec 3.1: the only line a first-timer needs, and it goes when a pack arrives. -->
-    <TextBlock DockPanel.Dock="Top"
-               Margin="0,0,0,12"
-               Foreground="{StaticResource Text2Brush}"
-               TextWrapping="Wrap"
-               Visibility="{Binding ShowFirstRunLine, Converter={StaticResource BoolToVis}}">
-      <Run Text="No packs yet. Import a folder of map art on the " /><Hyperlink Command="{Binding DataContext.NavigatePacksCommand, RelativeSource={RelativeSource AncestorType=Window}}" Foreground="{StaticResource TextBrush}"><Run Text="Packs" /></Hyperlink><Run Text=" page, or add an image on " /><Hyperlink Command="{Binding DataContext.NavigateBackgroundsCommand, RelativeSource={RelativeSource AncestorType=Window}}" Foreground="{StaticResource TextBrush}"><Run Text="Backgrounds" /></Hyperlink><Run Text="." />
-    </TextBlock>
-
     <!-- The grid first and the panel second, because WPF tabs in declaration order: a DockPanel would have to
          declare the docked panel before the fill child and Tab would reach it before the cards. -->
     <Grid>
-      <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="*" />
-        <ColumnDefinition Width="Auto" />
-      </Grid.ColumnDefinitions>
-
       <Grid>
-        <!-- 2.8: the grid is a ListBox with single selection, and the selected card is the one the panel is open
-             on: the container's own IsSelected is MapCardViewModel.IsSelected. The container draws no focus
-             rectangle of its own: the cards and the chips have their own ring, and the default is a dashed box
-             around the whole grid. A local attribute, because a FocusVisualStyle style setter crashes at
-             startup. -->
-        <ListBox FocusVisualStyle="{x:Null}"
-                 ItemContainerStyle="{StaticResource MapCardItem}"
-                 ItemsSource="{Binding Cards}"
-                 KeyboardNavigation.DirectionalNavigation="Contained"
-                 ScrollViewer.CanContentScroll="False"
-                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                 ScrollViewer.VerticalScrollBarVisibility="Auto"
-                 SelectionMode="Single"
-                 Style="{StaticResource TileListBox}">
-          <ListBox.Resources>
-            <!-- The ScrollViewer is inside the ListBox's own template, so the behaviour reaches it through an
-                 implicit style rather than as an attribute (spec 10). -->
-            <Style TargetType="ScrollViewer">
-              <Setter Property="behaviors:SmoothScroll.IsEnabled" Value="True" />
-            </Style>
-          </ListBox.Resources>
-          <ListBox.ItemsPanel>
-            <ItemsPanelTemplate>
-              <!-- Top aligned, or a short list comes out with a huge gap under it. 2.8: a WrapPanel rather than
-                   a UniformGrid, so the cards keep the width the zoom gives them and the row holds however many
-                   fit; opening the panel moves the last card of a row down instead of shrinking every card. No
-                   ItemWidth: the card sets its own width, and the item's margin is the gap. A WrapPanel does not
-                   virtualise either, which is the point: every container is realised, so the selection binding
-                   is exact (plan decision A-D10). -->
-              <WrapPanel VerticalAlignment="Top" Orientation="Horizontal" />
-            </ItemsPanelTemplate>
-          </ListBox.ItemsPanel>
-          <ListBox.ItemTemplate>
-            <DataTemplate>
-              <!-- The name and the tag are the container's tooltip, which is the only place they are at the two
-                   tightest zoom steps (spec 3.1), and a longer name than the card can draw at any step. -->
-              <Border x:Name="Chrome"
-                      Width="{Binding DataContext.CardWidth, RelativeSource={RelativeSource AncestorType=ListBox}}"
-                      Padding="{Binding DataContext.CardPadding, RelativeSource={RelativeSource AncestorType=ListBox}}"
-                      Style="{StaticResource CardBorder}">
-                <StackPanel>
-                  <!-- The Viewbox holds the card source's shape at any card width, so a card that has not
-                       drawn its preview yet is the same size as one that has and nothing jumps, and the card's
-                       height follows its width rather than being set anywhere. The size comes
-                       from the compositor that renders it, so the two cannot drift apart. Through a OneTime
-                       Binding rather than a bare x:Static: the constants are pixel counts and so int, and
-                       setting a Double property from an int markup extension throws at load. -->
-                  <Grid>
-                    <Viewbox Stretch="Uniform">
-                      <Grid Width="{Binding Source={x:Static imaging:MapCompositor.CardWidth}, Mode=OneTime}"
-                            Height="{Binding Source={x:Static imaging:MapCompositor.CardHeight}, Mode=OneTime}"
-                            Background="{StaticResource TileBrush}">
-                        <Image RenderOptions.BitmapScalingMode="HighQuality"
-                               Source="{Binding Preview}"
-                               Stretch="UniformToFill" />
-                      </Grid>
-                    </Viewbox>
+        <Grid.Style>
+          <Style TargetType="Grid">
+            <Style.Triggers>
+              <DataTrigger Binding="{Binding DataContext.GameFolderMissing, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                <Setter Property="Visibility" Value="Collapsed" />
+              </DataTrigger>
+            </Style.Triggers>
+          </Style>
+        </Grid.Style>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
 
-                    <!-- Spec 3.1: with the tag row gone at 9 and 10, Missing is a mark on the picture. Over the
-                         Viewbox rather than inside it: the Viewbox scales the compositor's 640 px down to the
-                         card, which at 10 columns would draw these 10 px as 2. -->
-                    <Border Width="10"
-                            Height="10"
-                            Margin="4"
-                            HorizontalAlignment="Right"
-                            VerticalAlignment="Top"
-                            Background="{StaticResource MissingFgBrush}"
-                            CornerRadius="5">
-                      <Border.Style>
-                        <Style TargetType="Border">
-                          <Setter Property="Visibility" Value="Collapsed" />
-                          <Style.Triggers>
-                            <MultiDataTrigger>
-                              <MultiDataTrigger.Conditions>
-                                <Condition Binding="{Binding IsMissing}" Value="True" />
-                                <Condition Binding="{Binding DataContext.ShowMissingMark, RelativeSource={RelativeSource AncestorType=ListBox}}" Value="True" />
-                              </MultiDataTrigger.Conditions>
-                              <Setter Property="Visibility" Value="Visible" />
-                            </MultiDataTrigger>
-                          </Style.Triggers>
-                        </Style>
-                      </Border.Style>
-                    </Border>
-
-                    <!-- Owner change O6: where a card too narrow to hold the pill on its name row draws it
-                         instead, over the picture's bottom-left corner. Over the Viewbox rather than inside it,
-                         for the reason the Missing mark is. The wrapper is what the zoom hides, so
-                         the presenter's own Visibility is left to the template trigger below and the two never
-                         argue over it. -->
-                    <Grid Visibility="{Binding DataContext.ShowTagRow, RelativeSource={RelativeSource AncestorType=ListBox}, Converter={StaticResource BoolToVis}}">
-                      <ContentPresenter x:Name="PictureTag"
-                                        Margin="6"
-                                        HorizontalAlignment="Left"
-                                        VerticalAlignment="Bottom"
-                                        Content="{Binding}"
-                                        ContentTemplate="{StaticResource CardTagPillOnPicture}"
-                                        Visibility="Visible" />
-                    </Grid>
-                  </Grid>
-
-                  <!-- Owner change O1, as O6 amends it: the name and the tag share the card's one row where the
-                       card is wide enough to hold both. There is no second row: a card never grows for its tag,
-                       and the pill it cannot fit here is drawn over the picture instead. -->
-                  <Grid Margin="2,8,2,0"
-                        Visibility="{Binding DataContext.ShowName, RelativeSource={RelativeSource AncestorType=ListBox}, Converter={StaticResource BoolToVis}}">
-                    <Grid.ColumnDefinitions>
-                      <ColumnDefinition Width="*" />
-                      <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-
-                    <TextBlock VerticalAlignment="Center"
-                               FontSize="{Binding DataContext.NameFontSize, RelativeSource={RelativeSource AncestorType=ListBox}}"
-                               Text="{Binding DisplayName}"
-                               TextTrimming="CharacterEllipsis" />
-
-                    <!-- The wrapper is what the zoom hides (at 7 and above there are no tags anywhere), so the
-                         presenter's own Visibility is left to the template trigger below. -->
-                    <Grid Grid.Column="1"
-                          Visibility="{Binding DataContext.ShowTagRow, RelativeSource={RelativeSource AncestorType=ListBox}, Converter={StaticResource BoolToVis}}">
-                      <ContentPresenter x:Name="NameRowTag"
-                                        Margin="8,0,0,0"
-                                        VerticalAlignment="Center"
-                                        Content="{Binding}"
-                                        ContentTemplate="{StaticResource CardTagPill}"
-                                        Visibility="Collapsed" />
-                    </Grid>
-                  </Grid>
-                </StackPanel>
-              </Border>
-              <DataTemplate.Triggers>
-                <!-- Owner changes O1 and O6: a wide card carries the pill on the name's row; a narrow one
-                     carries it over the picture's bottom-left corner, so no card ever grows for its tag and a
-                     row is never as tall as an empty line in one card. The card's own width decides,
-                     rather than the zoom step, because the window can be any width and the panel takes 376 px
-                     of it. 200 px is a 16 character pill (the ellipsis ceiling on a picture's name) plus the
-                     8 px gap plus a 14 character name at 13 px, plus the card's padding and border. A pack name
-                     longer than that takes the width from the name, and ellipsises in its own pill rather than
-                     running off the card. -->
-                <DataTrigger Binding="{Binding ActualWidth, ElementName=Chrome, Converter={StaticResource WidthAtLeast}, ConverterParameter=200}" Value="True">
-                  <Setter TargetName="NameRowTag" Property="Visibility" Value="Visible" />
-                  <Setter TargetName="PictureTag" Property="Visibility" Value="Collapsed" />
-                </DataTrigger>
-
-                <!-- The hover fill is the one the card wore as a Button (spec 3.1). -->
-                <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
-                  <Setter TargetName="Chrome" Property="Background" Value="{StaticResource Surface2Brush}" />
-                </DataTrigger>
-              </DataTemplate.Triggers>
-            </DataTemplate>
-          </ListBox.ItemTemplate>
-        </ListBox>
-
-        <!-- Spec 3.1: an empty grid says why in one line, and offers the way back when a search caused it. -->
-        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-          <StackPanel.Style>
-            <Style TargetType="StackPanel">
-              <Setter Property="Visibility" Value="Collapsed" />
-              <Style.Triggers>
-                <DataTrigger Binding="{Binding Cards.Count}" Value="0">
-                  <Setter Property="Visibility" Value="Visible" />
-                </DataTrigger>
-              </Style.Triggers>
-            </Style>
-          </StackPanel.Style>
-          <TextBlock HorizontalAlignment="Center"
-                     Foreground="{StaticResource Text2Brush}"
-                     Text="{Binding EmptyText}"
-                     TextWrapping="Wrap" />
-          <Button Margin="0,8,0,0"
-                  HorizontalAlignment="Center"
-                  Command="{Binding ClearSearchCommand}"
-                  Content="Clear search"
-                  Style="{StaticResource PlainButton}"
-                  Visibility="{Binding ShowClearSearch, Converter={StaticResource BoolToVis}}" />
-        </StackPanel>
-      </Grid>
-
-      <!-- Spec 7.2: the right panel for one map, 360 px, open exactly while a card is selected. -->
-      <Border Grid.Column="1"
-              Width="{StaticResource PanelWidth}"
-              Margin="16,0,0,0"
-              AutomationProperties.Name="{Binding DisplayName}"
-              DataContext="{Binding Panel}"
-              Style="{StaticResource CardBorder}"
-              Visibility="{Binding DataContext.Panel, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource NullToVis}}">
         <Grid>
-          <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-          </Grid.RowDefinitions>
+          <!-- 2.8: the grid is a ListBox with single selection, and the selected card is the one the panel is open
+               on: the container's own IsSelected is MapCardViewModel.IsSelected. The container draws no focus
+               rectangle of its own: the cards and the chips have their own ring, and the default is a dashed box
+               around the whole grid. A local attribute, because a FocusVisualStyle style setter crashes at
+               startup. -->
+          <ListBox FocusVisualStyle="{x:Null}"
+                   ItemContainerStyle="{StaticResource MapCardItem}"
+                   ItemsSource="{Binding Cards}"
+                   KeyboardNavigation.DirectionalNavigation="Contained"
+                   ScrollViewer.CanContentScroll="False"
+                   ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                   ScrollViewer.VerticalScrollBarVisibility="Auto"
+                   SelectionMode="Single"
+                   Style="{StaticResource TileListBox}">
+            <ListBox.Resources>
+              <!-- The ScrollViewer is inside the ListBox's own template, so the behaviour reaches it through an
+                   implicit style rather than as an attribute (spec 10). -->
+              <Style TargetType="ScrollViewer">
+                <Setter Property="behaviors:SmoothScroll.IsEnabled" Value="True" />
+              </Style>
+            </ListBox.Resources>
+            <ListBox.ItemsPanel>
+              <ItemsPanelTemplate>
+                <!-- Top aligned, or a short list comes out with a huge gap under it. 3.0: a JustifiedPanel
+                     rather than the 2.8 WrapPanel, which left whatever did not fit as a hole down the right edge
+                     beside the open panel. The size is a target width; the panel fits as many cards across as it
+                     can and shares the rest of the row out over them, so the grid always reaches the edge. The
+                     gutter is the panel's Gap, so the cards themselves carry no margin. -->
+                <controls:JustifiedPanel VerticalAlignment="Top"
+                                         Gap="12"
+                                         TargetWidth="{Binding DataContext.TargetCardWidth, RelativeSource={RelativeSource AncestorType=ListBox}}" />
+              </ItemsPanelTemplate>
+            </ListBox.ItemsPanel>
+            <ListBox.ItemTemplate>
+              <DataTemplate>
+                <!-- The name and the tag are the container's tooltip, which is the only place they are at the two
+                     tightest zoom steps (spec 3.1), and a longer name than the card can draw at any step. -->
+                <Border x:Name="Chrome"
+                        Padding="{Binding DataContext.CardPadding, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                        Style="{StaticResource CardBorder}">
+                  <StackPanel>
+                    <!-- The Viewbox holds the card source's shape at any card width, so a card that has not
+                         drawn its preview yet is the same size as one that has and nothing jumps, and the card's
+                         height follows its width rather than being set anywhere. The size comes
+                         from the compositor that renders it, so the two cannot drift apart. Through a OneTime
+                         Binding rather than a bare x:Static: the constants are pixel counts and so int, and
+                         setting a Double property from an int markup extension throws at load. -->
+                    <Grid>
+                      <Viewbox Stretch="Uniform">
+                        <Grid Width="{Binding Source={x:Static imaging:MapCompositor.CardWidth}, Mode=OneTime}"
+                              Height="{Binding Source={x:Static imaging:MapCompositor.CardHeight}, Mode=OneTime}"
+                              Background="{StaticResource TileBrush}">
+                          <Image RenderOptions.BitmapScalingMode="HighQuality"
+                                 Source="{Binding Preview}"
+                                 Stretch="UniformToFill" />
+                        </Grid>
+                      </Viewbox>
 
-          <Grid Margin="16,12,8,4">
-            <Grid.ColumnDefinitions>
-              <ColumnDefinition Width="*" />
-              <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
+                      <!-- Spec 3.1: with the tag row gone at 9 and 10, Missing is a mark on the picture. Over the
+                           Viewbox rather than inside it: the Viewbox scales the compositor's 640 px down to the
+                           card, which at 10 columns would draw these 10 px as 2. -->
+                      <Border Width="10"
+                              Height="10"
+                              Margin="4"
+                              HorizontalAlignment="Right"
+                              VerticalAlignment="Top"
+                              Background="{StaticResource MissingFgBrush}"
+                              CornerRadius="5">
+                        <Border.Style>
+                          <Style TargetType="Border">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                              <MultiDataTrigger>
+                                <MultiDataTrigger.Conditions>
+                                  <Condition Binding="{Binding IsMissing}" Value="True" />
+                                  <Condition Binding="{Binding DataContext.ShowMissingMark, RelativeSource={RelativeSource AncestorType=ListBox}}" Value="True" />
+                                </MultiDataTrigger.Conditions>
+                                <Setter Property="Visibility" Value="Visible" />
+                              </MultiDataTrigger>
+                            </Style.Triggers>
+                          </Style>
+                        </Border.Style>
+                      </Border>
 
-            <StackPanel VerticalAlignment="Center">
-              <TextBlock FontSize="16" FontWeight="SemiBold" Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" />
-              <TextBlock Margin="0,2,0,0" Style="{StaticResource QuietNote}" Text="{Binding SetsText}" TextTrimming="CharacterEllipsis" />
-              <TextBlock Margin="0,2,0,0"
-                         Style="{StaticResource QuietNote}"
-                         Text="{Binding ThumbnailNote}"
-                         TextTrimming="CharacterEllipsis"
-                         Visibility="{Binding HasThumbnailNote, Converter={StaticResource BoolToVis}}" />
-            </StackPanel>
+                      <!-- Owner change O6: where a card too narrow to hold the pill on its name row draws it
+                           instead, over the picture's bottom-left corner. Over the Viewbox rather than inside it,
+                           for the reason the Missing mark is. The wrapper is what the zoom hides, so
+                           the presenter's own Visibility is left to the template trigger below and the two never
+                           argue over it. -->
+                      <Grid Visibility="{Binding DataContext.ShowTagRow, RelativeSource={RelativeSource AncestorType=ListBox}, Converter={StaticResource BoolToVis}}">
+                        <ContentPresenter x:Name="PictureTag"
+                                          Margin="6"
+                                          HorizontalAlignment="Left"
+                                          VerticalAlignment="Bottom"
+                                          Content="{Binding}"
+                                          ContentTemplate="{StaticResource CardTagPillOnPicture}"
+                                          Visibility="Visible" />
+                      </Grid>
+                    </Grid>
 
-            <Button Grid.Column="1"
-                    AutomationProperties.Name="Close"
-                    Command="{Binding CloseCommand}"
-                    Foreground="{StaticResource Text2Brush}"
-                    Style="{StaticResource IconButton}"
-                    ToolTip="Close">
-              <controls:Icon Geometry="{StaticResource Icon.X}" Size="16" />
-            </Button>
-          </Grid>
+                    <!-- Owner change O1, as O6 amends it: the name and the tag share the card's one row where the
+                         card is wide enough to hold both. There is no second row: a card never grows for its tag,
+                         and the pill it cannot fit here is drawn over the picture instead. -->
+                    <Grid Margin="2,8,2,0"
+                          Visibility="{Binding DataContext.ShowName, RelativeSource={RelativeSource AncestorType=ListBox}, Converter={StaticResource BoolToVis}}">
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                      </Grid.ColumnDefinitions>
 
-          <!-- The right margin is 4 and the content's is 12, so the overlay scrollbar rides in a gutter of its own
-               instead of sitting on top of the tiles. -->
-          <ScrollViewer Grid.Row="1"
-                        Margin="16,4,4,0"
-                        HorizontalScrollBarVisibility="Disabled"
-                        behaviors:SmoothScroll.IsEnabled="True"
-                        VerticalScrollBarVisibility="Auto">
-            <!-- The bottom margin keeps the last row clear of the panel's own edge. -->
-            <StackPanel Margin="0,0,12,16">
-              <!-- The panel preview's source is 1280x720 (spec 7.2); 16:9 at the panel's own width is 185 px tall. -->
-              <Border Height="185" Style="{StaticResource PictureTile}">
-                <Border CornerRadius="{StaticResource Radius}" RenderOptions.BitmapScalingMode="HighQuality">
-                  <Border.Background>
-                    <ImageBrush ImageSource="{Binding Preview}" Stretch="UniformToFill" />
-                  </Border.Background>
+                      <TextBlock VerticalAlignment="Center"
+                                 FontSize="{Binding DataContext.NameFontSize, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                 Text="{Binding DisplayName}"
+                                 TextTrimming="CharacterEllipsis" />
+
+                      <!-- The wrapper is what the zoom hides (at 7 and above there are no tags anywhere), so the
+                           presenter's own Visibility is left to the template trigger below. -->
+                      <Grid Grid.Column="1"
+                            Visibility="{Binding DataContext.ShowTagRow, RelativeSource={RelativeSource AncestorType=ListBox}, Converter={StaticResource BoolToVis}}">
+                        <ContentPresenter x:Name="NameRowTag"
+                                          Margin="8,0,0,0"
+                                          VerticalAlignment="Center"
+                                          Content="{Binding}"
+                                          ContentTemplate="{StaticResource CardTagPill}"
+                                          Visibility="Collapsed" />
+                      </Grid>
+                    </Grid>
+                  </StackPanel>
                 </Border>
-              </Border>
+                <DataTemplate.Triggers>
+                  <!-- Owner changes O1 and O6: a wide card carries the pill on the name's row; a narrow one
+                       carries it over the picture's bottom-left corner, so no card ever grows for its tag and a
+                       row is never as tall as an empty line in one card. The card's own width decides,
+                       rather than the zoom step, because the window can be any width and the panel takes 376 px
+                       of it. 200 px is a 16 character pill (the ellipsis ceiling on a picture's name) plus the
+                       8 px gap plus a 14 character name at 13 px, plus the card's padding and border. A pack name
+                       longer than that takes the width from the name, and ellipsises in its own pill rather than
+                       running off the card. -->
+                  <DataTrigger Binding="{Binding ActualWidth, ElementName=Chrome, Converter={StaticResource WidthAtLeast}, ConverterParameter=200}" Value="True">
+                    <Setter TargetName="NameRowTag" Property="Visibility" Value="Visible" />
+                    <Setter TargetName="PictureTag" Property="Visibility" Value="Collapsed" />
+                  </DataTrigger>
 
-              <!-- Spec 3.2: what the game is showing for this map, in words rather than file names. -->
-              <TextBlock Margin="0,12,0,0"
-                         Foreground="{StaticResource Text2Brush}"
-                         Text="{Binding StatusText}"
-                         TextWrapping="Wrap" />
+                  <!-- The hover fill is the one the card wore as a Button (spec 3.1). -->
+                  <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
+                    <Setter TargetName="Chrome" Property="Background" Value="{StaticResource Surface2Brush}" />
+                  </DataTrigger>
 
-              <StackPanel Margin="0,12,0,0" Orientation="Horizontal">
-                <!-- CanWrite, not IsNotBusy: a reset writes into the game folder (spec 7.8). -->
-                <Button Command="{Binding ResetCommand}"
-                        Content="Reset this map"
-                        controls:Icon.Glyph="{StaticResource Icon.Undo}"
-                        IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}"
-                        Style="{StaticResource OutlineButton}" />
-                <Button Margin="8,0,0,0"
-                        Command="{Binding OpenFolderCommand}"
-                        Content="Open folder"
-                        controls:Icon.Glyph="{StaticResource Icon.FolderOpen}"
-                        Style="{StaticResource PlainButton}" />
+                  <!-- 3.0: the open card wears the hover fill for as long as its panel is open, so the accent ring
+                       the container draws is not the only thing saying which card the panel belongs to. A fill
+                       rather than anything sized: the ring is an overlay at the card's edge and the picture sits
+                       inside the card's padding, so neither one covers the picture or moves a card. -->
+                  <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
+                    <Setter TargetName="Chrome" Property="Background" Value="{StaticResource Surface2Brush}" />
+                  </DataTrigger>
+                </DataTemplate.Triggers>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+
+          <!-- Spec 3.1: an empty grid says why in one line, and offers the way back when a search caused it. -->
+          <controls:EmptyState ActionCommand="{Binding ClearSearchCommand}"
+                               ActionText="{Binding EmptyActionText}"
+                               Text="{Binding EmptyText}">
+            <controls:EmptyState.Style>
+              <Style TargetType="controls:EmptyState">
+                <Setter Property="Visibility" Value="Collapsed" />
+                <Style.Triggers>
+                  <DataTrigger Binding="{Binding Cards.Count}" Value="0">
+                    <Setter Property="Visibility" Value="Visible" />
+                  </DataTrigger>
+                </Style.Triggers>
+              </Style>
+            </controls:EmptyState.Style>
+          </controls:EmptyState>
+        </Grid>
+
+        <!-- Spec 7.2: the right panel for one map, 420 px (3.0), open exactly while a card is selected. -->
+        <Border Grid.Column="1"
+                Width="{StaticResource PanelWidth}"
+                Margin="24,0,0,0"
+                AutomationProperties.Name="{Binding DisplayName}"
+                DataContext="{Binding Panel}"
+                Padding="16"
+                Style="{StaticResource CardBorder}"
+                Visibility="{Binding DataContext.Panel, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource NullToVis}}">
+          <Grid>
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <Grid Margin="0,0,0,12">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+
+              <StackPanel VerticalAlignment="Center">
+                <TextBlock FontSize="{StaticResource FontEmphasis}" FontWeight="SemiBold" Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" />
+                <!-- 3.0: the sentence is the sets a player knows; the game's own list is one hover away. -->
+                <TextBlock Margin="0,2,0,0"
+                           Style="{StaticResource QuietNote}"
+                           Text="{Binding SetsText}"
+                           TextTrimming="CharacterEllipsis"
+                           ToolTip="{Binding SetsToolTip}" />
+                <TextBlock Margin="0,2,0,0"
+                           Style="{StaticResource QuietNote}"
+                           Text="{Binding ThumbnailNote}"
+                           TextTrimming="CharacterEllipsis"
+                           Visibility="{Binding HasThumbnailNote, Converter={StaticResource BoolToVis}}" />
               </StackPanel>
 
-              <!-- Why Reset is off, rather than a disabled button with no explanation (spec 7.8). The empty hint is
-                   what switches the line off, the same way the header's done line works. -->
-              <TextBlock Margin="0,8,0,0" Text="{Binding ResetHint}" TextWrapping="Wrap">
-                <TextBlock.Style>
-                  <Style TargetType="TextBlock" BasedOn="{StaticResource QuietNote}">
-                    <Style.Triggers>
-                      <DataTrigger Binding="{Binding ResetHint}" Value="">
-                        <Setter Property="Visibility" Value="Collapsed" />
-                      </DataTrigger>
-                    </Style.Triggers>
-                  </Style>
-                </TextBlock.Style>
-              </TextBlock>
+              <Button Grid.Column="1"
+                      AutomationProperties.Name="Close"
+                      Command="{Binding CloseCommand}"
+                      Foreground="{StaticResource Text2Brush}"
+                      Style="{StaticResource IconButton}"
+                      ToolTip="Close">
+                <controls:Icon Geometry="{StaticResource Icon.X}" Size="16" />
+              </Button>
+            </Grid>
 
-              <!-- Spec 7: the two halves are stacked rather than segmented, so one map's whole state is on the
-                   screen at once. The header is the one a page already puts over a section, so a section in the
-                   panel reads as the same kind of thing. -->
-              <TextBlock Margin="0,16,0,0" Style="{StaticResource SectionHeaderText}" Text="Background" />
+            <!-- 3.0: the panel's 16 px inset is the Border's padding, so nothing in here repeats it. The content
+                 keeps a right margin of its own, so the overlay scrollbar rides in a gutter instead of sitting on
+                 top of the tiles. -->
+            <ScrollViewer Grid.Row="1"
+                          HorizontalScrollBarVisibility="Disabled"
+                          behaviors:SmoothScroll.IsEnabled="True"
+                          VerticalScrollBarVisibility="Auto">
+              <StackPanel Margin="0,0,8,0">
+                <!-- The panel preview's source is 1280x720 (spec 7.2); 16:9 at the panel's own width is 185 px tall. -->
+                <Border Height="185" Style="{StaticResource PictureTile}">
+                  <Border CornerRadius="{StaticResource Radius}" RenderOptions.BitmapScalingMode="HighQuality">
+                    <Border.Background>
+                      <ImageBrush ImageSource="{Binding Preview}" Stretch="UniformToFill" />
+                    </Border.Background>
+                  </Border>
+                </Border>
 
-              <!-- The -8 right margin is the gutter PanelTile carries on its own right: two tiles across is
-                   156 + 8 + 156 in 320 of content, so without it the trailing gutter puts the row 2 px over the
-                   panel's width and the second tile wraps. -->
-              <ItemsControl Margin="0,8,-8,0"
-                            Focusable="False"
-                            ItemContainerStyle="{StaticResource PanelTileContainer}"
-                            ItemTemplate="{StaticResource PanelPictureTile}"
-                            ItemsSource="{Binding Backgrounds}">
-                <ItemsControl.ItemsPanel>
-                  <ItemsPanelTemplate>
-                    <WrapPanel />
-                  </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-              </ItemsControl>
+                <!-- Spec 3.2: what the game is showing for this map, in words rather than file names. -->
+                <TextBlock Margin="0,12,0,0"
+                           Foreground="{StaticResource Text2Brush}"
+                           Text="{Binding StatusText}"
+                           TextWrapping="Wrap" />
 
-              <!-- Spec 3: the any-map pictures, under the packs, one strip per pack and then the game's own. A
-                   pack with none of them is no strip at all, because a count of zero says nothing the Add Image
-                   button beside it does not. -->
-              <Grid Margin="0,4,0,0">
-                <Grid.ColumnDefinitions>
-                  <ColumnDefinition Width="*" />
-                  <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
+                <StackPanel Margin="0,12,0,0" Orientation="Horizontal">
+                  <!-- CanWrite, not IsNotBusy: a reset writes into the game folder (spec 7.8). -->
+                  <!-- 3.0: a disabled WPF button swallows its tooltip, so the one thing that says why Reset is
+                       off would never be read. ShowOnDisabled is what lets it through. -->
+                  <Button Command="{Binding ResetCommand}"
+                          Content="Reset this map"
+                          controls:Icon.Glyph="{StaticResource Icon.Undo}"
+                          IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}"
+                          Style="{StaticResource OutlineButton}"
+                          ToolTip="{Binding ResetToolTip}"
+                          ToolTipService.ShowOnDisabled="True" />
+                  <Button Margin="8,0,0,0"
+                          Command="{Binding OpenFolderCommand}"
+                          Content="Open folder"
+                          controls:Icon.Glyph="{StaticResource Icon.FolderOpen}"
+                          Style="{StaticResource PlainButton}" />
+                </StackPanel>
 
-                <!-- Every strip folds on its own and starts folded, so the panel opens on the status line and the
-                     pack tiles alone; a strip's thumbnails are a file read each, and they wait for the click on
-                     its header. The tiles are the ones the packs above use, so the -8 right margin and the
-                     container's automation name are the same too. -->
-                <ItemsControl Focusable="False"
-                              ItemsSource="{Binding PictureGroups}"
-                              Visibility="{Binding HasCustomPictures, Converter={StaticResource BoolToVis}}">
-                  <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                      <StackPanel>
-                        <primitives:ToggleButton Content="{Binding Header}"
-                                                 IsChecked="{Binding IsOpen}"
-                                                 Style="{StaticResource SectionHeaderRow}" />
+                <!-- Why Reset is off, rather than a disabled button with no explanation (spec 7.8). The empty hint is
+                     what switches the line off, the same way the header's done line works. -->
+                <TextBlock Margin="0,8,0,0" Text="{Binding ResetHint}" TextWrapping="Wrap">
+                  <TextBlock.Style>
+                    <Style TargetType="TextBlock" BasedOn="{StaticResource QuietNote}">
+                      <Style.Triggers>
+                        <DataTrigger Binding="{Binding ResetHint}" Value="">
+                          <Setter Property="Visibility" Value="Collapsed" />
+                        </DataTrigger>
+                      </Style.Triggers>
+                    </Style>
+                  </TextBlock.Style>
+                </TextBlock>
 
-                        <ItemsControl Margin="0,4,-8,0"
-                                      behaviors:Fold.Animate="True"
-                                      Focusable="False"
-                                      ItemContainerStyle="{StaticResource PanelTileContainer}"
-                                      ItemTemplate="{StaticResource PanelPictureTile}"
-                                      ItemsSource="{Binding Tiles}"
-                                      Visibility="{Binding IsOpen, Converter={StaticResource BoolToVis}}">
-                          <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                              <WrapPanel />
-                            </ItemsPanelTemplate>
-                          </ItemsControl.ItemsPanel>
-                        </ItemsControl>
-                      </StackPanel>
-                    </DataTemplate>
-                  </ItemsControl.ItemTemplate>
+                <!-- Spec 7: the two halves are stacked rather than segmented, so one map's whole state is on the
+                     screen at once. The header is the one a page already puts over a section, so a section in the
+                     panel reads as the same kind of thing. -->
+                <TextBlock Margin="0,16,0,0" Style="{StaticResource SectionHeaderText}" Text="Background" />
+
+                <!-- The -8 right margin is the gutter PanelTile carries on its own right: two tiles across is
+                     156 + 8 + 156 in 320 of content, so without it the trailing gutter puts the row 2 px over the
+                     panel's width and the second tile wraps. -->
+                <ItemsControl Margin="0,8,-8,0"
+                              Focusable="False"
+                              ItemContainerStyle="{StaticResource PanelTileContainer}"
+                              ItemTemplate="{StaticResource PanelPictureTile}"
+                              ItemsSource="{Binding Backgrounds}">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <WrapPanel />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
                 </ItemsControl>
 
-                <!-- IsNotBusy, not CanWrite: adding a picture is a library write, and the window it opens is the
-                     one thing offered while the game folder is missing (spec 7.1). -->
-                <Button Grid.Column="1"
-                        VerticalAlignment="Top"
-                        Command="{Binding AddPictureCommand}"
-                        Content="Add Image"
-                        controls:Icon.Glyph="{StaticResource Icon.Plus}"
-                        IsEnabled="{Binding DataContext.IsNotBusy, RelativeSource={RelativeSource AncestorType=Window}}"
-                        Style="{StaticResource PlainButton}" />
-              </Grid>
+                <!-- Spec 3: the any-map pictures, under the packs, one strip per pack and then the game's own. A
+                     pack with none of them is no strip at all, because a count of zero says nothing the Add Image
+                     button beside it does not. -->
+                <Grid Margin="0,4,0,0">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
 
-              <!-- One hairline, not a box or a gap: the least chrome that still says the two sections are
-                   separate things. -->
-              <Border Margin="0,16,0,0" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,1,0,0" />
+                  <!-- Every strip folds on its own and starts folded, so the panel opens on the status line and the
+                       pack tiles alone; a strip's thumbnails are a file read each, and they wait for the click on
+                       its header. The tiles are the ones the packs above use, so the -8 right margin and the
+                       container's automation name are the same too. -->
+                  <ItemsControl Focusable="False"
+                                ItemsSource="{Binding PictureGroups}"
+                                Visibility="{Binding HasCustomPictures, Converter={StaticResource BoolToVis}}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate>
+                        <StackPanel>
+                          <primitives:ToggleButton Content="{Binding Header}"
+                                                   IsChecked="{Binding IsOpen}"
+                                                   Style="{StaticResource SectionHeaderRow}" />
 
-              <TextBlock Margin="0,16,0,0" Style="{StaticResource SectionHeaderText}" Text="Platforms" />
+                          <ItemsControl Margin="0,4,-8,0"
+                                        behaviors:Fold.Animate="True"
+                                        Focusable="False"
+                                        ItemContainerStyle="{StaticResource PanelTileContainer}"
+                                        ItemTemplate="{StaticResource PanelPictureTile}"
+                                        ItemsSource="{Binding Tiles}"
+                                        Visibility="{Binding IsOpen, Converter={StaticResource BoolToVis}}">
+                            <ItemsControl.ItemsPanel>
+                              <ItemsPanelTemplate>
+                                <WrapPanel />
+                              </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                          </ItemsControl>
+                        </StackPanel>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
 
-              <ItemsControl Margin="0,8,-8,0"
-                            Focusable="False"
-                            ItemContainerStyle="{StaticResource PanelSetContainer}"
-                            ItemTemplate="{StaticResource PanelSetTile}"
-                            ItemsSource="{Binding Platforms}">
-                <ItemsControl.ItemsPanel>
-                  <ItemsPanelTemplate>
-                    <WrapPanel />
-                  </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-              </ItemsControl>
+                  <!-- IsNotBusy, not CanWrite: adding a picture is a library write, and the window it opens is the
+                       one thing offered while the game folder is missing (spec 7.1). -->
+                  <Button Grid.Column="1"
+                          VerticalAlignment="Top"
+                          Command="{Binding AddPictureCommand}"
+                          Content="Add Image"
+                          controls:Icon.Glyph="{StaticResource Icon.Plus}"
+                          IsEnabled="{Binding DataContext.IsNotBusy, RelativeSource={RelativeSource AncestorType=Window}}"
+                          Style="{StaticResource PlainButton}" />
+                </Grid>
 
-              <primitives:ToggleButton Margin="0,8,0,0"
-                                       Content="{Binding FilesHeader}"
-                                       IsChecked="{Binding FilesOpen}"
-                                       Style="{StaticResource FilesToggle}" />
+                <!-- One hairline, not a box or a gap: the least chrome that still says the two sections are
+                     separate things. -->
+                <Border Margin="0,16,0,0" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,1,0,0" />
 
-              <!-- The list scrolls inside the panel (spec 7.2), so a map with twenty files does not push everything
-                   else out of reach. -->
-              <ScrollViewer MaxHeight="240"
-                            Margin="8,4,0,0"
-                            behaviors:Fold.Animate="True"
-                            HorizontalScrollBarVisibility="Disabled"
-                            behaviors:SmoothScroll.IsEnabled="True"
-                            VerticalScrollBarVisibility="Auto"
-                            Visibility="{Binding FilesOpen, Converter={StaticResource BoolToVis}}">
-                <ItemsControl Focusable="False"
-                              ItemContainerStyle="{StaticResource FileContainer}"
-                              ItemTemplate="{StaticResource PlatformFile}"
-                              ItemsSource="{Binding Files}" />
-              </ScrollViewer>
-            </StackPanel>
-          </ScrollViewer>
-        </Grid>
-      </Border>
+                <TextBlock Margin="0,16,0,0" Style="{StaticResource SectionHeaderText}" Text="Platforms" />
+
+                <ItemsControl Margin="0,8,-8,0"
+                              Focusable="False"
+                              ItemContainerStyle="{StaticResource PanelSetContainer}"
+                              ItemTemplate="{StaticResource PanelSetTile}"
+                              ItemsSource="{Binding Platforms}">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <WrapPanel />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                </ItemsControl>
+
+                <primitives:ToggleButton Margin="0,8,0,0"
+                                         Content="{Binding FilesHeader}"
+                                         IsChecked="{Binding FilesOpen}"
+                                         Style="{StaticResource FilesToggle}" />
+
+                <!-- The list scrolls inside the panel (spec 7.2), so a map with twenty files does not push everything
+                     else out of reach. -->
+                <ScrollViewer MaxHeight="240"
+                              Margin="8,4,0,0"
+                              behaviors:Fold.Animate="True"
+                              HorizontalScrollBarVisibility="Disabled"
+                              behaviors:SmoothScroll.IsEnabled="True"
+                              VerticalScrollBarVisibility="Auto"
+                              Visibility="{Binding FilesOpen, Converter={StaticResource BoolToVis}}">
+                  <ItemsControl Focusable="False"
+                                ItemContainerStyle="{StaticResource FileContainer}"
+                                ItemTemplate="{StaticResource PlatformFile}"
+                                ItemsSource="{Binding Files}" />
+                </ScrollViewer>
+              </StackPanel>
+            </ScrollViewer>
+          </Grid>
+        </Border>
+      </Grid>
+      <!-- 3.0: with no game folder there is nothing on this page to read or write, so the page itself says so
+           and offers the one thing that fixes it. The picker, the save and the rescan behind it are the Settings
+           page's own command; there is one of them. -->
+      <controls:EmptyState ActionCommand="{Binding DataContext.SettingsPage.ChangeGameCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                           ActionText="Choose folder"
+                           Text="Game folder not found. Choose the Brawlhalla mapArt folder to continue."
+                           Visibility="{Binding DataContext.GameFolderMissing, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}" />
     </Grid>
   </DockPanel>
 </UserControl>

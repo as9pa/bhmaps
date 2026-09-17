@@ -19,6 +19,10 @@ public static class PlatformBounds
     public static CameraBounds? For(LevelDesc level, double pad, double aspect) =>
         For(level, pad, aspect, null);
 
+    /// <summary>3.0: false for a level that places no unthemed platform at all. Such a map has nothing a platform
+    /// set could change, so the UI says so in words instead of drawing an empty tile and offering an apply.</summary>
+    public static bool HasPlatformArt(LevelDesc level) => !Union(level, null).IsEmpty;
+
     /// <summary>Spec 3.2: with a focus set, the box is the union of the focused assets alone, so Selected only
     /// frames the ticked pieces. A set that matches no asset leaves the box empty and returns null, which is the
     /// same "render the whole level" answer a level with no platforms already gives.</summary>

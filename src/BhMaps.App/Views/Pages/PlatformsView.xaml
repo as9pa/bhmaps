@@ -3,14 +3,14 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:behaviors="clr-namespace:BhMaps.App.Behaviors"
              xmlns:controls="clr-namespace:BhMaps.App.Views.Controls"
-             xmlns:pages="clr-namespace:BhMaps.App.ViewModels.Pages"
+             behaviors:SizeShortcuts.Target="{Binding}"
              PreviewKeyDown="OnPreviewKeyDown">
   <UserControl.Resources>
     <BooleanToVisibilityConverter x:Key="BoolToVis" />
   </UserControl.Resources>
 
   <DockPanel Margin="24,16,24,24">
-    <!-- Addendum C: title, search and zoom. No primary button: nothing is added to the library from here. -->
+    <!-- Addendum C: title, search and size. No primary button: nothing is added to the library from here. -->
     <controls:PageHeader DockPanel.Dock="Top" Title="Platforms">
       <controls:PageHeader.Actions>
         <StackPanel Orientation="Horizontal">
@@ -48,12 +48,7 @@
             </TextBlock>
           </Grid>
 
-          <controls:ZoomSlider Margin="12,0,0,0"
-                               VerticalAlignment="Center"
-                               Label="{Binding ZoomLabel}"
-                               Maximum="{x:Static pages:RowsPageViewModel.MaxZoom}"
-                               Minimum="{x:Static pages:RowsPageViewModel.MinZoom}"
-                               Value="{Binding Zoom}" />
+          <controls:SizePicker Margin="16,0,0,0" VerticalAlignment="Center" Value="{Binding TileSize}" />
         </StackPanel>
       </controls:PageHeader.Actions>
     </controls:PageHeader>
@@ -92,66 +87,68 @@
               Visibility="{Binding ShowHiddenPacks, Converter={StaticResource BoolToVis}}" />
     </Grid>
 
-    <TextBlock DockPanel.Dock="Top"
-               Margin="0,0,0,12"
-               Foreground="{StaticResource Text2Brush}"
-               TextWrapping="Wrap"
-               Visibility="{Binding ShowFirstRunLine, Converter={StaticResource BoolToVis}}">
-      <Run Text="No packs yet. Import a folder of map art on the " /><Hyperlink Command="{Binding DataContext.NavigatePacksCommand, RelativeSource={RelativeSource AncestorType=Window}}" Foreground="{StaticResource TextBrush}"><Run Text="Packs" /></Hyperlink><Run Text=" page." />
-    </TextBlock>
-
     <Grid>
-      <ItemsControl ItemTemplate="{StaticResource MapRow}"
-                    ItemsSource="{Binding Rows}"
-                    KeyboardNavigation.DirectionalNavigation="Continue"
-                    KeyboardNavigation.TabNavigation="Continue"
-                    ScrollViewer.CanContentScroll="True"
-                    ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                    ScrollViewer.VerticalScrollBarVisibility="Auto"
-                    VirtualizingPanel.IsVirtualizing="True"
-                    VirtualizingPanel.ScrollUnit="Pixel"
-                    VirtualizingPanel.VirtualizationMode="Recycling">
-        <ItemsControl.Template>
-          <!-- An ItemsControl has no ScrollViewer of its own, and without one the VirtualizingStackPanel is
-               handed infinite height and realises every row. -->
-          <ControlTemplate TargetType="ItemsControl">
-            <ScrollViewer CanContentScroll="True"
-                          Focusable="False"
-                          Padding="{TemplateBinding Padding}"
-                          behaviors:SmoothScroll.IsEnabled="True">
-              <ItemsPresenter />
-            </ScrollViewer>
-          </ControlTemplate>
-        </ItemsControl.Template>
-        <ItemsControl.ItemsPanel>
-          <ItemsPanelTemplate>
-            <VirtualizingStackPanel />
-          </ItemsPanelTemplate>
-        </ItemsControl.ItemsPanel>
-      </ItemsControl>
-
-      <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-        <StackPanel.Style>
-          <Style TargetType="StackPanel">
-            <Setter Property="Visibility" Value="Collapsed" />
+      <Grid>
+        <Grid.Style>
+          <Style TargetType="Grid">
             <Style.Triggers>
-              <DataTrigger Binding="{Binding Rows.Count}" Value="0">
-                <Setter Property="Visibility" Value="Visible" />
+              <DataTrigger Binding="{Binding DataContext.GameFolderMissing, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                <Setter Property="Visibility" Value="Collapsed" />
               </DataTrigger>
             </Style.Triggers>
           </Style>
-        </StackPanel.Style>
-        <TextBlock HorizontalAlignment="Center"
-                   Foreground="{StaticResource Text2Brush}"
-                   Text="{Binding EmptyText}"
-                   TextWrapping="Wrap" />
-        <Button Margin="0,8,0,0"
-                HorizontalAlignment="Center"
-                Command="{Binding ClearSearchCommand}"
-                Content="Clear"
-                Style="{StaticResource PlainButton}"
-                Visibility="{Binding ShowClearSearch, Converter={StaticResource BoolToVis}}" />
-      </StackPanel>
+        </Grid.Style>
+        <ItemsControl ItemTemplate="{StaticResource MapRow}"
+                      ItemsSource="{Binding Rows}"
+                      KeyboardNavigation.DirectionalNavigation="Continue"
+                      KeyboardNavigation.TabNavigation="Continue"
+                      ScrollViewer.CanContentScroll="True"
+                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                      ScrollViewer.VerticalScrollBarVisibility="Auto"
+                      VirtualizingPanel.IsVirtualizing="True"
+                      VirtualizingPanel.ScrollUnit="Pixel"
+                      VirtualizingPanel.VirtualizationMode="Recycling">
+          <ItemsControl.Template>
+            <!-- An ItemsControl has no ScrollViewer of its own, and without one the VirtualizingStackPanel is
+                 handed infinite height and realises every row. -->
+            <ControlTemplate TargetType="ItemsControl">
+              <ScrollViewer CanContentScroll="True"
+                            Focusable="False"
+                            Padding="{TemplateBinding Padding}"
+                            behaviors:SmoothScroll.IsEnabled="True">
+                <ItemsPresenter />
+              </ScrollViewer>
+            </ControlTemplate>
+          </ItemsControl.Template>
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <VirtualizingStackPanel />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+        </ItemsControl>
+
+        <controls:EmptyState ActionCommand="{Binding ClearSearchCommand}"
+                             ActionText="{Binding EmptyActionText}"
+                             Text="{Binding EmptyText}">
+          <controls:EmptyState.Style>
+            <Style TargetType="controls:EmptyState">
+              <Setter Property="Visibility" Value="Collapsed" />
+              <Style.Triggers>
+                <DataTrigger Binding="{Binding Rows.Count}" Value="0">
+                  <Setter Property="Visibility" Value="Visible" />
+                </DataTrigger>
+              </Style.Triggers>
+            </Style>
+          </controls:EmptyState.Style>
+        </controls:EmptyState>
+      </Grid>
+      <!-- 3.0: with no game folder there is nothing on this page to read or write, so the page itself says so
+           and offers the one thing that fixes it. The picker, the save and the rescan behind it are the Settings
+           page's own command; there is one of them. -->
+      <controls:EmptyState ActionCommand="{Binding DataContext.SettingsPage.ChangeGameCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                           ActionText="Choose folder"
+                           Text="Game folder not found. Choose the Brawlhalla mapArt folder to continue."
+                           Visibility="{Binding DataContext.GameFolderMissing, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}" />
     </Grid>
   </DockPanel>
 </UserControl>

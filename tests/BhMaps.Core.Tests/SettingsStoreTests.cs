@@ -141,10 +141,10 @@ public class SettingsStoreTests
 
         var loaded = SettingsStore.Load(path);
 
-        Assert.Equal(6, loaded.MapsZoom);
-        Assert.Equal(2, loaded.BackgroundsZoom);
-        Assert.Equal(3, loaded.PlatformsZoom);
-        Assert.Equal(5, loaded.PackZoom);
+        Assert.Equal(TileSize.Medium, loaded.MapsTileSize);
+        Assert.Equal(TileSize.Medium, loaded.BackgroundsTileSize);
+        Assert.Equal(TileSize.Medium, loaded.PlatformsTileSize);
+        Assert.Equal(TileSize.Medium, loaded.PackTileSize);
         Assert.False(loaded.WelcomeDone);
     }
 
@@ -153,19 +153,19 @@ public class SettingsStoreTests
     {
         using var tmp = new TempDir();
         var path = tmp.Sub("settings.json");
-        var settings = new AppSettings(@"C:\g", @"C:\l", true, MapsZoom: 9, BackgroundsZoom: 3, PackZoom: 7,
-            WelcomeDone: true);
+        var settings = new AppSettings(@"C:\g", @"C:\l", true, MapsTileSize: TileSize.Small,
+            BackgroundsTileSize: TileSize.Large, PackTileSize: TileSize.Large, WelcomeDone: true);
 
         SettingsStore.Save(path, settings);
         var loaded = SettingsStore.Load(path);
 
-        Assert.Equal(9, loaded.MapsZoom);
-        Assert.Equal(3, loaded.BackgroundsZoom);
-        Assert.Equal(7, loaded.PackZoom);
+        Assert.Equal(TileSize.Small, loaded.MapsTileSize);
+        Assert.Equal(TileSize.Large, loaded.BackgroundsTileSize);
+        Assert.Equal(TileSize.Large, loaded.PackTileSize);
         Assert.True(loaded.WelcomeDone);
         var json = File.ReadAllText(path);
-        Assert.Contains("\"mapsZoom\": 9", json);
-        Assert.Contains("\"packZoom\": 7", json);
+        Assert.Contains("\"mapsTileSize\": \"small\"", json);
+        Assert.Contains("\"packTileSize\": \"large\"", json);
     }
 
     [Fact]
@@ -176,10 +176,10 @@ public class SettingsStoreTests
         File.WriteAllText(path, """{"gamePath":"C:\\g","futureThing":{"a":1},"favourites":["Grove"]}""");
 
         var loaded = SettingsStore.Load(path);
-        SettingsStore.Save(path, loaded with { MapsZoom = 2 });
+        SettingsStore.Save(path, loaded with { MapsTileSize = TileSize.Large });
 
         var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(path))!.AsObject();
-        Assert.Equal(2, (int)json["mapsZoom"]!);
+        Assert.Equal("large", (string)json["mapsTileSize"]!);
         Assert.Equal(1, (int)json["futureThing"]!["a"]!);
         Assert.Equal("Grove", (string)json["favourites"]![0]!);
     }
@@ -206,18 +206,71 @@ public class SettingsStoreTests
     }
 
     [Fact]
-    public void Load_ClampsTheGridZoomsToTwoThroughTenAndTheRowZoomsToOneThroughFive()
+    public void Load_ReadsATileSizeItDoesNotKnowAsMedium()
     {
         using var tmp = new TempDir();
         var path = tmp.Sub("settings.json");
-        File.WriteAllText(path, """{"mapsZoom":99,"backgroundsRowZoom":0,"packZoom":-4,"platformsZoom":9}""");
+        File.WriteAllText(path, """{"mapsTileSize":"enormous","packTileSize":"LARGE","platformsTileSize":""}""");
 
         var loaded = SettingsStore.Load(path);
 
-        Assert.Equal(10, loaded.MapsZoom);
-        Assert.Equal(1, loaded.BackgroundsZoom);
-        Assert.Equal(2, loaded.PackZoom);
-        Assert.Equal(5, loaded.PlatformsZoom);
+        Assert.Equal(TileSize.Medium, loaded.MapsTileSize);
+        Assert.Equal(TileSize.Large, loaded.PackTileSize);
+        Assert.Equal(TileSize.Medium, loaded.PlatformsTileSize);
+    }
+
+    [Theory]
+    [InlineData(2, TileSize.Large)]
+    [InlineData(4, TileSize.Large)]
+    [InlineData(5, TileSize.Medium)]
+    [InlineData(7, TileSize.Medium)]
+    [InlineData(8, TileSize.Small)]
+    [InlineData(10, TileSize.Small)]
+    public void Load_MigratesAGridZoomIntoTheNearestTileSize(int zoom, TileSize expected)
+    {
+        using var tmp = new TempDir();
+        var path = tmp.Sub("settings.json");
+        File.WriteAllText(path, $$"""{"mapsZoom":{{zoom}},"packZoom":{{zoom}}}""");
+
+        var loaded = SettingsStore.Load(path);
+
+        Assert.Equal(expected, loaded.MapsTileSize);
+        Assert.Equal(expected, loaded.PackTileSize);
+    }
+
+    [Theory]
+    [InlineData(1, TileSize.Small)]
+    [InlineData(3, TileSize.Small)]
+    [InlineData(4, TileSize.Medium)]
+    [InlineData(5, TileSize.Large)]
+    public void Load_MigratesARowsZoomIntoTheNearestTileSize(int zoom, TileSize expected)
+    {
+        using var tmp = new TempDir();
+        var path = tmp.Sub("settings.json");
+        File.WriteAllText(path, $$"""{"backgroundsRowZoom":{{zoom}},"platformsZoom":{{zoom}}}""");
+
+        var loaded = SettingsStore.Load(path);
+
+        Assert.Equal(expected, loaded.BackgroundsTileSize);
+        Assert.Equal(expected, loaded.PlatformsTileSize);
+    }
+
+    [Fact]
+    public void Save_DropsTheOldZoomKeysOnceTheSizesAreWritten()
+    {
+        using var tmp = new TempDir();
+        var path = tmp.Sub("settings.json");
+        File.WriteAllText(path, """{"mapsZoom":3,"packZoom":9,"backgroundsRowZoom":5,"platformsZoom":1}""");
+
+        var loaded = SettingsStore.Load(path);
+        SettingsStore.Save(path, loaded);
+
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+        Assert.DoesNotContain(json, p => p.Key.EndsWith("Zoom", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal("large", (string)json["mapsTileSize"]!);
+        Assert.Equal("small", (string)json["packTileSize"]!);
+        Assert.Equal("large", (string)json["backgroundsTileSize"]!);
+        Assert.Equal("small", (string)json["platformsTileSize"]!);
     }
 
     [Fact]
@@ -233,28 +286,29 @@ public class SettingsStoreTests
 
         var loaded = SettingsStore.Load(path);
 
-        Assert.Equal(2, loaded.BackgroundsZoom);
+        Assert.Equal(TileSize.Medium, loaded.BackgroundsTileSize);
         Assert.Null(loaded.Unknown);
     }
 
     [Fact]
-    public void SaveThenLoad_RoundTripsThePlatformsZoom()
+    public void SaveThenLoad_RoundTripsThePlatformsAndBackgroundsTileSizes()
     {
         using var tmp = new TempDir();
         var path = tmp.Sub("settings.json");
 
-        SettingsStore.Save(path, AppSettings.Default with { PlatformsZoom = 4, BackgroundsZoom = 1 });
+        SettingsStore.Save(
+            path, AppSettings.Default with { PlatformsTileSize = TileSize.Large, BackgroundsTileSize = TileSize.Small });
         var loaded = SettingsStore.Load(path);
 
-        Assert.Equal(4, loaded.PlatformsZoom);
-        Assert.Equal(1, loaded.BackgroundsZoom);
-        Assert.Contains("\"platformsZoom\": 4", File.ReadAllText(path));
-        Assert.Contains("\"backgroundsRowZoom\": 1", File.ReadAllText(path));
+        Assert.Equal(TileSize.Large, loaded.PlatformsTileSize);
+        Assert.Equal(TileSize.Small, loaded.BackgroundsTileSize);
+        Assert.Contains("\"platformsTileSize\": \"large\"", File.ReadAllText(path));
+        Assert.Contains("\"backgroundsTileSize\": \"small\"", File.ReadAllText(path));
         Assert.DoesNotContain("\"backgroundsZoom\"", File.ReadAllText(path));
     }
 
     [Fact]
-    public void Load_MigratesAHomeZoomIntoMapsZoomAndPrefersMapsZoomWhenBothArePresent()
+    public void Load_MigratesAHomeZoomIntoTheMapsTileSizeAndPrefersMapsZoomWhenBothArePresent()
     {
         using var tmp = new TempDir();
         var legacy = tmp.Sub("legacy.json");
@@ -262,8 +316,8 @@ public class SettingsStoreTests
         var both = tmp.Sub("both.json");
         File.WriteAllText(both, """{"homeZoom":4,"mapsZoom":8}""");
 
-        Assert.Equal(4, SettingsStore.Load(legacy).MapsZoom);
-        Assert.Equal(8, SettingsStore.Load(both).MapsZoom);
+        Assert.Equal(TileSize.Large, SettingsStore.Load(legacy).MapsTileSize);
+        Assert.Equal(TileSize.Small, SettingsStore.Load(both).MapsTileSize);
     }
 
     [Fact]
@@ -279,7 +333,7 @@ public class SettingsStoreTests
         var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(path))!.AsObject();
         Assert.DoesNotContain(json, p => p.Key.Equals("whileRunning", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(json, p => p.Key.Equals("homeZoom", StringComparison.OrdinalIgnoreCase));
-        Assert.Equal(4, (int)json["mapsZoom"]!);
+        Assert.Equal("large", (string)json["mapsTileSize"]!);
         Assert.Equal(1, (int)json["keepMe"]!);
     }
 
@@ -358,22 +412,21 @@ public class SettingsStoreTests
     }
 
     [Fact]
-    public void WriteGameThumbnails_RoundTripsAndDefaultsOff()
+    public void Load_IgnoresTheDroppedThumbnailSwitch()
     {
         using var tmp = new TempDir();
         var path = tmp.Sub("settings.json");
 
-        // Spec 10.2: the switch is opt-in, so a file written before it existed loads off.
-        File.WriteAllText(path, "{ \"welcomeDone\": true }");
+        // 3.0 writes the game's map-select thumbnails always, so a 2.5 to 2.8 file still carrying the switch
+        // loads without it, and Save does not write it back.
+        File.WriteAllText(path, "{ \"welcomeDone\": true, \"writeGameThumbnails\": false }");
         var older = SettingsStore.Load(path);
         Assert.True(older.WelcomeDone);
-        Assert.False(older.WriteGameThumbnails);
-        Assert.False(AppSettings.Default.WriteGameThumbnails);
+        Assert.Null(older.Unknown);
 
-        SettingsStore.Save(path, AppSettings.Default with { WriteGameThumbnails = true });
+        SettingsStore.Save(path, older);
 
-        Assert.True(SettingsStore.Load(path).WriteGameThumbnails);
-        Assert.Contains("\"writeGameThumbnails\": true", File.ReadAllText(path));
+        Assert.DoesNotContain("writeGameThumbnails", File.ReadAllText(path));
     }
 
     [Fact]

@@ -23,14 +23,33 @@
         <RowDefinition Height="Auto" />
       </Grid.RowDefinitions>
 
-      <TextBlock FontSize="17" FontWeight="SemiBold" Text="{Binding Title}" TextWrapping="Wrap" />
-      <TextBlock Grid.Row="1" Margin="0,6,0,0" FontSize="12"
+      <TextBlock FontSize="{StaticResource FontSection}" FontWeight="SemiBold" Text="{Binding Title}" TextWrapping="Wrap" />
+      <TextBlock Grid.Row="1" Margin="0,6,0,0" FontSize="{StaticResource FontCaption}"
                  Foreground="{StaticResource Text3Brush}" Text="{Binding Subtitle}" TextWrapping="Wrap" />
 
-      <TextBox x:Name="Search" Grid.Row="2" Margin="0,14,0,0"
-               AutomationProperties.Name="Search"
-               Style="{StaticResource FieldTextBox}"
-               Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+      <Grid Grid.Row="2" Margin="0,14,0,0">
+        <TextBox x:Name="Search"
+                 AutomationProperties.Name="{Binding SearchPlaceholder}"
+                 Style="{StaticResource FieldTextBox}"
+                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+
+        <!-- The Maps page's watermark: hit test off, so it never swallows the click that focuses the box, and
+             centred, so nothing shifts when typing starts (3.0 E). -->
+        <TextBlock Margin="11,0,11,0" VerticalAlignment="Center" IsHitTestVisible="False"
+                   Text="{Binding SearchPlaceholder}">
+          <TextBlock.Style>
+            <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+              <Setter Property="Foreground" Value="{StaticResource Text3Brush}" />
+              <Setter Property="Visibility" Value="Collapsed" />
+              <Style.Triggers>
+                <DataTrigger Binding="{Binding SearchText}" Value="">
+                  <Setter Property="Visibility" Value="Visible" />
+                </DataTrigger>
+              </Style.Triggers>
+            </Style>
+          </TextBlock.Style>
+        </TextBlock>
+      </Grid>
 
       <Grid Grid.Row="3" Margin="0,12,0,0">
         <ListBox x:Name="Rows"
@@ -62,7 +81,7 @@
                 </Border>
                 <TextBlock Grid.Column="1" Margin="10,0,10,0" VerticalAlignment="Center"
                            Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
-                <TextBlock Grid.Column="2" VerticalAlignment="Center" FontSize="11"
+                <TextBlock Grid.Column="2" VerticalAlignment="Center" FontSize="{StaticResource FontCaption}"
                            Foreground="{StaticResource Text3Brush}" Text="{Binding Detail}" />
               </Grid>
             </DataTemplate>

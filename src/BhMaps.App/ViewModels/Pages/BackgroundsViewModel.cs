@@ -1,6 +1,7 @@
 using BhMaps.App.Services;
 using BhMaps.Core.LevelData;
 using BhMaps.Core.Maps;
+using BhMaps.Core.Settings;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -16,7 +17,7 @@ public partial class BackgroundsViewModel : RowsPageViewModel
     private int _pictureCount;
 
     public BackgroundsViewModel(MainViewModel shell)
-        : base(shell, shell.Services.Settings.BackgroundsZoom)
+        : base(shell, shell.Services.Settings.BackgroundsTileSize)
     {
         ShowPictures = shell.Services.Settings.BackgroundsShowPictures;
     }
@@ -58,11 +59,11 @@ public partial class BackgroundsViewModel : RowsPageViewModel
     [RelayCommand]
     private void TogglePictures() => ShowPictures = !ShowPictures;
 
-    protected override void SaveZoom(int value)
+    protected override void SaveSize(TileSize value)
     {
-        if (Shell.Services.Settings.BackgroundsZoom != value)
+        if (Shell.Services.Settings.BackgroundsTileSize != value)
         {
-            Shell.Services.UpdateSettings(Shell.Services.Settings with { BackgroundsZoom = value });
+            Shell.Services.UpdateSettings(Shell.Services.Settings with { BackgroundsTileSize = value });
         }
     }
 

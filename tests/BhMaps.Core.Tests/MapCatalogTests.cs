@@ -359,4 +359,90 @@ public class MapCatalogTests
         Assert.Empty(bloodMoon.BackgroundSlots);
         Assert.Contains(@"BloodMoon\BloodMoon_PlatformA01.png", bloodMoon.PlatformFiles);
     }
+
+    [Fact]
+    public void SetsSentence_SaysOnlyTheSetsAPlayerKnows_InOneFixedOrder()
+    {
+        Assert.Equal(
+            "Ranked 1v1, Standard, Experimental",
+            MapCatalog.SetsSentence(["StandardAll", "Ranked1v1", "Experimental1v1"]));
+    }
+
+    [Fact]
+    public void SetsSentence_KeepsItsOrderWhateverOrderTheSetsArriveIn()
+    {
+        Assert.Equal(
+            "Ranked 1v1, Standard, Experimental",
+            MapCatalog.SetsSentence(["Experimental1v1", "Standard1v1", "Ranked1v1", "Standard2v2"]));
+    }
+
+    [Fact]
+    public void SetsSentence_SaysMinigamesForTheGameModeSet()
+    {
+        Assert.Equal("Minigames", MapCatalog.SetsSentence(["GameModeAll"]));
+    }
+
+    [Fact]
+    public void SetsSentence_FoldsBothTournamentSetsIntoOneWord()
+    {
+        Assert.Equal("Tournament", MapCatalog.SetsSentence(["Tournament1v1", "Tournament2v2"]));
+    }
+
+    [Fact]
+    public void SetsSentence_SaysOtherModesWhenNoSetHasAWordOfItsOwn()
+    {
+        Assert.Equal("Other modes", MapCatalog.SetsSentence(["Tutorial1"]));
+        Assert.Equal("Other modes", MapCatalog.SetsSentence([]));
+    }
+
+    private static MapEntry MapIn(params string[] sets) =>
+        new("Brawlball", "Brawlball", Level("Brawlball", "Brawlball"), [], sets, [], []);
+
+    [Fact]
+    public void IsMinigame_IsTrueForAMapNoSetButTheModeSetHolds()
+    {
+        Assert.True(MapCatalog.IsMinigame(MapIn("GameModeAll")));
+    }
+
+    [Fact]
+    public void IsMinigame_IsFalseForAMapAPlayerCanAlsoPick()
+    {
+        Assert.False(MapCatalog.IsMinigame(MapIn("GameModeAll", "StandardAll")));
+        Assert.False(MapCatalog.IsMinigame(MapIn("GameModeAll", "Ranked1v1")));
+        Assert.False(MapCatalog.IsMinigame(MapIn("GameModeAll", "Tournament1v1")));
+    }
+
+    [Fact]
+    public void IsMinigame_IgnoresARotationSetThatOnlyStartsLikeARankedOne()
+    {
+        // Brawlball's big level sits in "Ranked3v3BrawlballOGMapOnly", a rotation set nobody picks a map from.
+        Assert.True(MapCatalog.IsMinigame(MapIn("GameModeAll", "BrawlballBig", "Ranked3v3BrawlballOGMapOnly")));
+    }
+
+    [Fact]
+    public void IsMinigame_IsFalseForAMapOutsideTheModeSet()
+    {
+        Assert.False(MapCatalog.IsMinigame(MapIn("Standard1v1")));
+        Assert.False(MapCatalog.IsMinigame(MapIn()));
+    }
+
+    [Fact]
+    public void Build_PutsTheMinigameChipLastAfterTheSetsAPlayerPicksFrom()
+    {
+        LevelDesc[] levels = [Level("Grove", "Grove")];
+        LevelType[] types = [Type("Grove", "Twilight Grove")];
+        LevelSet[] sets =
+        [
+            new("GameModeAll", ["Grove"]),
+            new("Ranked1v1", ["Grove"]),
+            new("Ranked2v2", ["Grove"]),
+            new("Tournament1v1", ["Grove"]),
+        ];
+
+        var catalog = MapCatalog.Build(Model(levels, types, sets));
+
+        Assert.Equal(
+            ["Ranked 1v1", "Ranked 2v2", "Tournament", "Minigames"],
+            catalog.UiSets.Select(s => s.Label));
+    }
 }

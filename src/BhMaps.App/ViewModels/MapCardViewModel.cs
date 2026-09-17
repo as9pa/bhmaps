@@ -43,7 +43,8 @@ public partial class MapCardViewModel : ObservableObject
 
     /// <summary>Spec 3.1's tag, drawn only when it says which art is on the map: the pack names, the custom
     /// picture's name ellipsised at <see cref="TagMaxLength"/>, or "Missing". Default draws no tag, and
-    /// neither does a map the scan produced no status for.</summary>
+    /// neither does a map the scan produced no status for. 3.0: nor does a map whose art is a file the app
+    /// cannot name, because the only thing left to print there would be a file name or a slot code.</summary>
     public string TagText { get; }
 
     /// <summary>The name and the tag in one line, for the two tightest zoom steps where the card draws neither
@@ -131,10 +132,18 @@ public partial class MapCardViewModel : ObservableObject
 
     /// <summary>Spec 3.1: the library's name for the picture in the map's first slot, through the one rule the
     /// panel's status line uses too (plan decision A-D5). A map with no slot has no picture to name.</summary>
-    private static string CustomName(MapEntry map, IReadOnlyList<CustomPicture> customPictures) =>
-        map.BackgroundSlots.Count > 0
-            ? Path.GetFileNameWithoutExtension(CustomPictureLibrary.NameFor(customPictures, map.BackgroundSlots[0]))
-            : "In game only";
+    /// <summary>The library's name for the picture the game is showing, or empty when the library has none:
+    /// the slot's own file name is a code, not a name, and a card never wears one (3.0).</summary>
+    private static string CustomName(MapEntry map, IReadOnlyList<CustomPicture> customPictures)
+    {
+        if (map.BackgroundSlots.Count == 0)
+        {
+            return "";
+        }
+
+        var name = CustomPictureLibrary.NamedFor(customPictures, map.BackgroundSlots[0]);
+        return name is null ? "" : Path.GetFileNameWithoutExtension(name);
+    }
 
     private static string Ellipsise(string name) =>
         name.Length <= TagMaxLength ? name : name[..(TagMaxLength - 1)] + "\u2026";

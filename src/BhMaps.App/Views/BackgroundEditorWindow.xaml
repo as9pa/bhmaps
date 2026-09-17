@@ -107,7 +107,7 @@
         <TextBlock Margin="0,0,22,22"
                    HorizontalAlignment="Right"
                    VerticalAlignment="Bottom"
-                   FontSize="11"
+                   FontSize="{StaticResource FontCaption}"
                    Foreground="{StaticResource Text3Brush}"
                    Text="{x:Static vm:BackgroundEditorViewModel.PreviewSizeText}" />
       </Grid>
@@ -185,18 +185,24 @@
                          Content="Fill"
                          FocusVisualStyle="{StaticResource DialogFocusRing}"
                          GroupName="Fit"
-                         IsChecked="{Binding ModeFill}" />
+                         IsChecked="{Binding FitFill}" />
             <RadioButton MinWidth="0"
                          Margin="0,0,20,0"
                          Content="Fit"
                          FocusVisualStyle="{StaticResource DialogFocusRing}"
                          GroupName="Fit"
-                         IsChecked="{Binding ModeFit}" />
+                         IsChecked="{Binding FitFit}" />
+            <RadioButton MinWidth="0"
+                         Margin="0,0,20,0"
+                         Content="Center"
+                         FocusVisualStyle="{StaticResource DialogFocusRing}"
+                         GroupName="Fit"
+                         IsChecked="{Binding FitCenter}" />
             <RadioButton MinWidth="0"
                          Content="Stretch"
                          FocusVisualStyle="{StaticResource DialogFocusRing}"
                          GroupName="Fit"
-                         IsChecked="{Binding ModeStretch}" />
+                         IsChecked="{Binding FitStretch}" />
           </StackPanel>
 
           <Grid Style="{StaticResource PanRow}">
@@ -317,23 +323,24 @@
     </Border>
 
     <Grid Grid.Row="1" Grid.ColumnSpan="2" Margin="0,18,0,0">
-      <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="*" />
-        <ColumnDefinition Width="Auto" />
-      </Grid.ColumnDefinitions>
-      <CheckBox VerticalAlignment="Center"
-                Content="{Binding ApplyNowText}"
-                FocusVisualStyle="{StaticResource DialogFocusRing}"
-                IsChecked="{Binding ApplyNow}" />
-      <StackPanel Grid.Column="1" Orientation="Horizontal">
-        <!-- No command: IsCancel closes with false, so the shell skips the rescan. Escape does the same. -->
+      <!-- 3.0 E: the two saves in place of one Save and an "Apply to game" tick, in the order every dialog uses:
+           Cancel, then the quieter save, then the primary at the end. Enter takes the primary, which is the one
+           that puts the picture in the game; Escape closes with false, so the shell skips the rescan. -->
+      <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
+        <!-- No command: IsCancel closes with false. -->
         <Button Margin="0,0,8,0"
                 Content="Cancel"
                 FocusVisualStyle="{StaticResource DialogFocusRing}"
                 IsCancel="True"
                 Style="{StaticResource PlainButton}" />
-        <Button Command="{Binding SaveCommand}"
-                Content="Save"
+        <Button Margin="0,0,8,0"
+                Command="{Binding SaveOnlyCommand}"
+                Content="Save only"
+                FocusVisualStyle="{StaticResource DialogFocusRing}"
+                Style="{StaticResource OutlineButton}" />
+        <Button AutomationProperties.Name="{Binding SaveAndApplyText}"
+                Command="{Binding SaveAndApplyCommand}"
+                Content="{Binding SaveAndApplyText}"
                 FocusVisualStyle="{StaticResource DialogFocusRing}"
                 IsDefault="True"
                 Style="{StaticResource PrimaryButton}" />

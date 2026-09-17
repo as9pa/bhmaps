@@ -4,6 +4,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using BhMaps.App.Services;
 using BhMaps.Core.Imaging;
+using BhMaps.Core.Layout;
 using BhMaps.Core.LevelData;
 using BhMaps.Core.Maps;
 using BhMaps.Core.Model;
@@ -21,12 +22,8 @@ namespace BhMaps.App.ViewModels.Pages;
 /// A tile opens the drawer, which lists the halves of what the pack holds for that map (addendum F). Every row is
 /// shown and nothing is truncated (spec section 2, Packs). The pack comes from
 /// <see cref="MainViewModel.NavigateToPack" />, so the title is a pack name rather than a fixed word.</summary>
-public partial class PackDetailViewModel : PageViewModel
+public partial class PackDetailViewModel : PageViewModel, ITileSized
 {
-    public const int MinZoom = AppSettings.MinZoom;
-
-    public const int MaxZoom = AppSettings.MaxZoom;
-
     public const string NoPackText = "No pack is open.";
 
     public const string NoMapsText = "This pack has no map folders.";
@@ -71,6 +68,7 @@ public partial class PackDetailViewModel : PageViewModel
         : base(shell)
     {
         Items = [];
+        Subtitle = "";
         TransparentText = "";
         ClipboardHint = "";
         _hintTimer.Tick += (_, _) =>
@@ -79,8 +77,7 @@ public partial class PackDetailViewModel : PageViewModel
             ClipboardHint = "";
         };
 
-        // A stored zoom from another version, or a hand-edited one, is clamped rather than trusted.
-        Zoom = Math.Clamp(shell.Services.Settings.PackZoom, MinZoom, MaxZoom);
+        TileSize = shell.Services.Settings.PackTileSize;
     }
 
     /// <summary>The pack the page is showing. Null until the shell navigates to one.</summary>
@@ -102,9 +99,27 @@ public partial class PackDetailViewModel : PageViewModel
 
     public bool HasPack => Pack is not null;
 
-    /// <summary>Columns in the grid, MinZoom to MaxZoom, persisted as packZoom.</summary>
+    /// <summary>How big the tiles are drawn, persisted as packTileSize. It sets the target width; how many
+    /// tiles a row holds, and the width they end up at, is the justified panel's (wireframe 8.1).</summary>
     [ObservableProperty]
-    public partial int Zoom { get; set; }
+    public partial TileSize TileSize { get; set; }
+
+    /// <summary>What a tile aims for, before the panel shares the row's spare width out over them.</summary>
+    public double TargetCardWidth => TileSizes.CardWidth(TileSize);
+
+    /// <summary>3.0: the card's name goes at Small, exactly as the Maps grid does it, because a card that size
+    /// has no room for one. The tile's tooltip still carries it.</summary>
+    public bool ShowName => TileSize != TileSize.Small;
+
+    /// <summary>The line under the title (3.0): the same two sentences the pack's row on the Packs page carries,
+    /// so the page opens saying what the row said. Empty while no pack is open.</summary>
+    [ObservableProperty]
+    public partial string Subtitle { get; set; }
+
+    /// <summary>The tile the backdrop band draws, which is the first card, so the band is the pack's own face
+    /// rather than a second picture to load. Null for a pack with no cards, and the band is then its gradient
+    /// alone; the tile's own Preview lands later, and the band's binding follows it in.</summary>
+    public PackTileViewModel? BackdropTile => Items.FirstOrDefault();
 
     /// <summary>Every map the pack touches, composed with the pack's own files over the background the pack ships
     /// for it, or the game's when it ships none (spec 5, addendum F).</summary>
@@ -321,7 +336,7 @@ public partial class PackDetailViewModel : PageViewModel
 
         var result = await RunPasteAsync(source, target, tile, catalog, cut, replace: false, name, undoPaths);
         if (result is { Skipped: true }
-            && Shell.Dialogs.Confirm("Replace", $"{target.Name} already has {name}. Replace it?"))
+            && Shell.Dialogs.Confirm("Replace", $"{target.Name} already has {name}. Replace it?", "Replace"))
         {
             result = await RunPasteAsync(source, target, tile, catalog, cut, replace: true, name, undoPaths);
         }
@@ -374,8 +389,9 @@ public partial class PackDetailViewModel : PageViewModel
         var ok = await Shell.RunBusyAsync($"{verb} {name}", Work);
         if (ok && result is { Skipped: false })
         {
-            var open = target;
-            Shell.SetLibraryDone(done, $"Open {target.Name}", new RelayCommand(() => Shell.NavigateToPack(open)));
+            // 3.0: the strip offers Cancel, Undo and Retry and nothing else, so the line says where the file
+            // landed rather than offering a button to the pack it landed in.
+            Shell.Status.Done(done, undoable: false);
         }
 
         await Shell.RescanAsync();
@@ -612,7 +628,7 @@ public partial class PackDetailViewModel : PageViewModel
         }
 
         var files = _transparentFiles;
-        if (!Shell.Dialogs.Confirm("Remove files", RemoveQuestion(files.Count, pack.Name)))
+        if (!Shell.Dialogs.Confirm("Remove files", RemoveQuestion(files.Count, pack.Name), "Remove", destructive: true))
         {
             return;
         }
@@ -629,7 +645,7 @@ public partial class PackDetailViewModel : PageViewModel
 
         if (ok)
         {
-            Shell.SetLibraryDone($"Removed {PackRowViewModel.Plural(files.Count - failures.Count, "file")}");
+            Shell.Status.Done($"Removed {PackRowViewModel.Plural(files.Count - failures.Count, "file")}.", undoable: false);
         }
 
         await Shell.RescanAsync();
@@ -679,12 +695,15 @@ public partial class PackDetailViewModel : PageViewModel
         }
     }
 
-    partial void OnZoomChanged(int value)
+    partial void OnTileSizeChanged(TileSize value)
     {
-        if (Shell.Services.Settings.PackZoom != value)
+        if (Shell.Services.Settings.PackTileSize != value)
         {
-            Shell.Services.UpdateSettings(Shell.Services.Settings with { PackZoom = value });
+            Shell.Services.UpdateSettings(Shell.Services.Settings with { PackTileSize = value });
         }
+
+        OnPropertyChanged(nameof(TargetCardWidth));
+        OnPropertyChanged(nameof(ShowName));
     }
 
     /// <summary>Throws away the previous pack's loads and starts this one's. The grid is built from the current
@@ -703,10 +722,21 @@ public partial class PackDetailViewModel : PageViewModel
         Items.Clear();
         _transparentFiles = Array.Empty<string>();
         TransparentText = "";
+        Subtitle = "";
+        OnPropertyChanged(nameof(BackdropTile));
         if (_snapshot is not { } snapshot || Pack is not { } pack)
         {
             return;
         }
+
+        // 3.0: the same sentences the Packs row carries, built from the same two helpers, so the page and the
+        // list cannot drift apart. The applied record is read here because Rebuild is what a rescan ends with.
+        var (mapCount, backgroundCount) = PackRowViewModel.Counts(pack);
+        var appliedMaps = AppliedRecord.Load(AppliedRecord.PathFor(Shell.Services.AppDataDir))
+            .MapsPerPack(MapFolders.Of(snapshot.Catalog.Maps));
+        Subtitle = PackRowViewModel.Describe(
+            pack.Name, mapCount, backgroundCount,
+            appliedMaps.TryGetValue(pack.Name, out var count) ? count : 0);
 
         foreach (var map in MapsIn(snapshot.Catalog, pack))
         {
@@ -750,6 +780,7 @@ public partial class PackDetailViewModel : PageViewModel
         }
 
         OnPropertyChanged(nameof(Items));
+        OnPropertyChanged(nameof(BackdropTile));
         Load([.. Items], pack, _cts.Token);
         LoadTransparent(pack, _cts.Token);
 

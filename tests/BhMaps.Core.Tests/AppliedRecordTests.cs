@@ -1,4 +1,6 @@
 using BhMaps.Core.Hashing;
+using BhMaps.Core.LevelData;
+using BhMaps.Core.Maps;
 using BhMaps.Core.Model;
 using BhMaps.Core.Operations;
 using BhMaps.Core.Tests.Helpers;
@@ -9,7 +11,7 @@ public class AppliedRecordTests
 {
     private static readonly DateTimeOffset Noted = new(2026, 9, 16, 11, 30, 0, TimeSpan.Zero);
 
-    /// <summary>A library with one pack holding Grove\a.png, the game folder that pack was applied to, and the
+    /// <summary>A library with one pack holding Grove\\a.png, the game folder that pack was applied to, and the
     /// record path beside them.</summary>
     private static (string Record, string Game, string Library, Pack Pack) Arrange(TempDir tmp, string gameBytes)
     {
@@ -226,5 +228,131 @@ public class AppliedRecordTests
 
         // applied.json lives at the session root, so a restore must not mistake it for a game file.
         Assert.False(File.Exists(Path.Combine(game, "applied.json")));
+    }
+
+    [Fact]
+    public void Renamed_PointsEveryEntryFromTheOldPathAtTheNewOne()
+    {
+        using var tmp = new TempDir();
+        var (record, game, library, pack) = Arrange(tmp, "art");
+        new FakeGameTree(game).File("Grove", "b.png", "art");
+        AppliedRecord.Note(
+            record,
+            game,
+            library,
+            [Source(pack), new AppliedSource("Grove\\b.png", Path.Combine(pack.FullPath, "Grove", "a.png"), "dark")],
+            Noted, Nothing);
+
+        AppliedRecord.Renamed(
+            record,
+            library,
+            Path.Combine(pack.FullPath, "Grove", "a.png"),
+            Path.Combine(pack.FullPath, "Grove", "sunset.png"));
+
+        var loaded = AppliedRecord.Load(record);
+        var renamed = Path.Combine("packs", "dark", "Grove", "sunset.png");
+        Assert.Equal(renamed, loaded.Entries["Grove\\a.png"].Source);
+        Assert.Equal(renamed, loaded.Entries["Grove\\b.png"].Source);
+
+        // Only the name moved: the hashes say the game still holds the bytes that file gave it.
+        Assert.Equal("dark", loaded.Entries["Grove\\a.png"].Pack);
+        Assert.Equal(Noted, loaded.Entries["Grove\\a.png"].At);
+    }
+
+    [Fact]
+    public void Renamed_LeavesAnEntryFromAnotherFileAlone()
+    {
+        using var tmp = new TempDir();
+        var (record, game, library, pack) = Arrange(tmp, "art");
+        AppliedRecord.Note(record, game, library, [Source(pack)], Noted, Nothing);
+
+        AppliedRecord.Renamed(
+            record,
+            library,
+            Path.Combine(pack.FullPath, "Grove", "other.png"),
+            Path.Combine(pack.FullPath, "Grove", "sunset.png"));
+
+        Assert.Equal(
+            Path.Combine("packs", "dark", "Grove", "a.png"),
+            AppliedRecord.Load(record).Entries["Grove\\a.png"].Source);
+    }
+
+    /// <summary>The lookup a catalog of these maps makes: each one named by its folder, holding the background
+    /// slots listed after it. Nothing else of a map's is read by the count.</summary>
+    private static MapFolders Folders(params (string Folder, string[] Slots)[] maps) =>
+        MapFolders.Of(maps.Select(map => new MapEntry(
+            map.Folder,
+            map.Folder,
+            new LevelDesc(map.Folder, map.Folder, new CameraBounds(0, 0, 100, 50), [], []),
+            [],
+            [],
+            map.Slots,
+            [])));
+
+    [Fact]
+    public void MapsPerPack_CountsMapFoldersPerPackAndPassesOverTheRest()
+    {
+        using var tmp = new TempDir();
+        var record = Path.Combine(tmp.Path, "applied.json");
+
+        // Two packs sharing Grove, a background no map of the catalog's uses, and a picture of the owner's own,
+        // whose entry names no pack.
+        File.WriteAllText(record, Written(
+            ("Grove\\a.png", "dark"),
+            ("Grove\\b.png", "dark"),
+            ("Grove\\c.png", "light"),
+            ("Brawlhaven\\a.png", "dark"),
+            ("Backgrounds\\BG_Grove.jpg", "dark"),
+            ("Thundergard\\a.png", null)));
+
+        var counts = AppliedRecord.Load(record).MapsPerPack(
+            Folders(("Grove", []), ("Brawlhaven", []), ("Thundergard", [])));
+
+        Assert.Equal(2, counts["dark"]);
+        Assert.Equal(1, counts["light"]);
+        Assert.Equal(2, counts["DARK"]);
+        Assert.False(counts.ContainsKey("quiet"));
+    }
+
+    [Fact]
+    public void MapsPerPack_CountsABackgroundForEveryMapWhoseLevelsUseIt()
+    {
+        using var tmp = new TempDir();
+        var record = Path.Combine(tmp.Path, "applied.json");
+
+        // Backgrounds live in the game's one shared folder, so only the level data says whose they are: this one
+        // is on two maps, and the pack that wrote it is on both of them without owning either folder.
+        File.WriteAllText(record, Written(("Backgrounds\\BG_Sewer.jpg", "dark")));
+
+        var counts = AppliedRecord.Load(record).MapsPerPack(
+            Folders(("Grove", ["BG_Sewer.jpg"]), ("Swamp", ["BG_Sewer.jpg"]), ("Brawlhaven", ["BG_Brawlhaven.jpg"])));
+
+        Assert.Equal(2, counts["dark"]);
+    }
+
+    [Fact]
+    public void MapsPerPack_PassesOverABackgroundNoMapUses()
+    {
+        using var tmp = new TempDir();
+        var record = Path.Combine(tmp.Path, "applied.json");
+
+        // A background the game ships but no included level names is on no map, so the pack that wrote it is in
+        // no map either and stays out of the counts rather than reading as zero.
+        File.WriteAllText(record, Written(("Backgrounds\\BG_Unused.jpg", "dark")));
+
+        var counts = AppliedRecord.Load(record).MapsPerPack(Folders(("Grove", ["BG_Grove.jpg"])));
+
+        Assert.False(counts.ContainsKey("dark"));
+    }
+
+    /// <summary>An applied.json holding exactly these game-relative paths, each from the named pack or, for a
+    /// null, from no pack at all. Written as text because nothing but a write puts an entry in a record.</summary>
+    private static string Written(params (string Path, string? Pack)[] entries)
+    {
+        var files = entries.Select(entry => string.Format(
+            "\"{0}\":{{\"source\":\"s\",\"pack\":{1},\"hash\":\"h\",\"sourceHash\":\"h\",\"at\":\"2026-09-16T11:30:00+00:00\"}}",
+            entry.Path.Replace("\\", "\\\\"),
+            entry.Pack is null ? "null" : $"\"{entry.Pack}\""));
+        return $"{{\"version\":{AppliedRecord.SchemaVersion},\"files\":{{{string.Join(",", files)}}}}}";
     }
 }

@@ -13,14 +13,51 @@
   <SolidColorBrush x:Key="TileBrush" Color="#2F2D2B" />
   <SolidColorBrush x:Key="MissingBgBrush" Color="#3A1A1C" />
   <SolidColorBrush x:Key="MissingFgBrush" Color="#E57A7A" />
+  <SolidColorBrush x:Key="MissingPressedBrush" Color="#D06A6A" />
+  <!-- The status strip's dot and nothing else (3.0). The dot is the one coloured thing in the app that is not a
+       missing state, so these two keys have exactly one caller each and no text is ever painted with them. -->
+  <SolidColorBrush x:Key="OkBrush" Color="#86B98B" />
+  <SolidColorBrush x:Key="WarnBrush" Color="#D9A66A" />
   <!-- The ground a label needs when it is drawn over map art rather than over a surface: the page's own
        near-black at 85 percent, so the art it covers is still felt through it. -->
   <SolidColorBrush x:Key="ScrimBrush" Color="#D9161514" />
-  <!-- The one restrained accent: the Text colour used as a fill for a page's single primary action. -->
+  <!-- The accent is the text colour itself: one primary action per page, the selected or checked state, the
+       keyboard focus ring, and text links. There is no second hue. -->
   <SolidColorBrush x:Key="AccentBrush" Color="#F1EFEA" />
+  <!-- A quiet ground the accent can sit on. No longer the checked chip's fill, but the key stays so nothing
+       that asks for it breaks. -->
+  <SolidColorBrush x:Key="AccentSurfaceBrush" Color="#2A2827" />
+  <!-- The accent darkened about 10 percent, for a pressed primary. -->
+  <SolidColorBrush x:Key="AccentPressedBrush" Color="#D9D6D0" />
+  <SolidColorBrush x:Key="FocusRingBrush" Color="#F1EFEA" />
 
   <CornerRadius x:Key="Radius">6</CornerRadius>
-  <sys:Double x:Key="PanelWidth">360</sys:Double>
+  <!-- The chip's radius. WPF distorts a Border whose CornerRadius is more than half its height, so this is half
+       of the 28 px a chip measures rather than some large number; only controls that short may take it. -->
+  <CornerRadius x:Key="RadiusPill">14</CornerRadius>
+  <sys:Double x:Key="PanelWidth">420</sys:Double>
+
+  <!-- The type scale. Five sizes, so nothing in the app picks a size of its own. -->
+  <sys:Double x:Key="FontCaption">12</sys:Double>
+  <sys:Double x:Key="FontBody">13</sys:Double>
+  <sys:Double x:Key="FontEmphasis">15</sys:Double>
+  <sys:Double x:Key="FontSection">20</sys:Double>
+  <sys:Double x:Key="FontTitle">28</sys:Double>
+
+  <!-- The 4 px spacing grid. The Doubles are for a layout that computes; the Thicknesses are the uniform
+       Padding and Margin values, because XAML cannot build one from a Double. -->
+  <sys:Double x:Key="Space1">4</sys:Double>
+  <sys:Double x:Key="Space2">8</sys:Double>
+  <sys:Double x:Key="Space3">12</sys:Double>
+  <sys:Double x:Key="Space4">16</sys:Double>
+  <sys:Double x:Key="Space5">24</sys:Double>
+  <sys:Double x:Key="Space6">32</sys:Double>
+  <Thickness x:Key="Gap4">4</Thickness>
+  <Thickness x:Key="Gap8">8</Thickness>
+  <Thickness x:Key="Gap12">12</Thickness>
+  <Thickness x:Key="Gap16">16</Thickness>
+  <Thickness x:Key="Gap24">24</Thickness>
+  <Thickness x:Key="Gap32">32</Thickness>
 
   <!-- What a button in a page header measures: 1 px border, 7 px padding, a 13 px line, 7 and 1 again. A field
        beside one is given this so the two line up; without it a TextBox asks for ten more pixels than the button

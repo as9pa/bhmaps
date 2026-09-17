@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows;
 using BhMaps.App.Services;
+using BhMaps.Core.Layout;
 using BhMaps.Core.LevelData;
 using BhMaps.Core.Maps;
 using BhMaps.Core.Model;
@@ -15,16 +16,9 @@ namespace BhMaps.App.ViewModels.Pages;
 /// <summary>Spec 3.1: the chip row with "Select all" at its right end, and the grid of composed map cards.
 /// No summary bar and no composition bars; the header carries the search box, the zoom and Reset all to
 /// default, so nothing the chips do can move the slider.</summary>
-public partial class MapsViewModel : PageViewModel
+public partial class MapsViewModel : PageViewModel, ITileSized
 {
-    public const int MinZoom = AppSettings.MinZoom;
-    public const int MaxZoom = AppSettings.MaxZoom;
-
     private const string AllChip = "All";
-
-    /// <summary>The grid's content width in the default 1280 px window with the panel shut, which is what the
-    /// zoom steps were drawn against: 6 columns of a 188 px card and a 12 px gap.</summary>
-    private const double ReferenceGridWidth = 1200;
 
     /// <summary>Every card the last scan produced. Cards is this list under the chip and the search.</summary>
     private readonly List<MapCardViewModel> _all = [];
@@ -47,8 +41,7 @@ public partial class MapsViewModel : PageViewModel
         SearchText = "";
         SelectedChip = AllChip;
 
-        // A stored zoom from another version, or a hand-edited one, is clamped rather than trusted.
-        Zoom = Math.Clamp(shell.Services.Settings.MapsZoom, MinZoom, MaxZoom);
+        TileSize = shell.Services.Settings.MapsTileSize;
     }
 
     public override string Title => "Maps";
@@ -71,13 +64,15 @@ public partial class MapsViewModel : PageViewModel
     [ObservableProperty]
     public partial string SelectedChip { get; set; }
 
-    /// <summary>The zoom step, MinZoom to MaxZoom, persisted as mapsZoom. It sets the card's width through
-    /// <see cref="CardWidth"/>; how many cards a row holds is whatever fits.</summary>
+    /// <summary>How big the cards are drawn, persisted as mapsTileSize. It sets the card's target width
+    /// through <see cref="TargetCardWidth"/>; how many cards a row holds, and the width they end up at, is the
+    /// justified panel's answer.</summary>
     [ObservableProperty]
-    public partial int Zoom { get; set; }
+    public partial TileSize TileSize { get; set; }
 
     /// <summary>The card whose right panel is open. Null closes the panel.</summary>
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(EscapeCommand))]
     public partial MapCardViewModel? Selected { get; set; }
 
     /// <summary>The right panel for <see cref="Selected"/> (spec 7.2), rebuilt whenever the selection changes and
@@ -85,27 +80,25 @@ public partial class MapsViewModel : PageViewModel
     [ObservableProperty]
     public partial MapPanelViewModel? Panel { get; set; }
 
-    /// <summary>2.8: the slider sets a card width, not a column count, so the cards keep their size when the
-    /// right panel opens and the row simply holds fewer of them. The width is the one the step used to give in
-    /// the default window, so nothing moves at the same zoom with the panel shut.</summary>
-    public double CardWidth => Math.Round(ReferenceGridWidth / Zoom) - CardMargin.Right;
+    /// <summary>3.0: about how wide a card should be at this size. The panel takes it as a wish and hands the
+    /// cards whatever makes the row reach the right edge, so the grid no longer leaves a hole beside the open
+    /// panel (wireframe 8.1).</summary>
+    public double TargetCardWidth => TileSizes.CardWidth(TileSize);
 
-    /// <summary>Spec 3.1's density steps, which follow the same steps the width does. At 7 and 8 the name
-    /// shrinks and the tag goes; at 9 and 10 the name row goes with it, the card tightens to 4 px padding and
-    /// 8 px gaps, and Missing becomes a mark on the picture.
-    /// ShowTagRow is the zoom's answer for every card; MapCardViewModel.ShowTag is one card's own answer about
-    /// whether it has a tag at all. Both have to be true for a tag to be drawn, so they keep different names.</summary>
-    public bool ShowName => Zoom <= 8;
+    /// <summary>Spec 3.1's density steps, now three rather than nine. Large and Medium carry the name and the
+    /// tag; Small drops both, tightens the card to 4 px padding, and shows Missing as a mark on the picture
+    /// instead of a word under it. ShowTagRow is the size's answer for every card; MapCardViewModel.ShowTag is
+    /// one card's own answer about whether it has a tag at all. Both have to be true for a tag to be drawn, so
+    /// they keep different names.</summary>
+    public bool ShowName => TileSize != TileSize.Small;
 
-    public bool ShowTagRow => Zoom <= 6;
+    public bool ShowTagRow => TileSize != TileSize.Small;
 
-    public bool ShowMissingMark => Zoom >= 9;
+    public bool ShowMissingMark => TileSize == TileSize.Small;
 
-    public double NameFontSize => Zoom <= 6 ? 13 : 12;
+    public double NameFontSize => TileSize == TileSize.Large ? 15 : TileSize == TileSize.Medium ? 13 : 12;
 
-    public Thickness CardPadding => Zoom <= 8 ? new Thickness(8) : new Thickness(4);
-
-    public Thickness CardMargin => Zoom <= 8 ? new Thickness(0, 0, 12, 12) : new Thickness(0, 0, 8, 8);
+    public Thickness CardPadding => TileSize == TileSize.Small ? new Thickness(4) : new Thickness(8);
 
     /// <summary>Spec 3.1: why the grid is empty, in one line.</summary>
     public string EmptyText
@@ -115,6 +108,7 @@ public partial class MapsViewModel : PageViewModel
             var what = SelectedChip switch
             {
                 AllChip => "map",
+                MapCatalog.MinigameLabel => "minigame map",
 
                 // RebuildChips clears the chip ListBox's items, and the ListBox pushes its lost selection back
                 // through this two-way binding, so the getter can run between the null and the chip put back.
@@ -132,12 +126,9 @@ public partial class MapsViewModel : PageViewModel
 
     public bool ShowClearSearch => SearchText.Length > 0;
 
-    /// <summary>Spec 3.1's first-run line: nothing in the library but the Default pack, and no any-map picture
-    /// either (plan decision A-D6, settled here).</summary>
-    public bool ShowFirstRunLine =>
-        _snapshot is { } s
-        && !s.Packs.Any(p => !p.Name.Equals(DefaultPack.Name, StringComparison.OrdinalIgnoreCase))
-        && s.CustomPictures.Count == 0;
+    /// <summary>The empty state's one action, which only a search gives it: with nothing typed there is nothing
+    /// to undo and the state is just the sentence.</summary>
+    public string EmptyActionText => ShowClearSearch ? "Clear search" : "";
 
     /// <summary>Opens one map's right panel. A click on a card runs the generated command.</summary>
     [RelayCommand]
@@ -161,9 +152,19 @@ public partial class MapsViewModel : PageViewModel
     private void ClearSearch() => SearchText = "";
 
     /// <summary>Spec 3.2: Escape closes the panel. The search box takes Escape before it does, in
-    /// MapsView.OnPageKeyDown.</summary>
-    [RelayCommand]
+    /// MapsView.OnPageKeyDown. With no panel open it says no rather than doing nothing, so the keystroke carries
+    /// on to the window's own Escape, which is the status strip's Cancel (3.0).</summary>
+    [RelayCommand(CanExecute = nameof(HasPanel))]
     private void Escape() => Selected = null;
+
+    private bool HasPanel => Selected is not null;
+
+    /// <summary>The header's menu (3.0): a reset of every map is destructive and rare, so it reads as a line in
+    /// the menu rather than as a button one slip away from the zoom. CanWrite, not IsNotBusy: it writes into the
+    /// game folder, so the line is dead while that folder is missing (spec 7.8), the way a tile's menu is
+    /// built.</summary>
+    public override IReadOnlyList<TileMenuCommand>? PageMenu =>
+        [new TileMenuCommand("Reset all maps", ResetAllCommand, IsEnabled: Shell.CanWrite, IsDestructive: true)];
 
     /// <summary>Spec 7.2's one page action: every folder in the game tree back to the Default pack, or deleted for
     /// the game to regenerate when there is no Default pack.</summary>
@@ -178,9 +179,15 @@ public partial class MapsViewModel : PageViewModel
         var count = snapshot.Tree.Folders.Count;
         var defaultPack = snapshot.DefaultPack;
         var message = defaultPack is null
-            ? $"Reset the map art in all {count} folders? The files are deleted and Brawlhalla regenerates the defaults on its next launch."
-            : $"Reset the map art in all {count} folders to the Default pack?";
-        if (!Shell.Dialogs.Confirm("Reset all to default", message))
+            ? $"Reset the map art in {MainViewModel.Count(count, "folder")}? The files are deleted and Brawlhalla regenerates its defaults on the next launch."
+            : $"Reset {MainViewModel.Count(count, "map")} to the Default pack? {MainViewModel.RestoresArt} Undo puts them back.";
+
+        // The button names what it resets, in the same noun the message counts in: folders when there is no
+        // Default pack to put back, maps when there is.
+        var verb = defaultPack is null
+            ? $"Reset {MainViewModel.Count(count, "folder")}"
+            : $"Reset {MainViewModel.Count(count, "map")}";
+        if (!Shell.Dialogs.Confirm("Reset all maps", message, verb))
         {
             return;
         }
@@ -211,7 +218,7 @@ public partial class MapsViewModel : PageViewModel
 
         ResetOutcome? outcome = null;
         await Shell.RunGameWriteAsync(
-            "Resetting all",
+            $"Resetting {MainViewModel.Count(count, "map")}",
             undoPaths,
             (progress, ct) => Task.Run(
                 () =>
@@ -223,7 +230,7 @@ public partial class MapsViewModel : PageViewModel
                     }
                 },
                 ct),
-            "Reset every map to default",
+            $"Reset {MainViewModel.Count(count, "map")} to the Default pack.",
             libraryUndoPaths: RecordReset.UndoPaths(allMatched, Shell.Services.LibraryPath),
             artMaps: snapshot.Catalog.Maps,
             resetThumbnails: true,
@@ -239,7 +246,13 @@ public partial class MapsViewModel : PageViewModel
     /// <summary>Spec 4.3: one pack onto the maps given, whoever gave them.</summary>
     public async Task ApplyPackToAsync(IReadOnlyList<MapEntry> maps, Pack pack)
     {
-        if (maps.Count == 0 || !Confirm($"Apply {pack.Name}", $"Apply {pack.Name}", maps))
+        if (maps.Count == 0
+            || !Confirm(
+                $"Apply {pack.Name}",
+                $"Apply {pack.Name} to {MainViewModel.Count(maps.Count, "map")}?",
+                MainViewModel.WritesArt,
+                $"Apply to {MainViewModel.Count(maps.Count, "map")}",
+                maps))
         {
             return;
         }
@@ -252,7 +265,7 @@ public partial class MapsViewModel : PageViewModel
             targetPaths,
             (progress, ct) => Task.Run(
                 () => { result = PackApplier.ApplyToMaps(pack, maps, gamePath, progress, ct); }, ct),
-            $"{pack.Name} applied to {MainViewModel.Count(maps.Count, "map")}",
+            $"{pack.Name} applied to {MainViewModel.Count(maps.Count, "map")}.",
             pack.Name,
             artMaps: maps,
             sources: AppliedSources.FromPack(pack, targetPaths));
@@ -272,12 +285,12 @@ public partial class MapsViewModel : PageViewModel
         {
             Shell.Dialogs.Info(
                 "Nothing to apply",
-                $"{picture.DisplayName} has no file in the library or in the game folder.");
+                $"{picture.Name} has no file in the library or in the game folder.");
             return;
         }
 
         // The name the menu row was labelled with, so the done line reports the row that was clicked (spec 2.2).
-        await Shell.ApplyPictureAsync(source, maps, picture.DisplayName, picture.PackName);
+        await Shell.ApplyPictureAsync(source, maps, picture.Name, picture.PackName);
     }
 
     /// <summary>Spec 4.3: the maps given, back to the Default pack. One map resets without asking; more than one
@@ -285,7 +298,14 @@ public partial class MapsViewModel : PageViewModel
     public async Task ResetAsync(IReadOnlyList<MapEntry> maps)
     {
         if (_snapshot is not { } snapshot || snapshot.DefaultPack is not { } defaultPack || maps.Count == 0
-            || !Confirm("Reset to default", "Reset", maps))
+            || !Confirm(
+                maps.Count == 1
+                    ? $"Reset {maps[0].DisplayName}"
+                    : $"Reset {MainViewModel.Count(maps.Count, "map")}",
+                $"Reset {MainViewModel.Count(maps.Count, "map")} to the Default pack?",
+                MainViewModel.RestoresArt,
+                $"Reset {MainViewModel.Count(maps.Count, "map")}",
+                maps))
         {
             return;
         }
@@ -325,7 +345,7 @@ public partial class MapsViewModel : PageViewModel
                     }
                 },
                 ct),
-            $"Reset {MainViewModel.Count(maps.Count, "map")} to default",
+            $"Reset {MainViewModel.Count(maps.Count, "map")} to the Default pack.",
             libraryUndoPaths: RecordReset.UndoPaths(allMatched, Shell.Services.LibraryPath),
             artMaps: maps,
             resetThumbnails: true,
@@ -338,11 +358,12 @@ public partial class MapsViewModel : PageViewModel
     public bool CanReset => _snapshot?.DefaultPack is not null;
 
     /// <summary>Spec 3.3: a write to more than one map names the count and the maps first; one map is one click.</summary>
-    private bool Confirm(string title, string verb, IReadOnlyList<MapEntry> maps) =>
+    private bool Confirm(string title, string question, string effect, string primary, IReadOnlyList<MapEntry> maps) =>
         maps.Count <= 1
         || Shell.Dialogs.Confirm(
             title,
-            $"{verb} to these {maps.Count} maps?\n\n{string.Join(", ", maps.Select(m => m.DisplayName))}");
+            MainViewModel.ConfirmBody(question, effect, [.. maps.Select(m => m.DisplayName)]),
+            primary);
 
     public override void Refresh(ScanSnapshot snapshot) => Refresh(snapshot, null);
 
@@ -366,7 +387,6 @@ public partial class MapsViewModel : PageViewModel
 
         RebuildChips(snapshot.Catalog);
         ApplyFilter();
-        OnPropertyChanged(nameof(ShowFirstRunLine));
 
         // The card the panel was on is a new object now, so it is found again by folder name rather than left
         // pointing at one nothing draws.
@@ -421,21 +441,20 @@ public partial class MapsViewModel : PageViewModel
         }
     }
 
-    partial void OnZoomChanged(int value)
+    partial void OnTileSizeChanged(TileSize value)
     {
-        if (Shell.Services.Settings.MapsZoom != value)
+        if (Shell.Services.Settings.MapsTileSize != value)
         {
-            Shell.Services.UpdateSettings(Shell.Services.Settings with { MapsZoom = value });
+            Shell.Services.UpdateSettings(Shell.Services.Settings with { MapsTileSize = value });
         }
 
         // The card template reads these numbers rather than carrying a pile of triggers of its own.
-        OnPropertyChanged(nameof(CardWidth));
+        OnPropertyChanged(nameof(TargetCardWidth));
         OnPropertyChanged(nameof(ShowName));
         OnPropertyChanged(nameof(ShowTagRow));
         OnPropertyChanged(nameof(ShowMissingMark));
         OnPropertyChanged(nameof(NameFontSize));
         OnPropertyChanged(nameof(CardPadding));
-        OnPropertyChanged(nameof(CardMargin));
     }
 
     /// <summary>The library's custom pictures, as the last scan built them (spec 4). Empty before the first scan.</summary>
@@ -525,6 +544,7 @@ public partial class MapsViewModel : PageViewModel
 
         OnPropertyChanged(nameof(EmptyText));
         OnPropertyChanged(nameof(ShowClearSearch));
+        OnPropertyChanged(nameof(EmptyActionText));
     }
 
     /// <summary>The chip filter, then the header search box on top of it.</summary>
@@ -535,11 +555,20 @@ public partial class MapsViewModel : PageViewModel
             return false;
         }
 
+        // 3.0: a search reads every map, whatever the chip says, so a typed name still reaches a minigame map
+        // that the All chip leaves out.
+        if (SearchText.Length > 0)
+        {
+            return true;
+        }
+
         return SelectedChip switch
         {
-            AllChip => true,
+            AllChip => !MapCatalog.IsMinigame(card.Map),
             _ => _uiSets.FirstOrDefault(s => s.Label == SelectedChip) is { } set
-                && card.Map.Sets.Contains(set.Name, StringComparer.OrdinalIgnoreCase),
+                && (set.Name == MapCatalog.MinigameSetName
+                    ? MapCatalog.IsMinigame(card.Map)
+                    : card.Map.Sets.Contains(set.Name, StringComparer.OrdinalIgnoreCase)),
         };
     }
 
@@ -577,7 +606,7 @@ public partial class MapsViewModel : PageViewModel
         foreach (var picture in CustomPictures().Take(8))
         {
             pictures.Add(new TileMenuCommand(
-                picture.DisplayName,
+                picture.Name,
                 new AsyncRelayCommand(() => ApplyPictureToAsync(target, picture))));
         }
 
@@ -611,10 +640,10 @@ public partial class MapsViewModel : PageViewModel
                 new AsyncRelayCommand(() => Shell.OpenPlatformEditorAsync(target, null))),
             TileMenuCommand.Separator(),
             new TileMenuCommand(
-                "Reset to default",
+                "Reset map",
                 new AsyncRelayCommand(() => ResetAsync(target)),
                 IsEnabled: CanReset,
-                ToolTip: CanReset ? null : "There is no Default pack to reset to."),
+                ToolTip: CanReset ? null : MapPanelViewModel.NoDefaultPackTip),
             new TileMenuCommand("Show in game folder", new RelayCommand(() => ShowMapFolder(one))),
         ];
     }

@@ -5,8 +5,10 @@ namespace BhMaps.App.Services;
 /// <summary>Everything a view model needs from the UI that blocks for the user.</summary>
 public interface IDialogs
 {
-    /// <summary>OK/Cancel question. True on OK.</summary>
-    bool Confirm(string title, string message);
+    /// <summary>A question with a way out. True when the user pressed the primary button, whose label
+    /// <paramref name="primary" /> is: the verb of the thing about to happen, never "OK". A
+    /// <paramref name="destructive" /> primary is the one that deletes or removes something.</summary>
+    bool Confirm(string title, string message, string primary, bool destructive = false);
 
     void Error(string title, string message);
 

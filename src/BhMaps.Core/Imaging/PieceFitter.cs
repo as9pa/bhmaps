@@ -11,11 +11,15 @@ public static class PieceFitter
 {
     /// <summary>The picture, cover-fitted to the piece's rectangle and masked by the piece's alpha. Frozen Bgra32,
     /// the piece's size and DPI.</summary>
-    public static BitmapSource Fit(BitmapSource source, BitmapSource piece)
+    public static BitmapSource Fit(BitmapSource source, BitmapSource piece) =>
+        Fit(source, piece, new FitOptions());
+
+    /// <summary>The same, fitted the way the caller asks rather than always covered (3.0 E).</summary>
+    public static BitmapSource Fit(BitmapSource source, BitmapSource piece, FitOptions options)
     {
         var width = piece.PixelWidth;
         var height = piece.PixelHeight;
-        var dest = BackgroundFitter.DestinationRect(source.PixelWidth, source.PixelHeight, new FitOptions(), width, height);
+        var dest = BackgroundFitter.DestinationRect(source.PixelWidth, source.PixelHeight, options, width, height);
 
         var visual = new DrawingVisual();
         RenderOptions.SetBitmapScalingMode(visual, BitmapScalingMode.HighQuality);

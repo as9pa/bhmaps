@@ -19,6 +19,10 @@
   <Geometry x:Key="Icon.Download">M12 5v11 M8 12l4 4l4 -4 M4 20h16</Geometry>
   <Geometry x:Key="Icon.Export">M12 19v-11 M8 12l4 -4l4 4 M4 20h16</Geometry>
   <Geometry x:Key="Icon.FolderOpen">M5 4h4l3 3h7a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-11a2 2 0 0 1 2 -2</Geometry>
+
+  <!-- 3.0's glyph table: a folder with a plus is what bringing pictures in wears, so a bare plus is left to mean
+       making something new and nothing else. -->
+  <Geometry x:Key="Icon.FolderPlus">M12 19h-7a2 2 0 0 1 -2 -2v-11a2 2 0 0 1 2 -2h4l3 3h7a2 2 0 0 1 2 2v3.5 M16 19h6 M19 16v6</Geometry>
   <Geometry x:Key="Icon.Undo">M9 14l-4 -4l4 -4 M5 10h11a4 4 0 1 1 0 8h-1</Geometry>
   <Geometry x:Key="Icon.Refresh">M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4 M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4</Geometry>
   <Geometry x:Key="Icon.Camera">M5 7h1a2 2 0 0 0 2 -2a1 1 0 0 1 1 -1h6a1 1 0 0 1 1 1a2 2 0 0 0 2 2h1a2 2 0 0 1 2 2v9a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-9a2 2 0 0 1 2 -2 M9 13A3 3 0 0 1 15 13A3 3 0 0 1 9 13Z</Geometry>
@@ -37,4 +41,10 @@
   <!-- Three dots, drawn as three zero length strokes: the Icon control caps every stroke round, so each one comes
        out a 2 unit disc and no fill geometry is needed. -->
   <Geometry x:Key="Icon.Dots">M5 12h.01 M12 12h.01 M19 12h.01</Geometry>
+
+  <!-- The three sizes a page's tiles come in (3.0), which took over from the two squares and the number the
+       2.8 zoom slider drew itself: four big tiles, nine middling ones, sixteen small ones, in one 24 unit box. -->
+  <Geometry x:Key="Icon.GridLarge">M6 4h3a2 2 0 0 1 2 2v3a2 2 0 0 1 -2 2h-3a2 2 0 0 1 -2 -2v-3a2 2 0 0 1 2 -2Z M15 4h3a2 2 0 0 1 2 2v3a2 2 0 0 1 -2 2h-3a2 2 0 0 1 -2 -2v-3a2 2 0 0 1 2 -2Z M6 13h3a2 2 0 0 1 2 2v3a2 2 0 0 1 -2 2h-3a2 2 0 0 1 -2 -2v-3a2 2 0 0 1 2 -2Z M15 13h3a2 2 0 0 1 2 2v3a2 2 0 0 1 -2 2h-3a2 2 0 0 1 -2 -2v-3a2 2 0 0 1 2 -2Z</Geometry>
+  <Geometry x:Key="Icon.GridMedium">M5 4h2a1 1 0 0 1 1 1v2a1 1 0 0 1 -1 1h-2a1 1 0 0 1 -1 -1v-2a1 1 0 0 1 1 -1Z M11 4h2a1 1 0 0 1 1 1v2a1 1 0 0 1 -1 1h-2a1 1 0 0 1 -1 -1v-2a1 1 0 0 1 1 -1Z M17 4h2a1 1 0 0 1 1 1v2a1 1 0 0 1 -1 1h-2a1 1 0 0 1 -1 -1v-2a1 1 0 0 1 1 -1Z M5 10h2a1 1 0 0 1 1 1v2a1 1 0 0 1 -1 1h-2a1 1 0 0 1 -1 -1v-2a1 1 0 0 1 1 -1Z M11 10h2a1 1 0 0 1 1 1v2a1 1 0 0 1 -1 1h-2a1 1 0 0 1 -1 -1v-2a1 1 0 0 1 1 -1Z M17 10h2a1 1 0 0 1 1 1v2a1 1 0 0 1 -1 1h-2a1 1 0 0 1 -1 -1v-2a1 1 0 0 1 1 -1Z M5 16h2a1 1 0 0 1 1 1v2a1 1 0 0 1 -1 1h-2a1 1 0 0 1 -1 -1v-2a1 1 0 0 1 1 -1Z M11 16h2a1 1 0 0 1 1 1v2a1 1 0 0 1 -1 1h-2a1 1 0 0 1 -1 -1v-2a1 1 0 0 1 1 -1Z M17 16h2a1 1 0 0 1 1 1v2a1 1 0 0 1 -1 1h-2a1 1 0 0 1 -1 -1v-2a1 1 0 0 1 1 -1Z</Geometry>
+  <Geometry x:Key="Icon.GridSmall">M3 3h3v3h-3Z M8 3h3v3h-3Z M13 3h3v3h-3Z M18 3h3v3h-3Z M3 8h3v3h-3Z M8 8h3v3h-3Z M13 8h3v3h-3Z M18 8h3v3h-3Z M3 13h3v3h-3Z M8 13h3v3h-3Z M13 13h3v3h-3Z M18 13h3v3h-3Z M3 18h3v3h-3Z M8 18h3v3h-3Z M13 18h3v3h-3Z M18 18h3v3h-3Z</Geometry>
 </ResourceDictionary>

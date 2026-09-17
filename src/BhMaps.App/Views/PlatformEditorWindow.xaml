@@ -257,7 +257,7 @@
 
                   <CheckBox Margin="0,0,10,0"
                             VerticalAlignment="Center"
-                            AutomationProperties.Name="{Binding FileName}"
+                            AutomationProperties.Name="{Binding RowName}"
                             FocusVisualStyle="{StaticResource DialogFocusRing}"
                             IsChecked="{Binding IsTicked}"
                             Style="{StaticResource CardTick}" />
@@ -268,7 +268,7 @@
                   <Border Grid.Column="1"
                           Grid.ColumnSpan="3"
                           Padding="4,3"
-                          AutomationProperties.Name="{Binding FileName}"
+                          AutomationProperties.Name="{Binding RowName}"
                           CornerRadius="{StaticResource Radius}"
                           Focusable="True"
                           FocusVisualStyle="{StaticResource DialogFocusRing}"
@@ -319,12 +319,16 @@
                         </Border>
                       </Border>
 
-                      <TextBlock Grid.Column="1"
-                                 Margin="8,0,0,0"
-                                 VerticalAlignment="Center"
-                                 Style="{StaticResource MonoText}"
-                                 Text="{Binding FileName}"
-                                 TextTrimming="CharacterEllipsis" />
+                      <!-- 3.0 E: the row is called Piece 1, Piece 2 and so on, and the file it is made from is
+                           the quieter line under it. -->
+                      <StackPanel Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+                        <TextBlock FontSize="{StaticResource FontCaption}"
+                                   Foreground="{StaticResource Text2Brush}"
+                                   Style="{StaticResource MonoText}"
+                                   Text="{Binding FileName}"
+                                   TextTrimming="CharacterEllipsis" />
+                      </StackPanel>
 
                       <TextBlock Grid.Column="2"
                                  Margin="10,0,0,0"
@@ -387,6 +391,36 @@
                          FocusVisualStyle="{StaticResource DialogFocusRing}"
                          GroupName="Fit"
                          IsChecked="{Binding FitAcross, Converter={StaticResource InverseBool}, Mode=TwoWay}"
+                         Style="{StaticResource ChipToggle}" />
+          </StackPanel>
+          <!-- 3.0 E: how the picture fills that box, the same four the other windows offer and in the same order. -->
+          <StackPanel Margin="0,8,0,0" IsEnabled="{Binding CanUseFit}" Orientation="Horizontal">
+            <RadioButton AutomationProperties.Name="Fill"
+                         Content="Fill"
+                         FocusVisualStyle="{StaticResource DialogFocusRing}"
+                         GroupName="PictureFit"
+                         IsChecked="{Binding FitFill, Mode=TwoWay}"
+                         Style="{StaticResource ChipToggle}" />
+            <RadioButton Margin="8,0,0,0"
+                         AutomationProperties.Name="Fit"
+                         Content="Fit"
+                         FocusVisualStyle="{StaticResource DialogFocusRing}"
+                         GroupName="PictureFit"
+                         IsChecked="{Binding FitFit, Mode=TwoWay}"
+                         Style="{StaticResource ChipToggle}" />
+            <RadioButton Margin="8,0,0,0"
+                         AutomationProperties.Name="Center"
+                         Content="Center"
+                         FocusVisualStyle="{StaticResource DialogFocusRing}"
+                         GroupName="PictureFit"
+                         IsChecked="{Binding FitCenter, Mode=TwoWay}"
+                         Style="{StaticResource ChipToggle}" />
+            <RadioButton Margin="8,0,0,0"
+                         AutomationProperties.Name="Stretch"
+                         Content="Stretch"
+                         FocusVisualStyle="{StaticResource DialogFocusRing}"
+                         GroupName="PictureFit"
+                         IsChecked="{Binding FitStretch, Mode=TwoWay}"
                          Style="{StaticResource ChipToggle}" />
           </StackPanel>
           <TextBlock Style="{StaticResource ErrorText}" Text="{Binding ImageError}" />
@@ -482,10 +516,6 @@
         <ColumnDefinition Width="*" />
         <ColumnDefinition Width="Auto" />
       </Grid.ColumnDefinitions>
-      <CheckBox VerticalAlignment="Center"
-                Content="Apply to game now"
-                FocusVisualStyle="{StaticResource DialogFocusRing}"
-                IsChecked="{Binding ApplyNow}" />
       <StackPanel Grid.Column="1" Orientation="Horizontal">
         <!-- Spec 9: one Save writes every map of the set, so the line says which map it is on and the Cancel
              beside it stops the run between maps. The maps already written stay in the pack. -->
@@ -509,8 +539,16 @@
                 IsCancel="True"
                 IsEnabled="{Binding CanCloseWindow}"
                 Style="{StaticResource PlainButton}" />
-        <Button Command="{Binding SaveCommand}"
-                Content="Save"
+        <!-- 3.0 E: the two saves in place of one Save and an "Apply to game" tick, in the order every dialog
+             uses: Cancel, then the quieter save, then the primary at the end. Enter takes the primary, which is
+             the one that puts the platforms in the game. -->
+        <Button Margin="0,0,8,0"
+                Command="{Binding SaveOnlyCommand}"
+                Content="Save only"
+                FocusVisualStyle="{StaticResource DialogFocusRing}"
+                Style="{StaticResource OutlineButton}" />
+        <Button Command="{Binding SaveAndApplyCommand}"
+                Content="Save and apply"
                 FocusVisualStyle="{StaticResource DialogFocusRing}"
                 IsDefault="True"
                 Style="{StaticResource PrimaryButton}" />

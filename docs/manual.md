@@ -5,16 +5,69 @@ listed under the name the game gives it, above a preview composed the way the ga
 the game's own level data. It keeps a library of *packs*, folders of images that mirror the game's
 `mapArt` tree, and copies them into the game folder on demand. The only files it changes are `.png`
 and `.jpg` files inside the `mapArt` folder and inside its own library, plus its own files in
-`%APPDATA%\BhMaps`. With the Map-select thumbnails switch on, which is off until you turn it on, it
-also writes over the `.jpg` files already in the game's `images\thumbnails` folder, and it keeps a
-copy of every original so it can put it back. The game's data files are read and never written, and
+`%APPDATA%\BhMaps`. It also writes over the `.jpg` files already in the game's `images\thumbnails`
+folder, and it keeps a copy of every original so it can put it back. The game's data files are read and never written, and
 nothing else in the game install is touched.
+
+## What is new in 3.0
+
+3.0 is a redraw. The pages, the words and the dialogs were reworked from one design pass over the
+whole app, so most of what changed is how things read and where they sit rather than what the app
+can do. Nothing about the files it writes changed.
+
+- **Rows that fill the width.** Maps, Backgrounds, Platforms and a pack's page lay their cards out
+  in justified rows: every row is as wide as the page, and the cards in it share the leftover space.
+  The zoom slider is gone. A three-step size picker at the top right of each page, Large, Medium
+  and Small, takes its place, and Ctrl and the mouse wheel, Ctrl and plus, Ctrl and minus and Ctrl
+  and 0 do the same from the keyboard. Each page remembers its own size. At Small the names go and
+  the pictures speak for themselves.
+- **One status line.** Everything the app is doing or has just done reads on one line at the foot of
+  the page, with a coloured dot for its state: running, done, undone, cancelled, an error, or a note.
+  A running line has Cancel, a done line has Undo, an error has Retry, and every other line has an
+  × to put it away. Ctrl+Z undoes the last write and Escape cancels the one running. The header no
+  longer carries status text.
+- **Dialogs say what the button does.** A confirm names the action on its button, "Apply to 23
+  maps", "Reset 68 maps", "Delete b&w maps", and a button that throws something away is red. Only
+  one dialog opens at a time.
+- **Empty pages say why.** A search with no match says so and offers to clear it. A page whose game
+  folder is gone says "Game folder not found. Choose the Brawlhalla mapArt folder to continue." with
+  a Choose folder button, and the app notices the folder going or coming back within a few seconds
+  on its own. A library with no packs yet shows a banner offering to capture the Default pack.
+- **The Welcome window shows its progress.** Capturing the Default pack on first run reads as a
+  progress line inside Welcome, and the main window opens with the done line on its status strip.
+  Paths in Welcome and in Settings are shortened in the middle so they fit on one line.
+- **Pictures have names.** A picture added to My Backgrounds is named when it is added, from its
+  file name with the underscores and hyphens turned into spaces, and can be renamed from its tile's
+  menu. The name is what every list, chooser and status line calls it; the file name is never shown
+  as a name again.
+- **Words, not codes.** A map's level sets read as words in a fixed order, "Ranked 1v1, Ranked 2v2,
+  Tournament, Standard, Experimental, Minigames", and everything the panel says ends in a full stop.
+  A map whose Reset needs the Default pack says "Needs the Default pack." on the button.
+- **Packs rows say where a pack is.** Each row says "On N maps." when the pack is on the game, "Not
+  in game." when it is not, "What Reset puts back." for Default and "Hidden from lists." for a pack
+  stepped out, and a "+N more" link opens the pack's page, which has a picture band across its top.
+- **Settings is three sections.** Folders, Game and Updates, each row a label, a value and one
+  button. The Map-select thumbnails switch is gone: thumbnails are always written with the art. The
+  Version row says "Latest. Last checked yesterday, 20:44." or "Update available: 3.1.0." with a Get
+  button, and Updates is one switch, "Check for updates when BhMaps starts".
+- **The game's version.** Settings says which Brawlhalla the game data came from and when it was
+  read, "From Brawlhalla 10.10, read 17 September 2026.", and the data is read again on its own when
+  the game has updated: at start, and when Brawlhalla is seen starting or stopping. The Refresh
+  button in the top bar is an icon with its explanation in the tooltip.
+- **Minigames.** A Minigames chip after Tournament holds the ten maps only a game mode uses,
+  Brawlball, Bombsketball, Horde and the rest, and All leaves them out. A typed search still finds
+  them.
+- **Editors end in two buttons.** The background and platform editors end in "Save and apply" and
+  "Save only" instead of a Save button and an Apply to game box. Platform pieces are "Piece 1",
+  "Piece 2" and so on, with the file name under each, and both editors offer the same four fits,
+  Fill, Fit, Center and Stretch. The map chooser's button says what it will do, "Apply to Grove" or
+  "Apply to 3 maps", and Add Image counts the pictures picked.
 
 ## What is new in 2.8
 
 - **A pack can step out of the lists.** Every Packs row except Default has an eye button before Apply
   all, and its menu has **Hide from lists** / **Show in lists**. A hidden pack stays on the Packs page,
-  dimmed, with ", hidden from lists" on its counts line, and Apply all still works on it; its pictures
+  dimmed, with "Hidden from lists." last on its counts line, and Apply all still works on it; its pictures
   and platform sets stop showing up along the rows on Backgrounds and Platforms and in a map's panel,
   except on a map where the game is showing that pack's art right now. That tile stays, with a muted
   "hidden" after its name, until something else is applied to the map; Undo brings it back with the
@@ -26,7 +79,7 @@ nothing else in the game install is touched.
   again every game file whose source changed since the app put it there (a pack picture edited on
   disk, a picture in My Backgrounds replaced), restores a file missing from a map folder from the
   pack the folder matches or from Default, and rewrites the map-select thumbnails for every map with
-  custom art when that switch is on. It is one write with one Undo, and its line reads "Refreshed 12
+  custom art. It is one write with one Undo, and its line reads "Refreshed 12
   maps. Shows on the next match load." A game file the app wrote that has since been changed by
   hand is left alone and counted: "1 file changed by hand, left alone." With nothing to do it says
   "Nothing to refresh." and writes nothing. F5 is still the read-only rescan.
@@ -222,9 +275,9 @@ describes things by where they are and what they do. Nothing on disk changes sha
 - **The map panel is one list, Background over Platforms.** The two-part switch is gone, so both halves
   of a map's look are in front of you at once.
 - **The Packs order follows what you used last.** Default first, then the packs with a last-applied
-  stamp, newest first, then the packs never applied, by name. Each pack row says when it was last
-  applied, as in "applied 2 min ago". The order is the same on the Packs page, in the map panel, on the
-  rows pages and in the editors' pack pickers.
+  stamp, newest first, then the packs never applied, by name. Each pack row says how many maps are
+  wearing that pack's art right now, as in "On 12 maps.". The order is the same on the Packs page, in
+  the map panel, on the rows pages and in the editors' pack pickers.
 - **Tile menus hold only what the tile cannot do on its own.** "Show files" is offered only in the map
   panel, where it does something, and "Apply to <map>" is dropped wherever the tile already carries an
   Apply button. Edit is on every platform set.
@@ -246,7 +299,7 @@ describes things by where they are and what they do. Nothing on disk changes sha
 | --- | --- |
 | Game map art, read and written | `C:\Program Files (x86)\Steam\steamapps\common\Brawlhalla\mapArt` |
 | Game data files, read only | `BrawlhallaAir.swf`, `Dynamic.swz`, `Init.swz` and `Game.swz`, in the folder above `mapArt` |
-| Game map-select thumbnails, written only with the switch on | `C:\Program Files (x86)\Steam\steamapps\common\Brawlhalla\images\thumbnails` |
+| Game map-select thumbnails, written with the map art | `C:\Program Files (x86)\Steam\steamapps\common\Brawlhalla\images\thumbnails` |
 | Pack library | `Documents\BhMaps` by default, changeable in Settings |
 | Packs inside the library | `<library>\packs\<pack name>\<GameFolder>\<file>` |
 | Settings | `%APPDATA%\BhMaps\settings.json` |
@@ -260,10 +313,9 @@ describes things by where they are and what they do. Nothing on disk changes sha
 
 The map art folder and the library are chosen in the welcome window and editable in Settings; the
 data files are wherever the game folder is. Only `<library>\packs` is read and written, so anything
-else kept in the library folder is left alone. The settings file holds the two paths, the zoom level
+else kept in the library folder is left alone. The settings file holds the two paths, the tile size
 each page remembers, when each pack was last applied, whether the Backgrounds page is showing your own
-pictures, whether the game's map-select thumbnails are updated, the names of the packs hidden from
-the lists, whether the welcome window has been
+pictures, the names of the packs hidden from the lists, whether the welcome window has been
 finished, whether BhMaps checks for updates when it starts, when it last checked, and any update
 notice you dismissed. The three caches are speed-ups
 only: deleting any of them costs one slower start, and preview files unused for 30 days are deleted
@@ -284,10 +336,11 @@ instead.
 The top bar carries the app's name, then the five tabs: Maps, Backgrounds, Platforms, Packs and
 Settings. Ctrl+1 to Ctrl+5 switch between them, and Ctrl+K goes to Maps and puts the cursor in its
 search box. On the right is the game line, reading "Brawlhalla running", or "Brawlhalla not running"
-beside a Launch button that asks Steam to start the game. Before the game line is **Refresh**, which
-applies again every game file whose source changed since the app put it there, restores a file
-missing from a map folder, and rewrites the map-select thumbnails; one write, one Undo, and "Nothing
-to refresh." when there is nothing to do. When a newer release is out, a **New update
+beside a Launch button that asks Steam to start the game. Before the game line is **Refresh**, a
+square button showing only its arrows, which applies again every game file whose source changed since
+the app put it there, restores a file missing from a map folder, and rewrites the map-select
+thumbnails; one write, one Undo, and "Nothing to refresh." when there is nothing to do. Hovering it
+says "Refresh: re-apply what is on, restore missing files, redraw the map-select thumbnails". When a newer release is out, a **New update
 available** line sits before the game line; clicking it opens Settings and the small x beside it hides
 it until the release after that. When the game folder cannot be found the
 line turns red and offers Choose folder, which opens Settings. F5 rescans; Cancel in a page header
@@ -297,9 +350,11 @@ stops a long operation.
   filter: All and one per level set. The set
   chips are Ranked 1v1, Ranked 2v2 and
   Tournament when the game's data has the ranked sets, and the standard ones when it does not; the
-  other sets the game defines are read but not shown. The zoom slider in the header sets the card
-  size in nine steps, the fifth to begin with; the grid holds as many columns as fit, so opening the
-  panel moves cards down a row instead of shrinking them. Each card is a composed preview, the map's
+  other sets the game defines are read but not shown. Minigames comes last and holds the ten maps
+  only a game mode uses, such as Brawlball and Horde, and All leaves those ten out; a search still
+  finds them whatever chip is on. The card size is the size control (Large,
+  Medium, Small) in the page header, or Ctrl and plus, minus, zero, or the wheel; the grid holds as
+  many columns as fit, so opening the panel moves cards down a row instead of shrinking them. Each card is a composed preview, the map's
   name, and a tag only when there is something to say: the pack the map matches, the name of the
   any-map picture on it, or Missing. A map that is entirely default draws no tag. Wide cards keep the
   tag on the name row; narrower ones draw it over the bottom-left corner of the picture instead, so
@@ -316,7 +371,7 @@ stops a long operation.
   out when it has nothing for that map and a hidden pack marked "hidden";
   **Apply picture** unfolds your pictures, up to eight, then "More pictures..."
   for the chooser and "Add Custom Image..."; then **Edit background**, **Edit platforms** (one map
-  only), **Reset to default** and **Show in game folder**. One map applies without asking; a write to
+  only), **Reset** and **Show in game folder**. One map applies without asking; a write to
   more than one map asks and names the count.
 - The **map panel** opens on the right and holds everything one map can do: its name and the sets it
   belongs to, a larger preview, a line saying in words what is in game, Reset this map and Open
@@ -347,11 +402,12 @@ stops a long operation.
   goes to Packs.
   One click on a thumbnail applies it to that map, with no confirmation to answer. Hovering shows
   Apply and a dots button, and the menu offers to apply the picture to all maps, then Edit and Show
-  in folder, and for a picture in a pack **Delete background**, which also puts the default back on
+  in folder, and for a picture in a pack **Rename**, which renames its file in the library and leaves
+  the maps it is on showing it, and **Delete background**, which also puts the default back on
   any map showing it, or Save to My Backgrounds for a picture the game is showing that no pack
   holds. Search matches map names, pack names and file names. The chips are the ones Maps has.
-  The zoom slider sets the row height in five steps, the second to begin with. Add Image is in the
-  header. Up and Down move between rows, Left and Right along a strip, and Enter applies
+  The thumbnail size is the size control (Large, Medium, Small) in the page header, or Ctrl and
+  plus, minus, zero, or the wheel. Add Image is in the header. Up and Down move between rows, Left and Right along a strip, and Enter applies
   the thumbnail the keyboard is on.
 - **Platforms** is the same kind of row for the other half of a map's look. A platform set fits only
   the map it was drawn for, so a row holds exactly the packs that have a set for that map: the set in
@@ -364,16 +420,18 @@ stops a long operation.
   folder and, for a set that is not Default's, **Delete platform set**, which also puts the default
   platforms back if the map is showing that set; Show files belongs to the map panel, where the
   files are listed. Search matches map
-  and pack names, and the zoom slider has the same five steps, the third to begin with.
+  and pack names, and the size control is the one Backgrounds has.
 - **Packs** is one row per pack: a composed thumbnail of the pack's first map, the pack's name and
-  what it holds, as in "3 maps, 12 backgrounds, applied 2 min ago", and a strip of previews of the
-  maps it touches, as many as the width allows, with a count for the rest. `Default` comes first,
+  what it holds and where it is, as in "3 maps, 12 backgrounds. On 12 maps.", and a strip of previews
+  of the maps it touches, as many as the width allows, with a "+56 more" link to the pack's own page
+  for the rest. A pack with nothing of its in the game says "Not in game."; `Default` says "What Reset
+  puts back.", because it is the art every reset lands on rather than a pack you apply. `Default` comes first,
   then the packs that have been applied, the most recent first, then the ones never applied, by
   name; every list of packs in the app follows that order. Apply all is a button on the row; a dots
   button beside it holds **Duplicate**, **Import from another pack...**, Export, Open folder and
   **Delete pack**; `Default` has no Delete pack. Every row but Default also has an eye before Apply
   all: click it and the pack is hidden from the lists on Backgrounds, Platforms and the map panel,
-  the row dims and its counts line ends ", hidden from lists"; click again to show it. The dots menu
+  the row dims and its counts line ends "Hidden from lists."; click again to show it. The dots menu
   says the same in words, **Hide from lists** / **Show in lists**. The header has Import folder, New
   pack, Capture defaults and Open library. After a game update, the first scan that finds a map
   folder or a background slot the game has and Default lacks copies exactly those files into Default
@@ -382,7 +440,7 @@ stops a long operation.
   for a pack that is wrong as a whole. **New pack** asks for a name and makes an empty pack you can
   fill later from Add Image or the editors. Clicking a row opens the pack.
 - **Pack detail** shows one pack as a single grid of its maps, each composed with the game's art
-  where the pack has nothing of its own, with zoom setting the column count. Clicking a tile opens a
+  where the pack has nothing of its own, at the size the header's size control sets. Clicking a tile opens a
   drawer listing that map's files, its background and its platforms, and where each came from.
   Hovering a tile shows a dots button, and the dots or a right-click opens the
   menu. A map's tile is headed with the map's name and holds **Apply to <map>**, **Copy to pack...**
@@ -396,15 +454,13 @@ stops a long operation.
   the pack holds fully transparent PNGs, a line above the grid says how many of its files change
   nothing in game and offers to remove them. Apply all, Open folder and the way back to the pack list
   are in the header.
-- **Settings** is one line per setting: the game folder and the library, each with Change and Open;
-  the game data, with the date it was last read and Refresh now; Capture defaults; one line about
-  applying, which says that changes are written straight into the game folder with Brawlhalla open or
-  closed and show on the next match load, and that Undo puts back the files of the last write;
-  **Map-select thumbnails**, a checkbox reading **Also update the game's map-select thumbnails** that
-  starts off and, turned off again, puts every kept original thumbnail back; **Updates**, a checkbox
-  reading **Check for updates when BhMaps starts** with a **Check now** button and a line saying when
-  it last checked; and the version, which says whether a newer release is out and offers **Update to
-  <version>** and **What changed**. There is no OK button, so every row saves as it is changed.
+- **Settings** is one line per setting, under three headings. **Folders** is the game folder and the
+  library, each with Change and Open. **Game** is the game data, reading "From Brawlhalla 10.10, read
+  16 September 2026." with the version the game's files name, or "From the game's files, read ..."
+  when they name none, and Refresh now beside it; and the Default pack, with **Capture**. **Updates**
+  is the version, whose line reads "Latest. Last checked ..." or "Update available: <version>." with
+  **Get** and **What changed** beside it; and a checkbox reading **Check for updates when BhMaps
+  starts** with a **Check now** button. There is no OK button, so every row saves as it is changed.
 
 These windows open on top of the pages:
 
@@ -412,16 +468,21 @@ These windows open on top of the pages:
   found through Steam when it can be, the library folder, and whether to capture the game's current
   art as the `Default` pack. It comes back if the saved game folder later stops working.
 - **Add Image**, from the Backgrounds header or a map's panel, takes any
-  number of images, dropped on the window or picked, fits them all one way (**Stretch**, **Center**,
-  **Fill** or **Fit**) and writes each one into an existing or new pack as a 2048x1151 JPEG. A block
+  number of images, dropped on the window or picked, fits them all one way (**Fill**, **Fit**,
+  **Center** or **Stretch**) and writes each one into an existing or new pack as a 2048x1151 JPEG. A block
   of choices headed "Then" decides what happens after that: add them to the library and stop; add and
   apply to the map the window was opened from; or add and apply
   to every map. Applying goes in order and starts again from the first picture when there are more
-  maps than pictures. The pictures it reads are never changed.
+  maps than pictures. The pictures it reads are never changed. A picture is called what its file is
+  called: adding one picture asks for its name first, offering the file's own name tidied up
+  (underscores and hyphens become spaces), and adding several takes those tidied names without
+  asking. A name another picture in the pack already has gets " (2)" after it.
 - **Chooser**, from "Apply to a map..." on a picture's menu or "More pictures..." on a map card's
   menu, is one list with a search box: every map, each with a thumbnail and the art it shows now, or
-  every picture you imported, each with the pack that holds it. The button reads "Apply to <name>"
-  and the list opens on the first row; Escape or Cancel applies nothing.
+  every picture you imported, each with the pack that holds it. The box says "Search maps", and the
+  button reads "Apply to <name>" for the row picked, "Apply to 3 maps" when several are, and a plain
+  "Apply", greyed out, with nothing picked; the list opens on the first row, and Escape or Cancel
+  applies nothing.
 - **Import folder** takes several folders at once and makes one pack of each. Every folder's name is
   filled in as its pack name and can be edited; a name that matches a pack already in the library
   adds to that pack after one confirm. The button reads "Import N packs". Inside each folder, every
@@ -430,14 +491,15 @@ These windows open on top of the pages:
 - The **background editor**, from a background tile's **Edit**, fits one picture to a background slot
   and saves it into a pack. Its title names the file. The source row shows the picture, its name, its
   pack and its size, with **Replace** beside it, and another image can be dropped on it. Under that:
-  which map the picture is for, a slot several maps share naming them all; the fit, **Fill**, **Fit**
-  or **Stretch**, with two pan sliders that apply only to Fill; and how far to darken it. The Map
+  which map the picture is for, a slot several maps share naming them all; the fit, **Fill**, **Fit**,
+  **Center** or **Stretch**, with two pan sliders that apply only to Fill; and how far to darken it. The Map
   picker starts with **All maps**, which saves the picture under its own name rather than a map's
-  slot name, so it stays an any-map picture; **Apply to all maps now** then writes it over every map
+  slot name, so it stays an any-map picture; **Save and apply** then writes it over every map
   in the same step. All maps is what an any-map picture opens on, and the map it belongs to is what a
   pack picture opens on. It saves into a pack, the picture's own to begin with, under a note saying
-  which file it replaces and that choosing another pack keeps the original, and it can write the
-  result into the game in the same step. When that pack already holds values saved for this map, the
+  which file it replaces and that choosing another pack keeps the original. It ends in two buttons:
+  **Save and apply** writes the picture into the pack and on into the game, and **Save only** writes
+  it into the pack and leaves the game as it is. When that pack already holds values saved for this map, the
   editor opens on them and a line reads "Values from Neon", with a **Start fresh** link beside it
   that puts the defaults back. Opened from Add Image with no picture, the source row is
   where a picture is dropped or browsed for.
@@ -464,7 +526,9 @@ These windows open on top of the pages:
   laid on: **Across the platforms**, which is what it starts on, fits one copy of the picture over
   all the selected pieces at once, so each platform shows the part of the picture it sits on, and
   dragging the preview moves the picture under them; **On each piece** fits a separate copy to every
-  selected piece, covering and centring it. **Edit in
+  selected piece. Beside the switch, the same four fits the other windows offer, **Fill**, **Fit**,
+  **Center** and **Stretch**, say how the picture fills that box; only Fill hangs over the edges, so
+  only Fill can be panned. **Edit in
   another app** writes each selected piece into the pack named under Save into pack and opens it with
   the Windows "Open with" dialog; the preview follows what that program saves, and Cancel leaves
   those files in the pack. **Reset** beside Image puts the piece's own art back, asking first over a
@@ -472,8 +536,9 @@ These windows open on top of the pages:
   through, and **Hue** turns their colour round the wheel, in degrees, to match a background; each has
   its own reset, the readout says Mixed when selected pieces disagree, and the preview recomposes as
   the slider moves. **Save into pack** takes an existing pack or a new one and writes the selected
-  pieces, copying a piece left at its own art and default values as it is, and **Apply to game now**
-  writes the result over the map's own art in the same step. A map with no platform art of its own
+  pieces, copying a piece left at its own art and default values as it is. It ends in the editors'
+  two buttons: **Save and apply** writes the result over the map's own art in the same step, and
+  **Save only** leaves the game as it is. A map with no platform art of its own
   says so and has nothing to edit.
 
 Every change is written straight into the game folder, whether Brawlhalla is open or closed, and
@@ -502,6 +567,25 @@ The words the menus use mean the same thing everywhere:
 There is no universal setting for a picture. "Apply to all maps" writes the picture onto every map
 now, and a later apply to one map replaces it there.
 
+## Words the app uses
+
+One action, one verb, wherever it appears. The label tells you what is about to happen; the confirm
+repeats it with the number of maps in it.
+
+| Action | The label | Where it appears |
+|---|---|---|
+| Apply | "Apply all", "Apply to a map...", "Apply to all maps", "Apply to N maps" | The row button on a pack, the tile and card menus, and the confirm button |
+| Reset | "Reset map", "Reset this map", "Reset all maps", "Reset N maps" | The card menu, the open map's panel, the Maps page menu, and the confirm |
+| Capture | "Capture the Default pack" | The Packs page menu and the third step of the welcome window |
+| Refresh | "Refresh", as the tooltip of an icon | The top bar. Re-copies the app's own files over what the game holds now |
+| Rescan | "Rescan", F5 | The top bar. Re-reads the game folder and the library without writing anything |
+| Import | "Import folder", "Import from pack" | The Packs page and a pack's own page |
+| New | "New pack", "Add image" | The Packs page and a pack's own page |
+| Undo | "Undo", Ctrl+Z | The line a write leaves in the page header |
+
+Reset and Capture are the two that talk about the Default pack: Capture makes it out of the game's
+own art, and Reset puts that art back.
+
 ## How it works
 
 - **Level data.** The app reads, and never writes, four files in the folder above `mapArt`:
@@ -510,8 +594,11 @@ now, and a later apply to one map replaces it there.
   scanning the compiled ActionScript in `BrawlhallaAir.swf` for the number that unlocks them; it is
   never hard-coded, because it changes with every game update. The parsed result is cached in
   `leveldata.json` next to the size and timestamp of all four files, so an unchanged game starts from
-  the cache and a game update re-reads in the background. When the files are not there, the key is
-  not found, or an entry fails its checksum, the app falls back to folder names for map names, hides
+  the cache and a game update re-reads in the background: after the first scan of a run, and again
+  whenever Brawlhalla starts or stops, because that is when an update has just landed. The strip says
+  "Game data read from Brawlhalla 10.10." when it did. The version is the one the app finds written in
+  `BrawlhallaAir.swf`; neither the `.swz` files nor the game's exe carry it. When the files are not
+  there, the key is not found, or an entry fails its checksum, the app falls back to folder names for map names, hides
   the set chips, and shows a single-file thumbnail in place of each composed preview. Settings says
   which of those happened.
 - A **map** is a `mapArt` folder that at least one level points at, named after the level the game
@@ -535,7 +622,7 @@ now, and a later apply to one map replaces it there.
 - **Apply all** copies every file a pack holds into the game folder, overwriting what is there. It
   never deletes a game file the pack does not have, so packs stack: applying one changes only the
   slots it carries.
-- **Reset to default** copies the `Default` pack's files for that map back, including its copies of
+- **Reset** copies the `Default` pack's files for that map back, including its copies of
   the map's backgrounds. With no `Default` pack it falls back to deleting the map's `.png` and `.jpg`
   files so Brawlhalla writes its own art back the next time it launches, which leaves the folder
   looking empty until then.
@@ -569,17 +656,17 @@ now, and a later apply to one map replaces it there.
 - **What the editors remember** is kept in the pack, in two files at its root,
   `platforms.bhmaps.json` and `backgrounds.bhmaps.json`, one entry per map holding the values that
   editor was saved on. A pack gets one once something has been saved into it, whichever pack that
-  is, and Export carries them with the rest of the pack. Reset to default drops the
+  is, and Export carries them with the rest of the pack. Reset drops the
   entries for the maps it resets, and Undo puts them back.
-- **Map-select thumbnails** are the one thing the app writes outside `mapArt`. With the switch in
-  Settings on, a write that changes a map's art renders that map at 290 by 164 and writes the JPEG
+- **Map-select thumbnails** are the one thing the app writes outside `mapArt`. A write that changes
+  a map's art renders that map at 290 by 164 and writes the JPEG
   over every picture in the game's `images\thumbnails` folder that the map's own levels name and no
   other map's folder names. A map's folder often holds more than one level, the ranked "Small" one
   beside the casual one, and those levels usually name different pictures; all of them are that map's
   and each is rendered from its own level, so the Small variant gets its own layout. The first time a
   file is written over, the original is copied into
   `%APPDATA%\BhMaps\thumbnails-original` under that file's own name, and those copies are what Reset
-  to default, Undo and turning the switch off put back. A picture two different maps' folders both
+  to default and Undo put back. A picture two different maps' folders both
   name is skipped, so one map's art is never written over another map's thumbnail, and the map panel
   says which file was left alone and why.
 - **Updates** are read from the GitHub releases page of the project, once a day at most, when BhMaps

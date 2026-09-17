@@ -1,11 +1,13 @@
+using System.Collections;
 using System.Windows;
 using System.Windows.Controls;
 
 namespace BhMaps.App.Views.Controls;
 
 /// <summary>The 56 px header every page docks at its top (spec 7.1): the page title on the left, the page's own
-/// actions on the right, and the shell's progress line or done line with Undo between them. The missing-folder
-/// notice is the top bar's (spec 2.1).</summary>
+/// actions and its menu on the right. Nothing the shell is doing is said here any more (3.0): the progress line,
+/// the done line and Undo are the status strip's at the foot of the page, and the missing-folder notice is the
+/// top bar's (spec 2.1).</summary>
 public partial class PageHeader : UserControl
 {
     public static readonly DependencyProperty TitleProperty =
@@ -17,6 +19,11 @@ public partial class PageHeader : UserControl
 
     public static readonly DependencyProperty ActionsProperty =
         DependencyProperty.Register(nameof(Actions), typeof(object), typeof(PageHeader), new PropertyMetadata(null));
+
+    /// <summary>The lines of the page's menu, as ViewModels.TileMenuCommand. Null on a page with no menu, which
+    /// is what takes the button away.</summary>
+    public static readonly DependencyProperty PageMenuProperty =
+        DependencyProperty.Register(nameof(PageMenu), typeof(IEnumerable), typeof(PageHeader), new PropertyMetadata(null));
 
     public PageHeader()
     {
@@ -40,5 +47,12 @@ public partial class PageHeader : UserControl
     {
         get => GetValue(ActionsProperty);
         set => SetValue(ActionsProperty, value);
+    }
+
+    /// <summary>The page's menu, behind the dots button after the actions. Null on a page that offers none.</summary>
+    public IEnumerable? PageMenu
+    {
+        get => (IEnumerable?)GetValue(PageMenuProperty);
+        set => SetValue(PageMenuProperty, value);
     }
 }

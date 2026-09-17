@@ -40,6 +40,15 @@ public partial class PlatformPieceViewModel : ObservableObject
 
     public string FileName { get; }
 
+    /// <summary>Where the piece sits in the list, from 1. The editor numbers the rows as it builds them.</summary>
+    public int Number { get; internal set; }
+
+    /// <summary>3.0 E: what the row is called, with the file name as the line under it.</summary>
+    public string Label => $"Piece {Number}";
+
+    /// <summary>"Piece 2, platform_bm1.png": the whole row in one line, for the screen reader.</summary>
+    public string RowName => $"{Label}, {FileName}";
+
     public string OriginalPath { get; private set; }
 
     public int Width { get; private set; }

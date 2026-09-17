@@ -9,6 +9,7 @@ public enum BackgroundMode
     Cover,
     Contain,
     Stretch,
+    Center,
 }
 
 /// <summary>What the background editor remembers about one slot.</summary>

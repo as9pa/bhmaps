@@ -9,7 +9,7 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace BhMaps.App.ViewModels.Pages;
 
-/// <summary>Spec 7.6: one line per setting, no explanatory subtext. There is no OK button, so every row writes
+/// <summary>3.0: the rows are grouped under Folders, Game and Updates, one line each. There is no OK button, so every row writes
 /// settings.json the moment it changes and rescans when the change moves what the app is looking at.</summary>
 public partial class SettingsPageViewModel : PageViewModel
 {
@@ -27,11 +27,9 @@ public partial class SettingsPageViewModel : PageViewModel
         GameError = "";
         LibraryError = "";
         UpdateLine = "";
-        UpdatesLine = "";
         GamePath = shell.Services.GamePath;
         LibraryPath = shell.Services.LibraryPath;
         GameDataStatus = shell.Services.LevelData.StatusSentence;
-        WriteGameThumbnails = shell.Services.Settings.WriteGameThumbnails;
         CheckForUpdates = shell.Services.Settings.CheckForUpdates;
         Version = ReadVersion();
         _refreshing = false;
@@ -75,11 +73,6 @@ public partial class SettingsPageViewModel : PageViewModel
     [ObservableProperty]
     public partial string GameDataStatus { get; set; }
 
-    /// <summary>Spec 10.2: writing the game's map-select thumbnails is opt-in, so this is off unless the settings
-    /// file says otherwise.</summary>
-    [ObservableProperty]
-    public partial bool WriteGameThumbnails { get; set; }
-
     /// <summary>Set once the download has finished and been verified: the path of the exe the swap will move.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(UpdateButtonText))]
@@ -99,9 +92,6 @@ public partial class SettingsPageViewModel : PageViewModel
     [ObservableProperty]
     public partial bool CheckForUpdates { get; set; }
 
-    [ObservableProperty]
-    public partial string UpdatesLine { get; set; }
-
     public bool HasGameError => GameError.Length > 0;
 
     public bool HasLibraryError => LibraryError.Length > 0;
@@ -116,9 +106,9 @@ public partial class SettingsPageViewModel : PageViewModel
     public bool CanUpdate => Newer is not null && !Downloading;
 
     public string UpdateButtonText =>
-        !CanSwap ? "Open release page"
+        !CanSwap ? "Release page"
         : ReadyExe is not null ? "Close and update"
-        : Newer is { } release ? $"Update to {UpdateText.Short(release.Version)}"
+        : Newer is not null ? "Get"
         : "";
 
     private AppServices Services => Shell.Services;
@@ -135,7 +125,6 @@ public partial class SettingsPageViewModel : PageViewModel
         GamePath = Services.GamePath;
         LibraryPath = Services.LibraryPath;
         GameDataStatus = Services.LevelData.StatusSentence;
-        WriteGameThumbnails = Services.Settings.WriteGameThumbnails;
         CheckForUpdates = Services.Settings.CheckForUpdates;
         _refreshing = false;
         RefreshUpdateRow();
@@ -145,11 +134,6 @@ public partial class SettingsPageViewModel : PageViewModel
     /// from the constructor, from Refresh, and by the shell after every check.</summary>
     public void RefreshUpdateRow()
     {
-        UpdatesLine =
-            "Once a day, one small request to github.com. Nothing is sent about you or your library. Last checked "
-            + UpdateText.CheckedWhen(Services.Settings.LastUpdateCheck, DateTimeOffset.UtcNow)
-            + ".";
-
         if (Downloading)
         {
             OnPropertyChanged(nameof(CanUpdate));
@@ -164,13 +148,11 @@ public partial class SettingsPageViewModel : PageViewModel
         }
         else if (Newer is { } release)
         {
-            var line =
-                $"{UpdateText.Short(release.Version)} is available. Released {UpdateText.ReleaseDate(release.PublishedAt)}. "
-                + "Update downloads the new exe and swaps it in when you close BhMaps.";
+            // What the download does is the Get button's tooltip, so the line says only what is out there.
+            var available = $"Update available: {UpdateText.Short(release.Version)}.";
             UpdateLine = CanSwap && release.CanDownload
-                ? line
-                : $"{UpdateText.Short(release.Version)} is available. Released {UpdateText.ReleaseDate(release.PublishedAt)}. "
-                    + "Download the new version from the release page.";
+                ? available
+                : available + " Get it from the release page.";
         }
         else if (Shell.UpdateCheckFailed)
         {
@@ -183,7 +165,7 @@ public partial class SettingsPageViewModel : PageViewModel
         else
         {
             UpdateLine =
-                "You have the latest version. Checked "
+                "Latest. Last checked "
                 + UpdateText.CheckedWhen(Services.Settings.LastUpdateCheck, DateTimeOffset.UtcNow)
                 + ".";
         }
@@ -339,27 +321,6 @@ public partial class SettingsPageViewModel : PageViewModel
         }
     }
 
-    /// <summary>There is no OK button, so the switch saves as it changes. Turning it off puts back the thumbnails
-    /// already written, which the shell owns because the undo of a write does.</summary>
-    partial void OnWriteGameThumbnailsChanged(bool value)
-    {
-        if (_refreshing || Services.Settings.WriteGameThumbnails == value)
-        {
-            return;
-        }
-
-        if (!Save(Services.Settings with { WriteGameThumbnails = value }))
-        {
-            // Nothing was saved, so the row goes back to what the settings file still says.
-            _refreshing = true;
-            WriteGameThumbnails = Services.Settings.WriteGameThumbnails;
-            _refreshing = false;
-            return;
-        }
-
-        _ = Shell.ThumbnailSwitchChangedAsync(value);
-    }
-
     /// <summary>Pick, validate, save, re-read the game's data, rescan. A path that does not pass stays on the row
     /// rather than in a dialog, and nothing is saved. With an override active the save still happens, and the row
     /// still shows the override.</summary>
@@ -426,8 +387,14 @@ public partial class SettingsPageViewModel : PageViewModel
     [RelayCommand]
     private async Task RefreshGameDataAsync()
     {
-        await Shell.RunBusyAsync("Reading game data", (_, ct) => Services.LevelData.RefreshAsync(ct));
+        var ok = await Shell.RunBusyAsync("Reading game data", (_, ct) => Services.LevelData.RefreshAsync(ct));
         await Shell.RescanAsync();
+
+        // After the rescan, because the scan puts back whatever line it found on the strip when it started.
+        if (ok && Services.LevelData.Available)
+        {
+            Shell.Status.Note(Services.LevelData.ReadNote);
+        }
 
         // Again by hand, because a cancelled scan never reaches Refresh and the read behind it still happened.
         GameDataStatus = Services.LevelData.StatusSentence;

@@ -19,22 +19,24 @@
   <Style TargetType="TextBlock">
     <Setter Property="FontFamily" Value="{StaticResource Sans}" />
     <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
-    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontSize" Value="{StaticResource FontBody}" />
   </Style>
 
   <!-- The button styles below replace the theme's own, so they lose its focus visual with it, and the stock
-       dashed adorner is close to invisible on this palette. All three wear this instead, and so do a dialog's
-       checkboxes and radios: the same 1 px TextBrush ring at the same radius and the same 60% the tiles and the
-       sidebar rows draw, in the adorner layer, so it costs the shared templates nothing (spec 7.8). Declared
+       dashed adorner is close to invisible on this palette. They wear this instead, and so do the chips, the
+       tick boxes, the section headers and a dialog's checkboxes and radios: one 1 px accent ring at 60% standing
+       2 px off the control, in the adorner layer, so it costs the shared templates nothing (spec 7.8). Only keyboard
+       focus raises it, which is what a FocusVisualStyle already does; the mouse never draws one. Declared
        first because a StaticResource cannot reach forward inside one dictionary. -->
   <Style x:Key="DialogFocusRing">
     <Setter Property="Control.Template">
       <Setter.Value>
         <ControlTemplate>
-          <Border Margin="-3"
-                  BorderBrush="{StaticResource TextBrush}"
+          <!-- Radius plus the 2 px it stands off by, written out because XAML cannot add two tokens. -->
+          <Border Margin="-2"
+                  BorderBrush="{StaticResource FocusRingBrush}"
                   BorderThickness="1"
-                  CornerRadius="{StaticResource Radius}"
+                  CornerRadius="8"
                   Opacity="0.6"
                   SnapsToDevicePixels="True" />
         </ControlTemplate>
@@ -45,9 +47,12 @@
   <!-- The only filled button. One per page, for that page's single primary action. -->
   <Style x:Key="PrimaryButton" TargetType="Button">
     <Setter Property="FontFamily" Value="{StaticResource Sans}" />
-    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontSize" Value="{StaticResource FontBody}" />
     <Setter Property="Background" Value="{StaticResource AccentBrush}" />
     <Setter Property="Foreground" Value="{StaticResource BgBrush}" />
+    <!-- The pressed fill travels on BorderBrush, which a borderless template has no other use for: a style
+         BasedOn this one, such as DangerButton, then gives the press its own colour without a second template. -->
+    <Setter Property="BorderBrush" Value="{StaticResource AccentPressedBrush}" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Padding" Value="14,7" />
     <Setter Property="Cursor" Value="Hand" />
@@ -91,6 +96,11 @@
             <Trigger Property="IsMouseOver" Value="True">
               <Setter TargetName="Chrome" Property="Opacity" Value="0.9" />
             </Trigger>
+            <!-- After hover, so pressing replaces the lift rather than compounding with it. -->
+            <Trigger Property="IsPressed" Value="True">
+              <Setter TargetName="Chrome" Property="Background" Value="{Binding BorderBrush, RelativeSource={RelativeSource TemplatedParent}}" />
+              <Setter TargetName="Chrome" Property="Opacity" Value="1" />
+            </Trigger>
             <Trigger Property="IsEnabled" Value="False">
               <Setter TargetName="Chrome" Property="Opacity" Value="0.4" />
             </Trigger>
@@ -100,9 +110,16 @@
     </Setter>
   </Style>
 
+  <!-- The primary of a confirm whose verb deletes or removes something: PrimaryButton's shape, padding and
+       states in Missing's colour, which is already the colour the app gives art that is gone. -->
+  <Style x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+    <Setter Property="Background" Value="{StaticResource MissingFgBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource MissingPressedBrush}" />
+  </Style>
+
   <Style x:Key="OutlineButton" TargetType="Button">
     <Setter Property="FontFamily" Value="{StaticResource Sans}" />
-    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontSize" Value="{StaticResource FontBody}" />
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderBrush" Value="{StaticResource Line2Brush}" />
     <Setter Property="BorderThickness" Value="1" />
@@ -147,6 +164,12 @@
             <Trigger Property="IsMouseOver" Value="True">
               <Setter TargetName="Chrome" Property="Background" Value="{StaticResource Surface2Brush}" />
             </Trigger>
+            <!-- After hover, so pressing replaces it: a step back down to Surface, darker than the hover lift.
+                 TileAction rides this template too, and it is only ever seen hovered, so hover to pressed is
+                 the change that has to read there. -->
+            <Trigger Property="IsPressed" Value="True">
+              <Setter TargetName="Chrome" Property="Background" Value="{StaticResource SurfaceBrush}" />
+            </Trigger>
             <Trigger Property="IsEnabled" Value="False">
               <Setter TargetName="Chrome" Property="Opacity" Value="0.4" />
             </Trigger>
@@ -158,7 +181,7 @@
 
   <Style x:Key="PlainButton" TargetType="Button">
     <Setter Property="FontFamily" Value="{StaticResource Sans}" />
-    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontSize" Value="{StaticResource FontBody}" />
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Foreground" Value="{StaticResource Text2Brush}" />
@@ -201,6 +224,11 @@
             <Trigger Property="IsMouseOver" Value="True">
               <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
             </Trigger>
+            <!-- After hover, so pressing replaces it. Plain lifts nothing on hover, so the fill is the press. -->
+            <Trigger Property="IsPressed" Value="True">
+              <Setter TargetName="Chrome" Property="Background" Value="{StaticResource Surface2Brush}" />
+              <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+            </Trigger>
             <Trigger Property="IsEnabled" Value="False">
               <Setter TargetName="Chrome" Property="Opacity" Value="0.4" />
             </Trigger>
@@ -210,15 +238,30 @@
     </Setter>
   </Style>
 
+  <!-- The links the status strip offers, and the first-run line under the top bar with them: a link here is the
+       app's plain button with the text's own weight and rule on it, never a colour, because the strip's dot is
+       the only coloured thing on either line. -->
+  <Style x:Key="StripLink" TargetType="Button" BasedOn="{StaticResource PlainButton}">
+    <Setter Property="Padding" Value="{StaticResource Gap8}" />
+  </Style>
+
+  <Style x:Key="StripLinkText" TargetType="TextBlock">
+    <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+    <Setter Property="FontSize" Value="{StaticResource FontBody}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="TextDecorations" Value="Underline" />
+  </Style>
+
   <Style x:Key="ChipToggle" TargetType="ToggleButton">
     <Setter Property="FontFamily" Value="{StaticResource Sans}" />
-    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontSize" Value="{StaticResource FontBody}" />
     <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
     <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="Foreground" Value="{StaticResource Text2Brush}" />
     <Setter Property="Padding" Value="12,5" />
     <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="FocusVisualStyle" Value="{StaticResource DialogFocusRing}" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="ToggleButton">
@@ -235,7 +278,7 @@
                   Background="{TemplateBinding Background}"
                   BorderBrush="{TemplateBinding BorderBrush}"
                   BorderThickness="{TemplateBinding BorderThickness}"
-                  CornerRadius="14"
+                  CornerRadius="{StaticResource RadiusPill}"
                   Padding="{TemplateBinding Padding}">
             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
           </Border>
@@ -257,12 +300,12 @@
     </Setter>
   </Style>
 
-  <!-- The tick box on the platform editor's file rows (ruling 10): an 18 px box, filled in Text with a Bg tick
-       when the row is ticked. No focus visual of its own, because the box is Focusable="False" and the row behind
-       it is the tab stop. -->
+  <!-- The tick box on the platform editor's file rows (ruling 10): an 18 px box, filled in the accent with a Bg
+       tick when the row is ticked. It carries the shared ring like every other control, though today the box is
+       Focusable="False" and the row behind it is the tab stop, so nothing raises it. -->
   <Style x:Key="CardTick" TargetType="CheckBox">
     <Setter Property="Cursor" Value="Hand" />
-    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="FocusVisualStyle" Value="{StaticResource DialogFocusRing}" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="CheckBox">
@@ -290,8 +333,8 @@
           </Border>
           <ControlTemplate.Triggers>
             <Trigger Property="IsChecked" Value="True">
-              <Setter TargetName="Box" Property="Background" Value="{StaticResource TextBrush}" />
-              <Setter TargetName="Box" Property="BorderBrush" Value="{StaticResource TextBrush}" />
+              <Setter TargetName="Box" Property="Background" Value="{StaticResource AccentBrush}" />
+              <Setter TargetName="Box" Property="BorderBrush" Value="{StaticResource AccentBrush}" />
               <Setter TargetName="Tick" Property="Visibility" Value="Visible" />
             </Trigger>
             <Trigger Property="IsMouseOver" Value="True">
@@ -310,7 +353,7 @@
        its first click. Tag carries the page this tab opens. -->
   <Style x:Key="TopBarTab" TargetType="Button">
     <Setter Property="FontFamily" Value="{StaticResource Sans}" />
-    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontSize" Value="{StaticResource FontBody}" />
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="Foreground" Value="{StaticResource Text2Brush}" />
     <Setter Property="Padding" Value="12,5" />
@@ -337,7 +380,7 @@
               <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
             </Border>
             <Border x:Name="Ring"
-                    BorderBrush="{StaticResource TextBrush}"
+                    BorderBrush="{StaticResource FocusRingBrush}"
                     BorderThickness="1"
                     CornerRadius="{StaticResource Radius}"
                     IsHitTestVisible="False"
@@ -383,7 +426,7 @@
     <Style.Resources>
       <Style TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource Sans}" />
-        <Setter Property="FontSize" Value="11" />
+        <Setter Property="FontSize" Value="{StaticResource FontCaption}" />
         <Setter Property="Foreground" Value="{StaticResource Text2Brush}" />
       </Style>
     </Style.Resources>
@@ -397,7 +440,7 @@
     <Style.Resources>
       <Style TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource Sans}" />
-        <Setter Property="FontSize" Value="11" />
+        <Setter Property="FontSize" Value="{StaticResource FontCaption}" />
         <Setter Property="Foreground" Value="{StaticResource MissingFgBrush}" />
       </Style>
     </Style.Resources>
@@ -408,7 +451,7 @@
 
   <Style x:Key="FieldTextBox" TargetType="TextBox">
     <Setter Property="FontFamily" Value="{StaticResource Sans}" />
-    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontSize" Value="{StaticResource FontBody}" />
     <Setter Property="Background" Value="{StaticResource Surface2Brush}" />
     <Setter Property="BorderBrush" Value="{StaticResource Line2Brush}" />
     <Setter Property="BorderThickness" Value="1" />
@@ -446,8 +489,10 @@
     </Setter>
   </Style>
 
-  <!-- Selection is a ring, not a fill, so a tile's own artwork keeps its colours. Keyboard focus
-       draws the same ring at 60% so focus is visible even on an unselected tile (spec 7.8). -->
+  <!-- Selection is a ring, not a fill, so a tile's own artwork keeps its colours. Selection is 2 px in the
+       accent; keyboard focus draws the same ring 1 px at 60%, so focus is visible even on an unselected tile
+       (spec 7.8). The ring is an overlay in the Grid rather than a border around the content, so the 2 px the
+       open card wears moves nothing. -->
   <Style x:Key="TileListBoxItem" TargetType="ListBoxItem">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="Padding" Value="0" />
@@ -462,7 +507,7 @@
                               HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                               VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
             <Border x:Name="Ring"
-                    BorderBrush="{StaticResource TextBrush}"
+                    BorderBrush="{StaticResource FocusRingBrush}"
                     BorderThickness="1"
                     CornerRadius="{StaticResource Radius}"
                     IsHitTestVisible="False"
@@ -473,6 +518,8 @@
               <Setter TargetName="Ring" Property="Opacity" Value="0.6" />
             </Trigger>
             <Trigger Property="IsSelected" Value="True">
+              <Setter TargetName="Ring" Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+              <Setter TargetName="Ring" Property="BorderThickness" Value="2" />
               <Setter TargetName="Ring" Property="Opacity" Value="1" />
             </Trigger>
           </ControlTemplate.Triggers>
@@ -533,21 +580,6 @@
     </Grid>
   </ControlTemplate>
 
-  <Style x:Key="ZoomSliderStyle" TargetType="Slider">
-    <Setter Property="Width" Value="96" />
-    <Setter Property="Orientation" Value="Horizontal" />
-    <Setter Property="IsSnapToTickEnabled" Value="True" />
-    <Setter Property="TickFrequency" Value="1" />
-    <Setter Property="VerticalAlignment" Value="Center" />
-    <Setter Property="Template" Value="{StaticResource SliderTrack}" />
-    <Setter Property="behaviors:SliderDrag.IsEnabled" Value="True" />
-    <Style.Triggers>
-      <Trigger Property="IsEnabled" Value="False">
-        <Setter Property="Opacity" Value="0.4" />
-      </Trigger>
-    </Style.Triggers>
-  </Style>
-
   <!-- Spec 7.2: the editor's sliders. Move-to-point on, so a click on the groove jumps the thumb there instead
        of stepping, and SliderDrag so that holding the button after that goes on dragging it; no snapping,
        because pan is continuous. The row around a disabled one carries the dimming. -->
@@ -584,14 +616,14 @@
   </Style>
 
   <Style x:Key="SectionHeaderText" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
-    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontSize" Value="{StaticResource FontCaption}" />
     <Setter Property="FontWeight" Value="Medium" />
     <Setter Property="Foreground" Value="{StaticResource Text3Brush}" />
   </Style>
 
   <Style x:Key="MonoText" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
     <Setter Property="FontFamily" Value="{StaticResource Mono}" />
-    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontSize" Value="{StaticResource FontCaption}" />
     <Setter Property="Foreground" Value="{StaticResource Text2Brush}" />
   </Style>
 
@@ -602,12 +634,12 @@
        worth re-implementing for a five line menu. -->
   <Style x:Key="TileContextMenu" TargetType="ContextMenu" BasedOn="{StaticResource {x:Type ContextMenu}}">
     <Setter Property="FontFamily" Value="{StaticResource Sans}" />
-    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontSize" Value="{StaticResource FontBody}" />
     <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
     <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
     <Setter Property="BorderBrush" Value="{StaticResource Line2Brush}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="Padding" Value="4" />
+    <Setter Property="Padding" Value="{StaticResource Gap4}" />
   </Style>
 
   <!-- For a menu whose rows are not TileMenuCommand: the header is the words themselves, drawn the same way and
@@ -626,7 +658,7 @@
        still wins: a local value beats a style setter. -->
   <Style x:Key="TileMenuItem" TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}">
     <Setter Property="FontFamily" Value="{StaticResource Sans}" />
-    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontSize" Value="{StaticResource FontBody}" />
     <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
     <Setter Property="Padding" Value="10,6" />
     <Setter Property="Header" Value="{Binding}" />
@@ -678,10 +710,10 @@
                 <StackPanel Margin="10,6,10,6">
                   <!-- One line each, trimmed rather than wrapped: a long file name must not push the commands
                        down the screen. MaxWidth so the menu is no wider than the name it is titled with. -->
-                  <TextBlock HorizontalAlignment="Left" MaxWidth="260" FontSize="12" FontWeight="SemiBold"
+                  <TextBlock HorizontalAlignment="Left" MaxWidth="260" FontSize="{StaticResource FontCaption}" FontWeight="SemiBold"
                              Foreground="{StaticResource TextBrush}" Text="{Binding Text}"
                              TextTrimming="CharacterEllipsis" />
-                  <TextBlock HorizontalAlignment="Left" MaxWidth="260" Margin="0,1,0,0" FontSize="11"
+                  <TextBlock HorizontalAlignment="Left" MaxWidth="260" Margin="0,1,0,0" FontSize="{StaticResource FontCaption}"
                              Foreground="{StaticResource Text2Brush}" Text="{Binding Detail}"
                              TextTrimming="CharacterEllipsis"
                              Visibility="{Binding Detail, Converter={StaticResource NullToVis}}" />
@@ -733,7 +765,7 @@
        button's transparent fill. Smaller than a page button, because at eight columns a tile is narrow. -->
   <Style x:Key="TileAction" TargetType="Button" BasedOn="{StaticResource OutlineButton}">
     <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
-    <Setter Property="FontSize" Value="11" />
+    <Setter Property="FontSize" Value="{StaticResource FontCaption}" />
     <Setter Property="Padding" Value="8,3" />
     <Setter Property="Margin" Value="4,0,0,0" />
   </Style>
@@ -787,39 +819,28 @@
   <Style x:Key="SectionHeaderRow" TargetType="ToggleButton">
     <Setter Property="Cursor" Value="Hand" />
     <Setter Property="behaviors:Fold.IsOpen" Value="{Binding IsChecked, RelativeSource={RelativeSource Self}}" />
-    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="FocusVisualStyle" Value="{StaticResource DialogFocusRing}" />
     <Setter Property="Foreground" Value="{StaticResource Text2Brush}" />
     <Setter Property="HorizontalAlignment" Value="Stretch" />
     <Setter Property="HorizontalContentAlignment" Value="Left" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="ToggleButton">
-          <Grid>
-            <Border x:Name="Chrome"
-                    Background="Transparent"
-                    CornerRadius="{StaticResource Radius}"
-                    Padding="8,7">
-              <StackPanel Orientation="Horizontal">
-                <controls:Icon Style="{StaticResource FoldChevron}" />
-                <TextBlock FontFamily="{StaticResource Sans}"
-                           FontSize="13"
-                           Foreground="{StaticResource Text2Brush}"
-                           Text="{Binding Content, RelativeSource={RelativeSource TemplatedParent}}" />
-              </StackPanel>
-            </Border>
-            <Border x:Name="Ring"
-                    BorderBrush="{StaticResource TextBrush}"
-                    BorderThickness="1"
-                    CornerRadius="{StaticResource Radius}"
-                    IsHitTestVisible="False"
-                    Opacity="0" />
-          </Grid>
+          <Border x:Name="Chrome"
+                  Background="Transparent"
+                  CornerRadius="{StaticResource Radius}"
+                  Padding="8,7">
+            <StackPanel Orientation="Horizontal">
+              <controls:Icon Style="{StaticResource FoldChevron}" />
+              <TextBlock FontFamily="{StaticResource Sans}"
+                         FontSize="{StaticResource FontBody}"
+                         Foreground="{StaticResource Text2Brush}"
+                         Text="{Binding Content, RelativeSource={RelativeSource TemplatedParent}}" />
+            </StackPanel>
+          </Border>
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
               <Setter TargetName="Chrome" Property="Background" Value="{StaticResource Surface2Brush}" />
-            </Trigger>
-            <Trigger Property="IsKeyboardFocused" Value="True">
-              <Setter TargetName="Ring" Property="Opacity" Value="0.6" />
             </Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
@@ -849,7 +870,7 @@
                           IsHitTestVisible="False"
                           Style="{StaticResource ChipToggle}" />
             <Border x:Name="Ring"
-                    BorderBrush="{StaticResource TextBrush}"
+                    BorderBrush="{StaticResource FocusRingBrush}"
                     BorderThickness="1"
                     CornerRadius="14"
                     IsHitTestVisible="False"
@@ -909,7 +930,7 @@
 
               <!-- Drawn rather than typed: a glyph would depend on the font having one. -->
               <Border x:Name="Check"
-                      Margin="4"
+                      Margin="{StaticResource Gap4}"
                       HorizontalAlignment="Right"
                       VerticalAlignment="Top"
                       Background="{StaticResource BgBrush}"
@@ -925,6 +946,19 @@
                       StrokeThickness="1.6" />
               </Border>
 
+              <!-- 3.0: a map whose level places no platforms has nothing a set could change, so the tile keeps
+                   its size and says that in words instead of showing an empty picture with an Apply over it. -->
+              <TextBlock x:Name="NoArt"
+                         Margin="8,0"
+                         HorizontalAlignment="Center"
+                         VerticalAlignment="Center"
+                         FontSize="{StaticResource FontCaption}"
+                         Foreground="{StaticResource Text3Brush}"
+                         Text="{Binding NoArt}"
+                         TextAlignment="Center"
+                         TextWrapping="Wrap"
+                         Visibility="Collapsed" />
+
               <!-- Opacity rather than Visibility, the map panel's lesson: a collapsed button cannot be tabbed to,
                    so it would be mouse-only. Revealed by the pointer, by keyboard focus, or by the tile's own
                    menu being open, so the button that opened the menu is still drawn under it. -->
@@ -937,7 +971,7 @@
                            Padding="8,3"
                            VerticalAlignment="Center"
                            Background="{StaticResource SurfaceBrush}"
-                           FontSize="11"
+                           FontSize="{StaticResource FontCaption}"
                            Text="Apply"
                            Visibility="{Binding DataContext.ShowTileApply, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVis}}" />
                 <Button AutomationProperties.Name="More actions"
@@ -960,14 +994,14 @@
               </Grid.ColumnDefinitions>
 
               <TextBlock HorizontalAlignment="Left"
-                         FontSize="11"
+                         FontSize="{StaticResource FontCaption}"
                          Foreground="{StaticResource Text2Brush}"
                          Text="{Binding Title}"
                          TextTrimming="CharacterEllipsis" />
 
               <TextBlock Grid.Column="1"
                          Margin="4,0,0,0"
-                         FontSize="11"
+                         FontSize="{StaticResource FontCaption}"
                          Foreground="{StaticResource Text2Brush}"
                          Text="{Binding HiddenNote, StringFormat='&#183; {0}'}"
                          Visibility="{Binding IsHiddenPack, Converter={StaticResource BoolToVis}}" />
@@ -991,16 +1025,33 @@
             <Trigger Property="IsEnabled" Value="False">
               <Setter TargetName="Actions" Property="Opacity" Value="0" />
             </Trigger>
+
+            <!-- Last, so it wins over the hover and focus triggers above: there is nothing here to act on. The
+                 other two tile types carry no such property, hence the fallback. -->
+            <DataTrigger Binding="{Binding HasNoArt, FallbackValue=False, TargetNullValue=False}" Value="True">
+              <Setter TargetName="NoArt" Property="Visibility" Value="Visible" />
+              <Setter TargetName="Actions" Property="Visibility" Value="Collapsed" />
+            </DataTrigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
       </Setter.Value>
     </Setter>
+    <Style.Triggers>
+      <!-- 3.0: a placeholder tile is not a choice, so it takes no click, opens no menu and names itself to a
+           screen reader by the words it draws. -->
+      <DataTrigger Binding="{Binding HasNoArt, FallbackValue=False, TargetNullValue=False}" Value="True">
+        <Setter Property="Command" Value="{x:Null}" />
+        <Setter Property="ContextMenu" Value="{x:Null}" />
+        <Setter Property="Cursor" Value="Arrow" />
+        <Setter Property="AutomationProperties.Name" Value="No platform art" />
+      </DataTrigger>
+    </Style.Triggers>
   </Style>
 
   <!-- "+7" beside a strip with more choices than it had width for. The same height as a thumbnail, so the line of
        them is level. -->
   <Style x:Key="RowMoreTileButton" TargetType="Button" BasedOn="{StaticResource OutlineButton}">
-    <Setter Property="FontSize" Value="11" />
+    <Setter Property="FontSize" Value="{StaticResource FontCaption}" />
     <Setter Property="Padding" Value="8,3" />
     <Setter Property="VerticalAlignment" Value="Top" />
     <Setter Property="Height" Value="{Binding DataContext.ThumbHeight, RelativeSource={RelativeSource AncestorType=UserControl}}" />
@@ -1033,7 +1084,7 @@
         </Grid.ColumnDefinitions>
 
         <StackPanel Margin="0,0,12,0" VerticalAlignment="Center">
-          <TextBlock FontSize="13"
+          <TextBlock FontSize="{StaticResource FontBody}"
                      FontWeight="Medium"
                      Text="{Binding DisplayName}"
                      TextTrimming="CharacterEllipsis"
@@ -1085,10 +1136,12 @@
                      and the row learns the number without the view reaching into the panel's name scope. -->
                 <!-- Spec 4.1: the lines the strip grows fade in and slide up, and only when the row unfolds while
                      it is on screen: a row realised by a scroll has nothing to animate. -->
+                <!-- 3.0: a 12 px gutter, the one gap every page's tiles are spaced by. -->
                 <controls:StripPanel behaviors:Fold.Animate="True"
                                      behaviors:Fold.IsOpen="{Binding IsUnfolded}"
                                      IsUnfolded="{Binding IsUnfolded}"
-                                     Overflow="{Binding Overflow, Mode=OneWayToSource}" />
+                                     Overflow="{Binding Overflow, Mode=OneWayToSource}"
+                                     Spacing="12" />
               </ItemsPanelTemplate>
             </ItemsControl.ItemsPanel>
           </ItemsControl>

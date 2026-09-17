@@ -28,7 +28,7 @@ public sealed partial class CustomPictureTileViewModel : PictureTileViewModel
         MainViewModel shell, CustomPicture picture, string subtitle, MapEntry? map, string? slot, bool inGame)
         : base(
             shell,
-            Path.GetFileNameWithoutExtension(picture.DisplayName),
+            picture.Name,
             subtitle,
             // Empty only for the picture SourcePath calls impossible, and then every action on the tile reports a
             // file that is not there rather than throwing on a path nobody could resolve.
@@ -81,6 +81,10 @@ public sealed partial class CustomPictureTileViewModel : PictureTileViewModel
         items.Add(new TileMenuCommand("Show in folder", ShowInFolderCommand));
         if (InLibrary)
         {
+            // A picture that is only in the game folder has no library file to rename, so the name it shows is
+            // the game's own file name until it is saved into a pack.
+            items.Add(new TileMenuCommand("Rename", RenameCommand));
+
             // Last, behind a rule and in the destructive colour: it deletes files, and the pointer should not
             // have to pass over it to reach another line.
             items.Add(TileMenuCommand.Separator());
@@ -143,24 +147,24 @@ public sealed partial class CustomPictureTileViewModel : PictureTileViewModel
     [RelayCommand]
     private Task ApplyToMapAsync() =>
         Map is { } map
-            ? Shell.ApplyPictureAsync(FullPath, [map], _picture.DisplayName, _picture.PackName)
+            ? Shell.ApplyPictureAsync(FullPath, [map], _picture.Name, _picture.PackName)
             : Task.CompletedTask;
 
     /// <summary>Spec 4.4: the chooser in map mode, then the shell's apply on the one map it returned.</summary>
     [RelayCommand]
     private async Task ApplyToChosenMapAsync()
     {
-        if (await Shell.ChooseMapAsync(FullPath, _picture.DisplayName) is { } map)
+        if (await Shell.ChooseMapAsync(FullPath, _picture.Name) is { } map)
         {
             await Shell.ApplyPictureAsync(
-                FullPath, [map], _picture.DisplayName, _picture.PackName);
+                FullPath, [map], _picture.Name, _picture.PackName);
         }
     }
 
     [RelayCommand]
     private Task ApplyToAllAsync() =>
         Shell.Snapshot is { } snapshot
-            ? Shell.ApplyPictureAsync(FullPath, snapshot.Catalog.Maps, _picture.DisplayName, _picture.PackName)
+            ? Shell.ApplyPictureAsync(FullPath, snapshot.Catalog.Maps, _picture.Name, _picture.PackName)
             : Task.CompletedTask;
 
     [RelayCommand]
@@ -268,6 +272,50 @@ public sealed partial class CustomPictureTileViewModel : PictureTileViewModel
         return new PackCopyResult([], removed, false, failures);
     }
 
+    /// <summary>The picture's name is the name of its file, so renaming it moves every copy the library holds and
+    /// points the applied record at the new path, which is what keeps "on Brawlhaven" under the tile it belongs
+    /// to. A library-only change: the game keeps the bytes it was given, so nothing here is a game write.</summary>
+    [RelayCommand]
+    private async Task RenameAsync()
+    {
+        var typed = Shell.Dialogs.PromptText(
+            "Rename picture",
+            "The new name shows on its tile and on the maps it is on.",
+            Title);
+        if (string.IsNullOrWhiteSpace(typed))
+        {
+            return;
+        }
+
+        var picture = _picture;
+        var libraryPath = Shell.Services.LibraryPath;
+        var recordPath = AppliedRecord.PathFor(Shell.Services.AppDataDir);
+        PictureRenameResult? result = null;
+        var ok = await Shell.RunBusyAsync(
+            $"Renaming {Title}",
+            (_, _) => Task.Run(() =>
+            {
+                result = CustomPictureLibrary.Rename(picture, typed);
+                foreach (var renamed in result.Renamed)
+                {
+                    AppliedRecord.Renamed(recordPath, libraryPath, renamed.From, renamed.To);
+                }
+            }));
+
+        if (result is { Failures.Count: > 0 })
+        {
+            Shell.Dialogs.ShowFailures("The picture could not be renamed", result.Failures);
+        }
+
+        // Only a copy that really moved changes what a scan would find, so the name it already had costs no rescan.
+        if (ok && result is { Renamed.Count: > 0 })
+        {
+            Shell.Status.Done(
+                $"Renamed to {Path.GetFileNameWithoutExtension(result.Renamed[0].To)}.", undoable: false);
+            await Shell.RescanAsync();
+        }
+    }
+
     [RelayCommand]
     private async Task SaveToLibraryAsync()
     {
@@ -289,7 +337,7 @@ public sealed partial class CustomPictureTileViewModel : PictureTileViewModel
         // Only a copy that landed changes what a scan would find, so a cancelled or failed import costs no rescan.
         if (ok && result is { Copied: > 0 })
         {
-            Shell.SetLibraryDone($"Saved {Title} into {pack}");
+            Shell.Status.Done($"Saved {Title} into {pack}.", undoable: false);
             await Shell.RescanAsync();
         }
     }

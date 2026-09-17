@@ -116,7 +116,8 @@ public static class LevelDataReader
         var types = ReadOne(Path.Combine(gameRoot, InitName), key, "LevelTypes", LevelTypesParser.ParseTypes, notes);
         var sets = ReadOne(Path.Combine(gameRoot, GameName), key, "LevelSetTypes", LevelTypesParser.ParseSets, notes);
 
-        var model = new LevelDataModel(levels, types, sets, DateTimeOffset.UtcNow);
+        var model = new LevelDataModel(
+            levels, types, sets, DateTimeOffset.UtcNow, GameVersion.Read(Path.Combine(gameRoot, SwfName)));
         return new LevelDataResult(model, key, notes.Count == 0 ? null : string.Join(" ", notes));
     }
 

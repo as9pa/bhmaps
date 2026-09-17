@@ -1,6 +1,5 @@
 using System.Collections.ObjectModel;
 using System.Windows.Media;
-using System.Windows.Threading;
 using BhMaps.App.Services;
 using BhMaps.Core.Imaging;
 using BhMaps.Core.Maps;
@@ -16,16 +15,13 @@ namespace BhMaps.App.ViewModels.Pages;
 public partial class PacksViewModel : PageViewModel
 {
     /// <summary>Addendum E: the empty library's line. "No packs yet." was the v2 wording and said less.</summary>
-    public const string EmptyText = "No packs in the library.";
+    public const string EmptyText = "No packs yet.";
 
     /// <summary>The folder a pack keeps its background images in. Every other folder is a map.</summary>
     private const string BackgroundsFolder = "Backgrounds";
 
     /// <summary>What a background is: the game ships every one of its background slots as a JPEG.</summary>
     private const string BackgroundExtension = ".jpg";
-
-    /// <summary>Spec 8: how often "applied just now" is read again, which is as often as it can change.</summary>
-    private static readonly TimeSpan AppliedInterval = TimeSpan.FromSeconds(60);
 
     /// <summary>The snapshot the rows were built from, which the composites are drawn against.</summary>
     private ScanSnapshot? _snapshot;
@@ -34,18 +30,10 @@ public partial class PacksViewModel : PageViewModel
     /// PackDetailViewModel does, because those loads still hold the token.</summary>
     private CancellationTokenSource? _cts;
 
-    /// <summary>Re-reads the rows' apply times once a minute. It runs for as long as the window does, because a
-    /// page is not told when it is shown; the tick itself does nothing unless Packs is the page on screen, so a
-    /// window sitting on Maps pays a comparison a minute for it.</summary>
-    private readonly DispatcherTimer _appliedTimer;
-
     public PacksViewModel(MainViewModel shell)
         : base(shell)
     {
         Rows = [];
-        _appliedTimer = new DispatcherTimer { Interval = AppliedInterval };
-        _appliedTimer.Tick += (_, _) => RefreshApplied();
-        _appliedTimer.Start();
     }
 
     public override string Title => "Packs";
@@ -69,9 +57,11 @@ public partial class PacksViewModel : PageViewModel
         _snapshot = snapshot;
         Rows.Clear();
 
-        // Spec 8: the packs arrive sorted by the shell, so the row that was just applied is already near the top;
-        // all the page adds is the time each one carries on its counts line.
-        var stamps = Shell.Services.Settings.LastApplied;
+        // 3.0: where each pack's art actually is, read once for the whole list rather than once a row. The record
+        // names the pack behind every game file the app wrote, so a pack the owner has since reset away from
+        // drops back to "Not in game." without anything having to tell this page so.
+        var appliedMaps = AppliedRecord.Load(AppliedRecord.PathFor(Shell.Services.AppDataDir))
+            .MapsPerPack(MapFolders.Of(snapshot.Catalog.Maps));
         foreach (var pack in snapshot.Packs)
         {
             var row = new PackRowViewModel(pack, MapsIn(snapshot.Catalog, pack));
@@ -79,25 +69,11 @@ public partial class PacksViewModel : PageViewModel
             // 2.8: the eye's state is read before the menu is built, because the menu's line names it.
             row.IsHidden = Shell.Services.Settings.IsHidden(pack.Name);
             row.SetMenu(BuildMenu(row));
-            row.SetLastApplied(stamps.TryGetValue(pack.Name, out var stamp) ? stamp : null);
+            row.SetAppliedMaps(appliedMaps.TryGetValue(pack.Name, out var count) ? count : 0);
             Rows.Add(row);
         }
 
         IsEmpty = Rows.Count == 0;
-    }
-
-    /// <summary>The apply times, read again from the stamps the rows already hold.</summary>
-    private void RefreshApplied()
-    {
-        if (!ReferenceEquals(Shell.CurrentPage, this))
-        {
-            return;
-        }
-
-        foreach (var row in Rows)
-        {
-            row.RefreshCountsText();
-        }
     }
 
     /// <summary>Addendum E: a row reads its files when it comes on screen and not before, so a library of forty
@@ -257,7 +233,11 @@ public partial class PacksViewModel : PageViewModel
         if (maps.Count > 1
             && !Shell.Dialogs.Confirm(
                 $"Apply {pack.Name}",
-                $"Apply {pack.Name} to these {maps.Count} maps?\n\n{string.Join(", ", maps)}"))
+                MainViewModel.ConfirmBody(
+                    $"Apply {pack.Name} to {MainViewModel.Count(maps.Count, "map")}?",
+                    MainViewModel.WritesArt,
+                    maps),
+                $"Apply to {MainViewModel.Count(maps.Count, "map")}"))
         {
             return;
         }
@@ -268,12 +248,19 @@ public partial class PacksViewModel : PageViewModel
         IReadOnlyList<MapEntry> artMaps = Shell.Snapshot is { } snapshot
             ? PackApplier.MapsTouched(pack, snapshot.Catalog.Maps)
             : [];
+        // The strip names maps, not files (3.0), so the applier gets the catalog's name for every folder it writes.
+        // Two catalog maps can share a folder, so the first name for a folder is the one it reports under. The keys
+        // cover every map the confirm counted, since a map with files in the pack is one of artMaps too, and that is
+        // what makes the strip's total the same number the confirm and the done line say.
+        var mapNames = artMaps
+            .GroupBy(map => map.FolderName, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(folder => folder.Key, folder => folder.First().DisplayName, StringComparer.OrdinalIgnoreCase);
         ApplyResult? result = null;
         await Shell.RunGameWriteAsync(
             $"Applying {pack.Name}",
             pack.RelativePaths,
-            (progress, ct) => Task.Run(() => { result = PackApplier.ApplyPack(pack, gamePath, progress, ct); }, ct),
-            $"{pack.Name} applied",
+            (progress, ct) => Task.Run(() => { result = PackApplier.ApplyPack(pack, gamePath, progress, ct, mapNames); }, ct),
+            $"{pack.Name} applied to {MainViewModel.Count(maps.Count, "map")}.",
             packName: pack.Name,
             artMaps: artMaps,
             sources: AppliedSources.FromPack(pack, pack.RelativePaths));
@@ -288,6 +275,15 @@ public partial class PacksViewModel : PageViewModel
         Shell.Snapshot is { } snapshot
             ? [.. MapsIn(snapshot.Catalog, pack).Select(map => map.DisplayName)]
             : Array.Empty<string>();
+
+    /// <summary>The header's menu (3.0): the two actions that are not what the page is for. Capture writes into
+    /// the game folder and carries the CanWrite its button carried; Open library is library-only and stops at the
+    /// shell being busy, which is the gate the header's row of buttons put on it (spec 7.8).</summary>
+    public override IReadOnlyList<TileMenuCommand>? PageMenu =>
+    [
+        new TileMenuCommand("Capture the Default pack", CaptureDefaultsCommand, IsEnabled: Shell.CanWrite),
+        new TileMenuCommand("Open library", OpenLibraryCommand, IsEnabled: Shell.IsNotBusy),
+    ];
 
     /// <summary>Copies the game folder into the Default pack. The confirm text and the busy boundary live on the
     /// shell, so this page and Settings ask the same question (spec 6.1).</summary>
@@ -315,7 +311,9 @@ public partial class PacksViewModel : PageViewModel
         var pack = row.Pack;
         if (!Shell.Dialogs.Confirm(
             $"Delete {pack.Name}?",
-            $"Its {PackRowViewModel.Plural(pack.FileCount, "file")} will be deleted. This cannot be undone."))
+            $"Its {PackRowViewModel.Plural(pack.FileCount, "file")} will be deleted. This cannot be undone.",
+            MainViewModel.Verb("Delete", pack.Name),
+            destructive: true))
         {
             return;
         }
@@ -331,7 +329,7 @@ public partial class PacksViewModel : PageViewModel
         }
         else if (ok)
         {
-            Shell.SetLibraryDone($"Deleted {pack.Name}");
+            Shell.Status.Done($"Deleted {pack.Name}.", undoable: false);
             if (Shell.PackClipboard is { } held && held.Source.Name.Equals(pack.Name, StringComparison.OrdinalIgnoreCase))
             {
                 Shell.PackClipboard = null;
@@ -368,7 +366,7 @@ public partial class PacksViewModel : PageViewModel
 
         if (ok)
         {
-            Shell.SetLibraryDone($"Exported {pack.Name}");
+            Shell.Status.Done($"Exported {pack.Name}.", undoable: false);
         }
     }
 
@@ -410,7 +408,7 @@ public partial class PacksViewModel : PageViewModel
         {
             // The copy took its own half-written folder with it, so there is nothing to undo and nothing to say
             // but what went wrong: the line the write boundary left is written over, as an import's is.
-            Shell.SetLibraryDone($"Could not duplicate {pack.Name}");
+            Shell.Status.Error($"Could not duplicate {pack.Name}.", retry: null);
             Shell.Dialogs.Error("Could not duplicate pack", $"Could not duplicate {pack.Name}: {error}");
         }
     }
@@ -454,7 +452,7 @@ public partial class PacksViewModel : PageViewModel
 
         Shell.Services.UpdateSettings(Shell.Services.Settings with { HiddenPackNames = names });
         row.IsHidden = hide;
-        row.RefreshCountsText();
+        row.RefreshLines();
         row.SetMenu(BuildMenu(row));
 
         // 2.8: the other pages read the setting when they build their rows, and nothing else tells them it moved.

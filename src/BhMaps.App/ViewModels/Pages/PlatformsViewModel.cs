@@ -3,6 +3,7 @@ using BhMaps.App.Services;
 using BhMaps.Core.Imaging;
 using BhMaps.Core.LevelData;
 using BhMaps.Core.Maps;
+using BhMaps.Core.Settings;
 
 namespace BhMaps.App.ViewModels.Pages;
 
@@ -11,8 +12,8 @@ namespace BhMaps.App.ViewModels.Pages;
 /// background and cropped to the platforms, because at row height a whole level shows them as slivers.</summary>
 public partial class PlatformsViewModel : RowsPageViewModel
 {
-    /// <summary>The composite behind a set tile, rendered at twice the largest zoom step (128 px tall, 228 wide),
-    /// so a thumbnail is still sharp at step 5 and on a high DPI screen. Exactly 16:9, which is the shape
+    /// <summary>The composite behind a set tile, rendered at twice the largest tile size (224 by 126), so a
+    /// thumbnail is still sharp at Large and on a high DPI screen. Exactly 16:9, which is the shape
     /// PlatformBounds crops to, so the render fills the tile with no letterbox.</summary>
     public const int SetWidth = 448;
     public const int SetHeight = 252;
@@ -20,7 +21,7 @@ public partial class PlatformsViewModel : RowsPageViewModel
     private const double Aspect = 16d / 9d;
 
     public PlatformsViewModel(MainViewModel shell)
-        : base(shell, shell.Services.Settings.PlatformsZoom)
+        : base(shell, shell.Services.Settings.PlatformsTileSize)
     {
     }
 
@@ -30,11 +31,11 @@ public partial class PlatformsViewModel : RowsPageViewModel
 
     protected override string NoResultsText => $"No map or pack matches '{SearchText}'.";
 
-    protected override void SaveZoom(int value)
+    protected override void SaveSize(TileSize value)
     {
-        if (Shell.Services.Settings.PlatformsZoom != value)
+        if (Shell.Services.Settings.PlatformsTileSize != value)
         {
-            Shell.Services.UpdateSettings(Shell.Services.Settings with { PlatformsZoom = value });
+            Shell.Services.UpdateSettings(Shell.Services.Settings with { PlatformsTileSize = value });
         }
     }
 
@@ -93,7 +94,7 @@ public partial class PlatformsViewModel : RowsPageViewModel
     /// the render leaves the tile grey, which is what every other preview path in the app does.</summary>
     private async Task ComposeSetAsync(PlatformSetTileViewModel tile, CancellationToken ct)
     {
-        if (Snapshot is not { } snapshot)
+        if (Snapshot is not { } snapshot || tile.HasNoArt)
         {
             return;
         }

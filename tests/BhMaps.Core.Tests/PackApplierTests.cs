@@ -42,8 +42,37 @@ public class PackApplierTests
         Assert.Equal("new-b", Read(game, "BloodMoon", "B.png"));
         Assert.Equal("new-bg", Read(game, "Backgrounds", "BG_Sewer.jpg"));
         Assert.Equal("old-mud", Read(game, "Swamp", "Mud1.png"));
-        Assert.Equal(3, progress.Count);
+        Assert.Equal(2, progress.Count);
+        Assert.Contains("BloodMoon, 1 of 1", progress);
         Assert.Contains(progress, p => p.Contains("BG_Sewer.jpg"));
+    }
+
+    [Fact]
+    public void ApplyPack_CountsOnlyTheCatalogMapsAndNamesThem()
+    {
+        using var tmp = new TempDir();
+        var game = Path.Combine(tmp.Path, "game");
+        var lib = Path.Combine(tmp.Path, "lib");
+        new FakeGameTree(Path.Combine(lib, "packs", "b&w"))
+            .File("BloodMoon", "A.png", "new-a")
+            .File("BloodMoon", "B.png", "new-b")
+            .File("Swamp", "Mud1.png", "new-mud")
+            .File("Backgrounds", "BG_Sewer.jpg", "new-bg");
+        var pack = PackScanner.ScanAll(lib).Single();
+        var progress = new List<string>();
+        var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["BloodMoon"] = "Blood Moon" };
+
+        var result = PackApplier.ApplyPack(pack, game, new SyncProgress(progress), CancellationToken.None, names);
+
+        Assert.Equal(4, result.Copied);
+        Assert.Equal(3, progress.Count);
+
+        // The named map reports under the catalog's name and is the whole of the count; the folder the catalog
+        // does not know reports its bare name with no count, and the shared Backgrounds folder still reports its
+        // files by path.
+        Assert.Contains("Blood Moon, 1 of 1", progress);
+        Assert.Contains("Swamp", progress);
+        Assert.Contains("Backgrounds\\BG_Sewer.jpg", progress);
     }
 
     [Fact]

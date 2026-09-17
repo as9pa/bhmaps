@@ -47,6 +47,13 @@ public sealed class MapCatalog
 {
     public static readonly string[] RankedSetNames = ["Ranked1v1", "Ranked2v2", "Tournament1v1"];
     public static readonly string[] StandardSetNames = ["Standard1v1", "Standard2v2", "Tournament1v1"];
+
+    /// <summary>3.0: the set every level a game mode uses belongs to, minigame or not.</summary>
+    public const string MinigameSetName = "GameModeAll";
+
+    /// <summary>3.0: the word the chip and the sets sentence both use for <see cref="MinigameSetName"/>.</summary>
+    public const string MinigameLabel = "Minigames";
+
     public static readonly string[] MiniGameDisplayNames =
         ["Catch Bombs", "Color Platforms", "Demon Island CTF", "Beachbrawl Arena"];
 
@@ -64,7 +71,27 @@ public sealed class MapCatalog
         ["Tournament1v1"] = "Tournament",
         ["Standard1v1"] = "Standard 1v1",
         ["Standard2v2"] = "Standard 2v2",
+        [MinigameSetName] = MinigameLabel,
     };
+
+    /// <summary>3.0: the words <see cref="SetsSentence"/> may use, in the order it says them. Several game sets
+    /// share one word, because a player picks "Standard", not "Standard3v3" and "StandardBig" apart.</summary>
+    private static readonly (string Word, string[] Sets)[] SetWords =
+    [
+        ("Ranked 1v1", ["Ranked1v1"]),
+        ("Ranked 2v2", ["Ranked2v2"]),
+        ("Tournament", ["Tournament1v1", "Tournament2v2"]),
+        ("Standard", ["StandardAll", "Standard1v1", "Standard2v2", "Standard3v3", "StandardFFA", "StandardBig"]),
+        ("Experimental", ["Experimental1v1"]),
+        (MinigameLabel, [MinigameSetName]),
+    ];
+
+    /// <summary>3.0: the sets a player picks a map from, which is every set the sentence above names but the
+    /// mode set. Exact names, not prefixes: the game's list also holds one-map rotation sets such as
+    /// "Ranked3v3BrawlballOGMapOnly", and a map in one of those is still a map only a mode uses.</summary>
+    private static readonly HashSet<string> PlayableSetNames = new(
+        SetWords.Where(w => w.Word != MinigameLabel).SelectMany(w => w.Sets),
+        StringComparer.OrdinalIgnoreCase);
 
     private readonly Dictionary<string, MapEntry> byFolder;
 
@@ -100,6 +127,24 @@ public sealed class MapCatalog
     /// <summary>The chip label for a set name; an unlabelled set is shown under its own name.</summary>
     public static string LabelFor(string setName) =>
         SetLabels.TryGetValue(setName, out var label) ? label : setName;
+
+    /// <summary>3.0: the sets a player would recognise, in one fixed order, for the sentence under a map's name.
+    /// The game's own list holds codes nobody outside it reads ("StandardAll", "TableTopAL"), so a set with no
+    /// word of its own is left out rather than spelled at the reader, and a map left with nothing reads as the
+    /// one thing that is still true of it. The raw list stays on the map for the tooltip.</summary>
+    public static string SetsSentence(IEnumerable<string> sets)
+    {
+        var names = new HashSet<string>(sets, StringComparer.OrdinalIgnoreCase);
+        var words = SetWords.Where(w => w.Sets.Any(names.Contains)).Select(w => w.Word).ToList();
+        return words.Count > 0 ? string.Join(", ", words) : "Other modes";
+    }
+
+    /// <summary>3.0: true for a map only a game mode uses, such as Brawlball or Horde. Those maps sit under their
+    /// own chip and stay out of All, because someone looking through the maps is not looking for them. A map a
+    /// mode borrows but a player can also pick, which is most of the mode set, stays an ordinary map.</summary>
+    public static bool IsMinigame(MapEntry map) =>
+        map.Sets.Contains(MinigameSetName, StringComparer.OrdinalIgnoreCase)
+        && !map.Sets.Any(PlayableSetNames.Contains);
 
     public static MapCatalog Build(LevelDataModel data)
     {
@@ -309,7 +354,9 @@ public sealed class MapCatalog
             ? RankedSetNames
             : StandardSetNames;
 
-        return preferred.Where(present.Contains).ToList();
+        // 3.0: the minigame chip comes last, after the sets a player picks a map from.
+        string[] wanted = [.. preferred, MinigameSetName];
+        return wanted.Where(present.Contains).ToList();
     }
 
     private static bool IsHidden(string folderName) =>
