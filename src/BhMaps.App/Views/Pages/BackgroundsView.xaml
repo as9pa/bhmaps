@@ -60,7 +60,7 @@
           <!-- Solid: adding a picture is this page's one primary action (spec 4). -->
           <Button Margin="12,0,0,0"
                   Command="{Binding AddPicturesCommand}"
-                  Content="Add Image"
+                  Content="Add image"
                   controls:Icon.Glyph="{StaticResource Icon.Plus}"
                   IsEnabled="{Binding DataContext.IsNotBusy, RelativeSource={RelativeSource AncestorType=Window}}"
                   Style="{StaticResource PrimaryButton}" />

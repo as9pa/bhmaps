@@ -289,6 +289,15 @@ public partial class PacksViewModel : PageViewModel
             ? [.. MapsIn(snapshot.Catalog, pack).Select(map => map.DisplayName)]
             : Array.Empty<string>();
 
+    /// <summary>The header's menu (3.0): the two actions that are not what the page is for. Capture writes into
+    /// the game folder and carries the CanWrite its button carried; Open library is library-only and stops at the
+    /// shell being busy, which is the gate the header's row of buttons put on it (spec 7.8).</summary>
+    public IReadOnlyList<TileMenuCommand> PageMenu =>
+    [
+        new TileMenuCommand("Capture the Default pack", CaptureDefaultsCommand, IsEnabled: Shell.CanWrite),
+        new TileMenuCommand("Open library", OpenLibraryCommand, IsEnabled: Shell.IsNotBusy),
+    ];
+
     /// <summary>Copies the game folder into the Default pack. The confirm text and the busy boundary live on the
     /// shell, so this page and Settings ask the same question (spec 6.1).</summary>
     [RelayCommand]

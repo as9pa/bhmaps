@@ -437,7 +437,7 @@
   </UserControl.Resources>
 
   <DockPanel Margin="24,16,24,24">
-    <controls:PageHeader DockPanel.Dock="Top" Title="Maps">
+    <controls:PageHeader DockPanel.Dock="Top" PageMenu="{Binding PageMenu}" Title="Maps">
       <controls:PageHeader.Actions>
         <StackPanel Orientation="Horizontal">
           <!-- Spec 3.1: the page's own search string, bound straight to the page view model. Centred at the
@@ -487,15 +487,6 @@
                                Maximum="{x:Static pages:MapsViewModel.MaxZoom}"
                                Minimum="{x:Static pages:MapsViewModel.MinZoom}"
                                Value="{Binding Zoom}" />
-
-          <!-- CanWrite, not IsNotBusy: this writes into the game folder, so it is also off while that folder is
-               missing and its confirm cannot be reached from a live-looking button (spec 7.8). -->
-          <Button Margin="8,0,0,0"
-                  Command="{Binding ResetAllCommand}"
-                  Content="Reset all to default"
-                  controls:Icon.Glyph="{StaticResource Icon.Undo}"
-                  IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}"
-                  Style="{StaticResource OutlineButton}" />
         </StackPanel>
       </controls:PageHeader.Actions>
     </controls:PageHeader>

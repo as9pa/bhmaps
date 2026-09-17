@@ -858,8 +858,8 @@
                           IsHitTestVisible="False"
                           Style="{StaticResource ChipToggle}" />
             <Border x:Name="Ring"
-                    BorderBrush="{StaticResource TextBrush}"
-                    BorderThickness="1"
+                    BorderBrush="{StaticResource FocusRingBrush}"
+                    BorderThickness="2"
                     CornerRadius="14"
                     IsHitTestVisible="False"
                     Opacity="0" />

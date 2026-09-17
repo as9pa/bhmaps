@@ -3,8 +3,9 @@ using System.Windows.Controls;
 
 namespace BhMaps.App.Views.Controls;
 
-/// <summary>The compact zoom control at the right end of a page's chip row (spec 7.2): a snapped slider over the
-/// theme's ZoomSliderStyle with the column count beside it. Whole columns, so every value is an int.</summary>
+/// <summary>The compact zoom control in a page's header (spec 7.2): a snapped slider over the theme's
+/// ZoomSliderStyle between the two grid glyphs that say which end is which. The number that used to follow it is
+/// gone (3.0): the grid behind the slider is the count. Whole columns, so every value is an int.</summary>
 public partial class ZoomSlider : UserControl
 {
     public static readonly DependencyProperty ValueProperty =

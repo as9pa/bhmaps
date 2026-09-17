@@ -37,7 +37,10 @@
           <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
 
-        <TextBlock VerticalAlignment="Center" FontSize="14" FontWeight="SemiBold" Text="BhMaps" />
+        <TextBlock VerticalAlignment="Center"
+                   FontSize="{StaticResource FontEmphasis}"
+                   FontWeight="SemiBold"
+                   Text="BhMaps" />
 
         <StackPanel Grid.Column="1" Margin="24,0,0,0" VerticalAlignment="Center" Orientation="Horizontal">
           <Button Command="{Binding NavigateMapsCommand}" Content="Maps" Style="{StaticResource TopBarTab}" Tag="{Binding Maps}" />
@@ -78,7 +81,9 @@
                   ToolTip="Re-applies what is on, restores missing files and rewrites the map-select thumbnails"
                   controls:Icon.Glyph="{StaticResource Icon.Refresh}">
             <Button.Style>
-              <Style BasedOn="{StaticResource PlainButton}" TargetType="Button">
+              <!-- Outlined rather than plain (3.0): it writes into the game folder, and a write does not read as
+                   quietly as Launch beside it. -->
+              <Style BasedOn="{StaticResource OutlineButton}" TargetType="Button">
                 <Style.Triggers>
                   <DataTrigger Binding="{Binding GameFolderMissing}" Value="True">
                     <Setter Property="Visibility" Value="Collapsed" />

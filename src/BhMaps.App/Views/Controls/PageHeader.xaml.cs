@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Windows;
 using System.Windows.Controls;
 
@@ -17,6 +18,11 @@ public partial class PageHeader : UserControl
 
     public static readonly DependencyProperty ActionsProperty =
         DependencyProperty.Register(nameof(Actions), typeof(object), typeof(PageHeader), new PropertyMetadata(null));
+
+    /// <summary>The lines of the page's menu, as ViewModels.TileMenuCommand. Null on a page with no menu, which
+    /// is what takes the button away.</summary>
+    public static readonly DependencyProperty PageMenuProperty =
+        DependencyProperty.Register(nameof(PageMenu), typeof(IEnumerable), typeof(PageHeader), new PropertyMetadata(null));
 
     public PageHeader()
     {
@@ -40,5 +46,12 @@ public partial class PageHeader : UserControl
     {
         get => GetValue(ActionsProperty);
         set => SetValue(ActionsProperty, value);
+    }
+
+    /// <summary>The page's menu, behind the dots button after the actions. Null on a page that offers none.</summary>
+    public IEnumerable? PageMenu
+    {
+        get => (IEnumerable?)GetValue(PageMenuProperty);
+        set => SetValue(PageMenuProperty, value);
     }
 }

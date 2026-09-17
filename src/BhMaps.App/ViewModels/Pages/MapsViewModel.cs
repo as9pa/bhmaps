@@ -165,6 +165,13 @@ public partial class MapsViewModel : PageViewModel
     [RelayCommand]
     private void Escape() => Selected = null;
 
+    /// <summary>The header's menu (3.0): a reset of every map is destructive and rare, so it reads as a line in
+    /// the menu rather than as a button one slip away from the zoom. CanWrite, not IsNotBusy: it writes into the
+    /// game folder, so the line is dead while that folder is missing (spec 7.8), the way a tile's menu is
+    /// built.</summary>
+    public IReadOnlyList<TileMenuCommand> PageMenu =>
+        [new TileMenuCommand("Reset all maps", ResetAllCommand, IsEnabled: Shell.CanWrite, IsDestructive: true)];
+
     /// <summary>Spec 7.2's one page action: every folder in the game tree back to the Default pack, or deleted for
     /// the game to regenerate when there is no Default pack.</summary>
     [RelayCommand]

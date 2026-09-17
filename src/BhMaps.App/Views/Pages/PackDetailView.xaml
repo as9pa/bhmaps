@@ -36,17 +36,19 @@
                                Minimum="{x:Static pages:PackDetailViewModel.MinZoom}"
                                Value="{Binding Zoom}" />
           <Button Margin="0,0,8,0" Command="{Binding ImportFromPackCommand}" Content="Import from pack"
-                  controls:Icon.Glyph="{StaticResource Icon.Plus}"
+                  controls:Icon.Glyph="{StaticResource Icon.FolderPlus}"
                   FocusVisualStyle="{StaticResource DialogFocusRing}"
                   Style="{StaticResource OutlineButton}"
                   ToolTip="{x:Static pages:PackDetailViewModel.NoOtherPackText}"
                   ToolTipService.ShowOnDisabled="True" />
+          <Button Margin="0,0,8,0" Command="{Binding OpenFolderCommand}" Content="Open folder"
+                  controls:Icon.Glyph="{StaticResource Icon.FolderOpen}" Style="{StaticResource OutlineButton}" />
+
+          <!-- Last, because the page's one primary ends the row (3.0). -->
           <Button Command="{Binding ApplyAllCommand}" Content="Apply all"
                   controls:Icon.Glyph="{StaticResource Icon.Download}"
                   IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}"
                   Style="{StaticResource PrimaryButton}" />
-          <Button Margin="8,0,0,0" Command="{Binding OpenFolderCommand}" Content="Open folder"
-                  controls:Icon.Glyph="{StaticResource Icon.FolderOpen}" Style="{StaticResource OutlineButton}" />
         </StackPanel>
       </controls:PageHeader.Actions>
     </controls:PageHeader>
