@@ -240,16 +240,31 @@
 
   <!-- The links the status strip offers, and the first-run line under the top bar with them: a link here is the
        app's plain button with the text's own weight and rule on it, never a colour, because the strip's dot is
-       the only coloured thing on either line. -->
+       the only coloured thing on either line. Quieter from 3.1, now that the strip is in the top bar: the
+       second text colour rather than the first, the rule a shade under that, and Medium rather than SemiBold.
+       A link beside a line the eye is not looking for should be findable, not loud. -->
   <Style x:Key="StripLink" TargetType="Button" BasedOn="{StaticResource PlainButton}">
     <Setter Property="Padding" Value="{StaticResource Gap8}" />
   </Style>
 
   <Style x:Key="StripLinkText" TargetType="TextBlock">
-    <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+    <Setter Property="Foreground" Value="{StaticResource Text2Brush}" />
     <Setter Property="FontSize" Value="{StaticResource FontBody}" />
-    <Setter Property="FontWeight" Value="SemiBold" />
-    <Setter Property="TextDecorations" Value="Underline" />
+    <Setter Property="FontWeight" Value="Medium" />
+
+    <!-- A decoration with its own pen rather than the plain Underline, which would take the text's colour and
+         put as much weight under the word as in it. -->
+    <Setter Property="TextDecorations">
+      <Setter.Value>
+        <TextDecorationCollection>
+          <TextDecoration Location="Underline">
+            <TextDecoration.Pen>
+              <Pen Brush="{StaticResource Text3Brush}" Thickness="1" />
+            </TextDecoration.Pen>
+          </TextDecoration>
+        </TextDecorationCollection>
+      </Setter.Value>
+    </Setter>
   </Style>
 
   <Style x:Key="ChipToggle" TargetType="ToggleButton">

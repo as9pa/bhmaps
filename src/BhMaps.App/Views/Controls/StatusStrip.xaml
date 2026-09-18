@@ -4,17 +4,30 @@
              xmlns:controls="clr-namespace:BhMaps.App.Views.Controls"
              AutomationProperties.Name="Status"
              Visibility="{Binding IsVisible, Converter={StaticResource BoolToVis}}">
-  <Border Background="{StaticResource Surface2Brush}"
-          BorderBrush="{StaticResource LineBrush}"
-          BorderThickness="1"
-          CornerRadius="{StaticResource Radius}"
-          Padding="{StaticResource Gap12}">
-    <DockPanel>
 
-      <!-- The dot, and the only thing on the strip that carries a colour. The halo is a second circle under it,
-           twice the width at a quarter of the opacity, so a running line reads as running from across the room
-           without anything moving. -->
-      <Grid Width="12" Height="12" Margin="0,0,12,0" DockPanel.Dock="Left" VerticalAlignment="Center">
+  <!-- 3.1: no card round it any more. The line lives in the top bar now, where a border and a fill would be a
+       second bar inside the first one; what is left is the dot, the words and the links, sitting on the bar.
+       Transparent rather than no background, because the fade pauses under the pointer and a panel that is not
+       painted is a panel the pointer goes through. -->
+  <DockPanel Background="Transparent">
+
+    <!-- The dot, and the only thing on the line that carries a colour. The halo is a second circle under it,
+         twice the width at a quarter of the opacity, so a running line reads as running from across the room
+         without anything moving. It is a button because it outlives the words (3.1): after a done or cancelled
+         line has faded with an undo still behind it, the dot stays lit, says what the line was, and brings it
+         back. Nothing to bring back means nothing to click, so it is out of the pointer's and the tab order's
+         way rather than greyed. -->
+    <Button DockPanel.Dock="Left"
+            Margin="0,0,8,0"
+            Padding="4"
+            VerticalAlignment="Center"
+            AutomationProperties.Name="Last result"
+            Command="{Binding RecallCommand}"
+            Focusable="{Binding Remembered}"
+            IsHitTestVisible="{Binding Remembered}"
+            Style="{StaticResource PlainButton}"
+            ToolTip="{Binding Text}">
+      <Grid Width="12" Height="12">
         <Ellipse Width="12" Height="12" Fill="{StaticResource AccentBrush}" Opacity="0.25">
           <Ellipse.Style>
             <Style TargetType="Ellipse">
@@ -47,14 +60,25 @@
                 <DataTrigger Binding="{Binding Kind}" Value="Cancelled">
                   <Setter Property="Fill" Value="{StaticResource WarnBrush}" />
                 </DataTrigger>
+
+                <!-- Last, so it wins over the kind the line was: a dot standing on its own stands for something
+                     that went well and can be taken back, whichever of the two kinds wrote it. -->
+                <DataTrigger Binding="{Binding Remembered}" Value="True">
+                  <Setter Property="Fill" Value="{StaticResource OkBrush}" />
+                </DataTrigger>
               </Style.Triggers>
             </Style>
           </Ellipse.Style>
         </Ellipse>
       </Grid>
+    </Button>
 
-      <!-- Last in the row and first in the markup, because a DockPanel gives the docked children the edges in the
-           order they are declared and the text takes what is left. -->
+    <!-- What fades (3.1): the words and the links together, so they go as one thing, while the dot holds still.
+         The code-behind animates this panel's opacity and then the view model collapses it. -->
+    <DockPanel x:Name="Line" Visibility="{Binding ShowLine, Converter={StaticResource BoolToVis}}">
+
+      <!-- Last in the row and first in the markup, because a DockPanel gives the docked children the edges in
+           the order they are declared and the text takes what is left. Only a failure carries it now (3.1). -->
       <Button DockPanel.Dock="Right"
               Margin="4,0,0,0"
               VerticalAlignment="Center"
@@ -83,18 +107,20 @@
         </Button>
       </StackPanel>
 
-      <!-- Two lines at most: the strip is a line, not a paragraph, and a reason longer than that belongs in the
-           failures dialog. MaxHeight rather than trimming, because a cut-off word says less than a clipped one.
-           The automation name is the text itself, so a reader announces the line rather than the control. -->
+      <!-- One line, never two: the bar is 44 px and nothing on the page may move to make room for words. What
+           does not fit is trimmed and the whole of it is in the tooltip. The width it trims at is the top bar's
+           own doing: the strip sits in a starred column between the tabs and the right cluster, so what is left
+           there is what this measures against. The automation name is the text itself, so a reader announces
+           the line rather than the control. -->
       <TextBlock VerticalAlignment="Center"
-                 MaxHeight="36"
                  AutomationProperties.LiveSetting="Polite"
                  AutomationProperties.Name="{Binding Text}"
                  FontSize="{StaticResource FontBody}"
-                 Foreground="{StaticResource TextBrush}"
+                 Foreground="{StaticResource Text2Brush}"
                  Text="{Binding Text}"
-                 TextTrimming="None"
-                 TextWrapping="Wrap" />
+                 TextTrimming="CharacterEllipsis"
+                 TextWrapping="NoWrap"
+                 ToolTip="{Binding Text}" />
     </DockPanel>
-  </Border>
+  </DockPanel>
 </UserControl>

@@ -29,10 +29,10 @@
       <RowDefinition Height="44" />
       <RowDefinition Height="Auto" />
       <RowDefinition Height="*" />
-      <RowDefinition Height="Auto" />
     </Grid.RowDefinitions>
 
-    <!-- Addendum A: brand, five tabs, and the game line at the right. 44 px with a hairline under it. -->
+    <!-- Addendum A: brand, five tabs, the status line, and the game line at the right. 44 px with a hairline
+         under it, and it stays 44 px whatever the status line is saying (3.1). -->
     <Border Grid.Row="0"
             Background="{StaticResource BgBrush}"
             BorderBrush="{StaticResource LineBrush}"
@@ -49,13 +49,30 @@
                    FontWeight="SemiBold"
                    Text="BhMaps" />
 
-        <StackPanel Grid.Column="1" Margin="24,0,0,0" VerticalAlignment="Center" Orientation="Horizontal">
-          <Button Command="{Binding NavigateMapsCommand}" Content="Maps" Style="{StaticResource TopBarTab}" Tag="{Binding Maps}" />
-          <Button Command="{Binding NavigateBackgroundsCommand}" Content="Backgrounds" Style="{StaticResource TopBarTab}" Tag="{Binding Backgrounds}" />
-          <Button Command="{Binding NavigatePlatformsCommand}" Content="Platforms" Style="{StaticResource TopBarTab}" Tag="{Binding Platforms}" />
-          <Button Command="{Binding NavigatePacksCommand}" Content="Packs" Style="{StaticResource TopBarTab}" Tag="{Binding Packs}" />
-          <Button Command="{Binding NavigateSettingsCommand}" Content="Settings" Style="{StaticResource TopBarTab}" Tag="{Binding SettingsPage}" />
-        </StackPanel>
+        <Grid Grid.Column="1" Margin="24,0,0,0">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+          </Grid.ColumnDefinitions>
+
+          <StackPanel VerticalAlignment="Center" Orientation="Horizontal">
+            <Button Command="{Binding NavigateMapsCommand}" Content="Maps" Style="{StaticResource TopBarTab}" Tag="{Binding Maps}" />
+            <Button Command="{Binding NavigateBackgroundsCommand}" Content="Backgrounds" Style="{StaticResource TopBarTab}" Tag="{Binding Backgrounds}" />
+            <Button Command="{Binding NavigatePlatformsCommand}" Content="Platforms" Style="{StaticResource TopBarTab}" Tag="{Binding Platforms}" />
+            <Button Command="{Binding NavigatePacksCommand}" Content="Packs" Style="{StaticResource TopBarTab}" Tag="{Binding Packs}" />
+            <Button Command="{Binding NavigateSettingsCommand}" Content="Settings" Style="{StaticResource TopBarTab}" Tag="{Binding SettingsPage}" />
+          </StackPanel>
+
+          <!-- 3.1: the one line the shell says anything on, moved out of the foot of the page and into the bar.
+               The column it sits in is what is left between the last tab and the right cluster, so a long line
+               is trimmed rather than pushing anything: the bar is 44 px whether the line is there or not, and
+               nothing on the page moves when it comes or goes. -->
+          <controls:StatusStrip Grid.Column="1"
+                                Margin="12,0,12,0"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Center"
+                                DataContext="{Binding Status}" />
+        </Grid>
 
         <StackPanel Grid.Column="2" VerticalAlignment="Center" Orientation="Horizontal">
 
@@ -188,10 +205,5 @@
     </Border>
 
     <ContentControl x:Name="PageHost" Grid.Row="2" Content="{Binding CurrentPage}" />
-
-    <!-- 3.0: the one place the shell says anything, at the foot of the content area. The side gutter is the
-         pages' own 24 px, so the strip's left edge is the page content's; it collapses when there is nothing to
-         say, and the row gives the height back to the page with it. -->
-    <controls:StatusStrip Grid.Row="3" Margin="24,0,24,16" DataContext="{Binding Status}" />
   </Grid>
 </Window>

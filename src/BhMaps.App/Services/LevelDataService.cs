@@ -34,8 +34,10 @@ public sealed class LevelDataService
     /// <summary>The game's "10.10", or null when the model came from a SWF that named no version (3.0).</summary>
     public string? Version => Volatile.Read(ref _state).Model?.Version;
 
-    /// <summary>What the strip says after a read finishes, from Settings or from the game poll (3.0).</summary>
-    public string ReadNote => Version is { } version ? $"Game data read from Brawlhalla {version}." : "Game data read.";
+    /// <summary>What the strip says after a read finishes, from Settings or from the game poll (3.0). The
+    /// version it read is not in it from 3.1: the line is in the top bar now, where the news is that the read
+    /// happened, and Settings has said which version all along.</summary>
+    public string ReadNote => "Game data read.";
 
     /// <summary>The Settings line (spec 7.6), carrying the reason when the data could not be read (spec 3.6).</summary>
     public string StatusSentence

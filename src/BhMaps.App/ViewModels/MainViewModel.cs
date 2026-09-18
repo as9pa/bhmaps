@@ -12,6 +12,7 @@ using BhMaps.Core.Model;
 using BhMaps.Core.Operations;
 using BhMaps.Core.Packs;
 using BhMaps.Core.Scanning;
+using BhMaps.Core.Text;
 using BhMaps.Core.Update;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -1077,7 +1078,7 @@ public partial class MainViewModel : ObservableObject
 
         // The line names what the import did, which is only known once the work is over, so it is written over
         // the placeholder the write boundary left rather than handed to it.
-        Status.Done(ImportDone(result, plan, target), touched.Count > 0 && Services.Undo.Latest is not null);
+        Status.Done(Sentences.First(ImportDone(result, plan, target)), touched.Count > 0 && Services.Undo.Latest is not null);
         if (result is not null)
         {
             Dialogs.ShowFailures("Some files could not be imported", result.Failures);
@@ -1695,7 +1696,7 @@ public partial class MainViewModel : ObservableObject
 
         if (ok)
         {
-            Status.Done(doneText, undoable && Services.Undo.Latest is not null);
+            Status.Done(Sentences.First(doneText), undoable && Services.Undo.Latest is not null);
         }
         else if (Status.Kind is StatusKind.Cancelled && undoable && Services.Undo.Latest is not null)
         {
@@ -1893,14 +1894,22 @@ public partial class MainViewModel : ObservableObject
     /// <summary>The line an undo leaves. Spec 11 names no string for it, so this is the plan's (A-D7).</summary>
     public const string UndoDoneText = "Undone.";
 
-    /// <summary>The whole done line: the page's fragment, then the shared sentence, with exactly one period
-    /// between them however the fragment was punctuated. The wrapper settles the period for the same reason it
-    /// settles the sentence: a page cannot get it wrong if a page does not decide it. An empty fragment leaves
-    /// the sentence standing alone rather than a line that opens with a stop.</summary>
+    /// <summary>The whole done line (3.1): the first sentence of the page's fragment, and the shared sentence
+    /// after it only while the game is up. The line lives in the top bar now, where the room is one sentence
+    /// long, and the fragment's first sentence is the one that says what happened; a closed game shows the new
+    /// art the next time it opens whatever the line says, so that case spends its words on nothing. The wrapper
+    /// settles the period between the two for the same reason it settles the sentence: a page cannot get it
+    /// wrong if a page does not decide it. An empty fragment leaves the sentence standing alone rather than a
+    /// line that opens with a stop.</summary>
     private static string DoneLine(string doneText, bool gameRunning)
     {
-        var fragment = doneText.TrimEnd('.');
-        return fragment.Length == 0 ? DoneSentence(gameRunning) : $"{fragment}. {DoneSentence(gameRunning)}";
+        var fragment = Sentences.First(doneText).TrimEnd('.');
+        if (fragment.Length == 0)
+        {
+            return DoneSentence(gameRunning);
+        }
+
+        return gameRunning ? $"{fragment}. {DoneSentence(gameRunning)}" : $"{fragment}.";
     }
 
     /// <summary>What an undo put back. The count is maps rather than files (3.0): the session's game side names
