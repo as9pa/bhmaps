@@ -1,7 +1,8 @@
 <Window x:Class="BhMaps.App.Views.ChooserWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Width="420" Height="460" ResizeMode="NoResize"
+        Width="760" Height="560" MinWidth="600" MinHeight="440"
+        ResizeMode="CanResizeWithGrip"
         WindowStyle="None"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
         Background="{StaticResource BgBrush}"
@@ -30,6 +31,7 @@
       <Grid Grid.Row="2" Margin="0,14,0,0">
         <TextBox x:Name="Search"
                  AutomationProperties.Name="{Binding SearchPlaceholder}"
+                 KeyDown="OnSearchKeyDown"
                  Style="{StaticResource FieldTextBox}"
                  Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
 
@@ -52,38 +54,64 @@
       </Grid>
 
       <Grid Grid.Row="3" Margin="0,12,0,0">
+        <!-- 3.1: a picture grid rather than a list of 40x22 stamps, so the choice is made on the picture. Both
+             modes share the template; in map mode the image is the map's preview. -->
         <ListBox x:Name="Rows"
                  FocusVisualStyle="{x:Null}"
                  ItemsSource="{Binding Rows}"
+                 KeyboardNavigation.DirectionalNavigation="Contained"
                  SelectedItem="{Binding Selected, Mode=TwoWay}"
                  SelectionMode="Single"
-                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                 ScrollViewer.CanContentScroll="False"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                 Style="{StaticResource TileListBox}">
           <ListBox.ItemContainerStyle>
             <Style TargetType="ListBoxItem" BasedOn="{StaticResource TileListBoxItem}">
               <Setter Property="AutomationProperties.Name" Value="{Binding Name}" />
-              <Setter Property="Padding" Value="6,5" />
+              <!-- The gutter is the container's, not the template's, so the selection ring hugs the tile. -->
+              <Setter Property="Margin" Value="0,0,12,12" />
+              <Setter Property="Padding" Value="0" />
               <EventSetter Event="MouseDoubleClick" Handler="OnRowDoubleClick" />
             </Style>
           </ListBox.ItemContainerStyle>
+          <ListBox.ItemsPanel>
+            <ItemsPanelTemplate>
+              <!-- Top aligned, or a short list comes out with a huge gap under it. -->
+              <WrapPanel VerticalAlignment="Top" Orientation="Horizontal" />
+            </ItemsPanelTemplate>
+          </ListBox.ItemsPanel>
           <ListBox.ItemTemplate>
             <DataTemplate>
-              <Grid>
-                <Grid.ColumnDefinitions>
-                  <ColumnDefinition Width="Auto" />
-                  <ColumnDefinition Width="*" />
-                  <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <Border Width="40" Height="22" CornerRadius="3"
+              <StackPanel>
+                <!-- A row whose thumbnail has not decoded yet, or will not, shows the tile colour and its name
+                     rather than a broken image. -->
+                <Border x:Name="Shot"
+                        Width="224" Height="126"
+                        Background="{StaticResource TileBrush}"
+                        BorderBrush="Transparent"
+                        BorderThickness="2"
+                        CornerRadius="{StaticResource Radius}"
                         RenderOptions.BitmapScalingMode="HighQuality">
-                  <Border.Background>
-                    <ImageBrush ImageSource="{Binding Thumbnail}" Stretch="UniformToFill" />
-                  </Border.Background>
+                  <Border CornerRadius="{StaticResource Radius}">
+                    <Border.Background>
+                      <ImageBrush ImageSource="{Binding Thumbnail}" Stretch="UniformToFill" />
+                    </Border.Background>
+                  </Border>
                 </Border>
-                <TextBlock Grid.Column="1" Margin="10,0,10,0" VerticalAlignment="Center"
-                           Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
-                <TextBlock Grid.Column="2" VerticalAlignment="Center" FontSize="{StaticResource FontCaption}"
-                           Foreground="{StaticResource Text3Brush}" Text="{Binding Detail}" />
-              </Grid>
+                <TextBlock Margin="0,6,0,0" FontSize="{StaticResource FontBody}"
+                           Foreground="{StaticResource TextBrush}" Text="{Binding Name}"
+                           TextTrimming="CharacterEllipsis" />
+                <TextBlock FontSize="{StaticResource FontCaption}"
+                           Foreground="{StaticResource Text3Brush}" Text="{Binding Detail}"
+                           TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+              <DataTemplate.Triggers>
+                <!-- The open card's treatment: the picked tile wears the ring itself. -->
+                <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
+                  <Setter TargetName="Shot" Property="BorderBrush" Value="{StaticResource TextBrush}" />
+                </DataTrigger>
+              </DataTemplate.Triggers>
             </DataTemplate>
           </ListBox.ItemTemplate>
         </ListBox>
