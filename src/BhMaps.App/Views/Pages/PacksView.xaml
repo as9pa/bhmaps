@@ -213,7 +213,8 @@
                               Orientation="Horizontal">
                     <!-- 2.8: the eye, which keeps the pack out of the Backgrounds and Platforms lists. Muted while
                          the pack is shown and lit once it is hidden, the same way the My Backgrounds switch reads.
-                         The Default pack has none: the lists fall back to it. -->
+                         3.1: the Default pack has one too, so the game's own art can leave the lists like any
+                         other pack; what it is for, Reset and Capture, reads the folder and not this. -->
                     <Button Margin="0,0,6,0"
                             Command="{Binding DataContext.ToggleHiddenCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                             CommandParameter="{Binding}">
@@ -228,9 +229,6 @@
                               <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
                               <Setter Property="controls:Icon.Glyph" Value="{StaticResource Icon.EyeOff}" />
                               <Setter Property="ToolTip" Value="Hidden from Backgrounds and Platforms" />
-                            </DataTrigger>
-                            <DataTrigger Binding="{Binding IsDefault}" Value="True">
-                              <Setter Property="Visibility" Value="Collapsed" />
                             </DataTrigger>
                           </Style.Triggers>
                         </Style>

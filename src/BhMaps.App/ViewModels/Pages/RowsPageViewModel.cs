@@ -150,10 +150,8 @@ public abstract partial class RowsPageViewModel : PageViewModel, ITileSized
         ApplyFilter();
         RebuildMenus();
 
-        // The Default pack is never hidden, whatever the setting holds.
-        HiddenPackCount = snapshot.Packs.Count(p =>
-            !p.Name.Equals(DefaultPack.Name, StringComparison.OrdinalIgnoreCase)
-            && Shell.Services.Settings.IsHidden(p.Name));
+        // 3.1: the Default pack counts like any other, because it hides from the lists like any other.
+        HiddenPackCount = snapshot.Packs.Count(p => Shell.Services.Settings.IsHidden(p.Name));
         OnPropertyChanged(nameof(HiddenPackCount));
         OnPropertyChanged(nameof(HiddenPacksText));
         OnPropertyChanged(nameof(ShowHiddenPacks));

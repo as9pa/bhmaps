@@ -139,9 +139,8 @@ public static class MapChoices
         return tiles;
     }
 
-    /// <summary>True for a pack the Packs page is hiding (2.8). The Default pack is never one, whatever the
-    /// setting holds: the game's own art is the fallback every other choice is measured against.</summary>
+    /// <summary>True for a pack the Packs page is hiding (2.8). 3.1: the Default pack is one like any other when
+    /// it is hidden; the rule above still keeps the tile the game is showing.</summary>
     private static bool IsHidden(MainViewModel shell, string packName) =>
-        !packName.Equals(DefaultPack.Name, StringComparison.OrdinalIgnoreCase)
-        && shell.Services.Settings.IsHidden(packName);
+        shell.Services.Settings.IsHidden(packName);
 }

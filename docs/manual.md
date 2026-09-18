@@ -13,7 +13,10 @@ nothing else in the game install is touched.
 
 A pack's own page reads better and asks less of you. The menu on a picture tile says **Edit background**
 rather than "Edit", and a map's tile offers **Edit platforms** beside it, so both halves of a map are one
-click from the grid. The band behind the pack's name is as tall as the words in it rather than a fixed
+click from the grid, and **Edit platforms** is now on every map's tile, not only the ones this pack
+has a background for. The `Default` pack has the eye too, so the game's own art can step out of the
+lists like any other pack; Reset, Capture defaults and the top-up after a game update read its folder
+and go on working either way. The band behind the pack's name is as tall as the words in it rather than a fixed
 height, and the pack's art behind them is dimmed so the name and the line under it stay readable on any
 pack. The note about files that change nothing in game can now be dismissed with the X next to Remove: it
 stays away until the pack holds a different number of them.
@@ -438,7 +441,7 @@ stops a long operation.
   then the packs that have been applied, the most recent first, then the ones never applied, by
   name; every list of packs in the app follows that order. Apply all is a button on the row; a dots
   button beside it holds **Duplicate**, **Import from another pack...**, Export, Open folder and
-  **Delete pack**; `Default` has no Delete pack. Every row but Default also has an eye before Apply
+  **Delete pack**; `Default` has no Delete pack. Every row, `Default` included, has an eye before Apply
   all: click it and the pack is hidden from the lists on Backgrounds, Platforms and the map panel,
   the row dims and its counts line ends "Hidden from lists."; click again to show it. The dots menu
   says the same in words, **Hide from lists** / **Show in lists**. The header has Import folder, New
@@ -452,11 +455,12 @@ stops a long operation.
   where the pack has nothing of its own, at the size the header's size control sets. Clicking a tile opens a
   drawer listing that map's files, its background and its platforms, and where each came from.
   Hovering a tile shows a dots button, and the dots or a right-click opens the
-  menu. A map's tile is headed with the map's name and holds **Apply to <map>**, **Copy to pack...**
-  (Ctrl+C), **Move to pack...** (Ctrl+X), **Show in folder** and **Delete from <pack>**; a picture's
-  tile is headed with its file name and keeps 2.5's lines, with Copy and Move added after **Edit
-  background** and **Edit platforms**, and **Delete background** last. **Edit platforms** is on a map's
-  tile and opens the platform editor on that map with this pack's own pieces; it is greyed out, saying
+  menu. A map's tile is headed with the map's name and holds **Apply to <map>**, **Edit platforms**,
+  **Copy to pack...** (Ctrl+C), **Move to pack...** (Ctrl+X), **Show in folder** and **Delete from
+  <pack>**; a picture's tile is headed with its file name and keeps 2.5's lines, with Copy and Move
+  added after **Edit background**, and **Delete background** last. **Edit platforms** is on every map's
+  tile, with a background for the map in this pack or without one, and opens the platform editor on
+  that map with this pack's own pieces; it is greyed out, saying
   so, when the pack holds no platform files for that map. A delete puts the default back on whatever the game was showing
   from it, and Undo brings back the files and the game folder together.
   Ctrl+V pastes whatever was copied or cut into the pack you are looking at. **Import from pack** in
