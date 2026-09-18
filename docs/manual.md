@@ -9,6 +9,38 @@ and `.jpg` files inside the `mapArt` folder and inside its own library, plus its
 folder, and it keeps a copy of every original so it can put it back. The game's data files are read and never written, and
 nothing else in the game install is touched.
 
+## What is new in 3.1
+
+The status line is in the top bar. Everything the app is doing or has just done reads on one line
+between the tabs and the Refresh button, with its coloured dot, its links and nothing else: no card
+round it, no row of its own at the foot of the page, and nothing on the page that moves when the line
+comes or goes. A long line is trimmed to the room there is, and hovering it says the whole of it. A
+running line stays while the work does and a failure stays until its × puts it away; a note, a done,
+an undone and a cancelled line have six seconds and then fade, and that clock stops while the pointer
+is on the line or the keyboard is in it. When a faded line left something to undo, its dot stays lit
+where it was: hovering the dot says what the line was and clicking it brings the line back with its
+Undo. Ctrl+Z and Escape do the same thing whether the line is showing or not. The lines are shorter
+with it: one sentence each, and a write says where it will show only while the game is running,
+because a closed game shows it at the next start either way.
+
+A pack's own page reads better and asks less of you. The menu on a picture tile says **Edit background**
+rather than "Edit", and a map's tile offers **Edit platforms** beside it, so both halves of a map are one
+click from the grid, and **Edit platforms** is now on every map's tile, not only the ones this pack
+has a background for. The `Default` pack has the eye too, so the game's own art can step out of the
+lists like any other pack; Reset, Capture defaults and the top-up after a game update read its folder
+and go on working either way. The band behind the pack's name is as tall as the words in it rather than a fixed
+height, and the pack's art behind them is dimmed so the name and the line under it stay readable on any
+pack. The note about files that change nothing in game can now be dismissed with the X next to Remove: it
+stays away until the pack holds a different number of them.
+
+A map card's **Apply picture** flyout is now
+**Apply background**, and its **Apply pack** flyout lists only the packs that have something for that map,
+with a greyed last line counting the ones left out and naming them when you rest on it. The picture chooser that **More pictures...** and **Apply to a map...** open is a grid now: 760 by 560, resizable, with each picture at 224 by 126 and its name under it, instead of a list with a thumbnail the size of a fingernail.
+
+The chip row is one filter now: All, Ranked 1v1, Ranked 2v2, Tournament and Minigames are shared by
+Maps, Backgrounds and Platforms, so a chip picked on one of them is the chip the other two show. Each
+page still has its own search box, and every run starts on All.
+
 ## What is new in 3.0
 
 3.0 is a redraw. The pages, the words and the dialogs were reworked from one design pass over the
@@ -335,7 +367,9 @@ instead.
 
 The top bar carries the app's name, then the five tabs: Maps, Backgrounds, Platforms, Packs and
 Settings. Ctrl+1 to Ctrl+5 switch between them, and Ctrl+K goes to Maps and puts the cursor in its
-search box. On the right is the game line, reading "Brawlhalla running", or "Brawlhalla not running"
+search box. After the tabs is the status line: what the app is doing or has just done, on one line
+with its dot and its links, trimmed to the room between the tabs and the buttons at the right and
+said in full by hovering it. On the right is the game line, reading "Brawlhalla running", or "Brawlhalla not running"
 beside a Launch button that asks Steam to start the game. Before the game line is **Refresh**, a
 square button showing only its arrows, which applies again every game file whose source changed since
 the app put it there, restores a file missing from a map folder, and rewrites the map-select
@@ -352,7 +386,8 @@ stops a long operation.
   Tournament when the game's data has the ranked sets, and the standard ones when it does not; the
   other sets the game defines are read but not shown. Minigames comes last and holds the ten maps
   only a game mode uses, such as Brawlball and Horde, and All leaves those ten out; a search still
-  finds them whatever chip is on. The card size is the size control (Large,
+  finds them whatever chip is on. The chip is shared with Backgrounds and Platforms: pick one here and
+  those two pages show the same set. The card size is the size control (Large,
   Medium, Small) in the page header, or Ctrl and plus, minus, zero, or the wheel; the grid holds as
   many columns as fit, so opening the panel moves cards down a row instead of shrinking them. Each card is a composed preview, the map's
   name, and a tag only when there is something to say: the pack the map matches, the name of the
@@ -367,9 +402,10 @@ stops a long operation.
   all maps** or the chooser, asks first and names the count. Escape closes the panel when one is
   open, and clears the search when none is.
 - A right-click on a card opens its menu for that card. The menu opens with the
-  map's name and, under it, what the map shows. **Apply pack** unfolds the packs, with a pack greyed
-  out when it has nothing for that map and a hidden pack marked "hidden";
-  **Apply picture** unfolds your pictures, up to eight, then "More pictures..."
+  map's name and, under it, what the map shows. **Apply pack** unfolds the packs that have something
+  for that map, with a hidden pack marked "hidden", and ends in a greyed line counting the packs left
+  out, "2 packs have nothing for Grove", which names them when you rest on it;
+  **Apply background** unfolds your pictures, up to eight, then "More pictures..."
   for the chooser and "Add Custom Image..."; then **Edit background**, **Edit platforms** (one map
   only), **Reset** and **Show in game folder**. One map applies without asking; a write to
   more than one map asks and names the count.
@@ -405,7 +441,8 @@ stops a long operation.
   in folder, and for a picture in a pack **Rename**, which renames its file in the library and leaves
   the maps it is on showing it, and **Delete background**, which also puts the default back on
   any map showing it, or Save to My Backgrounds for a picture the game is showing that no pack
-  holds. Search matches map names, pack names and file names. The chips are the ones Maps has.
+  holds. Search matches map names, pack names and file names. The chips are the ones Maps has, and
+  they are the one filter: the chip picked here is the chip Maps and Platforms show.
   The thumbnail size is the size control (Large, Medium, Small) in the page header, or Ctrl and
   plus, minus, zero, or the wheel. Add Image is in the header. Up and Down move between rows, Left and Right along a strip, and Enter applies
   the thumbnail the keyboard is on.
@@ -429,7 +466,7 @@ stops a long operation.
   then the packs that have been applied, the most recent first, then the ones never applied, by
   name; every list of packs in the app follows that order. Apply all is a button on the row; a dots
   button beside it holds **Duplicate**, **Import from another pack...**, Export, Open folder and
-  **Delete pack**; `Default` has no Delete pack. Every row but Default also has an eye before Apply
+  **Delete pack**; `Default` has no Delete pack. Every row, `Default` included, has an eye before Apply
   all: click it and the pack is hidden from the lists on Backgrounds, Platforms and the map panel,
   the row dims and its counts line ends "Hidden from lists."; click again to show it. The dots menu
   says the same in words, **Hide from lists** / **Show in lists**. The header has Import folder, New
@@ -443,10 +480,13 @@ stops a long operation.
   where the pack has nothing of its own, at the size the header's size control sets. Clicking a tile opens a
   drawer listing that map's files, its background and its platforms, and where each came from.
   Hovering a tile shows a dots button, and the dots or a right-click opens the
-  menu. A map's tile is headed with the map's name and holds **Apply to <map>**, **Copy to pack...**
-  (Ctrl+C), **Move to pack...** (Ctrl+X), **Show in folder** and **Delete from <pack>**; a picture's
-  tile is headed with its file name and keeps 2.5's lines, with Copy and Move added after **Edit**
-  and **Delete background** last. A delete puts the default back on whatever the game was showing
+  menu. A map's tile is headed with the map's name and holds **Apply to <map>**, **Edit platforms**,
+  **Copy to pack...** (Ctrl+C), **Move to pack...** (Ctrl+X), **Show in folder** and **Delete from
+  <pack>**; a picture's tile is headed with its file name and keeps 2.5's lines, with Copy and Move
+  added after **Edit background**, and **Delete background** last. **Edit platforms** is on every map's
+  tile, with a background for the map in this pack or without one, and opens the platform editor on
+  that map with this pack's own pieces; it is greyed out, saying
+  so, when the pack holds no platform files for that map. A delete puts the default back on whatever the game was showing
   from it, and Undo brings back the files and the game folder together.
   Ctrl+V pastes whatever was copied or cut into the pack you are looking at. **Import from pack** in
   the header opens the import dialog. The Backgrounds page's picture menus gain the same **Apply to a
@@ -581,7 +621,7 @@ repeats it with the number of maps in it.
 | Rescan | "Rescan", F5 | The top bar. Re-reads the game folder and the library without writing anything |
 | Import | "Import folder", "Import from pack" | The Packs page and a pack's own page |
 | New | "New pack", "Add image" | The Packs page and a pack's own page |
-| Undo | "Undo", Ctrl+Z | The line a write leaves in the page header |
+| Undo | "Undo", Ctrl+Z | The line a write leaves in the top bar, and the dot it leaves behind |
 
 Reset and Capture are the two that talk about the Default pack: Capture makes it out of the game's
 own art, and Reset puts that art back.
@@ -596,7 +636,7 @@ own art, and Reset puts that art back.
   `leveldata.json` next to the size and timestamp of all four files, so an unchanged game starts from
   the cache and a game update re-reads in the background: after the first scan of a run, and again
   whenever Brawlhalla starts or stops, because that is when an update has just landed. The strip says
-  "Game data read from Brawlhalla 10.10." when it did. The version is the one the app finds written in
+  "Game data read." when it did, and Settings says which version that was. The version is the one the app finds written in
   `BrawlhallaAir.swf`; neither the `.swz` files nor the game's exe carry it. When the files are not
   there, the key is not found, or an entry fails its checksum, the app falls back to folder names for map names, hides
   the set chips, and shows a single-file thumbnail in place of each composed preview. Settings says

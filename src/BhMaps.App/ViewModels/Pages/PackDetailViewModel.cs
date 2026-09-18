@@ -236,6 +236,26 @@ public partial class PackDetailViewModel : PageViewModel, ITileSized
             AddPictureLines(items, tile, pack, path);
         }
 
+        // 3.1: the platform editor belongs to the map, not to a picture, so every map tile offers it, whether or
+        // not this pack holds a background for the map. The editor opens on this pack's own pieces, so the line
+        // is dead on a pack that holds none for the map and says why rather than opening an empty editor.
+        if (tile.Map is { } platformOwner)
+        {
+            if (tile.PicturePath is null)
+            {
+                items.Add(TileMenuCommand.Separator());
+            }
+
+            var hasPlatforms = PackCopier.PlatformFiles(pack, platformOwner).Count > 0;
+            items.Add(new TileMenuCommand(
+                "Edit platforms",
+                new AsyncRelayCommand(() => Shell.OpenPlatformEditorAsync([platformOwner], pack)),
+                IsEnabled: hasPlatforms,
+                ToolTip: hasPlatforms
+                    ? null
+                    : $"No platform files in this pack for {platformOwner.DisplayName}"));
+        }
+
         items.Add(new TileMenuCommand(
             "Copy to pack...", new AsyncRelayCommand(() => CopyTileAsync(tile, cut: false)), Gesture: "Ctrl+C"));
         if (!isDefault)
@@ -270,8 +290,9 @@ public partial class PackDetailViewModel : PageViewModel, ITileSized
         tile.MenuItems = items;
     }
 
-    /// <summary>The 2.5 picture lines, in their order: the chooser, every map, then Edit. The per-map apply of
-    /// 2.5 is gone: on a map tile Apply to {map} above it already names that map.</summary>
+    /// <summary>The 2.5 picture lines, in their order: the chooser, every map, then the editor. The per-map
+    /// apply of 2.5 is gone: on a map tile Apply to {map} above it already names that map. 3.1 C9: "Edit" says
+    /// which half it edits, and Edit platforms follows it from BuildTileMenu on every map tile.</summary>
     private void AddPictureLines(List<TileMenuCommand> items, PackTileViewModel tile, Pack pack, string path)
     {
         var name = Path.GetFileName(path);
@@ -282,7 +303,7 @@ public partial class PackDetailViewModel : PageViewModel, ITileSized
             "Apply to all maps", new AsyncRelayCommand(() => ApplyToAllMapsAsync(path, name, pack.Name))));
         items.Add(TileMenuCommand.Separator());
         items.Add(new TileMenuCommand(
-            "Edit",
+            "Edit background",
             new AsyncRelayCommand(
                 () => Shell.OpenBackgroundEditorAsync(new BackgroundEditorRequest(path, pack.Name, slot)))));
     }
@@ -617,6 +638,27 @@ public partial class PackDetailViewModel : PageViewModel, ITileSized
         }
     }
 
+    /// <summary>3.1 C8: puts the note away for this pack at the count it says now. A pack that gains or loses a
+    /// transparent file is a different note, so it comes back on its own; a pack that stays as it is keeps it
+    /// away across restarts, which is why the count rather than the name is what is stored.</summary>
+    [RelayCommand]
+    private void DismissTransparent()
+    {
+        if (Pack is not { } pack || _transparentFiles.Count == 0)
+        {
+            return;
+        }
+
+        var notes = new Dictionary<string, int>(
+            Shell.Services.Settings.DismissedTransparent, StringComparer.OrdinalIgnoreCase)
+        {
+            [pack.Name] = _transparentFiles.Count,
+        };
+
+        Shell.Services.UpdateSettings(Shell.Services.Settings with { DismissedTransparentNotes = notes });
+        TransparentText = "";
+    }
+
     /// <summary>Spec 6.5: deletes the flagged PNGs from the pack after a confirm that names how many. A
     /// library-only write, so it takes no undo snapshot; the rescan afterwards is what rebuilds the page.</summary>
     [RelayCommand]
@@ -833,7 +875,9 @@ public partial class PackDetailViewModel : PageViewModel, ITileSized
             var files = await Task.Run(() => PlatformSetApplier.TransparentFiles(pack, ct), ct);
             ct.ThrowIfCancellationRequested();
             _transparentFiles = files;
-            TransparentText = TransparentLine(files.Count);
+            TransparentText = Shell.Services.Settings.IsTransparentNoteDismissed(pack.Name, files.Count)
+                ? ""
+                : TransparentLine(files.Count);
         }
         catch (OperationCanceledException)
         {

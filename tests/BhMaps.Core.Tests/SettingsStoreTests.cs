@@ -1,4 +1,4 @@
-using BhMaps.Core.Settings;
+﻿using BhMaps.Core.Settings;
 using BhMaps.Core.Tests.Helpers;
 
 namespace BhMaps.Core.Tests;
@@ -525,5 +525,38 @@ public class SettingsStoreTests
 
         SettingsStore.Save(path, loaded);
         Assert.DoesNotContain("hiddenPacks", File.ReadAllText(path));
+    }
+
+    [Fact]
+    public void Save_ThenLoad_RoundTripsTheDismissedTransparentNotes()
+    {
+        using var tmp = new TempDir();
+        var path = tmp.Sub("settings.json");
+        var notes = new Dictionary<string, int> { ["dark"] = 3, ["b&w maps"] = 1 };
+        var settings = AppSettings.Default with { DismissedTransparentNotes = notes };
+
+        SettingsStore.Save(path, settings);
+
+        var loaded = SettingsStore.Load(path);
+        Assert.Equal(3, loaded.DismissedTransparent["DARK"]);
+        Assert.True(loaded.IsTransparentNoteDismissed("Dark", 3));
+        Assert.False(loaded.IsTransparentNoteDismissed("dark", 4));
+        Assert.False(loaded.IsTransparentNoteDismissed("flowermap", 1));
+    }
+
+    [Fact]
+    public void Load_WithoutKey_GivesNoDismissedTransparentNotes()
+    {
+        using var tmp = new TempDir();
+        var path = tmp.Sub("settings.json");
+        File.WriteAllText(path, """{"gamePath":"C:\\g"}""");
+
+        var loaded = SettingsStore.Load(path);
+
+        Assert.Empty(loaded.DismissedTransparent);
+        Assert.False(loaded.IsTransparentNoteDismissed("dark", 3));
+
+        SettingsStore.Save(path, loaded);
+        Assert.DoesNotContain("dismissedTransparentNotes", File.ReadAllText(path));
     }
 }

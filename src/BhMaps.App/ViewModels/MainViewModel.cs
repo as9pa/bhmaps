@@ -12,6 +12,7 @@ using BhMaps.Core.Model;
 using BhMaps.Core.Operations;
 using BhMaps.Core.Packs;
 using BhMaps.Core.Scanning;
+using BhMaps.Core.Text;
 using BhMaps.Core.Update;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -27,6 +28,9 @@ public sealed record PartReset(MapEntry Map, bool Platforms, IReadOnlyList<strin
 /// them, and the undo of the last game write.</summary>
 public partial class MainViewModel : ObservableObject
 {
+    /// <summary>The level-set filter before a chip is picked, and the chip label the pages match it against.</summary>
+    public const string AllLevelSet = "All";
+
     private static readonly TimeSpan GamePollInterval = TimeSpan.FromSeconds(3);
 
     /// <summary>Spec 7.3: how long after the first scan the one update check of the run starts.</summary>
@@ -69,6 +73,9 @@ public partial class MainViewModel : ObservableObject
         Dialogs = dialogs;
         Status = new StatusViewModel(Cancel, UndoAsync);
         _launcher = new GameLauncher();
+
+        // Before the pages, because each of the three chip rows reads it as it is built.
+        SelectedLevelSet = AllLevelSet;
         Maps = new MapsViewModel(this);
         Backgrounds = new BackgroundsViewModel(this);
         Platforms = new PlatformsViewModel(this);
@@ -143,6 +150,12 @@ public partial class MainViewModel : ObservableObject
 
     [ObservableProperty]
     public partial PageViewModel? CurrentPage { get; set; }
+
+    /// <summary>3.1: the level-set chip Maps, Backgrounds and Platforms all filter by. One value on the shell
+    /// rather than one per page, so a chip picked on any of the three is the chip the next one shows. Not
+    /// persisted: every run starts on All, as it did before.</summary>
+    [ObservableProperty]
+    public partial string SelectedLevelSet { get; set; }
 
     /// <summary>Addendum B: unfolded rows fold back when the page is left, so coming back to a rows page shows
     /// the same thing it shows on a first visit.</summary>
@@ -660,7 +673,7 @@ public partial class MainViewModel : ObservableObject
 
         if (targets.Count > 1
             && !Dialogs.Confirm(
-                "Apply picture",
+                "Apply background",
                 ConfirmBody(
                     $"Apply {name} to {Count(targets.Count, "map")}?",
                     WritesBackgrounds,
@@ -1077,7 +1090,7 @@ public partial class MainViewModel : ObservableObject
 
         // The line names what the import did, which is only known once the work is over, so it is written over
         // the placeholder the write boundary left rather than handed to it.
-        Status.Done(ImportDone(result, plan, target), touched.Count > 0 && Services.Undo.Latest is not null);
+        Status.Done(Sentences.First(ImportDone(result, plan, target)), touched.Count > 0 && Services.Undo.Latest is not null);
         if (result is not null)
         {
             Dialogs.ShowFailures("Some files could not be imported", result.Failures);
@@ -1695,7 +1708,7 @@ public partial class MainViewModel : ObservableObject
 
         if (ok)
         {
-            Status.Done(doneText, undoable && Services.Undo.Latest is not null);
+            Status.Done(Sentences.First(doneText), undoable && Services.Undo.Latest is not null);
         }
         else if (Status.Kind is StatusKind.Cancelled && undoable && Services.Undo.Latest is not null)
         {
@@ -1893,14 +1906,22 @@ public partial class MainViewModel : ObservableObject
     /// <summary>The line an undo leaves. Spec 11 names no string for it, so this is the plan's (A-D7).</summary>
     public const string UndoDoneText = "Undone.";
 
-    /// <summary>The whole done line: the page's fragment, then the shared sentence, with exactly one period
-    /// between them however the fragment was punctuated. The wrapper settles the period for the same reason it
-    /// settles the sentence: a page cannot get it wrong if a page does not decide it. An empty fragment leaves
-    /// the sentence standing alone rather than a line that opens with a stop.</summary>
+    /// <summary>The whole done line (3.1): the first sentence of the page's fragment, and the shared sentence
+    /// after it only while the game is up. The line lives in the top bar now, where the room is one sentence
+    /// long, and the fragment's first sentence is the one that says what happened; a closed game shows the new
+    /// art the next time it opens whatever the line says, so that case spends its words on nothing. The wrapper
+    /// settles the period between the two for the same reason it settles the sentence: a page cannot get it
+    /// wrong if a page does not decide it. An empty fragment leaves the sentence standing alone rather than a
+    /// line that opens with a stop.</summary>
     private static string DoneLine(string doneText, bool gameRunning)
     {
-        var fragment = doneText.TrimEnd('.');
-        return fragment.Length == 0 ? DoneSentence(gameRunning) : $"{fragment}. {DoneSentence(gameRunning)}";
+        var fragment = Sentences.First(doneText).TrimEnd('.');
+        if (fragment.Length == 0)
+        {
+            return DoneSentence(gameRunning);
+        }
+
+        return gameRunning ? $"{fragment}. {DoneSentence(gameRunning)}" : $"{fragment}.";
     }
 
     /// <summary>What an undo put back. The count is maps rather than files (3.0): the session's game side names

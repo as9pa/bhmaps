@@ -18,7 +18,7 @@ namespace BhMaps.App.ViewModels.Pages;
 /// default, so nothing the chips do can move the slider.</summary>
 public partial class MapsViewModel : PageViewModel, ITileSized
 {
-    private const string AllChip = "All";
+    private const string AllChip = MainViewModel.AllLevelSet;
 
     /// <summary>Every card the last scan produced. Cards is this list under the chip and the search.</summary>
     private readonly List<MapCardViewModel> _all = [];
@@ -37,11 +37,14 @@ public partial class MapsViewModel : PageViewModel, ITileSized
         Cards = [];
         _chips.Add(AllChip);
 
-        // After the collections, because setting them runs the change hooks that filter them.
+        // After the collections, because setting it runs the change hook that filters them.
         SearchText = "";
-        SelectedChip = AllChip;
 
         TileSize = shell.Services.Settings.MapsTileSize;
+
+        // 3.1: the chip is the shell's, so a chip picked on Backgrounds or Platforms arrives as a shell change
+        // rather than as a set of this page's property. Subscribed for the life of the app, like the page is.
+        shell.PropertyChanged += OnShellLevelSetChanged;
     }
 
     public override string Title => "Maps";
@@ -61,8 +64,13 @@ public partial class MapsViewModel : PageViewModel, ITileSized
     /// Owner change 2026-09-13: the "Selected" chip that used to appear with a selection is gone.</summary>
     public IReadOnlyList<string> Chips => _chips;
 
-    [ObservableProperty]
-    public partial string SelectedChip { get; set; }
+    /// <summary>The chip the level-set filter is on. 3.1: one filter for Maps, Backgrounds and Platforms, so
+    /// the value lives on the shell and this is the chip row's way in and out of it.</summary>
+    public string SelectedChip
+    {
+        get => Shell.SelectedLevelSet;
+        set => Shell.SelectedLevelSet = value;
+    }
 
     /// <summary>How big the cards are drawn, persisted as mapsTileSize. It sets the card's target width
     /// through <see cref="TargetCardWidth"/>; how many cards a row holds, and the width they end up at, is the
@@ -406,9 +414,19 @@ public partial class MapsViewModel : PageViewModel, ITileSized
         _ = LoadPreviewsAsync([.. order.Select(folder => byFolder[folder])], snapshot.Catalog.HasLevelData, _previews.Token);
     }
 
-    partial void OnSelectedChipChanged(string value) => ApplyFilter();
-
     partial void OnSearchTextChanged(string value) => ApplyFilter();
+
+    /// <summary>The shared chip changed, here or on another page: the row shows it and the grid answers it.</summary>
+    private void OnShellLevelSetChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(MainViewModel.SelectedLevelSet))
+        {
+            return;
+        }
+
+        OnPropertyChanged(nameof(SelectedChip));
+        ApplyFilter();
+    }
 
     /// <summary>A card click and the re-selection every scan does both land here, so the panel is built in one
     /// place. The panel it replaces is cancelled: its composites are for a state that is gone.</summary>
@@ -586,19 +604,51 @@ public partial class MapsViewModel : PageViewModel, ITileSized
         IReadOnlyList<MapEntry> target = [one];
 
         var packs = new List<TileMenuCommand>();
+        var refused = new List<string>();
         foreach (var pack in snapshot.Packs)
         {
-            var has = PackApplier.ApplyToMapsPaths(pack, target).Count > 0;
+            // 3.1: a pack with nothing for this map is left out of the flyout rather than offered and refused,
+            // so every line in it is a line that would do something. The ones left out are counted in the foot
+            // line below, which names them in its tooltip, so a missing pack is still accounted for.
+            if (PackApplier.ApplyToMapsPaths(pack, target).Count == 0)
+            {
+                refused.Add(pack.Name);
+                continue;
+            }
 
             // 2.8: hiding a pack is for the browsing lists, not for acting, so a hidden pack is still offered
             // here and only says that it is hidden.
-            var hidden = !pack.Name.Equals(DefaultPack.Name, StringComparison.OrdinalIgnoreCase)
-                && Shell.Services.Settings.IsHidden(pack.Name);
+            // 3.1: the Default pack can be hidden like any other, so a hidden one says so here too.
+            var hidden = Shell.Services.Settings.IsHidden(pack.Name);
             packs.Add(new TileMenuCommand(
                 hidden ? $"{pack.Name} \u00b7 hidden" : pack.Name,
-                new AsyncRelayCommand(() => ApplyPackToAsync(target, pack)),
-                IsEnabled: has,
-                ToolTip: has ? null : $"Nothing for {one.DisplayName} in this pack"));
+                new AsyncRelayCommand(() => ApplyPackToAsync(target, pack))));
+        }
+
+        if (refused.Count > 0 && packs.Count == 0)
+        {
+            // Every pack refused: the flyout is the one line saying so, rather than a separator over nothing.
+            packs.Add(new TileMenuCommand(
+                $"No pack has anything for {one.DisplayName}",
+                null,
+                IsEnabled: false,
+                ToolTip: string.Join(", ", refused)));
+        }
+        else if (refused.Count > 0)
+        {
+            packs.Add(TileMenuCommand.Separator());
+            packs.Add(new TileMenuCommand(
+                refused.Count == 1
+                    ? $"1 pack has nothing for {one.DisplayName}"
+                    : $"{refused.Count} packs have nothing for {one.DisplayName}",
+                null,
+                IsEnabled: false,
+                ToolTip: string.Join(", ", refused)));
+        }
+        else if (packs.Count == 0)
+        {
+            // No packs at all: an empty flyout draws as a dead line with an arrow, so it says why it is empty.
+            packs.Add(new TileMenuCommand("No packs yet", null, IsEnabled: false));
         }
 
         // Spec 9.2, owner answer q3: eight My Backgrounds pictures inline, then the chooser, then Add.
@@ -628,7 +678,7 @@ public partial class MapsViewModel : PageViewModel, ITileSized
         [
             TileMenuCommand.Header(one.DisplayName, MapArtText.Describe(one, status, snapshot)),
             TileMenuCommand.Flyout("Apply pack", packs),
-            TileMenuCommand.Flyout("Apply picture", pictures),
+            TileMenuCommand.Flyout("Apply background", pictures),
             TileMenuCommand.Separator(),
             new TileMenuCommand(
                 "Edit background",
