@@ -11,6 +11,18 @@ nothing else in the game install is touched.
 
 ## What is new in 3.1
 
+The status line is in the top bar. Everything the app is doing or has just done reads on one line
+between the tabs and the Refresh button, with its coloured dot, its links and nothing else: no card
+round it, no row of its own at the foot of the page, and nothing on the page that moves when the line
+comes or goes. A long line is trimmed to the room there is, and hovering it says the whole of it. A
+running line stays while the work does and a failure stays until its × puts it away; a note, a done,
+an undone and a cancelled line have six seconds and then fade, and that clock stops while the pointer
+is on the line or the keyboard is in it. When a faded line left something to undo, its dot stays lit
+where it was: hovering the dot says what the line was and clicking it brings the line back with its
+Undo. Ctrl+Z and Escape do the same thing whether the line is showing or not. The lines are shorter
+with it: one sentence each, and a write says where it will show only while the game is running,
+because a closed game shows it at the next start either way.
+
 A pack's own page reads better and asks less of you. The menu on a picture tile says **Edit background**
 rather than "Edit", and a map's tile offers **Edit platforms** beside it, so both halves of a map are one
 click from the grid. The band behind the pack's name is as tall as the words in it rather than a fixed
@@ -344,7 +356,9 @@ instead.
 
 The top bar carries the app's name, then the five tabs: Maps, Backgrounds, Platforms, Packs and
 Settings. Ctrl+1 to Ctrl+5 switch between them, and Ctrl+K goes to Maps and puts the cursor in its
-search box. On the right is the game line, reading "Brawlhalla running", or "Brawlhalla not running"
+search box. After the tabs is the status line: what the app is doing or has just done, on one line
+with its dot and its links, trimmed to the room between the tabs and the buttons at the right and
+said in full by hovering it. On the right is the game line, reading "Brawlhalla running", or "Brawlhalla not running"
 beside a Launch button that asks Steam to start the game. Before the game line is **Refresh**, a
 square button showing only its arrows, which applies again every game file whose source changed since
 the app put it there, restores a file missing from a map folder, and rewrites the map-select
@@ -592,7 +606,7 @@ repeats it with the number of maps in it.
 | Rescan | "Rescan", F5 | The top bar. Re-reads the game folder and the library without writing anything |
 | Import | "Import folder", "Import from pack" | The Packs page and a pack's own page |
 | New | "New pack", "Add image" | The Packs page and a pack's own page |
-| Undo | "Undo", Ctrl+Z | The line a write leaves in the page header |
+| Undo | "Undo", Ctrl+Z | The line a write leaves in the top bar, and the dot it leaves behind |
 
 Reset and Capture are the two that talk about the Default pack: Capture makes it out of the game's
 own art, and Reset puts that art back.
@@ -607,7 +621,7 @@ own art, and Reset puts that art back.
   `leveldata.json` next to the size and timestamp of all four files, so an unchanged game starts from
   the cache and a game update re-reads in the background: after the first scan of a run, and again
   whenever Brawlhalla starts or stops, because that is when an update has just landed. The strip says
-  "Game data read from Brawlhalla 10.10." when it did. The version is the one the app finds written in
+  "Game data read." when it did, and Settings says which version that was. The version is the one the app finds written in
   `BrawlhallaAir.swf`; neither the `.swz` files nor the game's exe carry it. When the files are not
   there, the key is not found, or an entry fails its checksum, the app falls back to folder names for map names, hides
   the set chips, and shows a single-file thumbnail in place of each composed preview. Settings says
