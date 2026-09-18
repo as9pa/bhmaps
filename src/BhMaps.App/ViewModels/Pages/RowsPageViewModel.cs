@@ -16,7 +16,7 @@ namespace BhMaps.App.ViewModels.Pages;
 /// row it belongs to.</summary>
 public abstract partial class RowsPageViewModel : PageViewModel, ITileSized
 {
-    protected const string AllChip = "All";
+    protected const string AllChip = MainViewModel.AllLevelSet;
 
     /// <summary>Every row the last scan produced. Rows is this list under the chip and the search.</summary>
     private readonly List<MapRowViewModel> _all = [];
@@ -34,12 +34,15 @@ public abstract partial class RowsPageViewModel : PageViewModel, ITileSized
         Rows = [];
         _chips.Add(AllChip);
 
-        // After the collections, because setting them runs the change hooks that filter them.
+        // After the collections, because setting it runs the change hook that filters them.
         SearchText = "";
-        SelectedChip = AllChip;
 
         // Handed in rather than read here, so the constructor reaches for nothing the subclass owns.
         TileSize = storedSize;
+
+        // 3.1: the chip is the shell's, so a chip picked on another of the three pages arrives as a shell change
+        // rather than as a set of this page's property. Subscribed for the life of the app, like the page is.
+        shell.PropertyChanged += OnShellLevelSetChanged;
     }
 
     /// <summary>The last scan, or null before the first one.</summary>
@@ -58,8 +61,13 @@ public abstract partial class RowsPageViewModel : PageViewModel, ITileSized
     [ObservableProperty]
     public partial string SearchText { get; set; }
 
-    [ObservableProperty]
-    public partial string SelectedChip { get; set; }
+    /// <summary>The chip the level-set filter is on. 3.1: one filter for Maps, Backgrounds and Platforms, so
+    /// the value lives on the shell and this is the chip row's way in and out of it.</summary>
+    public string SelectedChip
+    {
+        get => Shell.SelectedLevelSet;
+        set => Shell.SelectedLevelSet = value;
+    }
 
     /// <summary>How big the row's thumbnails are drawn, persisted by the page (wireframe 8.2). A rows page
     /// picks a tile width like a grid page does, and the row height follows it, so one size means the same
@@ -193,8 +201,6 @@ public abstract partial class RowsPageViewModel : PageViewModel, ITileSized
         ApplyFilter();
     }
 
-    partial void OnSelectedChipChanged(string value) => ApplyFilter();
-
     partial void OnTileSizeChanged(TileSize value)
     {
         SaveSize(value);
@@ -203,6 +209,18 @@ public abstract partial class RowsPageViewModel : PageViewModel, ITileSized
         OnPropertyChanged(nameof(ThumbWidth));
         OnPropertyChanged(nameof(ThumbHeight));
         OnPropertyChanged(nameof(ShowTileApply));
+    }
+
+    /// <summary>The shared chip changed, here or on another page: the row shows it and the rows answer it.</summary>
+    private void OnShellLevelSetChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(MainViewModel.SelectedLevelSet))
+        {
+            return;
+        }
+
+        OnPropertyChanged(nameof(SelectedChip));
+        ApplyFilter();
     }
 
     private void RebuildMenus()

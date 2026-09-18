@@ -36,6 +36,10 @@ stays away until the pack holds a different number of them. A map card's **Apply
 **Apply background**, and its **Apply pack** flyout lists only the packs that have something for that map,
 with a greyed last line counting the ones left out and naming them when you rest on it.
 
+The chip row is one filter now: All, Ranked 1v1, Ranked 2v2, Tournament and Minigames are shared by
+Maps, Backgrounds and Platforms, so a chip picked on one of them is the chip the other two show. Each
+page still has its own search box, and every run starts on All.
+
 ## What is new in 3.0
 
 3.0 is a redraw. The pages, the words and the dialogs were reworked from one design pass over the
@@ -381,7 +385,8 @@ stops a long operation.
   Tournament when the game's data has the ranked sets, and the standard ones when it does not; the
   other sets the game defines are read but not shown. Minigames comes last and holds the ten maps
   only a game mode uses, such as Brawlball and Horde, and All leaves those ten out; a search still
-  finds them whatever chip is on. The card size is the size control (Large,
+  finds them whatever chip is on. The chip is shared with Backgrounds and Platforms: pick one here and
+  those two pages show the same set. The card size is the size control (Large,
   Medium, Small) in the page header, or Ctrl and plus, minus, zero, or the wheel; the grid holds as
   many columns as fit, so opening the panel moves cards down a row instead of shrinking them. Each card is a composed preview, the map's
   name, and a tag only when there is something to say: the pack the map matches, the name of the
@@ -435,7 +440,8 @@ stops a long operation.
   in folder, and for a picture in a pack **Rename**, which renames its file in the library and leaves
   the maps it is on showing it, and **Delete background**, which also puts the default back on
   any map showing it, or Save to My Backgrounds for a picture the game is showing that no pack
-  holds. Search matches map names, pack names and file names. The chips are the ones Maps has.
+  holds. Search matches map names, pack names and file names. The chips are the ones Maps has, and
+  they are the one filter: the chip picked here is the chip Maps and Platforms show.
   The thumbnail size is the size control (Large, Medium, Small) in the page header, or Ctrl and
   plus, minus, zero, or the wheel. Add Image is in the header. Up and Down move between rows, Left and Right along a strip, and Enter applies
   the thumbnail the keyboard is on.

@@ -18,7 +18,7 @@ namespace BhMaps.App.ViewModels.Pages;
 /// default, so nothing the chips do can move the slider.</summary>
 public partial class MapsViewModel : PageViewModel, ITileSized
 {
-    private const string AllChip = "All";
+    private const string AllChip = MainViewModel.AllLevelSet;
 
     /// <summary>Every card the last scan produced. Cards is this list under the chip and the search.</summary>
     private readonly List<MapCardViewModel> _all = [];
@@ -37,11 +37,14 @@ public partial class MapsViewModel : PageViewModel, ITileSized
         Cards = [];
         _chips.Add(AllChip);
 
-        // After the collections, because setting them runs the change hooks that filter them.
+        // After the collections, because setting it runs the change hook that filters them.
         SearchText = "";
-        SelectedChip = AllChip;
 
         TileSize = shell.Services.Settings.MapsTileSize;
+
+        // 3.1: the chip is the shell's, so a chip picked on Backgrounds or Platforms arrives as a shell change
+        // rather than as a set of this page's property. Subscribed for the life of the app, like the page is.
+        shell.PropertyChanged += OnShellLevelSetChanged;
     }
 
     public override string Title => "Maps";
@@ -61,8 +64,13 @@ public partial class MapsViewModel : PageViewModel, ITileSized
     /// Owner change 2026-09-13: the "Selected" chip that used to appear with a selection is gone.</summary>
     public IReadOnlyList<string> Chips => _chips;
 
-    [ObservableProperty]
-    public partial string SelectedChip { get; set; }
+    /// <summary>The chip the level-set filter is on. 3.1: one filter for Maps, Backgrounds and Platforms, so
+    /// the value lives on the shell and this is the chip row's way in and out of it.</summary>
+    public string SelectedChip
+    {
+        get => Shell.SelectedLevelSet;
+        set => Shell.SelectedLevelSet = value;
+    }
 
     /// <summary>How big the cards are drawn, persisted as mapsTileSize. It sets the card's target width
     /// through <see cref="TargetCardWidth"/>; how many cards a row holds, and the width they end up at, is the
@@ -406,9 +414,19 @@ public partial class MapsViewModel : PageViewModel, ITileSized
         _ = LoadPreviewsAsync([.. order.Select(folder => byFolder[folder])], snapshot.Catalog.HasLevelData, _previews.Token);
     }
 
-    partial void OnSelectedChipChanged(string value) => ApplyFilter();
-
     partial void OnSearchTextChanged(string value) => ApplyFilter();
+
+    /// <summary>The shared chip changed, here or on another page: the row shows it and the grid answers it.</summary>
+    private void OnShellLevelSetChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(MainViewModel.SelectedLevelSet))
+        {
+            return;
+        }
+
+        OnPropertyChanged(nameof(SelectedChip));
+        ApplyFilter();
+    }
 
     /// <summary>A card click and the re-selection every scan does both land here, so the panel is built in one
     /// place. The panel it replaces is cancelled: its composites are for a state that is gone.</summary>
@@ -600,8 +618,8 @@ public partial class MapsViewModel : PageViewModel, ITileSized
 
             // 2.8: hiding a pack is for the browsing lists, not for acting, so a hidden pack is still offered
             // here and only says that it is hidden.
-            var hidden = !pack.Name.Equals(DefaultPack.Name, StringComparison.OrdinalIgnoreCase)
-                && Shell.Services.Settings.IsHidden(pack.Name);
+            // 3.1: the Default pack can be hidden like any other, so a hidden one says so here too.
+            var hidden = Shell.Services.Settings.IsHidden(pack.Name);
             packs.Add(new TileMenuCommand(
                 hidden ? $"{pack.Name} \u00b7 hidden" : pack.Name,
                 new AsyncRelayCommand(() => ApplyPackToAsync(target, pack))));

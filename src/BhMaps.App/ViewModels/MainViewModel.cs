@@ -28,6 +28,9 @@ public sealed record PartReset(MapEntry Map, bool Platforms, IReadOnlyList<strin
 /// them, and the undo of the last game write.</summary>
 public partial class MainViewModel : ObservableObject
 {
+    /// <summary>The level-set filter before a chip is picked, and the chip label the pages match it against.</summary>
+    public const string AllLevelSet = "All";
+
     private static readonly TimeSpan GamePollInterval = TimeSpan.FromSeconds(3);
 
     /// <summary>Spec 7.3: how long after the first scan the one update check of the run starts.</summary>
@@ -70,6 +73,9 @@ public partial class MainViewModel : ObservableObject
         Dialogs = dialogs;
         Status = new StatusViewModel(Cancel, UndoAsync);
         _launcher = new GameLauncher();
+
+        // Before the pages, because each of the three chip rows reads it as it is built.
+        SelectedLevelSet = AllLevelSet;
         Maps = new MapsViewModel(this);
         Backgrounds = new BackgroundsViewModel(this);
         Platforms = new PlatformsViewModel(this);
@@ -144,6 +150,12 @@ public partial class MainViewModel : ObservableObject
 
     [ObservableProperty]
     public partial PageViewModel? CurrentPage { get; set; }
+
+    /// <summary>3.1: the level-set chip Maps, Backgrounds and Platforms all filter by. One value on the shell
+    /// rather than one per page, so a chip picked on any of the three is the chip the next one shows. Not
+    /// persisted: every run starts on All, as it did before.</summary>
+    [ObservableProperty]
+    public partial string SelectedLevelSet { get; set; }
 
     /// <summary>Addendum B: unfolded rows fold back when the page is left, so coming back to a rows page shows
     /// the same thing it shows on a first visit.</summary>
@@ -661,7 +673,7 @@ public partial class MainViewModel : ObservableObject
 
         if (targets.Count > 1
             && !Dialogs.Confirm(
-                "Apply picture",
+                "Apply background",
                 ConfirmBody(
                     $"Apply {name} to {Count(targets.Count, "map")}?",
                     WritesBackgrounds,
