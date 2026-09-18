@@ -32,9 +32,10 @@ and go on working either way. The band behind the pack's name is as tall as the 
 height, and the pack's art behind them is dimmed so the name and the line under it stay readable on any
 pack. The note about files that change nothing in game can now be dismissed with the X next to Remove: it
 stays away until the pack holds a different number of them.
-stays away until the pack holds a different number of them. A map card's **Apply picture** flyout is now
+
+A map card's **Apply picture** flyout is now
 **Apply background**, and its **Apply pack** flyout lists only the packs that have something for that map,
-with a greyed last line counting the ones left out and naming them when you rest on it.
+with a greyed last line counting the ones left out and naming them when you rest on it. The picture chooser that **More pictures...** and **Apply to a map...** open is a grid now: 760 by 560, resizable, with each picture at 224 by 126 and its name under it, instead of a list with a thumbnail the size of a fingernail.
 
 The chip row is one filter now: All, Ranked 1v1, Ranked 2v2, Tournament and Minigames are shared by
 Maps, Backgrounds and Platforms, so a chip picked on one of them is the chip the other two show. Each
