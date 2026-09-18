@@ -586,9 +586,17 @@ public partial class MapsViewModel : PageViewModel, ITileSized
         IReadOnlyList<MapEntry> target = [one];
 
         var packs = new List<TileMenuCommand>();
+        var refused = new List<string>();
         foreach (var pack in snapshot.Packs)
         {
-            var has = PackApplier.ApplyToMapsPaths(pack, target).Count > 0;
+            // 3.1: a pack with nothing for this map is left out of the flyout rather than offered and refused,
+            // so every line in it is a line that would do something. The ones left out are counted in the foot
+            // line below, which names them in its tooltip, so a missing pack is still accounted for.
+            if (PackApplier.ApplyToMapsPaths(pack, target).Count == 0)
+            {
+                refused.Add(pack.Name);
+                continue;
+            }
 
             // 2.8: hiding a pack is for the browsing lists, not for acting, so a hidden pack is still offered
             // here and only says that it is hidden.
@@ -596,9 +604,33 @@ public partial class MapsViewModel : PageViewModel, ITileSized
                 && Shell.Services.Settings.IsHidden(pack.Name);
             packs.Add(new TileMenuCommand(
                 hidden ? $"{pack.Name} \u00b7 hidden" : pack.Name,
-                new AsyncRelayCommand(() => ApplyPackToAsync(target, pack)),
-                IsEnabled: has,
-                ToolTip: has ? null : $"Nothing for {one.DisplayName} in this pack"));
+                new AsyncRelayCommand(() => ApplyPackToAsync(target, pack))));
+        }
+
+        if (refused.Count > 0 && packs.Count == 0)
+        {
+            // Every pack refused: the flyout is the one line saying so, rather than a separator over nothing.
+            packs.Add(new TileMenuCommand(
+                $"No pack has anything for {one.DisplayName}",
+                null,
+                IsEnabled: false,
+                ToolTip: string.Join(", ", refused)));
+        }
+        else if (refused.Count > 0)
+        {
+            packs.Add(TileMenuCommand.Separator());
+            packs.Add(new TileMenuCommand(
+                refused.Count == 1
+                    ? $"1 pack has nothing for {one.DisplayName}"
+                    : $"{refused.Count} packs have nothing for {one.DisplayName}",
+                null,
+                IsEnabled: false,
+                ToolTip: string.Join(", ", refused)));
+        }
+        else if (packs.Count == 0)
+        {
+            // No packs at all: an empty flyout draws as a dead line with an arrow, so it says why it is empty.
+            packs.Add(new TileMenuCommand("No packs yet", null, IsEnabled: false));
         }
 
         // Spec 9.2, owner answer q3: eight My Backgrounds pictures inline, then the chooser, then Add.
@@ -628,7 +660,7 @@ public partial class MapsViewModel : PageViewModel, ITileSized
         [
             TileMenuCommand.Header(one.DisplayName, MapArtText.Describe(one, status, snapshot)),
             TileMenuCommand.Flyout("Apply pack", packs),
-            TileMenuCommand.Flyout("Apply picture", pictures),
+            TileMenuCommand.Flyout("Apply background", pictures),
             TileMenuCommand.Separator(),
             new TileMenuCommand(
                 "Edit background",

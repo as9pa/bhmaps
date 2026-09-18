@@ -9,6 +9,17 @@ and `.jpg` files inside the `mapArt` folder and inside its own library, plus its
 folder, and it keeps a copy of every original so it can put it back. The game's data files are read and never written, and
 nothing else in the game install is touched.
 
+## What is new in 3.1
+
+A pack's own page reads better and asks less of you. The menu on a picture tile says **Edit background**
+rather than "Edit", and a map's tile offers **Edit platforms** beside it, so both halves of a map are one
+click from the grid. The band behind the pack's name is as tall as the words in it rather than a fixed
+height, and the pack's art behind them is dimmed so the name and the line under it stay readable on any
+pack. The note about files that change nothing in game can now be dismissed with the X next to Remove: it
+stays away until the pack holds a different number of them. A map card's **Apply picture** flyout is now
+**Apply background**, and its **Apply pack** flyout lists only the packs that have something for that map,
+with a greyed last line counting the ones left out and naming them when you rest on it.
+
 ## What is new in 3.0
 
 3.0 is a redraw. The pages, the words and the dialogs were reworked from one design pass over the
@@ -367,9 +378,10 @@ stops a long operation.
   all maps** or the chooser, asks first and names the count. Escape closes the panel when one is
   open, and clears the search when none is.
 - A right-click on a card opens its menu for that card. The menu opens with the
-  map's name and, under it, what the map shows. **Apply pack** unfolds the packs, with a pack greyed
-  out when it has nothing for that map and a hidden pack marked "hidden";
-  **Apply picture** unfolds your pictures, up to eight, then "More pictures..."
+  map's name and, under it, what the map shows. **Apply pack** unfolds the packs that have something
+  for that map, with a hidden pack marked "hidden", and ends in a greyed line counting the packs left
+  out, "2 packs have nothing for Grove", which names them when you rest on it;
+  **Apply background** unfolds your pictures, up to eight, then "More pictures..."
   for the chooser and "Add Custom Image..."; then **Edit background**, **Edit platforms** (one map
   only), **Reset** and **Show in game folder**. One map applies without asking; a write to
   more than one map asks and names the count.
