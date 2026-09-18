@@ -690,7 +690,10 @@
               <ColumnDefinition Width="*" />
               <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <TextBlock Text="{Binding Text}" />
+            <!-- The words take the line's own Foreground rather than inheriting it down the MenuItem template,
+                 so the style's triggers below, disabled and destructive, are what colours them. -->
+            <TextBlock Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=MenuItem}}"
+                       Text="{Binding Text}" />
             <TextBlock Grid.Column="1" Margin="24,0,0,0" Foreground="{StaticResource Text3Brush}"
                        Text="{Binding Gesture}" />
           </Grid>
@@ -705,8 +708,10 @@
     <Setter Property="ItemsSource" Value="{Binding Children}" />
     <Setter Property="ItemContainerStyle" Value="{DynamicResource TileMenuItem}" />
 
-    <!-- Spec 4.3: a pack that holds nothing for the target is offered and refused rather than hidden, so the
-         menu's shape does not change with the target. WPF hides a tooltip on a disabled item without the third. -->
+    <!-- 3.1: a pack that holds nothing for the target is left out of the Apply pack flyout and counted in a
+         disabled foot line at its end, which names the packs left out in its tooltip. So a disabled line is a
+         line that says something rather than one waiting to be clicked, and it reads as one (trigger below).
+         WPF hides a tooltip on a disabled item without the third setter. -->
     <Setter Property="IsEnabled" Value="{Binding IsEnabled}" />
     <Setter Property="ToolTip" Value="{Binding ToolTip}" />
     <Setter Property="ToolTipService.ShowOnDisabled" Value="True" />
@@ -756,6 +761,13 @@
           </Setter.Value>
         </Setter>
       </DataTrigger>
+
+      <!-- 3.1: a line that cannot be run must not read like one that can. Last of the triggers, so a disabled
+           destructive line reads disabled rather than in the missing colour. The header and the separator have
+           templates of their own, so their own colours are untouched by this. -->
+      <Trigger Property="IsEnabled" Value="False">
+        <Setter Property="Foreground" Value="{StaticResource Text3Brush}" />
+      </Trigger>
     </Style.Triggers>
   </Style>
 
