@@ -105,7 +105,8 @@ public static class SettingsStore
             Bool(obj, "checkForUpdates", fallback: true),
             Time(obj, "lastUpdateCheck"),
             Str(obj, "dismissedUpdate") is { Length: > 0 } tag ? tag : null,
-            Hidden(obj))
+            Hidden(obj),
+            Dismissed(obj))
         {
             Unknown = unknown.Count == 0 ? null : unknown,
         };
@@ -153,6 +154,18 @@ public static class SettingsStore
             }
 
             obj["hiddenPacks"] = hidden;
+        }
+
+        // 3.1: a library with no dismissed note writes no key at all, the same way the hidden packs do.
+        if (settings.DismissedTransparent.Count > 0)
+        {
+            var dismissed = new JsonObject();
+            foreach (var (pack, count) in settings.DismissedTransparent)
+            {
+                dismissed[pack] = count;
+            }
+
+            obj["dismissedTransparentNotes"] = dismissed;
         }
 
         if (settings.Unknown is { } extra)
@@ -319,6 +332,25 @@ public static class SettingsStore
     /// <summary>2.8's hidden packs, as [ "&lt;pack&gt;", ... ]. An entry that is not a string, and a name that is
     /// empty, is skipped rather than failing the whole file: a hand-edited list costs its own line and nothing
     /// else.</summary>
+    private static IReadOnlyDictionary<string, int>? Dismissed(JsonObject obj)
+    {
+        if (obj["dismissedTransparentNotes"] is not JsonObject notes)
+        {
+            return null;
+        }
+
+        var read = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (key, value) in notes)
+        {
+            if (value is JsonValue number && number.TryGetValue<int>(out var count) && count > 0)
+            {
+                read[key] = count;
+            }
+        }
+
+        return read;
+    }
+
     private static IReadOnlyList<string>? Hidden(JsonObject obj)
     {
         if (obj["hiddenPacks"] is not JsonArray names)

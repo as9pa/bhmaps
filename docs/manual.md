@@ -9,6 +9,15 @@ and `.jpg` files inside the `mapArt` folder and inside its own library, plus its
 folder, and it keeps a copy of every original so it can put it back. The game's data files are read and never written, and
 nothing else in the game install is touched.
 
+## What is new in 3.1
+
+A pack's own page reads better and asks less of you. The menu on a picture tile says **Edit background**
+rather than "Edit", and a map's tile offers **Edit platforms** beside it, so both halves of a map are one
+click from the grid. The band behind the pack's name is as tall as the words in it rather than a fixed
+height, and the pack's art behind them is dimmed so the name and the line under it stay readable on any
+pack. The note about files that change nothing in game can now be dismissed with the X next to Remove: it
+stays away until the pack holds a different number of them.
+
 ## What is new in 3.0
 
 3.0 is a redraw. The pages, the words and the dialogs were reworked from one design pass over the
@@ -445,8 +454,10 @@ stops a long operation.
   Hovering a tile shows a dots button, and the dots or a right-click opens the
   menu. A map's tile is headed with the map's name and holds **Apply to <map>**, **Copy to pack...**
   (Ctrl+C), **Move to pack...** (Ctrl+X), **Show in folder** and **Delete from <pack>**; a picture's
-  tile is headed with its file name and keeps 2.5's lines, with Copy and Move added after **Edit**
-  and **Delete background** last. A delete puts the default back on whatever the game was showing
+  tile is headed with its file name and keeps 2.5's lines, with Copy and Move added after **Edit
+  background** and **Edit platforms**, and **Delete background** last. **Edit platforms** is on a map's
+  tile and opens the platform editor on that map with this pack's own pieces; it is greyed out, saying
+  so, when the pack holds no platform files for that map. A delete puts the default back on whatever the game was showing
   from it, and Undo brings back the files and the game folder together.
   Ctrl+V pastes whatever was copied or cut into the pack you are looking at. **Import from pack** in
   the header opens the import dialog. The Backgrounds page's picture menus gain the same **Apply to a

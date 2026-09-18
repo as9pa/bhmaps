@@ -23,13 +23,19 @@
     <!-- 3.0: the backdrop band. The pack's first card, blown up behind the header and faded into the page, so the
          page opens with the pack's own art rather than a title on empty background. The header and the subtitle
          sit over it; a pack with no cards draws the gradient alone. -->
-    <Grid DockPanel.Dock="Top" Height="140">
+    <Grid DockPanel.Dock="Top">
       <Border CornerRadius="{StaticResource Radius}" RenderOptions.BitmapScalingMode="HighQuality">
         <Border.Background>
           <ImageBrush ImageSource="{Binding BackdropTile.Preview}" Opacity="0.35" Stretch="UniformToFill" />
         </Border.Background>
-        <Border CornerRadius="{StaticResource Radius}">
-          <Border.Background>
+
+        <!-- 3.1 C11: a flat wash of the page's own colour over the picture, under the gradient, so the title and
+             the subtitle read against it whatever the pack's first card happens to be. -->
+        <Border Background="{StaticResource BgBrush}" CornerRadius="{StaticResource Radius}" Opacity="0.55" />
+      </Border>
+
+      <Border CornerRadius="{StaticResource Radius}">
+        <Border.Background>
             <!-- The page's own colour drawn back over the picture, thickening downwards, so the band ends in the
                  page instead of on an edge. The top stop is alpha rather than a colour, which is why it is a
                  literal and adds no palette entry; the bottom one is BgBrush's, read off the token. -->
@@ -37,11 +43,10 @@
               <GradientStop Offset="0" Color="Transparent" />
               <GradientStop Offset="1" Color="{Binding Source={StaticResource BgBrush}, Path=Color}" />
             </LinearGradientBrush>
-          </Border.Background>
-        </Border>
+        </Border.Background>
       </Border>
 
-      <StackPanel VerticalAlignment="Top">
+      <StackPanel Margin="0,12,0,16" VerticalAlignment="Top">
         <controls:PageHeader Title="{Binding Title}">
       <controls:PageHeader.Leading>
         <Button AutomationProperties.Name="Back" Command="{Binding BackToPacksCommand}"
@@ -74,9 +79,9 @@
         </controls:PageHeader>
 
         <!-- Indented to the title, which the back chevron pushes across by its own padded width. -->
-        <TextBlock Margin="46,0,0,0"
+        <TextBlock Margin="46,6,0,0"
                    FontSize="{StaticResource FontBody}"
-                   Foreground="{StaticResource Text2Brush}"
+                   Foreground="{StaticResource TextBrush}"
                    Text="{Binding Subtitle}"
                    TextTrimming="CharacterEllipsis" />
       </StackPanel>
@@ -107,8 +112,17 @@
                     Visibility="{Binding HasTransparent, Converter={StaticResource BoolToVis}}">
               <Grid>
                 <TextBlock VerticalAlignment="Center" Text="{Binding TransparentText}" />
-                <Button HorizontalAlignment="Right" Command="{Binding RemoveTransparentCommand}" Content="Remove"
-                        controls:Icon.Glyph="{StaticResource Icon.Trash}" Style="{StaticResource OutlineButton}" />
+
+                <!-- 3.1 C8: Remove, then the way to put the note away without touching the files. It comes back
+                     on its own once the pack holds a different number of them. -->
+                <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
+                  <Button Command="{Binding RemoveTransparentCommand}" Content="Remove"
+                          controls:Icon.Glyph="{StaticResource Icon.Trash}" Style="{StaticResource OutlineButton}" />
+                  <Button Margin="4,0,0,0" AutomationProperties.Name="Dismiss the note"
+                          Command="{Binding DismissTransparentCommand}"
+                          controls:Icon.Glyph="{StaticResource Icon.X}" Style="{StaticResource PlainButton}"
+                          ToolTip="Dismiss" />
+                </StackPanel>
               </Grid>
             </Border>
 

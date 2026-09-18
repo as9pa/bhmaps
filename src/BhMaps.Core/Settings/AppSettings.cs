@@ -24,7 +24,13 @@ public sealed record AppSettings(
     /// <summary>2.8: the packs kept out of the Backgrounds and Platforms lists. Pack names, and a view preference
     /// of this machine: nothing is written into the pack, so the same library on another machine shows every
     /// pack. Read through <see cref="HiddenPacks"/>, which is never null.</summary>
-    IReadOnlyList<string>? HiddenPackNames = null)
+    IReadOnlyList<string>? HiddenPackNames = null,
+
+    /// <summary>3.1: the packs whose "N files change nothing in game" note was dismissed, and the count it was
+    /// dismissed at. A different count is a different note, so the line comes back on its own the way
+    /// <see cref="DismissedUpdate" /> does. Read through <see cref="DismissedTransparent" />, which is never
+    /// null.</summary>
+    IReadOnlyDictionary<string, int>? DismissedTransparentNotes = null)
 {
     public const string DefaultGamePath = @"C:\Program Files (x86)\Steam\steamapps\common\Brawlhalla\mapArt";
 
@@ -54,6 +60,18 @@ public sealed record AppSettings(
     /// them, so a pack hidden as "Dark" is still hidden after the folder is renamed to "dark".</summary>
     public bool IsHidden(string packName) =>
         HiddenPacks.Contains(packName, StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>3.1: the dismissed transparent-file notes, never null, so a settings file that never carried the
+    /// key reads the same as one that carried an empty object.</summary>
+    public IReadOnlyDictionary<string, int> DismissedTransparent => DismissedTransparentNotes ?? EmptyDismissed;
+
+    private static readonly IReadOnlyDictionary<string, int> EmptyDismissed =
+        new Dictionary<string, int>();
+
+    /// <summary>Whether this pack's note was dismissed at exactly this count. A note dismissed at three files is
+    /// back as soon as the pack holds four, which is what makes this safe to keep forever.</summary>
+    public bool IsTransparentNoteDismissed(string packName, int count) =>
+        DismissedTransparent.TryGetValue(packName, out var dismissed) && dismissed == count;
 
     /// <summary>Properties from settings.json this version does not know. Written back untouched.</summary>
     public System.Text.Json.Nodes.JsonObject? Unknown { get; init; }
