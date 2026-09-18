@@ -236,6 +236,26 @@ public partial class PackDetailViewModel : PageViewModel, ITileSized
             AddPictureLines(items, tile, pack, path);
         }
 
+        // 3.1: the platform editor belongs to the map, not to a picture, so every map tile offers it, whether or
+        // not this pack holds a background for the map. The editor opens on this pack's own pieces, so the line
+        // is dead on a pack that holds none for the map and says why rather than opening an empty editor.
+        if (tile.Map is { } platformOwner)
+        {
+            if (tile.PicturePath is null)
+            {
+                items.Add(TileMenuCommand.Separator());
+            }
+
+            var hasPlatforms = PackCopier.PlatformFiles(pack, platformOwner).Count > 0;
+            items.Add(new TileMenuCommand(
+                "Edit platforms",
+                new AsyncRelayCommand(() => Shell.OpenPlatformEditorAsync([platformOwner], pack)),
+                IsEnabled: hasPlatforms,
+                ToolTip: hasPlatforms
+                    ? null
+                    : $"No platform files in this pack for {platformOwner.DisplayName}"));
+        }
+
         items.Add(new TileMenuCommand(
             "Copy to pack...", new AsyncRelayCommand(() => CopyTileAsync(tile, cut: false)), Gesture: "Ctrl+C"));
         if (!isDefault)
@@ -270,9 +290,9 @@ public partial class PackDetailViewModel : PageViewModel, ITileSized
         tile.MenuItems = items;
     }
 
-    /// <summary>The 2.5 picture lines, in their order: the chooser, every map, then the two editors. The per-map
+    /// <summary>The 2.5 picture lines, in their order: the chooser, every map, then the editor. The per-map
     /// apply of 2.5 is gone: on a map tile Apply to {map} above it already names that map. 3.1 C9: "Edit" says
-    /// which half it edits, and a map tile can reach the platform editor from here too.</summary>
+    /// which half it edits, and Edit platforms follows it from BuildTileMenu on every map tile.</summary>
     private void AddPictureLines(List<TileMenuCommand> items, PackTileViewModel tile, Pack pack, string path)
     {
         var name = Path.GetFileName(path);
@@ -286,17 +306,6 @@ public partial class PackDetailViewModel : PageViewModel, ITileSized
             "Edit background",
             new AsyncRelayCommand(
                 () => Shell.OpenBackgroundEditorAsync(new BackgroundEditorRequest(path, pack.Name, slot)))));
-        if (tile.Map is { } map)
-        {
-            // The editor opens on this pack's own pieces, so the line is dead on a pack that holds none for the
-            // map and says why rather than opening an editor with nothing in it.
-            var has = PackCopier.PlatformFiles(pack, map).Count > 0;
-            items.Add(new TileMenuCommand(
-                "Edit platforms",
-                new AsyncRelayCommand(() => Shell.OpenPlatformEditorAsync([map], pack)),
-                IsEnabled: has,
-                ToolTip: has ? null : $"No platform files in this pack for {map.DisplayName}"));
-        }
     }
 
     /// <summary>Spec 2.6 4.3: pick the target, then copy or move the tile into it. A copy that clashes offers

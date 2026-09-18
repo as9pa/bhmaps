@@ -172,8 +172,8 @@ public partial class PacksViewModel : PageViewModel
     /// <summary>The row's dots menu (addendum E, q7). Each line wraps the page's own command with this row as
     /// its parameter, because a TileMenuCommand carries no parameter of its own. Delete pack is last: it is the
     /// destructive one, and the pointer should not have to pass over it to reach another line. The Default pack
-    /// has no Delete line and no Hide from lists line: it is the game's own art, every Reset to default restores
-    /// from it, and the lists fall back to it.</summary>
+    /// has no Delete line: it is the game's own art, and every Reset to default restores from it. It does hide
+    /// from the lists like any other pack (3.1), because hiding touches the lists and nothing else.</summary>
     private IReadOnlyList<TileMenuCommand> BuildMenu(PackRowViewModel row)
     {
         var items = new List<TileMenuCommand>
@@ -184,11 +184,11 @@ public partial class PacksViewModel : PageViewModel
             new("Export", new RelayCommand(() => ExportCommand.Execute(row))),
             new("Open folder", new RelayCommand(() => OpenFolderCommand.Execute(row))),
         };
+        items.Add(new TileMenuCommand(
+            row.IsHidden ? "Show in lists" : "Hide from lists",
+            new RelayCommand(() => ToggleHiddenCommand.Execute(row))));
         if (!row.IsDefault)
         {
-            items.Add(new TileMenuCommand(
-                row.IsHidden ? "Show in lists" : "Hide from lists",
-                new RelayCommand(() => ToggleHiddenCommand.Execute(row))));
             items.Add(TileMenuCommand.Separator());
             items.Add(new TileMenuCommand(
                 "Delete pack",
@@ -430,13 +430,14 @@ public partial class PacksViewModel : PageViewModel
     }
 
     /// <summary>2.8: the eye on the row. Hiding a pack keeps it out of the Backgrounds and Platforms lists and
-    /// nothing else: the files stay where they are, nothing is written into the game, and the Default pack is
-    /// never hidden, because the lists fall back to it. The list itself is rebuilt from the name it holds, so a
-    /// name hidden twice is stored once.</summary>
+    /// nothing else: the files stay where they are and nothing is written into the game. 3.1: that holds for the
+    /// Default pack too, which hides like any other; Reset, Capture and the applied record read its folder by
+    /// name and never this. The list itself is rebuilt from the name it holds, so a name hidden twice is stored
+    /// once.</summary>
     [RelayCommand]
     private void ToggleHidden(PackRowViewModel? row)
     {
-        if (row is null || row.IsDefault)
+        if (row is null)
         {
             return;
         }
