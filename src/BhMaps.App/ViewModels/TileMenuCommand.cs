@@ -28,7 +28,8 @@ public sealed record TileMenuCommand(
     string? Gesture = null,
 
     /// <summary>A header's second line: one short line saying what the menu's subject is showing or where it
-    /// came from. Null on a header with nothing to add, and on every other kind of line.</summary>
+    /// came from. 3.2: an ordinary line may carry one too, drawn muted under its words (the pack an edit line's
+    /// art comes from). Null on a line with nothing to add, and always on a separator.</summary>
     string? Detail = null,
 
     /// <summary>True for a line that removes or deletes something, which the menu draws in the missing colour so

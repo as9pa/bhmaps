@@ -681,7 +681,10 @@
     <!-- A file or pack name reads exactly as typed. Without a template the header string is drawn through
          AccessText, which eats the underscore in "BG_Dojo.jpg" and underlines the D instead; no menu in spec
          section 11 offers an access key, so no menu needs one. The header is the line itself, so the template
-         can draw its gesture beside its words. -->
+         can draw its gesture beside its words.
+         3.2: a line with a Detail draws it as a second, muted line under its words, trimmed at the header's
+         260 px so a long pack name does not widen the menu. Collapsed on every line without one, so those lines
+         keep their one-line height. -->
     <Setter Property="HeaderTemplate">
       <Setter.Value>
         <DataTemplate>
@@ -690,12 +693,20 @@
               <ColumnDefinition Width="*" />
               <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
             <!-- The words take the line's own Foreground rather than inheriting it down the MenuItem template,
                  so the style's triggers below, disabled and destructive, are what colours them. -->
             <TextBlock Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=MenuItem}}"
                        Text="{Binding Text}" />
             <TextBlock Grid.Column="1" Margin="24,0,0,0" Foreground="{StaticResource Text3Brush}"
                        Text="{Binding Gesture}" />
+            <TextBlock Grid.Row="1" HorizontalAlignment="Left" MaxWidth="260" Margin="0,1,0,0"
+                       FontSize="{StaticResource FontCaption}" Foreground="{StaticResource Text2Brush}"
+                       Text="{Binding Detail}" TextTrimming="CharacterEllipsis"
+                       Visibility="{Binding Detail, Converter={StaticResource NullToVis}}" />
           </Grid>
         </DataTemplate>
       </Setter.Value>

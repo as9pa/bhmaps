@@ -33,7 +33,7 @@ public partial class MapCardViewModel : ObservableObject
             MapState.Custom => Ellipsise(CustomName(map, customPictures)),
             _ => "",
         };
-        ToolTipText = TagText.Length == 0 ? DisplayName : $"{DisplayName} ({TagText})";
+        ToolTipText = DisplayName;
     }
 
     /// <summary>3.2: the card's identity, the layout it shows. Two cards of one folder share
@@ -50,14 +50,13 @@ public partial class MapCardViewModel : ObservableObject
     /// <summary>Spec 3.1's tag, drawn only when it says which art is on the map: the pack names, the custom
     /// picture's name ellipsised at <see cref="TagMaxLength"/>, or "Missing". Default draws no tag, and
     /// neither does a map the scan produced no status for. 3.0: nor does a map whose art is a file the app
-    /// cannot name, because the only thing left to print there would be a file name or a slot code.</summary>
+    /// cannot name, because the only thing left to print there would be a file name or a slot code. 3.2: the
+    /// Maps card no longer draws it (owner, 2026-09-22); the Backgrounds rows still do.</summary>
     public string TagText { get; }
 
-    /// <summary>The name and the tag in one line, for the two tightest zoom steps where the card draws neither
-    /// (spec 3.1).</summary>
+    /// <summary>The map's name, for the tightest zoom step where the card does not draw it (spec 3.1). 3.2: the
+    /// name alone, without the tag.</summary>
     public string ToolTipText { get; }
-
-    public bool ShowTag => TagText.Length > 0;
 
     /// <summary>The catalog entry behind the card, so a page can filter on its sets without a second lookup.</summary>
     public MapEntry Map { get; }

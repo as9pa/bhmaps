@@ -93,16 +93,10 @@ public partial class MapsViewModel : PageViewModel, ITileSized
     /// panel (wireframe 8.1).</summary>
     public double TargetCardWidth => TileSizes.CardWidth(TileSize);
 
-    /// <summary>Spec 3.1's density steps, now three rather than nine. Large and Medium carry the name and the
-    /// tag; Small drops both, tightens the card to 4 px padding, and shows Missing as a mark on the picture
-    /// instead of a word under it. ShowTagRow is the size's answer for every card; MapCardViewModel.ShowTag is
-    /// one card's own answer about whether it has a tag at all. Both have to be true for a tag to be drawn, so
-    /// they keep different names.</summary>
+    /// <summary>Spec 3.1's density steps, now three rather than nine. Large and Medium carry the name; Small
+    /// drops it and tightens the card to 4 px padding. 3.2: no size carries a tag, and Missing is a mark on the
+    /// picture at every size.</summary>
     public bool ShowName => TileSize != TileSize.Small;
-
-    public bool ShowTagRow => TileSize != TileSize.Small;
-
-    public bool ShowMissingMark => TileSize == TileSize.Small;
 
     public double NameFontSize => TileSize == TileSize.Large ? 15 : TileSize == TileSize.Medium ? 13 : 12;
 
@@ -484,8 +478,6 @@ public partial class MapsViewModel : PageViewModel, ITileSized
         // The card template reads these numbers rather than carrying a pile of triggers of its own.
         OnPropertyChanged(nameof(TargetCardWidth));
         OnPropertyChanged(nameof(ShowName));
-        OnPropertyChanged(nameof(ShowTagRow));
-        OnPropertyChanged(nameof(ShowMissingMark));
         OnPropertyChanged(nameof(NameFontSize));
         OnPropertyChanged(nameof(CardPadding));
     }
@@ -691,18 +683,21 @@ public partial class MapsViewModel : PageViewModel, ITileSized
 
         card.MenuItems =
         [
-            TileMenuCommand.Header(one.DisplayName, MapArtText.Describe(one, status, snapshot)),
+            TileMenuCommand.Header(one.DisplayName, MapArtText.Describe(status)),
             TileMenuCommand.Flyout("Apply pack", packs),
             TileMenuCommand.Flyout("Apply background", pictures),
             TileMenuCommand.Separator(),
             new TileMenuCommand(
                 "Edit background",
                 new AsyncRelayCommand(() => EditBackgroundAsync(one, slot)),
-                IsEnabled: slot is not null),
+                IsEnabled: slot is not null,
+                Detail: MapArtText.BackgroundPack(one, status, snapshot)),
             // Spec 9: the editor still opens on a set of maps, and from here that set is the one map named above.
+            // 3.2: each edit line names the pack its art comes from, under it (owner, 2026-09-22).
             new TileMenuCommand(
                 "Edit platforms",
-                new AsyncRelayCommand(() => Shell.OpenPlatformEditorAsync(target, null))),
+                new AsyncRelayCommand(() => Shell.OpenPlatformEditorAsync(target, null)),
+                Detail: MapArtText.PlatformPacks(one, status)),
             TileMenuCommand.Separator(),
             new TileMenuCommand(
                 "Reset map",
