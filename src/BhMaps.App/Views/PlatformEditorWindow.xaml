@@ -377,8 +377,9 @@
                     Style="{StaticResource PlainButton}" />
           </StackPanel>
           <!-- Spec 6.2: one picture laid over the whole stage and cut for each piece, or the same picture fitted
-               to every piece on its own. A radio group rather than two chips, because it is one question. -->
-          <StackPanel Margin="0,8,0,0" IsEnabled="{Binding CanUseFit}" Orientation="Horizontal">
+               to every piece on its own. A radio group rather than two chips, because it is one question.
+               3.2 F2: always open, so the layout can be chosen before a picture is picked. -->
+          <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
             <RadioButton AutomationProperties.Name="Across the platforms"
                          Content="Across the platforms"
                          FocusVisualStyle="{StaticResource DialogFocusRing}"
