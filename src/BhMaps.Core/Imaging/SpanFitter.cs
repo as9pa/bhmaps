@@ -70,12 +70,20 @@ public static class SpanFitter
     /// the piece's own pixels (undoing scale, flip and rotation) and masked by the piece's alpha. Frozen Bgra32 at
     /// the piece's size and DPI.</summary>
     public static BitmapSource Cut(
-        BitmapSource picture, Rect box, FitOptions pan, Placement placement, BitmapSource piece)
+        BitmapSource picture, Rect box, FitOptions pan, Placement placement, BitmapSource piece) =>
+        Cut(picture, box, pan, placement, piece, piece);
+
+    /// <summary>The same, with the art Fit and Center leave showing on the part of the piece the picture does not
+    /// reach (3.2 F1). original is the piece's own art at the piece's size; the shape still comes from piece.</summary>
+    public static BitmapSource Cut(
+        BitmapSource picture, Rect box, FitOptions pan, Placement placement, BitmapSource piece, BitmapSource original)
     {
         var width = piece.PixelWidth;
         var height = piece.PixelHeight;
         var stride = width * 4;
         var pixels = new byte[stride * height];
+        var pictureRect = PictureRect(picture, box, pan);
+        Transform? toPiece = null;
 
         // Piece pixels to the node's own space, then the node's space to camera space. Drawing under its inverse
         // puts the camera-space picture back into the piece's pixels in one pass, with no per-pixel loop.
@@ -83,13 +91,14 @@ public static class SpanFitter
         if (full.HasInverse)
         {
             full.Invert();
+            toPiece = new MatrixTransform(full);
 
             var visual = new DrawingVisual();
             RenderOptions.SetBitmapScalingMode(visual, BitmapScalingMode.HighQuality);
             using (var dc = visual.RenderOpen())
             {
-                dc.PushTransform(new MatrixTransform(full));
-                dc.DrawImage(picture, PictureRect(picture, box, pan));
+                dc.PushTransform(toPiece);
+                dc.DrawImage(picture, pictureRect);
                 dc.Pop();
             }
 
@@ -100,6 +109,14 @@ public static class SpanFitter
 
         // A placement scaled to nothing draws nothing, and leaves the transparent buffer as it is.
         PieceFitter.MaskBy(pixels, piece);
+        if (PieceFitter.KeepsOriginal(pan))
+        {
+            // A placement scaled to nothing is covered nowhere, so it keeps its original art whole.
+            var coverage = toPiece is null
+                ? new byte[width * height]
+                : PieceFitter.Coverage(width, height, pictureRect, toPiece);
+            PieceFitter.FillUncovered(pixels, coverage, original, piece);
+        }
 
         var result = new WriteableBitmap(width, height, piece.DpiX, piece.DpiY, PixelFormats.Bgra32, null);
         result.WritePixels(new Int32Rect(0, 0, width, height), pixels, stride, 0);

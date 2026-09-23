@@ -1130,9 +1130,12 @@ public partial class PlatformEditorViewModel : ObservableObject
                     foreach (var row in rows)
                     {
                         var piece = BackgroundFitter.LoadSource(row.SourcePath);
+
+                        // Fit and Center show the piece's original art where the picture does not reach (3.2 F1).
+                        var original = row.WorkingCopyPath is null ? piece : BackgroundFitter.LoadSource(row.OriginalPath);
                         if (!across || box is not { } stage)
                         {
-                            results.Add((row, PieceFitter.Fit(picture, piece, options), false, ""));
+                            results.Add((row, PieceFitter.Fit(picture, piece, options, original), false, ""));
                             continue;
                         }
 
@@ -1141,7 +1144,7 @@ public partial class PlatformEditorViewModel : ObservableObject
                         {
                             results.Add((
                                 row,
-                                PieceFitter.Fit(picture, piece, options),
+                                PieceFitter.Fit(picture, piece, options, original),
                                 false,
                                 $"{row.FileName} not on this stage, fitted on its own."));
                             continue;
@@ -1152,7 +1155,7 @@ public partial class PlatformEditorViewModel : ObservableObject
                         var note = placements.Count > 1
                             ? $"{row.FileName} drawn {placements.Count} times, cut from the largest."
                             : "";
-                        results.Add((row, SpanFitter.Cut(picture, stage, pan, SpanFitter.Largest(placements)!, piece), true, note));
+                        results.Add((row, SpanFitter.Cut(picture, stage, pan, SpanFitter.Largest(placements)!, piece, original), true, note));
                     }
                 }
 
