@@ -9,6 +9,32 @@ and `.jpg` files inside the `mapArt` folder and inside its own library, plus its
 folder, and it keeps a copy of every original so it can put it back. The game's data files are read and never written, and
 nothing else in the game install is touched.
 
+## What is new in 3.2
+
+Maps are split by layout now. The game builds several layouts from one art folder, such as World's End
+and Small World's End, or Terminus and Small Terminus, and each playable layout has its own card with
+its own name, preview and set chips. The chips follow the game's own lists: All, Ranked 1v1, Ranked 2v2,
+Tournament 1v1, Tournament 2v2 and Minigames. So Tournament 1v1 shows Small World's End and Small
+Terminus, the layouts the game really plays there. Layouts that are in no list still get a card under All.
+A map's panel and the platform editor show only the files that layout uses, and a file another layout
+shares says "also in" with that layout's name, because changing it changes both. The background is one
+per folder in the game, so the Backgrounds page keeps one row per folder and the background editor names
+every layout that shares it. A pack's page has one tile per layout too.
+
+Packs, a pack's page and Maps have a Both / Platforms / Backgrounds switch. Platforms draws only the
+platform pieces, with no background, on a checkerboard of grey squares. Backgrounds draws only the
+background picture. On the Packs page the switch also hides packs that have none of that kind. The choice
+is one setting for all three places and is remembered.
+
+Lowering a platform's opacity no longer shows bright lines. The game builds platforms from overlapping
+pieces, and fading each piece on its own drew the overlaps twice. The app now writes the lower pieces a
+little more transparent where the pieces above cover them, so the whole platform fades as one layer. It
+needs the game's level data; without it, pieces fade on their own as before and the status line says so.
+
+In the platform editor, Fit and Center keep the platform's shape: the part of a piece the picture does
+not reach keeps the piece's own art instead of going transparent. Across the platforms and On each piece
+can be picked before a picture is loaded, and a saved On each piece picture reopens with its own fit mode.
+
 ## What is new in 3.1
 
 The status line is in the top bar. Everything the app is doing or has just done reads on one line
