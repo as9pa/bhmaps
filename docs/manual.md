@@ -35,6 +35,9 @@ In the platform editor, Fit and Center keep the platform's shape: the part of a 
 not reach keeps the piece's own art instead of going transparent. Across the platforms and On each piece
 can be picked before a picture is loaded, and a saved On each piece picture reopens with its own fit mode.
 
+A map card shows only the map name. Its right-click menu names the pack the background and the platforms
+come from, as a quiet second line under Edit background and Edit platforms.
+
 ## What is new in 3.1
 
 The status line is in the top bar. Everything the app is doing or has just done reads on one line
@@ -415,13 +418,11 @@ stops a long operation.
   finds them whatever chip is on. The chip is shared with Backgrounds and Platforms: pick one here and
   those two pages show the same set. The card size is the size control (Large,
   Medium, Small) in the page header, or Ctrl and plus, minus, zero, or the wheel; the grid holds as
-  many columns as fit, so opening the panel moves cards down a row instead of shrinking them. Each card is a composed preview, the map's
-  name, and a tag only when there is something to say: the pack the map matches, the name of the
-  any-map picture on it, or Missing. A map that is entirely default draws no tag. Wide cards keep the
-  tag on the name row; narrower ones draw it over the bottom-left corner of the picture instead, so
-  every card in the grid is the same height. From the sixth step on the name is smaller and the tag
-  is hidden; at the last two the name row goes altogether, the name and tag become the card's
-  tooltip, and a missing map is marked on the picture.
+  many columns as fit, so opening the panel moves cards down a row instead of shrinking them. Each card is a composed preview and the map's
+  name, nothing else: which pack the art comes from is in the card's right-click menu, under Edit
+  background and Edit platforms. A map with a missing file is marked with a dot on the picture at
+  every size. From the sixth step on the name is smaller; at the last two the name row goes
+  altogether and the name becomes the card's tooltip.
 - Clicking a card opens the map panel and outlines the card; Enter on a focused card does the same,
   the arrows move between cards, and the card scrolls into view if opening the panel moved it. One
   map is open at a time; there is no selecting several. A write to more than one map, from **Apply to
