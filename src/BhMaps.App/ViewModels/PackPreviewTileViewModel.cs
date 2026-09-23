@@ -1,5 +1,6 @@
 using System.Windows.Media;
 using BhMaps.Core.Maps;
+using BhMaps.Core.Model;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace BhMaps.App.ViewModels;
@@ -12,13 +13,25 @@ public sealed partial class PackPreviewTileViewModel : ObservableObject
     public PackPreviewTileViewModel(MapEntry map)
     {
         Map = map;
+        DisplayName = map.DisplayName;
     }
 
-    public MapEntry Map { get; }
+    /// <summary>3.2 P1: a background picture's tile, for the Backgrounds switch.</summary>
+    public PackPreviewTileViewModel(GameFile file)
+    {
+        PicturePath = file.FullPath;
+        DisplayName = Path.GetFileNameWithoutExtension(file.Name);
+    }
+
+    /// <summary>The map the tile draws, or null for a background picture's tile.</summary>
+    public MapEntry? Map { get; }
+
+    /// <summary>The background picture the tile shows, or null for a map's tile.</summary>
+    public string? PicturePath { get; }
 
     /// <summary>The tile's tooltip and its automation name. There is no caption: at 96 px wide a map name would
     /// be three letters and an ellipsis.</summary>
-    public string DisplayName => Map.DisplayName;
+    public string DisplayName { get; }
 
     /// <summary>Null until the composite is ready. Always frozen, because it is drawn off the UI thread.</summary>
     [ObservableProperty]

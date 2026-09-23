@@ -30,7 +30,11 @@ public sealed record AppSettings(
     /// dismissed at. A different count is a different note, so the line comes back on its own the way
     /// <see cref="DismissedUpdate" /> does. Read through <see cref="DismissedTransparent" />, which is never
     /// null.</summary>
-    IReadOnlyDictionary<string, int>? DismissedTransparentNotes = null)
+    IReadOnlyDictionary<string, int>? DismissedTransparentNotes = null,
+
+    /// <summary>3.2 P1 and P2: the Both / Platforms / Backgrounds switch. One setting shared by Packs, a pack's page
+    /// and Maps, so flipping it on one page flips it on all three.</summary>
+    PreviewMode PreviewMode = PreviewMode.Both)
 {
     public const string DefaultGamePath = @"C:\Program Files (x86)\Steam\steamapps\common\Brawlhalla\mapArt";
 
