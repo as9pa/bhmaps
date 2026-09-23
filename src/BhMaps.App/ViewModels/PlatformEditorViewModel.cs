@@ -226,6 +226,9 @@ public partial class PlatformEditorViewModel : ObservableObject
     /// <summary>What Save wrote into the library, or null while nothing has been saved.</summary>
     public PlatformSave? Saved { get; private set; }
 
+    /// <summary>Save wrote faded pieces without the seam fix because there was no level data (3.2 O1).</summary>
+    public bool SeamFixSkipped { get; private set; }
+
     /// <summary>Spec 9: which map of the set the strip is on. Everything one map owns follows it.</summary>
     [ObservableProperty]
     public partial int CurrentIndex { get; set; }
@@ -1331,6 +1334,9 @@ public partial class PlatformEditorViewModel : ObservableObject
 
         var failed = false;
         var opened = new List<PlatformPieceViewModel>();
+        var rows = Pieces;
+        var model = _services.LevelData.Model;
+        var masks = await Task.Run(() => PlatformPieceViewModel.SeamMasks(rows, model, out _));
         foreach (var row in Pieces.Where(p => p.IsTicked).ToList())
         {
             var copy = Path.Combine(folder, row.FileName);
@@ -1340,7 +1346,7 @@ public partial class PlatformEditorViewModel : ObservableObject
             {
                 try
                 {
-                    await Task.Run(() => row.WriteResult(copy));
+                    await Task.Run(() => row.WriteResult(copy, masks.GetValueOrDefault(row.RelativePath)));
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or FileFormatException)
                 {
@@ -1659,11 +1665,14 @@ public partial class PlatformEditorViewModel : ObservableObject
                 // Every row, ticked or not: what Save leaves behind is the whole set, not the part worked on.
                 var rows = set.Rows;
                 var folder = set.Map.FolderName;
+                var model = _services.LevelData.Model;
                 await Task.Run(() =>
                 {
+                    var masks = PlatformPieceViewModel.SeamMasks(rows, model, out var missing);
+                    SeamFixSkipped |= missing;
                     foreach (var row in rows)
                     {
-                        row.CopyOrWriteResult(Path.Combine(packRoot, row.RelativePath));
+                        row.CopyOrWriteResult(Path.Combine(packRoot, row.RelativePath), masks.GetValueOrDefault(row.RelativePath));
                     }
 
                     record.SetMap(folder, DateTimeOffset.Now, EntriesFor(rows, packRoot, panX, panY, fit));
@@ -1792,6 +1801,7 @@ public partial class PlatformEditorViewModel : ObservableObject
         var level = CurrentMap.BaseLevel;
         var background = Current.BackgroundPath;
         var (focus, viewport) = FocusFor(level);
+        var model = _services.LevelData.Model;
         var reading = "";
         try
         {
@@ -1800,11 +1810,13 @@ public partial class PlatformEditorViewModel : ObservableObject
             await Task.Run(
                 () =>
                 {
+                    // The preview shows the corrected files, the same ones Save writes (3.2 O1).
+                    var masks = PlatformPieceViewModel.SeamMasks(rows, model, out _);
                     foreach (var row in rows)
                     {
                         ct.ThrowIfCancellationRequested();
                         reading = row.FileName;
-                        row.CopyOrWriteResult(Path.Combine(root, row.RelativePath));
+                        row.CopyOrWriteResult(Path.Combine(root, row.RelativePath), masks.GetValueOrDefault(row.RelativePath));
                     }
                 },
                 ct);

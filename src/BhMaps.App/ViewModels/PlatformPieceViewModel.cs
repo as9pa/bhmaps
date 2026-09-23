@@ -1,6 +1,7 @@
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using BhMaps.Core.Imaging;
+using BhMaps.Core.LevelData;
 using BhMaps.Core.Packs;
 using CommunityToolkit.Mvvm.ComponentModel;
 
@@ -179,25 +180,64 @@ public partial class PlatformPieceViewModel : ObservableObject
         Raise();
     }
 
+    /// <summary>The status line after a save that faded pieces without the seam fix, because there was no level
+    /// data to find the overlaps in (3.2 O1).</summary>
+    public const string SeamFixNote = "Seam fix needs the game's level data";
+
     /// <summary>Writes this row's result to <paramref name="destPng"/>: the source recoloured by this row's
-    /// values, from the fitted bitmap for a replacement. Runs on the calling thread; callers use Task.Run.</summary>
-    public void WriteResult(string destPng)
+    /// values, from the fitted bitmap for a replacement. <paramref name="seamMask"/> is this row's factor per pixel
+    /// from <see cref="SeamMasks"/>, or null to fade by the opacity alone. Runs on the calling thread; callers use
+    /// Task.Run.</summary>
+    public void WriteResult(string destPng, float[]? seamMask = null)
     {
         var opacity = Opacity / 100.0;
         if (Replacement is { } fitted)
         {
-            PlatformRecolor.Apply(fitted, destPng, opacity, Hue);
+            PlatformRecolor.Apply(fitted, destPng, opacity, Hue, seamMask);
         }
         else
         {
-            PlatformRecolor.Apply(SourcePath, destPng, opacity, Hue);
+            PlatformRecolor.Apply(SourcePath, destPng, opacity, Hue, seamMask);
         }
+    }
+
+    /// <summary>Spec 3.2 O1: the seam mask of every faded row of one map's set, keyed by relative path, over the
+    /// playable layouts of <paramref name="model"/>. <paramref name="missing"/> is true when a row is faded and
+    /// there is no level data to correct it with, which leaves every row fading on its own as before.</summary>
+    public static IReadOnlyDictionary<string, float[]> SeamMasks(
+        IReadOnlyList<PlatformPieceViewModel> rows, LevelDataModel? model, out bool missing)
+    {
+        var faded = rows.Where(r => r.Opacity < DefaultOpacity).ToList();
+        missing = faded.Count > 0 && model is null;
+        if (faded.Count == 0 || model is null)
+        {
+            return new Dictionary<string, float[]>();
+        }
+
+        var pieces = new List<SeamPiece>();
+        foreach (var row in faded)
+        {
+            try
+            {
+                var source = row.Replacement ?? PlatformRecolor.Decode(row.SourcePath);
+                pieces.Add(new SeamPiece(
+                    row.RelativePath, source.PixelWidth, source.PixelHeight, PlatformRecolor.AlphaOf(source), row.Opacity / 100.0));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or FileFormatException or ArgumentException)
+            {
+                // A row that will not decode cannot cover anything; writing it reports the error as before.
+            }
+        }
+
+        // A dev or test level is not a layout anyone plays, so it must not veto a correction the real ones agree on.
+        var hidden = model.Types.Where(t => !t.Included).Select(t => t.LevelName).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return SeamMask.Compute(model.Levels.Where(l => !hidden.Contains(l.LevelName)), pieces);
     }
 
     /// <summary>What Save and the preview write for this row: a plain copy when nothing about it changed, its
     /// result otherwise (spec 3). A working copy at defaults is a copy of itself, which callers skip when source
     /// and destination are the same file.</summary>
-    public void CopyOrWriteResult(string destPng)
+    public void CopyOrWriteResult(string destPng, float[]? seamMask = null)
     {
         if (Art != PieceArt.Replacement && IsDefault)
         {
@@ -210,7 +250,7 @@ public partial class PlatformPieceViewModel : ObservableObject
             return;
         }
 
-        WriteResult(destPng);
+        WriteResult(destPng, seamMask);
     }
 
     /// <summary>Pixel size from the PNG header only (no full decode), 0 x 0 when the file cannot be read.</summary>
