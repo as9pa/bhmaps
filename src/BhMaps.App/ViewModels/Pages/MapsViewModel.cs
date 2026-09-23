@@ -415,12 +415,16 @@ public partial class MapsViewModel : PageViewModel, ITileSized
 
         // Spec 11: a new card shows nothing until its preview lands, so the maps the write touched are loaded
         // before the rest of the alphabet and stop showing what was there before the write that much sooner.
-        // 3.2: writes are per folder, so every card of a written folder comes first.
+        // 3.2: writes are per folder, so every card of a written folder comes first. Ahead of both go the cards
+        // the chip and the search show: a mode switch draws every card again, and a shown card late in the
+        // alphabet otherwise stayed an empty tile until every hidden card before it had drawn.
         var byFolder = _all.ToLookup(card => card.FolderName, StringComparer.OrdinalIgnoreCase);
         var folders = _all.Select(c => c.FolderName).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         var order = LoadOrder.Prioritise(folders, writtenFolders);
         _ = LoadPreviewsAsync(
-            [.. order.SelectMany(folder => byFolder[folder])], snapshot.Catalog.HasLevelData, _previews.Token);
+            LoadOrder.ShownFirst([.. order.SelectMany(folder => byFolder[folder])], Matches),
+            snapshot.Catalog.HasLevelData,
+            _previews.Token);
     }
 
     partial void OnSearchTextChanged(string value) => ApplyFilter();

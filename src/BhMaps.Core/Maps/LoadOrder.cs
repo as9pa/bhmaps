@@ -30,4 +30,19 @@ public static class LoadOrder
 
         return [.. lead, .. all.Where(n => !taken.Contains(n))];
     }
+
+    /// <summary>3.2: the items <paramref name="shown"/> accepts, then the rest, each part in its given order. The
+    /// grid under a chip or a search shows a handful of cards, and a card that waits behind every hidden one
+    /// stays an empty tile for as long as the whole alphabet takes to draw, which a new preview mode makes long.</summary>
+    public static IReadOnlyList<T> ShownFirst<T>(IReadOnlyList<T> items, Func<T, bool> shown)
+    {
+        var lead = new List<T>();
+        var rest = new List<T>();
+        foreach (var item in items)
+        {
+            (shown(item) ? lead : rest).Add(item);
+        }
+
+        return [.. lead, .. rest];
+    }
 }
