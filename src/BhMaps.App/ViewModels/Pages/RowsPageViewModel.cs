@@ -135,6 +135,10 @@ public abstract partial class RowsPageViewModel : PageViewModel, ITileSized
     /// order of the strip; <see cref="MapChoices" /> decides what is in it.</summary>
     protected abstract MapRowViewModel BuildRow(MapCardViewModel card, MapStatus? status, ScanSnapshot snapshot);
 
+    /// <summary>3.2: true for a page whose rows are per art folder rather than per layout card. Only the card of
+    /// each folder's primary layout gets a row, in that card's place.</summary>
+    protected virtual bool OneRowPerFolder => false;
+
     public override void Refresh(ScanSnapshot snapshot)
     {
         Snapshot = snapshot;
@@ -150,6 +154,13 @@ public abstract partial class RowsPageViewModel : PageViewModel, ITileSized
         // is the one this page shows rather than a second copy of the rule that works it out.
         foreach (var card in Shell.Maps.AllCards)
         {
+            if (OneRowPerFolder
+                && snapshot.Catalog.PrimaryLayoutOf(card.FolderName) is { } primary
+                && !primary.Key.Equals(card.Key, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
             snapshot.MapStatuses.TryGetValue(card.FolderName, out var status);
             _all.Add(BuildRow(card, status, snapshot));
         }

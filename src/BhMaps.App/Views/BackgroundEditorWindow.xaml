@@ -160,6 +160,11 @@
                     ItemsSource="{Binding Maps}"
                     SelectedItem="{Binding SelectedMap}" />
           <TextBlock Style="{StaticResource ErrorText}" Text="{Binding MapLabel}" />
+          <!-- 3.2: one background under every layout of a map, said quietly when the map has more than one. -->
+          <TextBlock Style="{StaticResource HintText}"
+                     Text="{Binding SelectedMap.SharedNote, FallbackValue=''}"
+                     TextWrapping="Wrap"
+                     Visibility="{Binding SelectedMap.HasSharedNote, Converter={StaticResource BoolToVis}, FallbackValue=Collapsed}" />
 
           <!-- Spec 8: where the values on this panel came from, with the way back to a clean start beside it. -->
           <StackPanel Orientation="Horizontal" Visibility="{Binding HasValuesFrom, Converter={StaticResource BoolToVis}}">

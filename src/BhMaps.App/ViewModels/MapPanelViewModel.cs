@@ -19,9 +19,12 @@ namespace BhMaps.App.ViewModels;
 /// there is nothing to edit without it.</summary>
 public sealed record PlatformFileViewModel(
     string RelativePath, string SourceText, bool ChangesNothing, ImageSource? Thumbnail, bool CanEdit,
-    IRelayCommand EditCommand)
+    IRelayCommand EditCommand, string AlsoIn = "")
 {
     public string FileName => Path.GetFileName(RelativePath);
+
+    /// <summary>3.2: false hides the "also in" mark on a file only this layout draws.</summary>
+    public bool ShowAlsoIn => AlsoIn.Length > 0;
 
     /// <summary>Empty when the scan produced no status for the file, and then no tag is drawn.</summary>
     public bool ShowSource => SourceText.Length > 0;
@@ -132,12 +135,14 @@ public partial class MapPanelViewModel : ObservableObject
 
         // Built with no thumbnail, no transparency verdict and no Edit: all three are file work, and all three
         // arrive from LoadAsync. The Edit opens the editor on the game's file, so it hands it no pack (ruling 7).
-        foreach (var relativePath in map.PlatformFiles.OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
+        // 3.2: a layout card lists the files its own layout draws, and says which other layout draws one too.
+        foreach (var relativePath in map.LayoutFiles.OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
         {
             var file = relativePath;
             _platformFiles.Add(new PlatformFileViewModel(
                 file, InGameMatch.File(status, file)?.Text ?? "", ChangesNothing: false, Thumbnail: null,
-                CanEdit: false, EditCommand: new RelayCommand(() => _ = shell.OpenPlatformEditorAsync([map], pack: null, onlyFile: file))));
+                CanEdit: false, EditCommand: new RelayCommand(() => _ = shell.OpenPlatformEditorAsync([map], pack: null, onlyFile: file)),
+                AlsoIn: snapshot.Catalog.AlsoInText(map, file)));
         }
 
         RebuildMenus();

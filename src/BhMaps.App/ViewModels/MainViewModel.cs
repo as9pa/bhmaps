@@ -1128,7 +1128,7 @@ public partial class MainViewModel : ObservableObject
             Dialogs,
             snapshot.Packs,
             snapshot.MapStatuses,
-            new PlatformEditorRequest(maps, pack, onlyFile));
+            new PlatformEditorRequest(maps, pack, onlyFile, Catalog: snapshot.Catalog));
         var window = new PlatformEditorWindow { DataContext = vm, Owner = Application.Current.MainWindow, ShowActivated = !App.Quiet };
         bool accepted;
         try
@@ -1194,25 +1194,34 @@ public partial class MainViewModel : ObservableObject
     private static IReadOnlyList<MapSlotChoice> MapSlotChoices(ScanSnapshot snapshot)
     {
         var bySlot = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        var notes = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
         foreach (var map in snapshot.Catalog.Maps)
         {
+            // 3.2: a folder with two or more layouts draws one background under all of them, which the editor says.
+            var note = snapshot.Catalog.SharedBackgroundNote(map.FolderName);
             foreach (var slot in map.BackgroundSlots)
             {
                 if (!bySlot.TryGetValue(slot, out var names))
                 {
                     names = [];
                     bySlot[slot] = names;
+                    notes[slot] = [];
                 }
 
                 if (!names.Contains(map.DisplayName))
                 {
                     names.Add(map.DisplayName);
                 }
+
+                if (note.Length > 0 && !notes[slot].Contains(note))
+                {
+                    notes[slot].Add(note);
+                }
             }
         }
 
         var choices = bySlot
-            .Select(pair => new MapSlotChoice(pair.Key, string.Join(", ", pair.Value)))
+            .Select(pair => new MapSlotChoice(pair.Key, string.Join(", ", pair.Value), string.Join(" ", notes[pair.Key])))
             .OrderBy(c => c.DisplayNames, StringComparer.OrdinalIgnoreCase)
             .ToList();
         choices.Insert(0, MapSlotChoice.AllMaps);

@@ -71,9 +71,13 @@ public partial class BackgroundsViewModel : RowsPageViewModel
     /// each pack that has a picture for this map's slot in the Packs page order, then, while the switch is on,
     /// every any-map picture. An any-map picture the game is showing is first whatever the switch says, because it
     /// is the in-game choice.</summary>
+    /// <summary>3.2: the background belongs to the art folder, which every layout of it shares, so one row per
+    /// folder, named by its primary layout.</summary>
+    protected override bool OneRowPerFolder => true;
+
     protected override MapRowViewModel BuildRow(MapCardViewModel card, MapStatus? status, ScanSnapshot snapshot)
     {
-        var map = card.Map;
+        var map = snapshot.Catalog.ByFolder(card.FolderName) ?? card.Map;
         var packs = MapChoices.PackBackgrounds(Shell, map, status, snapshot);
 
         // The whole list, so the picture the game is showing on this row is found whatever pack it came from.
@@ -91,7 +95,7 @@ public partial class BackgroundsViewModel : RowsPageViewModel
             map,
             card.TagText,
             card.IsMissing,
-            Haystack(map, pictures),
+            Haystack(map, pictures, snapshot.Catalog.LayoutsOf(map.FolderName)),
             alwaysShown,
             extras,
             pictures,
@@ -119,8 +123,15 @@ public partial class BackgroundsViewModel : RowsPageViewModel
 
     /// <summary>Addendum B: the map's name, then every thumbnail's caption and file name, one per line, so a
     /// search for a pack name or a file name keeps the rows that offer it.</summary>
-    private static string Haystack(MapEntry map, IReadOnlyList<PictureTileViewModel> pictures) =>
+    /// <summary>3.2: every layout's name is in it too, so a search for Small World's End still finds the row.</summary>
+    private static string Haystack(
+        MapEntry map, IReadOnlyList<PictureTileViewModel> pictures, IReadOnlyList<MapEntry> layouts) =>
         string.Join(
             '\n',
-            [map.DisplayName, .. pictures.Select(t => t.Title), .. pictures.Select(t => Path.GetFileName(t.FullPath))]);
+            [
+                map.DisplayName,
+                .. layouts.Select(l => l.DisplayName),
+                .. pictures.Select(t => t.Title),
+                .. pictures.Select(t => Path.GetFileName(t.FullPath)),
+            ]);
 }
