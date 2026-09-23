@@ -12,6 +12,7 @@ using BhMaps.Core.Model;
 using BhMaps.Core.Operations;
 using BhMaps.Core.Packs;
 using BhMaps.Core.Scanning;
+using BhMaps.Core.Settings;
 using BhMaps.Core.Text;
 using BhMaps.Core.Update;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -275,6 +276,31 @@ public partial class MainViewModel : ObservableObject
     private void OpenUpdate() => CurrentPage = SettingsPage;
 
     /// <summary>Opens the pack detail page on one pack (spec 7.5).</summary>
+    /// <summary>3.2 P1 and P2: the switch's chips, in the order they draw.</summary>
+    public static IReadOnlyList<string> PreviewModeChips { get; } = [.. Enum.GetNames<PreviewMode>()];
+
+    /// <summary>3.2 P1 and P2: what the previews on Packs, a pack's page and Maps draw. One remembered setting,
+    /// so the three switches are one switch.</summary>
+    public PreviewMode PreviewMode => Services.Settings.PreviewMode;
+
+    /// <summary>The switch's selected chip. A null, which a ListBox pushes back while its items are rebuilt, and a
+    /// name that is no mode are both ignored.</summary>
+    public string PreviewModeChip
+    {
+        get => PreviewMode.ToString();
+        set
+        {
+            if (!Enum.TryParse<PreviewMode>(value, out var mode) || mode == PreviewMode)
+            {
+                return;
+            }
+
+            Services.UpdateSettings(Services.Settings with { PreviewMode = mode });
+            OnPropertyChanged(nameof(PreviewMode));
+            OnPropertyChanged();
+        }
+    }
+
     public void NavigateToPack(Pack pack)
     {
         PackDetail.Pack = pack;

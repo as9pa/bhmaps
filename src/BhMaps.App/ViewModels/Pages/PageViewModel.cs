@@ -24,6 +24,16 @@ public abstract partial class PageViewModel : ObservableObject
     /// <summary>The lines behind the page header's menu button, or null for a page with no menu (3.0).</summary>
     public virtual IReadOnlyList<TileMenuCommand>? PageMenu => null;
 
+    /// <summary>3.2 P1 and P2: the switch's chips and its selection, handed through to the shell so the switch on
+    /// every page is the one setting.</summary>
+    public IReadOnlyList<string> PreviewModeChips => MainViewModel.PreviewModeChips;
+
+    public string PreviewModeChip
+    {
+        get => Shell.PreviewModeChip;
+        set => Shell.PreviewModeChip = value;
+    }
+
     /// <summary>Called after every scan. Rebuild the page's collections here.</summary>
     public abstract void Refresh(ScanSnapshot snapshot);
 
@@ -38,5 +48,16 @@ public abstract partial class PageViewModel : ObservableObject
         {
             OnPropertyChanged(nameof(PageMenu));
         }
+        else if (e.PropertyName == nameof(MainViewModel.PreviewModeChip))
+        {
+            OnPropertyChanged(nameof(PreviewModeChip));
+            OnPreviewModeChanged();
+        }
+    }
+
+    /// <summary>3.2: the switch changed, on this page or another. A page that draws previews redraws them here;
+    /// the preview cache keys each mode apart, so a mode drawn before comes straight back from disk.</summary>
+    protected virtual void OnPreviewModeChanged()
+    {
     }
 }

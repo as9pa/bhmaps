@@ -382,6 +382,16 @@ public partial class MapsViewModel : PageViewModel, ITileSized
 
     public override void Refresh(ScanSnapshot snapshot) => Refresh(snapshot, null);
 
+    /// <summary>3.2 P2: every card and the panel are drawn again in the new mode; a mode drawn before comes
+    /// straight back from the preview cache.</summary>
+    protected override void OnPreviewModeChanged()
+    {
+        if (_snapshot is { } snapshot)
+        {
+            Refresh(snapshot);
+        }
+    }
+
     public override void Refresh(ScanSnapshot snapshot, IReadOnlyList<string>? writtenFolders)
     {
         _snapshot = snapshot;
@@ -498,7 +508,7 @@ public partial class MapsViewModel : PageViewModel, ITileSized
 
             try
             {
-                await card.LoadPreviewAsync(Shell.Services, hasLevelData, ct);
+                await card.LoadPreviewAsync(Shell.Services, hasLevelData, Shell.PreviewMode, ct);
             }
             catch (OperationCanceledException)
             {

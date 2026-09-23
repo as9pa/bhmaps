@@ -76,6 +76,22 @@
              their own, moved into the page menu (3.0). New pack is the solid one: making a pack is what this page
              is for, and importing a folder is the same thing done from files. -->
         <StackPanel IsEnabled="{Binding DataContext.IsNotBusy, RelativeSource={RelativeSource AncestorType=Window}}" Orientation="Horizontal">
+          <!-- 3.2 P1: Both / Platforms / Backgrounds, the one remembered switch Packs, a pack's page and Maps share.
+               A ListBox like the Maps chips, so the arrow keys move inside it and Tab lands on the selected chip. -->
+          <ListBox Margin="0,0,16,0"
+                   Visibility="{Binding HasPacks, Converter={StaticResource BoolToVis}}"
+                   VerticalAlignment="Center"
+                   AutomationProperties.Name="Show"
+                   ItemContainerStyle="{StaticResource ChipRow}"
+                   ItemsSource="{Binding PreviewModeChips}"
+                   SelectedItem="{Binding PreviewModeChip}"
+                   Style="{StaticResource TileListBox}">
+            <ListBox.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel Orientation="Horizontal" />
+              </ItemsPanelTemplate>
+            </ListBox.ItemsPanel>
+          </ListBox>
           <Button Command="{Binding ImportCommand}" Content="Import folder" controls:Icon.Glyph="{StaticResource Icon.FolderPlus}" Style="{StaticResource OutlineButton}" />
           <Button Margin="8,0,0,0"
                   Command="{Binding NewPackCommand}"

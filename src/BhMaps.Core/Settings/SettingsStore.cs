@@ -23,7 +23,7 @@ public static class SettingsStore
         // them; like the two keys below they have to stay known, or Save would carry them back as unknown.
         "mapsZoom", "backgroundsRowZoom", "packZoom", "platformsZoom",
         "welcomeDone", "homeZoom", "whileRunning", "backgroundsZoom", "packLastApplied",
-        "backgroundsShowPictures", "platformPreviewIsolate",
+        "backgroundsShowPictures", "platformPreviewIsolate", "previewMode",
         // 3.0 writes the game's map-select thumbnails always, so the 2.5 switch is read no more and written no
         // more; it stays known so an old file's copy of it is dropped rather than carried back.
         "writeGameThumbnails",
@@ -106,7 +106,8 @@ public static class SettingsStore
             Time(obj, "lastUpdateCheck"),
             Str(obj, "dismissedUpdate") is { Length: > 0 } tag ? tag : null,
             Hidden(obj),
-            Dismissed(obj))
+            Dismissed(obj),
+            Mode(obj))
         {
             Unknown = unknown.Count == 0 ? null : unknown,
         };
@@ -130,6 +131,7 @@ public static class SettingsStore
             ["checkForUpdates"] = settings.CheckForUpdates,
             ["lastUpdateCheck"] = settings.LastUpdateCheck?.ToString("o", CultureInfo.InvariantCulture),
             ["dismissedUpdate"] = settings.DismissedUpdate,
+            ["previewMode"] = settings.PreviewMode.ToString().ToLowerInvariant(),
         };
 
         // Spec 8: a library nobody has applied from writes no key at all, rather than an empty object nobody reads.
@@ -279,6 +281,15 @@ public static class SettingsStore
 
     /// <summary>The lowercase name the file carries, so a hand-edited settings file reads the way it looks.</summary>
     private static string Name(TileSize size) => size.ToString().ToLowerInvariant();
+
+    /// <summary>3.2: a missing or unknown value reads as Both, the look every earlier version had.</summary>
+    private static PreviewMode Mode(JsonObject obj) =>
+        Str(obj, "previewMode")?.ToLowerInvariant() switch
+        {
+            "platforms" => PreviewMode.Platforms,
+            "backgrounds" => PreviewMode.Backgrounds,
+            _ => PreviewMode.Both,
+        };
 
     /// <summary>Null when the key is absent or holds anything other than a JSON string, so a hand-edited file never throws.</summary>
     private static string? Str(JsonObject obj, string key) =>

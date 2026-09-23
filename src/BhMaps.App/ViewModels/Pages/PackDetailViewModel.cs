@@ -162,6 +162,9 @@ public partial class PackDetailViewModel : PageViewModel, ITileSized
     /// <summary>What the grid says when the pack has nothing to show.</summary>
     public string EmptyNote => NoMapsText;
 
+    /// <summary>3.2 P1: the grid is rebuilt for the new mode, and the drawer that was open comes back.</summary>
+    protected override void OnPreviewModeChanged() => Rebuild();
+
     /// <summary>Re-resolves the pack by name against the new snapshot and rebuilds every section from it. A pack
     /// that is no longer in the library was removed underneath the page, so the page goes back to the list.</summary>
     public override void Refresh(ScanSnapshot snapshot)
@@ -835,6 +838,23 @@ public partial class PackDetailViewModel : PageViewModel, ITileSized
             }
         }
 
+        // 3.2 P1: the switch keeps the tiles of one kind. Platforms keeps the layouts the pack has platform files
+        // for; Backgrounds keeps the tiles that carry one of the pack's background pictures.
+        var mode = Shell.PreviewMode;
+        foreach (var tile in Items.ToList())
+        {
+            var keep = mode switch
+            {
+                PreviewMode.Platforms => tile.Map is { } map && pack.FindFolder(map.FolderName) is { Files.Count: > 0 },
+                PreviewMode.Backgrounds => tile.PicturePath is not null,
+                _ => true,
+            };
+            if (!keep)
+            {
+                Items.Remove(tile);
+            }
+        }
+
         OnPropertyChanged(nameof(Items));
         OnPropertyChanged(nameof(BackdropTile));
         Load([.. Items], pack, _cts.Token);
@@ -928,9 +948,10 @@ public partial class PackDetailViewModel : PageViewModel, ITileSized
             try
             {
                 var sources = new AssetSources(Shell.Services.GamePath, pack.FullPath);
+                var mode = Shell.PreviewMode;
                 var path = await Task.Run(
                     () => Shell.Services.Previews.GetOrRenderAsync(
-                        tile.Map!.BaseLevel, tile.ComposeWidth, tile.ComposeHeight, sources, ct),
+                        tile.Map!.BaseLevel, tile.ComposeWidth, tile.ComposeHeight, sources, ct, mode: mode),
                     ct);
                 if (await Task.Run(() => LoadPreview(path), ct) is { } preview)
                 {

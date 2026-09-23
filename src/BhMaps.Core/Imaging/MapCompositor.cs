@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using BhMaps.Core.LevelData;
+using BhMaps.Core.Settings;
 
 namespace BhMaps.Core.Imaging;
 
@@ -93,27 +94,45 @@ public static class MapCompositor
     /// faint enough that the focused pieces read as the subject.</summary>
     public const double GhostOpacity = 0.15;
 
+    /// <summary>3.2 P2: the checkerboard Platforms mode draws where the background would be, the usual sign for
+    /// nothing there. Two quiet greys from the tile colour's family, in squares of <see cref="CheckerSquare" />
+    /// pixels at card width (about 12 px on a medium card), big enough that nobody reads them as the fine grid
+    /// missing art draws.</summary>
+    public static readonly Color CheckerDark = TileColour;
+
+    public static readonly Color CheckerLight = (Color)ColorConverter.ConvertFromString("#3B3936");
+
+    public const double CheckerSquare = 24;
+
     /// <summary>Every file this render will read, in draw order, background first.
     /// Missing files are omitted.</summary>
-    public static IReadOnlyList<string> CollectInputs(LevelDesc level, AssetSources sources)
+    public static IReadOnlyList<string> CollectInputs(
+        LevelDesc level, AssetSources sources, PreviewMode mode = PreviewMode.Both)
     {
         var inputs = new List<string>();
 
         // The same gate Render draws behind: a level with missing or degenerate CameraBounds has nowhere to draw,
         // so it reads nothing, and listing its assets anyway would churn the preview cache key for no bitmap.
+        // 3.2: Backgrounds draws the picture alone, cropped to fill, so it needs no camera; Platforms reads no
+        // background at all.
         var camera = level.Camera;
-        if (camera.W <= 0 || camera.H <= 0)
+        if (mode != PreviewMode.Backgrounds && (camera.W <= 0 || camera.H <= 0))
         {
             return inputs;
         }
 
-        if (level.Backgrounds.Count > 0)
+        if (mode != PreviewMode.Platforms && level.Backgrounds.Count > 0)
         {
             var background = sources.ResolveBackground(level.Backgrounds[0].AssetName);
             if (background is not null)
             {
                 inputs.Add(background);
             }
+        }
+
+        if (mode == PreviewMode.Backgrounds)
+        {
+            return inputs;
         }
 
         foreach (var node in level.Platforms)
@@ -130,7 +149,9 @@ public static class MapCompositor
     /// <paramref name="focus" /> is the set of asset paths relative to the map art root that draw at full
     /// strength; null means every asset does, which is what every 2.3 caller wants. An asset outside a non-null
     /// set draws at <paramref name="ghostOpacity" />. Pass a set built with
-    /// <see cref="StringComparer.OrdinalIgnoreCase" />: asset paths come from a file system that ignores case.</summary>
+    /// <see cref="StringComparer.OrdinalIgnoreCase" />: asset paths come from a file system that ignores case.
+    /// <paramref name="mode" /> is the 3.2 switch: Platforms draws no background, only the pieces on a checkerboard,
+    /// and Backgrounds draws the background alone, cropped to fill the whole bitmap.</summary>
     public static BitmapSource Render(
         LevelDesc level,
         int width,
@@ -138,7 +159,8 @@ public static class MapCompositor
         AssetSources sources,
         CameraBounds? viewport = null,
         IReadOnlySet<string>? focus = null,
-        double ghostOpacity = GhostOpacity)
+        double ghostOpacity = GhostOpacity,
+        PreviewMode mode = PreviewMode.Both)
     {
         var camera = viewport ?? level.Camera;
         var tile = new SolidColorBrush(TileColour);
@@ -149,9 +171,18 @@ public static class MapCompositor
         using (var dc = visual.RenderOpen())
         {
             dc.DrawRectangle(tile, null, new Rect(0, 0, width, height));
+            if (mode == PreviewMode.Platforms)
+            {
+                DrawChecker(dc, width, height);
+            }
 
-            // A level whose CameraBounds are missing or degenerate has nowhere to draw; the tile fill is the whole preview.
-            if (camera.W > 0 && camera.H > 0)
+            // A level whose CameraBounds are missing or degenerate has nowhere to draw; the tile fill is the whole
+            // preview. Backgrounds needs no camera: the picture is fitted to the bitmap, not to the level.
+            if (mode == PreviewMode.Backgrounds)
+            {
+                DrawBackgroundFill(dc, level, sources, width, height);
+            }
+            else if (camera.W > 0 && camera.H > 0)
             {
                 var scale = Math.Min(width / camera.W, height / camera.H);
                 var offsetX = (width - (camera.W * scale)) / 2;
@@ -169,7 +200,11 @@ public static class MapCompositor
                     },
                 });
 
-                DrawBackground(dc, level, sources, decoded);
+                if (mode == PreviewMode.Both)
+                {
+                    DrawBackground(dc, level, sources, decoded);
+                }
+
                 foreach (var placed in Walk(level))
                 {
                     dc.PushTransform(new MatrixTransform(placed.Transform));
@@ -209,6 +244,48 @@ public static class MapCompositor
         {
             CollectNode(child, assetDir, sources, inputs);
         }
+    }
+
+    /// <summary>3.2 P2: the checkerboard under the pieces in Platforms mode. The tile fill is the dark square, so
+    /// only the light ones are drawn. Scaled with the bitmap, so a card and the panel show the same board.</summary>
+    private static void DrawChecker(DrawingContext dc, int width, int height)
+    {
+        var light = new SolidColorBrush(CheckerLight);
+        light.Freeze();
+        var square = Math.Max(2, CheckerSquare * width / CardWidth);
+        for (var row = 0; row * square < height; row++)
+        {
+            for (var col = 1 - (row % 2); col * square < width; col += 2)
+            {
+                dc.DrawRectangle(light, null, new Rect(col * square, row * square, square, square));
+            }
+        }
+    }
+
+    /// <summary>3.2 P1 and P2: the first background alone, scaled to cover the whole bitmap and centred, so what
+    /// does not fit is cropped rather than letterboxed. Nothing for a level with no background, which leaves the
+    /// tile fill.</summary>
+    private static void DrawBackgroundFill(DrawingContext dc, LevelDesc level, AssetSources sources, int width, int height)
+    {
+        if (level.Backgrounds.Count == 0)
+        {
+            return;
+        }
+
+        var path = sources.ResolveBackground(level.Backgrounds[0].AssetName);
+        var decoded = new Dictionary<string, BitmapSource?>(StringComparer.OrdinalIgnoreCase);
+        var image = path is null ? null : Decode(path, decoded);
+        if (image is null || image.PixelWidth <= 0 || image.PixelHeight <= 0)
+        {
+            return;
+        }
+
+        var scale = Math.Max((double)width / image.PixelWidth, (double)height / image.PixelHeight);
+        var w = image.PixelWidth * scale;
+        var h = image.PixelHeight * scale;
+        dc.PushClip(new RectangleGeometry(new Rect(0, 0, width, height)));
+        dc.DrawImage(image, new Rect((width - w) / 2, (height - h) / 2, w, h));
+        dc.Pop();
     }
 
     /// <summary>Only the first Background element is drawn; the rest are parallax layers the preview leaves out.</summary>

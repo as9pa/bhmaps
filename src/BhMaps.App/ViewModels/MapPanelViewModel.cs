@@ -8,6 +8,7 @@ using BhMaps.Core.LevelData;
 using BhMaps.Core.Maps;
 using BhMaps.Core.Model;
 using BhMaps.Core.Operations;
+using BhMaps.Core.Settings;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -366,7 +367,8 @@ public partial class MapPanelViewModel : ObservableObject
     private async Task LoadPreviewAsync(CancellationToken ct)
     {
         var image = _snapshot.Catalog.HasLevelData
-            ? await ComposeAsync(_map.BaseLevel, MapCompositor.PanelWidth, MapCompositor.PanelHeight, null, null, ct)
+            ? await ComposeAsync(
+                _map.BaseLevel, MapCompositor.PanelWidth, MapCompositor.PanelHeight, null, null, ct, _shell.PreviewMode)
             : null;
 
         // A preview is never worth an error dialog, so a composite that could not be drawn becomes the file tile.
@@ -466,7 +468,8 @@ public partial class MapPanelViewModel : ObservableObject
     /// <summary>Every composite goes through the preview cache, never MapCompositor.Render: the cache queues the
     /// render on the one STA thread and keeps the result. Null when the picture could not be drawn.</summary>
     private async Task<ImageSource?> ComposeAsync(
-        LevelDesc level, int width, int height, string? packRoot, string? backgroundPath, CancellationToken ct)
+        LevelDesc level, int width, int height, string? packRoot, string? backgroundPath, CancellationToken ct,
+        PreviewMode mode = PreviewMode.Both)
     {
         var previews = _shell.Services.Previews;
         var sources = new AssetSources(_shell.Services.GamePath, packRoot, backgroundPath);
@@ -477,7 +480,7 @@ public partial class MapPanelViewModel : ObservableObject
             return await Task.Run<ImageSource?>(
                 async () =>
                 {
-                    var path = await previews.GetOrRenderAsync(level, width, height, sources, ct).ConfigureAwait(false);
+                    var path = await previews.GetOrRenderAsync(level, width, height, sources, ct, mode: mode).ConfigureAwait(false);
                     return Decode(path);
                 },
                 ct);
