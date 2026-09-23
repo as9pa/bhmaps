@@ -8,6 +8,7 @@ using BhMaps.Core.LevelData;
 using BhMaps.Core.Maps;
 using BhMaps.Core.Model;
 using BhMaps.Core.Operations;
+using BhMaps.Core.Settings;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -19,9 +20,12 @@ namespace BhMaps.App.ViewModels;
 /// there is nothing to edit without it.</summary>
 public sealed record PlatformFileViewModel(
     string RelativePath, string SourceText, bool ChangesNothing, ImageSource? Thumbnail, bool CanEdit,
-    IRelayCommand EditCommand)
+    IRelayCommand EditCommand, string AlsoIn = "")
 {
     public string FileName => Path.GetFileName(RelativePath);
+
+    /// <summary>3.2: false hides the "also in" mark on a file only this layout draws.</summary>
+    public bool ShowAlsoIn => AlsoIn.Length > 0;
 
     /// <summary>Empty when the scan produced no status for the file, and then no tag is drawn.</summary>
     public bool ShowSource => SourceText.Length > 0;
@@ -132,12 +136,14 @@ public partial class MapPanelViewModel : ObservableObject
 
         // Built with no thumbnail, no transparency verdict and no Edit: all three are file work, and all three
         // arrive from LoadAsync. The Edit opens the editor on the game's file, so it hands it no pack (ruling 7).
-        foreach (var relativePath in map.PlatformFiles.OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
+        // 3.2: a layout card lists the files its own layout draws, and says which other layout draws one too.
+        foreach (var relativePath in map.LayoutFiles.OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
         {
             var file = relativePath;
             _platformFiles.Add(new PlatformFileViewModel(
                 file, InGameMatch.File(status, file)?.Text ?? "", ChangesNothing: false, Thumbnail: null,
-                CanEdit: false, EditCommand: new RelayCommand(() => _ = shell.OpenPlatformEditorAsync([map], pack: null, onlyFile: file))));
+                CanEdit: false, EditCommand: new RelayCommand(() => _ = shell.OpenPlatformEditorAsync([map], pack: null, onlyFile: file)),
+                AlsoIn: snapshot.Catalog.AlsoInText(map, file)));
         }
 
         RebuildMenus();
@@ -361,7 +367,8 @@ public partial class MapPanelViewModel : ObservableObject
     private async Task LoadPreviewAsync(CancellationToken ct)
     {
         var image = _snapshot.Catalog.HasLevelData
-            ? await ComposeAsync(_map.BaseLevel, MapCompositor.PanelWidth, MapCompositor.PanelHeight, null, null, ct)
+            ? await ComposeAsync(
+                _map.BaseLevel, MapCompositor.PanelWidth, MapCompositor.PanelHeight, null, null, ct, _shell.PreviewMode)
             : null;
 
         // A preview is never worth an error dialog, so a composite that could not be drawn becomes the file tile.
@@ -461,7 +468,8 @@ public partial class MapPanelViewModel : ObservableObject
     /// <summary>Every composite goes through the preview cache, never MapCompositor.Render: the cache queues the
     /// render on the one STA thread and keeps the result. Null when the picture could not be drawn.</summary>
     private async Task<ImageSource?> ComposeAsync(
-        LevelDesc level, int width, int height, string? packRoot, string? backgroundPath, CancellationToken ct)
+        LevelDesc level, int width, int height, string? packRoot, string? backgroundPath, CancellationToken ct,
+        PreviewMode mode = PreviewMode.Both)
     {
         var previews = _shell.Services.Previews;
         var sources = new AssetSources(_shell.Services.GamePath, packRoot, backgroundPath);
@@ -472,7 +480,7 @@ public partial class MapPanelViewModel : ObservableObject
             return await Task.Run<ImageSource?>(
                 async () =>
                 {
-                    var path = await previews.GetOrRenderAsync(level, width, height, sources, ct).ConfigureAwait(false);
+                    var path = await previews.GetOrRenderAsync(level, width, height, sources, ct, mode: mode).ConfigureAwait(false);
                     return Decode(path);
                 },
                 ct);

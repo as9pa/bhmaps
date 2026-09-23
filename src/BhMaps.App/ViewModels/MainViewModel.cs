@@ -12,6 +12,7 @@ using BhMaps.Core.Model;
 using BhMaps.Core.Operations;
 using BhMaps.Core.Packs;
 using BhMaps.Core.Scanning;
+using BhMaps.Core.Settings;
 using BhMaps.Core.Text;
 using BhMaps.Core.Update;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -275,6 +276,31 @@ public partial class MainViewModel : ObservableObject
     private void OpenUpdate() => CurrentPage = SettingsPage;
 
     /// <summary>Opens the pack detail page on one pack (spec 7.5).</summary>
+    /// <summary>3.2 P1 and P2: the switch's chips, in the order they draw.</summary>
+    public static IReadOnlyList<string> PreviewModeChips { get; } = [.. Enum.GetNames<PreviewMode>()];
+
+    /// <summary>3.2 P1 and P2: what the previews on Packs, a pack's page and Maps draw. One remembered setting,
+    /// so the three switches are one switch.</summary>
+    public PreviewMode PreviewMode => Services.Settings.PreviewMode;
+
+    /// <summary>The switch's selected chip. A null, which a ListBox pushes back while its items are rebuilt, and a
+    /// name that is no mode are both ignored.</summary>
+    public string PreviewModeChip
+    {
+        get => PreviewMode.ToString();
+        set
+        {
+            if (!Enum.TryParse<PreviewMode>(value, out var mode) || mode == PreviewMode)
+            {
+                return;
+            }
+
+            Services.UpdateSettings(Services.Settings with { PreviewMode = mode });
+            OnPropertyChanged(nameof(PreviewMode));
+            OnPropertyChanged();
+        }
+    }
+
     public void NavigateToPack(Pack pack)
     {
         PackDetail.Pack = pack;
@@ -1128,7 +1154,7 @@ public partial class MainViewModel : ObservableObject
             Dialogs,
             snapshot.Packs,
             snapshot.MapStatuses,
-            new PlatformEditorRequest(maps, pack, onlyFile));
+            new PlatformEditorRequest(maps, pack, onlyFile, Catalog: snapshot.Catalog));
         var window = new PlatformEditorWindow { DataContext = vm, Owner = Application.Current.MainWindow, ShowActivated = !App.Quiet };
         bool accepted;
         try
@@ -1162,6 +1188,11 @@ public partial class MainViewModel : ObservableObject
         if (!saved.ApplyToGame)
         {
             // Saved into the pack and no further, so nothing in the game folder moved and there is nothing to undo.
+            if (vm.SeamFixSkipped)
+            {
+                Status.Note(PlatformPieceViewModel.SeamFixNote);
+            }
+
             return;
         }
 
@@ -1194,25 +1225,34 @@ public partial class MainViewModel : ObservableObject
     private static IReadOnlyList<MapSlotChoice> MapSlotChoices(ScanSnapshot snapshot)
     {
         var bySlot = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        var notes = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
         foreach (var map in snapshot.Catalog.Maps)
         {
+            // 3.2: a folder with two or more layouts draws one background under all of them, which the editor says.
+            var note = snapshot.Catalog.SharedBackgroundNote(map.FolderName);
             foreach (var slot in map.BackgroundSlots)
             {
                 if (!bySlot.TryGetValue(slot, out var names))
                 {
                     names = [];
                     bySlot[slot] = names;
+                    notes[slot] = [];
                 }
 
                 if (!names.Contains(map.DisplayName))
                 {
                     names.Add(map.DisplayName);
                 }
+
+                if (note.Length > 0 && !notes[slot].Contains(note))
+                {
+                    notes[slot].Add(note);
+                }
             }
         }
 
         var choices = bySlot
-            .Select(pair => new MapSlotChoice(pair.Key, string.Join(", ", pair.Value)))
+            .Select(pair => new MapSlotChoice(pair.Key, string.Join(", ", pair.Value), string.Join(" ", notes[pair.Key])))
             .OrderBy(c => c.DisplayNames, StringComparer.OrdinalIgnoreCase)
             .ToList();
         choices.Insert(0, MapSlotChoice.AllMaps);

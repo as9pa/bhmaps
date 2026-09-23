@@ -39,7 +39,7 @@ public partial class MapsView : UserControl
                 return;
             }
 
-            page.OpenMapCommand.Execute(card.FolderName);
+            page.OpenMapCommand.Execute(card.Key);
             ScrollOpenCardIntoView(item);
         }
     }
@@ -57,7 +57,7 @@ public partial class MapsView : UserControl
         {
             // Open only, never close: Escape and the X button are what close the panel, and the card a keyboard
             // user is standing on is the one they just opened.
-            page.OpenMapCommand.Execute(card.FolderName);
+            page.OpenMapCommand.Execute(card.Key);
             ScrollOpenCardIntoView(item);
             e.Handled = true;
             return;

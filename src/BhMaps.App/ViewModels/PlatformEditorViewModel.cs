@@ -21,9 +21,11 @@ namespace BhMaps.App.ViewModels;
 /// set came from, or null for the set the game is showing (spec 6), and the relative path of the one piece a
 /// panel row asked for, or null for the whole set. Only that one piece opens ticked (spec 7). SourcePack is the
 /// pack whose record the values are loaded from: the pack itself when there is one, the pack the map's files were
-/// matched to otherwise, and null when no pack remembers this map (spec 5.1).</summary>
+/// matched to otherwise, and null when no pack remembers this map (spec 5.1). Catalog, when given, says which
+/// other layout of a folder also draws a piece (3.2).</summary>
 public sealed record PlatformEditorRequest(
-    IReadOnlyList<MapEntry> Maps, Pack? Pack, string? OnlyFile = null, Pack? SourcePack = null)
+    IReadOnlyList<MapEntry> Maps, Pack? Pack, string? OnlyFile = null, Pack? SourcePack = null,
+    MapCatalog? Catalog = null)
 {
     /// <summary>The first map of the set, which is the whole set for every way in that opens on one map.</summary>
     public MapEntry Map => Maps[0];
@@ -226,6 +228,9 @@ public partial class PlatformEditorViewModel : ObservableObject
     /// <summary>What Save wrote into the library, or null while nothing has been saved.</summary>
     public PlatformSave? Saved { get; private set; }
 
+    /// <summary>Save wrote faded pieces without the seam fix because there was no level data (3.2 O1).</summary>
+    public bool SeamFixSkipped { get; private set; }
+
     /// <summary>Spec 9: which map of the set the strip is on. Everything one map owns follows it.</summary>
     [ObservableProperty]
     public partial int CurrentIndex { get; set; }
@@ -253,15 +258,17 @@ public partial class PlatformEditorViewModel : ObservableObject
     public partial ImageSource? Preview { get; set; }
 
     /// <summary>Spec 6.2: true lays one picture across every platform and cuts each piece out of it, false fits
-    /// the same picture to each piece on its own, as 2.4 did. Changing it cuts the ticked rows again.</summary>
+    /// the same picture to each piece on its own, as 2.4 did. Changing it cuts the ticked rows again. It can be
+    /// chosen before any picture is loaded, and the next Replace uses it (3.2 F2).</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanPan))]
+    [NotifyPropertyChangedFor(nameof(CanPan), nameof(ImageText))]
     public partial bool FitAcross { get; set; } = true;
 
     /// <summary>3.0 E: how the picture fills the piece's box, or the whole stage when it is laid across. The one
     /// fit set every window offers. Changing it cuts the ticked rows again.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanPan), nameof(FitFill), nameof(FitFit), nameof(FitCenter), nameof(FitStretch))]
+    [NotifyPropertyChangedFor(
+        nameof(CanPan), nameof(FitFill), nameof(FitFit), nameof(FitCenter), nameof(FitStretch), nameof(ImageText))]
     public partial PictureFit Fit { get; set; } = PictureFit.Fill;
 
     /// <summary>Where the laid picture sits inside the platform box, 0..1 (spec 6.2). The drag on the preview is
@@ -318,6 +325,10 @@ public partial class PlatformEditorViewModel : ObservableObject
 
     /// <summary>Whether the strip is drawn at all: one map is every other way into the editor (spec 9).</summary>
     public bool HasManyMaps => _sets.Count > 1;
+
+    /// <summary>3.2: the "also in" mark of each row whose piece another layout of the folder also draws, keyed by
+    /// the row. A row with no entry draws no mark.</summary>
+    public Dictionary<PlatformPieceViewModel, string> AlsoInMarks { get; } = [];
 
     public bool CanPreviousMap => !IsSaving && CurrentIndex > 0;
 
@@ -384,6 +395,14 @@ public partial class PlatformEditorViewModel : ObservableObject
             if (ticked.All(p => p.Art == PieceArt.Replacement)
                 && ticked.Select(p => p.ReplacementName).Distinct(StringComparer.Ordinal).Count() == 1)
             {
+                // 3.2: the rows are cut from the loaded picture the way the Across or Each pair and the fit row
+                // say, so the line reads those out rather than a size.
+                if (CanUseFit)
+                {
+                    var layout = FitAcross ? "across the platforms" : "on each piece";
+                    return $"{ticked[0].ReplacementName}, {layout}, {Fit}";
+                }
+
                 // One picture fitted to pieces of different shapes has no one size to read out.
                 return ticked.All(p => p.Width == ticked[0].Width && p.Height == ticked[0].Height)
                     ? ticked[0].ImageText
@@ -408,7 +427,8 @@ public partial class PlatformEditorViewModel : ObservableObject
     /// <summary>The full path the loaded picture came from, which is what the record writes down.</summary>
     public string? LoadedPicturePath { get; private set; }
 
-    /// <summary>Whether the fit switch can be used: there is a picture to lay (spec 6.2).</summary>
+    /// <summary>Whether the Fill, Fit, Center and Stretch row can be used: there is a picture to lay (spec 6.2).
+    /// The Across or Each pair is always open (3.2 F2).</summary>
     public bool CanUseFit => LoadedPicture is not null;
 
     /// <summary>Whether dragging the preview moves anything: a laid picture, not one fitted piece by piece, and
@@ -638,7 +658,7 @@ public partial class PlatformEditorViewModel : ObservableObject
     private IReadOnlyList<PlatformPieceViewModel> BuildPieces(MapSet set)
     {
         var pieces = new List<PlatformPieceViewModel>();
-        foreach (var relativePath in set.Map.PlatformFiles.OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
+        foreach (var relativePath in set.Map.LayoutFiles.OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
         {
             var ticked = _request.OnlyFile is null
                 || string.Equals(relativePath, _request.OnlyFile, StringComparison.OrdinalIgnoreCase);
@@ -665,6 +685,16 @@ public partial class PlatformEditorViewModel : ObservableObject
         for (var i = 0; i < pieces.Count; i++)
         {
             pieces[i].Number = i + 1;
+        }
+
+        // 3.2: a piece another layout of the folder also draws carries a quiet mark saying which.
+        foreach (var piece in pieces)
+        {
+            var mark = _request.Catalog?.AlsoInText(set.Map, piece.RelativePath) ?? "";
+            if (mark.Length > 0)
+            {
+                AlsoInMarks[piece] = mark;
+            }
         }
 
         return pieces;
@@ -784,8 +814,11 @@ public partial class PlatformEditorViewModel : ObservableObject
                     if (picture is { Length: > 0 } && File.Exists(picture))
                     {
                         reading = Path.GetFileName(picture);
+                        // The saved fit mode, not always Fill: a Fit or Center piece reopens as saved (3.2 F1).
                         fitted = PieceFitter.Fit(
-                            BackgroundFitter.LoadSource(picture), BackgroundFitter.LoadSource(row.OriginalPath));
+                            BackgroundFitter.LoadSource(picture),
+                            BackgroundFitter.LoadSource(row.OriginalPath),
+                            PictureFits.Options(entry.Fit ?? PictureFit.Fill));
                     }
 
                     results.Add((row, fitted, picture ?? "", ChangedOutsideNote(row, entry, packRoot, hasNote)));
@@ -828,6 +861,16 @@ public partial class PlatformEditorViewModel : ObservableObject
             .ToList();
         if (spanning.Count == 0)
         {
+            // The Across or Each pair is open with no picture loaded, so a record that saved its pictures piece
+            // by piece shows that choice rather than the default (3.2 F2).
+            if (_sets.SelectMany(s => s.RecordRows).Any(r => r.Entry.Art == PlatformArt.EachPiece
+                && r.Entry.Picture is { Length: > 0 }))
+            {
+                _restoringFit = true;
+                FitAcross = false;
+                _restoringFit = false;
+            }
+
             return;
         }
 
@@ -1061,6 +1104,7 @@ public partial class PlatformEditorViewModel : ObservableObject
         LoadedPicturePath = path;
         OnPropertyChanged(nameof(CanUseFit));
         OnPropertyChanged(nameof(CanPan));
+        OnPropertyChanged(nameof(ImageText));
         return true;
     }
 
@@ -1073,6 +1117,7 @@ public partial class PlatformEditorViewModel : ObservableObject
         _fitNoteRows.Clear();
         OnPropertyChanged(nameof(CanUseFit));
         OnPropertyChanged(nameof(CanPan));
+        OnPropertyChanged(nameof(ImageText));
     }
 
     /// <summary>Spec 6.2: every row named is cut from the loaded picture again with the switch and the pan as
@@ -1130,9 +1175,12 @@ public partial class PlatformEditorViewModel : ObservableObject
                     foreach (var row in rows)
                     {
                         var piece = BackgroundFitter.LoadSource(row.SourcePath);
+
+                        // Fit and Center show the piece's original art where the picture does not reach (3.2 F1).
+                        var original = row.WorkingCopyPath is null ? piece : BackgroundFitter.LoadSource(row.OriginalPath);
                         if (!across || box is not { } stage)
                         {
-                            results.Add((row, PieceFitter.Fit(picture, piece, options), false, ""));
+                            results.Add((row, PieceFitter.Fit(picture, piece, options, original), false, ""));
                             continue;
                         }
 
@@ -1141,7 +1189,7 @@ public partial class PlatformEditorViewModel : ObservableObject
                         {
                             results.Add((
                                 row,
-                                PieceFitter.Fit(picture, piece, options),
+                                PieceFitter.Fit(picture, piece, options, original),
                                 false,
                                 $"{row.FileName} not on this stage, fitted on its own."));
                             continue;
@@ -1152,7 +1200,7 @@ public partial class PlatformEditorViewModel : ObservableObject
                         var note = placements.Count > 1
                             ? $"{row.FileName} drawn {placements.Count} times, cut from the largest."
                             : "";
-                        results.Add((row, SpanFitter.Cut(picture, stage, pan, SpanFitter.Largest(placements)!, piece), true, note));
+                        results.Add((row, SpanFitter.Cut(picture, stage, pan, SpanFitter.Largest(placements)!, piece, original), true, note));
                     }
                 }
 
@@ -1316,6 +1364,9 @@ public partial class PlatformEditorViewModel : ObservableObject
 
         var failed = false;
         var opened = new List<PlatformPieceViewModel>();
+        var rows = Pieces;
+        var model = _services.LevelData.Model;
+        var masks = await Task.Run(() => PlatformPieceViewModel.SeamMasks(rows, model, out _));
         foreach (var row in Pieces.Where(p => p.IsTicked).ToList())
         {
             var copy = Path.Combine(folder, row.FileName);
@@ -1325,7 +1376,7 @@ public partial class PlatformEditorViewModel : ObservableObject
             {
                 try
                 {
-                    await Task.Run(() => row.WriteResult(copy));
+                    await Task.Run(() => row.WriteResult(copy, masks.GetValueOrDefault(row.RelativePath)));
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or FileFormatException)
                 {
@@ -1644,11 +1695,14 @@ public partial class PlatformEditorViewModel : ObservableObject
                 // Every row, ticked or not: what Save leaves behind is the whole set, not the part worked on.
                 var rows = set.Rows;
                 var folder = set.Map.FolderName;
+                var model = _services.LevelData.Model;
                 await Task.Run(() =>
                 {
+                    var masks = PlatformPieceViewModel.SeamMasks(rows, model, out var missing);
+                    SeamFixSkipped |= missing;
                     foreach (var row in rows)
                     {
-                        row.CopyOrWriteResult(Path.Combine(packRoot, row.RelativePath));
+                        row.CopyOrWriteResult(Path.Combine(packRoot, row.RelativePath), masks.GetValueOrDefault(row.RelativePath));
                     }
 
                     record.SetMap(folder, DateTimeOffset.Now, EntriesFor(rows, packRoot, panX, panY, fit));
@@ -1777,6 +1831,7 @@ public partial class PlatformEditorViewModel : ObservableObject
         var level = CurrentMap.BaseLevel;
         var background = Current.BackgroundPath;
         var (focus, viewport) = FocusFor(level);
+        var model = _services.LevelData.Model;
         var reading = "";
         try
         {
@@ -1785,11 +1840,13 @@ public partial class PlatformEditorViewModel : ObservableObject
             await Task.Run(
                 () =>
                 {
+                    // The preview shows the corrected files, the same ones Save writes (3.2 O1).
+                    var masks = PlatformPieceViewModel.SeamMasks(rows, model, out _);
                     foreach (var row in rows)
                     {
                         ct.ThrowIfCancellationRequested();
                         reading = row.FileName;
-                        row.CopyOrWriteResult(Path.Combine(root, row.RelativePath));
+                        row.CopyOrWriteResult(Path.Combine(root, row.RelativePath), masks.GetValueOrDefault(row.RelativePath));
                     }
                 },
                 ct);

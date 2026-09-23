@@ -6,6 +6,7 @@ using BhMaps.Core.Maps;
 using BhMaps.Core.Model;
 using BhMaps.Core.Operations;
 using BhMaps.Core.Packs;
+using BhMaps.Core.Settings;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -44,7 +45,11 @@ public partial class PacksViewModel : PageViewModel
     /// <summary>Whether to show the empty-library invitation instead of the list (spec 7.8). Set only by a scan,
     /// so it stays false while the first one is still running rather than flashing the empty state.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasPacks))]
     public partial bool IsEmpty { get; set; }
+
+    /// <summary>3.2 P1: the switch shows only when there is a pack to switch.</summary>
+    public bool HasPacks => !IsEmpty;
 
     /// <summary>The shell's own import flow (spec 6.9). The header reuses it rather than starting a second one;
     /// the rescan it ends with is what refreshes this list.</summary>
@@ -62,9 +67,20 @@ public partial class PacksViewModel : PageViewModel
         // drops back to "Not in game." without anything having to tell this page so.
         var appliedMaps = AppliedRecord.Load(AppliedRecord.PathFor(Shell.Services.AppDataDir))
             .MapsPerPack(MapFolders.Of(snapshot.Catalog.Maps));
+        var mode = Shell.PreviewMode;
         foreach (var pack in snapshot.Packs)
         {
-            var row = new PackRowViewModel(pack, MapsIn(snapshot.Catalog, pack));
+            // 3.2 P1: the switch leaves out the packs with none of the chosen kind. The eye's hidden state is not
+            // touched; the row is only not drawn.
+            var maps = MapsIn(snapshot.Catalog, pack);
+            var backgrounds = BackgroundFiles(pack);
+            if ((mode == PreviewMode.Platforms && maps.Count == 0)
+                || (mode == PreviewMode.Backgrounds && backgrounds.Count == 0))
+            {
+                continue;
+            }
+
+            var row = new PackRowViewModel(pack, maps, mode == PreviewMode.Backgrounds ? backgrounds : null);
 
             // 2.8: the eye's state is read before the menu is built, because the menu's line names it.
             row.IsHidden = Shell.Services.Settings.IsHidden(pack.Name);
@@ -73,7 +89,18 @@ public partial class PacksViewModel : PageViewModel
             Rows.Add(row);
         }
 
-        IsEmpty = Rows.Count == 0;
+        // An empty library, not a switch that filtered every row away: the empty state offers to capture the
+        // Default pack, which is no answer to a filter.
+        IsEmpty = snapshot.Packs.Count == 0;
+    }
+
+    /// <summary>3.2 P1: the rows are rebuilt for the new mode; the previews each mode drew before are cache hits.</summary>
+    protected override void OnPreviewModeChanged()
+    {
+        if (_snapshot is { } snapshot)
+        {
+            Refresh(snapshot);
+        }
     }
 
     /// <summary>Addendum E: a row reads its files when it comes on screen and not before, so a library of forty
@@ -97,7 +124,9 @@ public partial class PacksViewModel : PageViewModel
             foreach (var tile in row.Previews)
             {
                 ct.ThrowIfCancellationRequested();
-                tile.Preview = await ComposeAsync(row.Pack, tile.Map, ct);
+                tile.Preview = tile.Map is { } map
+                    ? await ComposeAsync(row.Pack, map, ct)
+                    : await Shell.Services.RowThumbnails.GetAsync(tile.PicturePath ?? "", ct);
             }
         }
         catch (OperationCanceledException)
@@ -111,13 +140,13 @@ public partial class PacksViewModel : PageViewModel
     /// which is what an empty slot looks like everywhere else in the app.</summary>
     private async Task<ImageSource?> LeadAsync(PackRowViewModel row, CancellationToken ct)
     {
-        if (row.Maps.Count > 0)
+        // 3.2 P1: in Backgrounds the lead is the pack's first background picture, like a pack with no maps.
+        if (row.Maps.Count > 0 && Shell.PreviewMode != PreviewMode.Backgrounds)
         {
             return await ComposeAsync(row.Pack, row.Maps[0], ct);
         }
 
-        var file = (row.Pack.FindFolder(BackgroundsFolder)?.Files ?? Array.Empty<GameFile>())
-            .FirstOrDefault(f => Path.GetExtension(f.Name).Equals(BackgroundExtension, StringComparison.OrdinalIgnoreCase));
+        var file = BackgroundFiles(row.Pack).FirstOrDefault();
         return file is null ? null : await Shell.Services.RowThumbnails.GetAsync(file.FullPath, ct);
     }
 
@@ -131,6 +160,7 @@ public partial class PacksViewModel : PageViewModel
         var previews = Shell.Services.Previews;
         var thumbnails = Shell.Services.RowThumbnails;
         var gamePath = Shell.Services.GamePath;
+        var mode = Shell.PreviewMode;
         ImageSource? image = null;
 
         // Spec 3.6: with no level data there are no camera bounds and no platform tree, so there is nothing to
@@ -146,7 +176,7 @@ public partial class PacksViewModel : PageViewModel
                         var path = await previews
                             .GetOrRenderAsync(
                                 map.BaseLevel, PackRowViewModel.ComposeWidth, PackRowViewModel.ComposeHeight,
-                                sources, ct)
+                                sources, ct, mode: mode)
                             .ConfigureAwait(false);
                         return await thumbnails.GetAsync(path, ct).ConfigureAwait(false);
                     },
@@ -203,6 +233,12 @@ public partial class PacksViewModel : PageViewModel
     /// pack folder that is not a map, such as a theme folder other maps borrow from (spec 4), is not one of
     /// them, and neither is Backgrounds. The same rule pack detail uses, so a row's strip and the pack's own
     /// page show the same maps in the same order.</summary>
+    private static IReadOnlyList<GameFile> BackgroundFiles(Pack pack) =>
+        [
+            .. (pack.FindFolder(BackgroundsFolder)?.Files ?? Array.Empty<GameFile>())
+                .Where(f => Path.GetExtension(f.Name).Equals(BackgroundExtension, StringComparison.OrdinalIgnoreCase)),
+        ];
+
     private static IReadOnlyList<MapEntry> MapsIn(MapCatalog catalog, Pack pack) =>
         [.. catalog.Maps.Where(map => pack.FindFolder(map.FolderName) is { Files.Count: > 0 })];
 

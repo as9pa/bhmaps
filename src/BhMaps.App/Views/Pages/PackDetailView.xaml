@@ -59,6 +59,21 @@
           <TextBlock Margin="0,0,12,0" VerticalAlignment="Center" Foreground="{StaticResource Text3Brush}"
                      Text="{Binding ClipboardHint}"
                      Visibility="{Binding HasClipboardHint, Converter={StaticResource BoolToVis}}" />
+          <!-- 3.2 P1: Both / Platforms / Backgrounds, the one remembered switch Packs, a pack's page and Maps share.
+               A ListBox like the Maps chips, so the arrow keys move inside it and Tab lands on the selected chip. -->
+          <ListBox Margin="0,0,12,0"
+                   VerticalAlignment="Center"
+                   AutomationProperties.Name="Show"
+                   ItemContainerStyle="{StaticResource ChipRow}"
+                   ItemsSource="{Binding PreviewModeChips}"
+                   SelectedItem="{Binding PreviewModeChip}"
+                   Style="{StaticResource TileListBox}">
+            <ListBox.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel Orientation="Horizontal" />
+              </ItemsPanelTemplate>
+            </ListBox.ItemsPanel>
+          </ListBox>
           <controls:SizePicker Margin="0,0,12,0" VerticalAlignment="Center" Value="{Binding TileSize}" />
           <Button Margin="0,0,8,0" Command="{Binding ImportFromPackCommand}" Content="Import from pack"
                   controls:Icon.Glyph="{StaticResource Icon.FolderPlus}"

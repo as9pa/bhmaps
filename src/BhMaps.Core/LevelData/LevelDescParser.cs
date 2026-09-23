@@ -75,7 +75,8 @@ public static class LevelDescParser
             Num(element, "Scale", 1), Num(element, "ScaleX", 1), Num(element, "ScaleY", 1),
             Num(element, "Rotation", 0),
             (string?)element.Attribute("Theme"),
-            assets, children);
+            assets, children,
+            element.Name.LocalName == "MovingPlatform");
     }
 
     /// <summary>An attribute or a same-named child element, whichever is present.</summary>

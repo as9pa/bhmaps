@@ -1,4 +1,4 @@
-﻿using BhMaps.Core.Settings;
+using BhMaps.Core.Settings;
 using BhMaps.Core.Tests.Helpers;
 
 namespace BhMaps.Core.Tests;

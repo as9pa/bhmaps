@@ -93,16 +93,10 @@ public partial class MapsViewModel : PageViewModel, ITileSized
     /// panel (wireframe 8.1).</summary>
     public double TargetCardWidth => TileSizes.CardWidth(TileSize);
 
-    /// <summary>Spec 3.1's density steps, now three rather than nine. Large and Medium carry the name and the
-    /// tag; Small drops both, tightens the card to 4 px padding, and shows Missing as a mark on the picture
-    /// instead of a word under it. ShowTagRow is the size's answer for every card; MapCardViewModel.ShowTag is
-    /// one card's own answer about whether it has a tag at all. Both have to be true for a tag to be drawn, so
-    /// they keep different names.</summary>
+    /// <summary>Spec 3.1's density steps, now three rather than nine. Large and Medium carry the name; Small
+    /// drops it and tightens the card to 4 px padding. 3.2: no size carries a tag, and Missing is a mark on the
+    /// picture at every size.</summary>
     public bool ShowName => TileSize != TileSize.Small;
-
-    public bool ShowTagRow => TileSize != TileSize.Small;
-
-    public bool ShowMissingMark => TileSize == TileSize.Small;
 
     public double NameFontSize => TileSize == TileSize.Large ? 15 : TileSize == TileSize.Medium ? 13 : 12;
 
@@ -138,22 +132,29 @@ public partial class MapsViewModel : PageViewModel, ITileSized
     /// to undo and the state is just the sentence.</summary>
     public string EmptyActionText => ShowClearSearch ? "Clear search" : "";
 
-    /// <summary>Opens one map's right panel. A click on a card runs the generated command.</summary>
+    /// <summary>Opens one map's right panel. A click on a card runs the generated command. 3.2: the argument is
+    /// a card's key; a folder name still opens that folder's first card, for a caller that only knows the folder.
+    /// </summary>
     [RelayCommand]
-    public void OpenMap(string? folderName)
+    public void OpenMap(string? key)
     {
-        if (string.IsNullOrEmpty(folderName))
+        if (string.IsNullOrEmpty(key))
         {
             return;
         }
 
-        if (_all.FirstOrDefault(c => c.FolderName.Equals(folderName, StringComparison.OrdinalIgnoreCase)) is { } card)
+        if (FindCard(key) is { } card)
         {
             Selected = card;
         }
 
-        Shell.LastOpenedMap = folderName;
+        Shell.LastOpenedMap = key;
     }
+
+    /// <summary>3.2: the card with this key, else the first card of the folder with this name.</summary>
+    private MapCardViewModel? FindCard(string key) =>
+        _all.FirstOrDefault(c => c.Key.Equals(key, StringComparison.OrdinalIgnoreCase))
+        ?? _all.FirstOrDefault(c => c.FolderName.Equals(key, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>The no-results state's way back when a search caused it (spec 3.1).</summary>
     [RelayCommand]
@@ -375,6 +376,16 @@ public partial class MapsViewModel : PageViewModel, ITileSized
 
     public override void Refresh(ScanSnapshot snapshot) => Refresh(snapshot, null);
 
+    /// <summary>3.2 P2: every card and the panel are drawn again in the new mode; a mode drawn before comes
+    /// straight back from the preview cache.</summary>
+    protected override void OnPreviewModeChanged()
+    {
+        if (_snapshot is { } snapshot)
+        {
+            Refresh(snapshot);
+        }
+    }
+
     public override void Refresh(ScanSnapshot snapshot, IReadOnlyList<string>? writtenFolders)
     {
         _snapshot = snapshot;
@@ -384,9 +395,11 @@ public partial class MapsViewModel : PageViewModel, ITileSized
         _previews?.Dispose();
         _previews = new CancellationTokenSource();
 
-        var opened = Selected?.FolderName;
+        var opened = Selected?.Key;
         _all.Clear();
-        foreach (var map in snapshot.Catalog.Maps)
+
+        // 3.2: a card per playable layout, so a folder with a big and a small layout draws two cards.
+        foreach (var map in snapshot.Catalog.Layouts)
         {
             snapshot.MapStatuses.TryGetValue(map.FolderName, out var status);
 
@@ -396,22 +409,22 @@ public partial class MapsViewModel : PageViewModel, ITileSized
         RebuildChips(snapshot.Catalog);
         ApplyFilter();
 
-        // The card the panel was on is a new object now, so it is found again by folder name rather than left
+        // The card the panel was on is a new object now, so it is found again by its key rather than left
         // pointing at one nothing draws.
-        Selected = opened is null
-            ? null
-            : _all.FirstOrDefault(c => c.FolderName.Equals(opened, StringComparison.OrdinalIgnoreCase));
+        Selected = opened is null ? null : FindCard(opened);
 
         // Spec 11: a new card shows nothing until its preview lands, so the maps the write touched are loaded
         // before the rest of the alphabet and stop showing what was there before the write that much sooner.
-        var byFolder = new Dictionary<string, MapCardViewModel>(StringComparer.OrdinalIgnoreCase);
-        foreach (var card in _all)
-        {
-            byFolder[card.FolderName] = card;
-        }
-
-        var order = LoadOrder.Prioritise([.. _all.Select(c => c.FolderName)], writtenFolders);
-        _ = LoadPreviewsAsync([.. order.Select(folder => byFolder[folder])], snapshot.Catalog.HasLevelData, _previews.Token);
+        // 3.2: writes are per folder, so every card of a written folder comes first. Ahead of both go the cards
+        // the chip and the search show: a mode switch draws every card again, and a shown card late in the
+        // alphabet otherwise stayed an empty tile until every hidden card before it had drawn.
+        var byFolder = _all.ToLookup(card => card.FolderName, StringComparer.OrdinalIgnoreCase);
+        var folders = _all.Select(c => c.FolderName).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var order = LoadOrder.Prioritise(folders, writtenFolders);
+        _ = LoadPreviewsAsync(
+            LoadOrder.ShownFirst([.. order.SelectMany(folder => byFolder[folder])], Matches),
+            snapshot.Catalog.HasLevelData,
+            _previews.Token);
     }
 
     partial void OnSearchTextChanged(string value) => ApplyFilter();
@@ -469,8 +482,6 @@ public partial class MapsViewModel : PageViewModel, ITileSized
         // The card template reads these numbers rather than carrying a pile of triggers of its own.
         OnPropertyChanged(nameof(TargetCardWidth));
         OnPropertyChanged(nameof(ShowName));
-        OnPropertyChanged(nameof(ShowTagRow));
-        OnPropertyChanged(nameof(ShowMissingMark));
         OnPropertyChanged(nameof(NameFontSize));
         OnPropertyChanged(nameof(CardPadding));
     }
@@ -493,7 +504,7 @@ public partial class MapsViewModel : PageViewModel, ITileSized
 
             try
             {
-                await card.LoadPreviewAsync(Shell.Services, hasLevelData, ct);
+                await card.LoadPreviewAsync(Shell.Services, hasLevelData, Shell.PreviewMode, ct);
             }
             catch (OperationCanceledException)
             {
@@ -676,18 +687,21 @@ public partial class MapsViewModel : PageViewModel, ITileSized
 
         card.MenuItems =
         [
-            TileMenuCommand.Header(one.DisplayName, MapArtText.Describe(one, status, snapshot)),
+            TileMenuCommand.Header(one.DisplayName, MapArtText.Describe(status)),
             TileMenuCommand.Flyout("Apply pack", packs),
             TileMenuCommand.Flyout("Apply background", pictures),
             TileMenuCommand.Separator(),
             new TileMenuCommand(
                 "Edit background",
                 new AsyncRelayCommand(() => EditBackgroundAsync(one, slot)),
-                IsEnabled: slot is not null),
+                IsEnabled: slot is not null,
+                Detail: MapArtText.BackgroundPack(one, status, snapshot)),
             // Spec 9: the editor still opens on a set of maps, and from here that set is the one map named above.
+            // 3.2: each edit line names the pack its art comes from, under it (owner, 2026-09-22).
             new TileMenuCommand(
                 "Edit platforms",
-                new AsyncRelayCommand(() => Shell.OpenPlatformEditorAsync(target, null))),
+                new AsyncRelayCommand(() => Shell.OpenPlatformEditorAsync(target, null)),
+                Detail: MapArtText.PlatformPacks(one, status)),
             TileMenuCommand.Separator(),
             new TileMenuCommand(
                 "Reset map",

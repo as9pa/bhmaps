@@ -4,6 +4,7 @@ using System.Text;
 using System.Windows.Media.Imaging;
 using BhMaps.Core.Hashing;
 using BhMaps.Core.LevelData;
+using BhMaps.Core.Settings;
 
 namespace BhMaps.Core.Imaging;
 
@@ -32,7 +33,8 @@ public sealed class PreviewCache
     /// hex. A cropped render and a whole one read the same files, so without the viewport in the key the two
     /// would collide on one cache file.</summary>
     public string KeyFor(
-        string levelName, int width, int height, IReadOnlyList<string> inputs, CameraBounds? viewport = null)
+        string levelName, int width, int height, IReadOnlyList<string> inputs, CameraBounds? viewport = null,
+        PreviewMode mode = PreviewMode.Both)
     {
         // The inputs stay an ordered list: draw order changes the picture, and one file named by two
         // slots must count twice, so folding them into a set would collide two different renders.
@@ -44,6 +46,13 @@ public sealed class PreviewCache
                 .Append(v.Y.ToString("R", CultureInfo.InvariantCulture)).Append(',')
                 .Append(v.W.ToString("R", CultureInfo.InvariantCulture)).Append(',')
                 .Append(v.H.ToString("R", CultureInfo.InvariantCulture));
+        }
+
+        // 3.2: Platforms and Backgrounds draw other pictures from the same level, so each keeps its own file and
+        // switching back and forth is two cache hits. Both writes nothing, so every earlier preview stays valid.
+        if (mode != PreviewMode.Both)
+        {
+            text.Append("|m").Append(mode);
         }
 
         foreach (var input in inputs)
@@ -63,10 +72,10 @@ public sealed class PreviewCache
     /// thread and then the render thread reads it again, and AssetSources is safe under both.</summary>
     public async Task<string> GetOrRenderAsync(
         LevelDesc level, int width, int height, AssetSources sources, CancellationToken ct = default,
-        CameraBounds? viewport = null)
+        CameraBounds? viewport = null, PreviewMode mode = PreviewMode.Both)
     {
-        var inputs = MapCompositor.CollectInputs(level, sources);
-        var key = KeyFor(level.LevelName, width, height, inputs, viewport);
+        var inputs = MapCompositor.CollectInputs(level, sources, mode);
+        var key = KeyFor(level.LevelName, width, height, inputs, viewport, mode);
         var path = Path.Combine(Root, key + ".jpg");
         if (File.Exists(path))
         {
@@ -83,7 +92,7 @@ public sealed class PreviewCache
         }
 
         var jpeg = await _queue
-            .RunAsync(() => Encode(MapCompositor.Render(level, width, height, sources, viewport)), ct)
+            .RunAsync(() => Encode(MapCompositor.Render(level, width, height, sources, viewport, mode: mode)), ct)
             .ConfigureAwait(false);
 
         Directory.CreateDirectory(Root);

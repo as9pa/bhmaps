@@ -9,9 +9,13 @@ namespace BhMaps.App.ViewModels;
 public sealed record BackgroundEditorRequest(string SourcePath, string? PackName, string? Slot, Pack? SourcePack = null);
 
 /// <summary>One line of the editor's Map combo: the file name the game expects, and the maps that share it,
-/// joined with ", ". The slot is never the label; the user picks a map (spec 7.2).</summary>
-public sealed record MapSlotChoice(string Slot, string DisplayNames)
+/// joined with ", ". The slot is never the label; the user picks a map (spec 7.2). SharedNote names the layouts
+/// that all draw this background when a map has two or more (3.2), and is empty otherwise.</summary>
+public sealed record MapSlotChoice(string Slot, string DisplayNames, string SharedNote = "")
 {
+    /// <summary>False hides the shared note.</summary>
+    public bool HasSharedNote => SharedNote.Length > 0;
+
     /// <summary>The first row of the Map combo: no slot, so Save writes the picture under its own name and it
     /// belongs to every map rather than to one (spec 5).</summary>
     public static readonly MapSlotChoice AllMaps = new("", "All maps");

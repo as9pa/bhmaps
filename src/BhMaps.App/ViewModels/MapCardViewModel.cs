@@ -6,6 +6,7 @@ using BhMaps.Core.LevelData;
 using BhMaps.Core.Maps;
 using BhMaps.Core.Operations;
 using BhMaps.Core.Scanning;
+using BhMaps.Core.Settings;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace BhMaps.App.ViewModels;
@@ -19,6 +20,7 @@ public partial class MapCardViewModel : ObservableObject
     public MapCardViewModel(MapEntry map, MapStatus? status, IReadOnlyList<CustomPicture> customPictures)
     {
         Map = map;
+        Key = map.Key;
         FolderName = map.FolderName;
         DisplayName = map.DisplayName;
 
@@ -31,8 +33,12 @@ public partial class MapCardViewModel : ObservableObject
             MapState.Custom => Ellipsise(CustomName(map, customPictures)),
             _ => "",
         };
-        ToolTipText = TagText.Length == 0 ? DisplayName : $"{DisplayName} ({TagText})";
+        ToolTipText = DisplayName;
     }
+
+    /// <summary>3.2: the card's identity, the layout it shows. Two cards of one folder share
+    /// <see cref="FolderName"/>, which stays the key for the art itself.</summary>
+    public string Key { get; }
 
     public string FolderName { get; }
 
@@ -44,14 +50,13 @@ public partial class MapCardViewModel : ObservableObject
     /// <summary>Spec 3.1's tag, drawn only when it says which art is on the map: the pack names, the custom
     /// picture's name ellipsised at <see cref="TagMaxLength"/>, or "Missing". Default draws no tag, and
     /// neither does a map the scan produced no status for. 3.0: nor does a map whose art is a file the app
-    /// cannot name, because the only thing left to print there would be a file name or a slot code.</summary>
+    /// cannot name, because the only thing left to print there would be a file name or a slot code. 3.2: the
+    /// Maps card no longer draws it (owner, 2026-09-22); the Backgrounds rows still do.</summary>
     public string TagText { get; }
 
-    /// <summary>The name and the tag in one line, for the two tightest zoom steps where the card draws neither
-    /// (spec 3.1).</summary>
+    /// <summary>The map's name, for the tightest zoom step where the card does not draw it (spec 3.1). 3.2: the
+    /// name alone, without the tag.</summary>
     public string ToolTipText { get; }
-
-    public bool ShowTag => TagText.Length > 0;
 
     /// <summary>The catalog entry behind the card, so a page can filter on its sets without a second lookup.</summary>
     public MapEntry Map { get; }
@@ -74,9 +79,9 @@ public partial class MapCardViewModel : ObservableObject
 
     /// <summary>Composes the card preview, falling back to the v1 single-file thumbnail without level data or when
     /// the composite could not be drawn (spec 3.6). Called on the UI thread; every file touch happens off it.</summary>
-    public async Task LoadPreviewAsync(AppServices services, bool hasLevelData, CancellationToken ct)
+    public async Task LoadPreviewAsync(AppServices services, bool hasLevelData, PreviewMode mode, CancellationToken ct)
     {
-        var image = hasLevelData ? await ComposedAsync(services, ct) : null;
+        var image = hasLevelData ? await ComposedAsync(services, mode, ct) : null;
 
         // A preview is never worth an error dialog, so a composite that could not be drawn becomes the file tile.
         image ??= await ThumbnailAsync(services, ct);
@@ -86,7 +91,7 @@ public partial class MapCardViewModel : ObservableObject
         }
     }
 
-    private async Task<ImageSource?> ComposedAsync(AppServices services, CancellationToken ct)
+    private async Task<ImageSource?> ComposedAsync(AppServices services, PreviewMode mode, CancellationToken ct)
     {
         var level = Map.BaseLevel;
         var sources = new AssetSources(services.GamePath);
@@ -98,7 +103,7 @@ public partial class MapCardViewModel : ObservableObject
                 async () =>
                 {
                     var path = await services.Previews
-                        .GetOrRenderAsync(level, MapCompositor.CardWidth, MapCompositor.CardHeight, sources, ct)
+                        .GetOrRenderAsync(level, MapCompositor.CardWidth, MapCompositor.CardHeight, sources, ct, mode: mode)
                         .ConfigureAwait(false);
                     return Load(path);
                 },

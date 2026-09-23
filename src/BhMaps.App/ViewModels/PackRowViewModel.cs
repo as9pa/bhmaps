@@ -57,13 +57,22 @@ public sealed partial class PackRowViewModel : ObservableObject
     /// page, because a row reads no applied record of its own.</summary>
     private int _appliedMaps;
 
-    public PackRowViewModel(Pack pack, IReadOnlyList<MapEntry> maps)
+    /// <summary>How many things the strip stands for, maps or background pictures, so the "+N more" counts the
+    /// same kind the tiles show.</summary>
+    private readonly int _stripCount;
+
+    /// <summary>3.2 P1: <paramref name="backgrounds" /> is the Backgrounds switch's strip, the pack's background
+    /// pictures in place of its maps. Null draws the maps.</summary>
+    public PackRowViewModel(Pack pack, IReadOnlyList<MapEntry> maps, IReadOnlyList<GameFile>? backgrounds = null)
     {
         Pack = pack;
         Maps = maps;
         (MapCount, BackgroundCount) = Counts(pack);
         _counts = HoldsText(MapCount, BackgroundCount);
-        Previews = [.. maps.Take(MaxPreviews).Select(map => new PackPreviewTileViewModel(map))];
+        _stripCount = backgrounds?.Count ?? maps.Count;
+        Previews = backgrounds is null
+            ? [.. maps.Take(MaxPreviews).Select(map => new PackPreviewTileViewModel(map))]
+            : [.. backgrounds.Take(MaxPreviews).Select(file => new PackPreviewTileViewModel(file))];
         MenuItems = [];
     }
 
@@ -136,7 +145,7 @@ public sealed partial class PackRowViewModel : ObservableObject
 
     public bool ShowMore => Remaining > 0;
 
-    private int Remaining => Math.Max(0, Maps.Count - Math.Max(0, Previews.Count - Overflow));
+    private int Remaining => Math.Max(0, _stripCount - Math.Max(0, Previews.Count - Overflow));
 
     /// <summary>The menu again, with a property change, because a line's words can change while the row is on
     /// screen: hiding a pack turns Hide from lists into Show in lists (2.8).</summary>

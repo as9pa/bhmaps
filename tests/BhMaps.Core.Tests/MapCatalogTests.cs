@@ -135,21 +135,23 @@ public class MapCatalogTests
             new("Ranked1v1", ["Grove"]),
             new("Ranked2v2", ["Grove"]),
             new("Tournament1v1", ["Grove"]),
+            new("Tournament2v2", ["Grove"]),
         ];
         LevelSet[] standard =
         [
             new("Standard1v1", ["Grove"]),
             new("Standard2v2", ["Grove"]),
             new("Tournament1v1", ["Grove"]),
+            new("Tournament2v2", ["Grove"]),
         ];
 
         var rankedCatalog = MapCatalog.Build(Model(levels, types, ranked));
 
         Assert.Equal(MapCatalog.RankedSetNames, rankedCatalog.UiSetNames);
-        Assert.Equal(["Ranked 1v1", "Ranked 2v2", "Tournament"], rankedCatalog.UiSets.Select(s => s.Label));
+        Assert.Equal(["Ranked 1v1", "Ranked 2v2", "Tournament 1v1", "Tournament 2v2"], rankedCatalog.UiSets.Select(s => s.Label));
         Assert.Equal(MapCatalog.StandardSetNames, MapCatalog.Build(Model(levels, types, standard)).UiSetNames);
         Assert.Equal(
-            ["Standard 1v1", "Standard 2v2", "Tournament"],
+            ["Standard 1v1", "Standard 2v2", "Tournament 1v1", "Tournament 2v2"],
             MapCatalog.Build(Model(levels, types, standard)).UiSets.Select(s => s.Label));
         Assert.Equal(
             ["Standard1v1", "Standard2v2"],
@@ -442,7 +444,159 @@ public class MapCatalogTests
         var catalog = MapCatalog.Build(Model(levels, types, sets));
 
         Assert.Equal(
-            ["Ranked 1v1", "Ranked 2v2", "Tournament", "Minigames"],
+            ["Ranked 1v1", "Ranked 2v2", "Tournament 1v1", "Minigames"],
             catalog.UiSets.Select(s => s.Label));
+    }
+
+    /// <summary>3.2: the World's End shape, one folder holding a big layout and a small one the game uses in
+    /// different sets, beside a mode's arena in the same folder and two folders with a single layout.</summary>
+    private static MapCatalog SplitCatalog() =>
+        MapCatalog.Build(Model(
+            [
+                Level("NorseWinterFFA", "NordicWinter", "Big1.png", "Shared.png"),
+                Level("Norse1v1Spike", "NordicWinter", "Small1.png", "Shared.png"),
+                Level("NorseBrawlball", "NordicWinter", "Ball.png"),
+                Level("SmallStadium", "Stadium", "Stadium1.png"),
+                Level("Enigma", "Enigma", "Enigma1.png"),
+            ],
+            [
+                new("NorseWinterFFA", "World's End", false, false, "WorldsEnd.jpg"),
+                new("Norse1v1Spike", "Small World's End", false, false, "SmallWorldsEnd.jpg"),
+                new("NorseBrawlball", "World's End Arena", false, false),
+                new("SmallStadium", "Small Thundergard Stadium", false, false),
+                new("Enigma", "The Enigma", false, false),
+                new("FrozenPlains", "Frozen Plains", true, false),
+            ],
+            [
+                new("Ranked1v1", ["Norse1v1Spike", "Enigma", "FrozenPlains"]),
+                new("Ranked2v2", ["Norse1v1Spike"]),
+                new("Tournament1v1", ["Norse1v1Spike"]),
+                new("Tournament2v2", ["Enigma"]),
+                new("Tournament3v3", ["NorseWinterFFA"]),
+                new("StandardFFA", ["NorseWinterFFA"]),
+                new("Standard1v1", ["SmallStadium"]),
+                new("GameModeAll", ["NorseBrawlball"]),
+            ]));
+
+    [Fact]
+    public void Build_GivesEachPlayableLayoutOfAFolderItsOwnCard()
+    {
+        var catalog = SplitCatalog();
+
+        Assert.Equal(
+            ["Small Thundergard Stadium", "Small World's End", "The Enigma", "World's End"],
+            catalog.Layouts.Select(l => l.DisplayName));
+        Assert.Equal(3, catalog.Maps.Count);
+
+        var big = catalog.ByLayout("NorseWinterFFA")!;
+        var small = catalog.ByLayout("Norse1v1Spike")!;
+        Assert.Equal("NordicWinter", big.FolderName);
+        Assert.Equal("NordicWinter", small.FolderName);
+        Assert.Equal("Norse1v1Spike", small.Key);
+        Assert.Equal(["Tournament3v3", "StandardFFA"], big.Sets);
+        Assert.Equal(["Ranked1v1", "Ranked2v2", "Tournament1v1"], small.Sets);
+        Assert.Equal("Norse1v1Spike", small.BaseLevel.LevelName);
+        Assert.Equal(["SmallWorldsEnd.jpg"], small.ThumbnailFiles);
+        Assert.Equal(["WorldsEnd.jpg"], big.ThumbnailFiles);
+
+        // The layout's own files for the editor, the folder's whole list for everything written per folder.
+        Assert.Equal([@"NordicWinter\Small1.png", @"NordicWinter\Shared.png"], small.LayoutFiles);
+        Assert.Equal([@"NordicWinter\Big1.png", @"NordicWinter\Shared.png"], big.LayoutFiles);
+        Assert.Equal(catalog.ByFolder("NordicWinter")!.PlatformFiles, small.PlatformFiles);
+        Assert.Contains(@"NordicWinter\Ball.png", small.PlatformFiles);
+        Assert.Equal(
+            ["Norse1v1Spike", "NorseWinterFFA"],
+            catalog.LayoutsOf("NordicWinter").Select(l => l.Key));
+    }
+
+    [Fact]
+    public void AlsoIn_NamesTheOtherLayoutsOfTheFolderThatDrawTheFile()
+    {
+        var catalog = SplitCatalog();
+        var small = catalog.ByLayout("Norse1v1Spike")!;
+        var big = catalog.ByLayout("NorseWinterFFA")!;
+
+        Assert.Equal([big], catalog.AlsoIn(small, @"NordicWinter\Shared.png"));
+        Assert.Equal("also in World's End", catalog.AlsoInText(small, @"nordicwinter\shared.png"));
+        Assert.Equal("also in Small World's End", catalog.AlsoInText(big, @"NordicWinter\Shared.png"));
+        Assert.Empty(catalog.AlsoIn(small, @"NordicWinter\Small1.png"));
+        Assert.Equal("", catalog.AlsoInText(big, @"NordicWinter\Big1.png"));
+    }
+
+    [Fact]
+    public void AlsoIn_IsEmptyForAFolderEntryAndAFolderWithOneLayout()
+    {
+        var catalog = SplitCatalog();
+
+        Assert.Empty(catalog.AlsoIn(catalog.ByFolder("NordicWinter")!, @"NordicWinter\Shared.png"));
+        Assert.Empty(catalog.AlsoIn(catalog.ByLayout("SmallStadium")!, @"Stadium\Stadium1.png"));
+    }
+
+    [Fact]
+    public void PrimaryLayoutOf_IsTheCardOfTheFoldersBaseLevel()
+    {
+        var catalog = SplitCatalog();
+
+        Assert.Equal("NorseWinterFFA", catalog.ByFolder("NordicWinter")!.BaseLevel.LevelName);
+        Assert.Equal("NorseWinterFFA", catalog.PrimaryLayoutOf("NordicWinter")!.Key);
+        Assert.Same(catalog.ByLayout("SmallStadium"), catalog.PrimaryLayoutOf("Stadium"));
+        Assert.Null(catalog.PrimaryLayoutOf("NoSuchFolder"));
+    }
+
+    [Fact]
+    public void SharedBackgroundNote_NamesEveryLayoutOfAFolderWithTwoOrMore()
+    {
+        var catalog = SplitCatalog();
+
+        Assert.Equal(
+            "Shared by every layout of this map: Small World's End, World's End.",
+            catalog.SharedBackgroundNote("NordicWinter"));
+        Assert.Equal("", catalog.SharedBackgroundNote("Stadium"));
+        Assert.Equal("", catalog.SharedBackgroundNote("NoSuchFolder"));
+    }
+
+    [Fact]
+    public void Build_TournamentChipsMatchTheLayoutTheGameUses()
+    {
+        var catalog = SplitCatalog();
+
+        IEnumerable<string> In(string set) =>
+            catalog.Layouts.Where(l => l.Sets.Contains(set)).Select(l => l.DisplayName);
+
+        Assert.Equal(["Small World's End"], In("Tournament1v1"));
+        Assert.Equal(["The Enigma"], In("Tournament2v2"));
+        Assert.Equal(
+            ["Ranked 1v1", "Ranked 2v2", "Tournament 1v1", "Tournament 2v2", "Minigames"],
+            catalog.UiSets.Select(s => s.Label));
+    }
+
+    [Fact]
+    public void Build_KeepsAFolderWithOneLayoutAsOneCard()
+    {
+        var catalog = SplitCatalog();
+
+        // A layout in no chip's list still gets a card, and it is the folder's own entry, unchanged.
+        var stadium = catalog.ByLayout("SmallStadium")!;
+        Assert.Same(catalog.ByFolder("Stadium"), stadium);
+        Assert.Equal(stadium.PlatformFiles, stadium.LayoutFiles);
+        Assert.False(MapCatalog.IsMinigame(stadium));
+
+        // The mode's arena inside a map's folder and the DevOnly level with no LevelDesc get no card.
+        Assert.Null(catalog.ByLayout("NorseBrawlball"));
+        Assert.Null(catalog.ByLayout("FrozenPlains"));
+        Assert.DoesNotContain(catalog.Layouts, MapCatalog.IsMinigame);
+    }
+
+    [Fact]
+    public void FromFolders_CardsAreTheFoldersKeyedByFolderName()
+    {
+        using var tmp = new TempDir();
+        FakeGameTree.Standard(tmp.Path);
+
+        var catalog = MapCatalog.FromFolders(GameTreeScanner.Scan(tmp.Path));
+
+        Assert.Equal(catalog.Maps, catalog.Layouts);
+        Assert.All(catalog.Layouts, l => Assert.Equal(l.FolderName, l.Key));
+        Assert.All(catalog.Layouts, l => Assert.Same(l, catalog.ByLayout(l.FolderName)));
     }
 }
