@@ -528,10 +528,31 @@
     </controls:PageHeader>
 
     <Grid DockPanel.Dock="Top" Margin="0,4,0,8">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="Auto" />
+      </Grid.ColumnDefinitions>
       <ListBox HorizontalAlignment="Left"
                ItemContainerStyle="{StaticResource ChipRow}"
                ItemsSource="{Binding Chips}"
                SelectedItem="{Binding SelectedChip}"
+               Style="{StaticResource TileListBox}">
+        <ListBox.ItemsPanel>
+          <ItemsPanelTemplate>
+            <StackPanel Orientation="Horizontal" />
+          </ItemsPanelTemplate>
+        </ListBox.ItemsPanel>
+      </ListBox>
+      <!-- 3.2 P2: Both / Platforms / Backgrounds at the right end of the chip row, the one remembered switch Packs,
+           a pack's page and Maps share. A ListBox like the chips beside it, so the arrow keys move inside it and
+           Tab lands on the selected chip. -->
+      <ListBox Grid.Column="1"
+               Margin="16,0,0,0"
+               HorizontalAlignment="Right"
+               AutomationProperties.Name="Show"
+               ItemContainerStyle="{StaticResource ChipRow}"
+               ItemsSource="{Binding PreviewModeChips}"
+               SelectedItem="{Binding PreviewModeChip}"
                Style="{StaticResource TileListBox}">
         <ListBox.ItemsPanel>
           <ItemsPanelTemplate>

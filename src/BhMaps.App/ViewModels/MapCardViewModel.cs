@@ -6,6 +6,7 @@ using BhMaps.Core.LevelData;
 using BhMaps.Core.Maps;
 using BhMaps.Core.Operations;
 using BhMaps.Core.Scanning;
+using BhMaps.Core.Settings;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace BhMaps.App.ViewModels;
@@ -79,9 +80,9 @@ public partial class MapCardViewModel : ObservableObject
 
     /// <summary>Composes the card preview, falling back to the v1 single-file thumbnail without level data or when
     /// the composite could not be drawn (spec 3.6). Called on the UI thread; every file touch happens off it.</summary>
-    public async Task LoadPreviewAsync(AppServices services, bool hasLevelData, CancellationToken ct)
+    public async Task LoadPreviewAsync(AppServices services, bool hasLevelData, PreviewMode mode, CancellationToken ct)
     {
-        var image = hasLevelData ? await ComposedAsync(services, ct) : null;
+        var image = hasLevelData ? await ComposedAsync(services, mode, ct) : null;
 
         // A preview is never worth an error dialog, so a composite that could not be drawn becomes the file tile.
         image ??= await ThumbnailAsync(services, ct);
@@ -91,7 +92,7 @@ public partial class MapCardViewModel : ObservableObject
         }
     }
 
-    private async Task<ImageSource?> ComposedAsync(AppServices services, CancellationToken ct)
+    private async Task<ImageSource?> ComposedAsync(AppServices services, PreviewMode mode, CancellationToken ct)
     {
         var level = Map.BaseLevel;
         var sources = new AssetSources(services.GamePath);
@@ -103,7 +104,7 @@ public partial class MapCardViewModel : ObservableObject
                 async () =>
                 {
                     var path = await services.Previews
-                        .GetOrRenderAsync(level, MapCompositor.CardWidth, MapCompositor.CardHeight, sources, ct)
+                        .GetOrRenderAsync(level, MapCompositor.CardWidth, MapCompositor.CardHeight, sources, ct, mode: mode)
                         .ConfigureAwait(false);
                     return Load(path);
                 },
