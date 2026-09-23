@@ -19,6 +19,7 @@
 
     <!-- Only the fit switch needs it: its second button is on exactly when the property is off. -->
     <converters:InverseBooleanConverter x:Key="InverseBool" />
+    <converters:LookupConverter x:Key="Lookup" />
 
     <!-- One label style carries the whole panel's vertical rhythm, so a block is a label and its control. -->
     <Style x:Key="FieldLabel" TargetType="TextBlock" BasedOn="{StaticResource SectionHeaderText}">
@@ -328,6 +329,27 @@
                                    Style="{StaticResource MonoText}"
                                    Text="{Binding FileName}"
                                    TextTrimming="CharacterEllipsis" />
+
+                        <!-- 3.2: a piece another layout of the folder also draws, said quietly. -->
+                        <TextBlock FontSize="{StaticResource FontCaption}"
+                                   Foreground="{StaticResource Text3Brush}"
+                                   TextTrimming="CharacterEllipsis">
+                          <TextBlock.Text>
+                            <MultiBinding Converter="{StaticResource Lookup}">
+                              <Binding />
+                              <Binding Path="DataContext.AlsoInMarks" RelativeSource="{RelativeSource AncestorType=Window}" />
+                            </MultiBinding>
+                          </TextBlock.Text>
+                          <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                              <Style.Triggers>
+                                <Trigger Property="Text" Value="">
+                                  <Setter Property="Visibility" Value="Collapsed" />
+                                </Trigger>
+                              </Style.Triggers>
+                            </Style>
+                          </TextBlock.Style>
+                        </TextBlock>
                       </StackPanel>
 
                       <TextBlock Grid.Column="2"

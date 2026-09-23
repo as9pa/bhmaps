@@ -21,9 +21,11 @@ namespace BhMaps.App.ViewModels;
 /// set came from, or null for the set the game is showing (spec 6), and the relative path of the one piece a
 /// panel row asked for, or null for the whole set. Only that one piece opens ticked (spec 7). SourcePack is the
 /// pack whose record the values are loaded from: the pack itself when there is one, the pack the map's files were
-/// matched to otherwise, and null when no pack remembers this map (spec 5.1).</summary>
+/// matched to otherwise, and null when no pack remembers this map (spec 5.1). Catalog, when given, says which
+/// other layout of a folder also draws a piece (3.2).</summary>
 public sealed record PlatformEditorRequest(
-    IReadOnlyList<MapEntry> Maps, Pack? Pack, string? OnlyFile = null, Pack? SourcePack = null)
+    IReadOnlyList<MapEntry> Maps, Pack? Pack, string? OnlyFile = null, Pack? SourcePack = null,
+    MapCatalog? Catalog = null)
 {
     /// <summary>The first map of the set, which is the whole set for every way in that opens on one map.</summary>
     public MapEntry Map => Maps[0];
@@ -322,6 +324,10 @@ public partial class PlatformEditorViewModel : ObservableObject
 
     /// <summary>Whether the strip is drawn at all: one map is every other way into the editor (spec 9).</summary>
     public bool HasManyMaps => _sets.Count > 1;
+
+    /// <summary>3.2: the "also in" mark of each row whose piece another layout of the folder also draws, keyed by
+    /// the row. A row with no entry draws no mark.</summary>
+    public Dictionary<PlatformPieceViewModel, string> AlsoInMarks { get; } = [];
 
     public bool CanPreviousMap => !IsSaving && CurrentIndex > 0;
 
@@ -643,7 +649,7 @@ public partial class PlatformEditorViewModel : ObservableObject
     private IReadOnlyList<PlatformPieceViewModel> BuildPieces(MapSet set)
     {
         var pieces = new List<PlatformPieceViewModel>();
-        foreach (var relativePath in set.Map.PlatformFiles.OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
+        foreach (var relativePath in set.Map.LayoutFiles.OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
         {
             var ticked = _request.OnlyFile is null
                 || string.Equals(relativePath, _request.OnlyFile, StringComparison.OrdinalIgnoreCase);
@@ -670,6 +676,16 @@ public partial class PlatformEditorViewModel : ObservableObject
         for (var i = 0; i < pieces.Count; i++)
         {
             pieces[i].Number = i + 1;
+        }
+
+        // 3.2: a piece another layout of the folder also draws carries a quiet mark saying which.
+        foreach (var piece in pieces)
+        {
+            var mark = _request.Catalog?.AlsoInText(set.Map, piece.RelativePath) ?? "";
+            if (mark.Length > 0)
+            {
+                AlsoInMarks[piece] = mark;
+            }
         }
 
         return pieces;
@@ -789,8 +805,11 @@ public partial class PlatformEditorViewModel : ObservableObject
                     if (picture is { Length: > 0 } && File.Exists(picture))
                     {
                         reading = Path.GetFileName(picture);
+                        // The saved fit mode, not always Fill: a Fit or Center piece reopens as saved (3.2 F1).
                         fitted = PieceFitter.Fit(
-                            BackgroundFitter.LoadSource(picture), BackgroundFitter.LoadSource(row.OriginalPath));
+                            BackgroundFitter.LoadSource(picture),
+                            BackgroundFitter.LoadSource(row.OriginalPath),
+                            PictureFits.Options(entry.Fit ?? PictureFit.Fill));
                     }
 
                     results.Add((row, fitted, picture ?? "", ChangedOutsideNote(row, entry, packRoot, hasNote)));

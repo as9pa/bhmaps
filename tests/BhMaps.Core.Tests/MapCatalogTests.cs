@@ -510,6 +510,52 @@ public class MapCatalogTests
     }
 
     [Fact]
+    public void AlsoIn_NamesTheOtherLayoutsOfTheFolderThatDrawTheFile()
+    {
+        var catalog = SplitCatalog();
+        var small = catalog.ByLayout("Norse1v1Spike")!;
+        var big = catalog.ByLayout("NorseWinterFFA")!;
+
+        Assert.Equal([big], catalog.AlsoIn(small, @"NordicWinter\Shared.png"));
+        Assert.Equal("also in World's End", catalog.AlsoInText(small, @"nordicwinter\shared.png"));
+        Assert.Equal("also in Small World's End", catalog.AlsoInText(big, @"NordicWinter\Shared.png"));
+        Assert.Empty(catalog.AlsoIn(small, @"NordicWinter\Small1.png"));
+        Assert.Equal("", catalog.AlsoInText(big, @"NordicWinter\Big1.png"));
+    }
+
+    [Fact]
+    public void AlsoIn_IsEmptyForAFolderEntryAndAFolderWithOneLayout()
+    {
+        var catalog = SplitCatalog();
+
+        Assert.Empty(catalog.AlsoIn(catalog.ByFolder("NordicWinter")!, @"NordicWinter\Shared.png"));
+        Assert.Empty(catalog.AlsoIn(catalog.ByLayout("SmallStadium")!, @"Stadium\Stadium1.png"));
+    }
+
+    [Fact]
+    public void PrimaryLayoutOf_IsTheCardOfTheFoldersBaseLevel()
+    {
+        var catalog = SplitCatalog();
+
+        Assert.Equal("NorseWinterFFA", catalog.ByFolder("NordicWinter")!.BaseLevel.LevelName);
+        Assert.Equal("NorseWinterFFA", catalog.PrimaryLayoutOf("NordicWinter")!.Key);
+        Assert.Same(catalog.ByLayout("SmallStadium"), catalog.PrimaryLayoutOf("Stadium"));
+        Assert.Null(catalog.PrimaryLayoutOf("NoSuchFolder"));
+    }
+
+    [Fact]
+    public void SharedBackgroundNote_NamesEveryLayoutOfAFolderWithTwoOrMore()
+    {
+        var catalog = SplitCatalog();
+
+        Assert.Equal(
+            "Shared by every layout of this map: Small World's End, World's End.",
+            catalog.SharedBackgroundNote("NordicWinter"));
+        Assert.Equal("", catalog.SharedBackgroundNote("Stadium"));
+        Assert.Equal("", catalog.SharedBackgroundNote("NoSuchFolder"));
+    }
+
+    [Fact]
     public void Build_TournamentChipsMatchTheLayoutTheGameUses()
     {
         var catalog = SplitCatalog();

@@ -195,7 +195,7 @@ public partial class PackDetailViewModel : PageViewModel, ITileSized
         SelectedTile = tile;
         _openKey = tile.Key;
         var preview = tile.Map is { } map
-            ? Items.FirstOrDefault(t => t.Key.Equals(map.FolderName, StringComparison.OrdinalIgnoreCase)) ?? tile
+            ? Items.FirstOrDefault(t => t.Key.Equals(map.Key, StringComparison.OrdinalIgnoreCase)) ?? tile
             : tile;
         var status = tile.Map is { } m && snapshot.MapStatuses.TryGetValue(m.FolderName, out var found) ? found : null;
         var drawer = new PackDrawerViewModel(Shell, this, pack, tile.Map, status, preview);
@@ -246,7 +246,9 @@ public partial class PackDetailViewModel : PageViewModel, ITileSized
                 items.Add(TileMenuCommand.Separator());
             }
 
-            var hasPlatforms = PackCopier.PlatformFiles(pack, platformOwner).Count > 0;
+            // 3.2: the editor opens on this layout's own pieces, so it is this layout's files the pack must hold.
+            var hasPlatforms = PackCopier.PlatformFiles(pack, platformOwner)
+                .Any(f => platformOwner.LayoutFiles.Contains(f, StringComparer.OrdinalIgnoreCase));
             items.Add(new TileMenuCommand(
                 "Edit platforms",
                 new AsyncRelayCommand(() => Shell.OpenPlatformEditorAsync([platformOwner], pack)),
@@ -783,7 +785,7 @@ public partial class PackDetailViewModel : PageViewModel, ITileSized
         foreach (var map in MapsIn(snapshot.Catalog, pack))
         {
             Items.Add(new PackTileViewModel(
-                map.FolderName, map.DisplayName, map, null, MapCompositor.CardWidth, MapCompositor.CardHeight)
+                map.Key, map.DisplayName, map, null, MapCompositor.CardWidth, MapCompositor.CardHeight)
             { FolderPath = pack.FindFolder(map.FolderName)?.FullPath });
         }
 
@@ -806,18 +808,30 @@ public partial class PackDetailViewModel : PageViewModel, ITileSized
             }
             else
             {
-                var tile = Items.FirstOrDefault(
-                    t => t.Key.Equals(owner.FolderName, StringComparison.OrdinalIgnoreCase));
-                if (tile is null)
+                // 3.2: the background is the folder's, so every layout tile of the folder carries it.
+                List<PackTileViewModel> tiles =
+                [
+                    .. Items.Where(t => t.Map is { } m
+                        && m.FolderName.Equals(owner.FolderName, StringComparison.OrdinalIgnoreCase)),
+                ];
+                if (tiles.Count == 0)
                 {
-                    tile = new PackTileViewModel(
-                        owner.FolderName, owner.DisplayName, owner, null,
-                        MapCompositor.CardWidth, MapCompositor.CardHeight)
-                    { FolderPath = pack.FindFolder(owner.FolderName)?.FullPath };
-                    Items.Add(tile);
+                    var layouts = snapshot.Catalog.LayoutsOf(owner.FolderName);
+                    foreach (var layout in layouts.Count > 0 ? layouts : [owner])
+                    {
+                        var tile = new PackTileViewModel(
+                            layout.Key, layout.DisplayName, layout, null,
+                            MapCompositor.CardWidth, MapCompositor.CardHeight)
+                        { FolderPath = pack.FindFolder(owner.FolderName)?.FullPath };
+                        Items.Add(tile);
+                        tiles.Add(tile);
+                    }
                 }
 
-                tile.PicturePath = file.FullPath;
+                foreach (var tile in tiles)
+                {
+                    tile.PicturePath = file.FullPath;
+                }
             }
         }
 
@@ -834,9 +848,10 @@ public partial class PackDetailViewModel : PageViewModel, ITileSized
     }
 
     /// <summary>The maps the pack touches: the catalog maps it has at least one file for. A pack folder that is
-    /// not a map, such as a theme folder other maps borrow from (spec 4), is not one of them.</summary>
+    /// not a map, such as a theme folder other maps borrow from (spec 4), is not one of them. 3.2: one per layout,
+    /// so a folder with two layouts is two tiles, each drawing its own layout.</summary>
     private static IEnumerable<MapEntry> MapsIn(MapCatalog catalog, Pack pack) =>
-        catalog.Maps.Where(map => pack.FindFolder(map.FolderName) is { Files.Count: > 0 });
+        catalog.Layouts.Where(map => pack.FindFolder(map.FolderName) is { Files.Count: > 0 });
 
     /// <summary>Fills the tiles in view order, one at a time, so the single render thread works down the page.
     /// Fire and forget, like PlatformsViewModel.LoadSelected.</summary>

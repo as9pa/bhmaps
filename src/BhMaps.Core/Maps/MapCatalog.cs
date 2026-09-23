@@ -163,6 +163,56 @@ public sealed class MapCatalog
     public IReadOnlyList<MapEntry> LayoutsOf(string folderName) =>
         Layouts.Where(l => l.FolderName.Equals(folderName, StringComparison.OrdinalIgnoreCase)).ToList();
 
+    /// <summary>3.2: the card that stands for a whole folder where one row per folder is wanted: the layout the
+    /// folder entry's base level is, or the folder's first card when no card is. Null for a folder with no card.
+    /// </summary>
+    public MapEntry? PrimaryLayoutOf(string folderName)
+    {
+        var layouts = LayoutsOf(folderName);
+        if (layouts.Count == 0)
+        {
+            return null;
+        }
+
+        var baseLevel = ByFolder(folderName)?.BaseLevel.LevelName;
+        return layouts.FirstOrDefault(l => l.Key.Equals(baseLevel, StringComparison.OrdinalIgnoreCase)) ?? layouts[0];
+    }
+
+    /// <summary>3.2: the other cards of <paramref name="card"/>'s folder that also draw
+    /// <paramref name="relativePath"/>, in <see cref="Layouts"/> order. Empty for a card that is not a split
+    /// layout (a folder entry, a folder with one layout, the fallback), because it lists the whole folder.</summary>
+    public IReadOnlyList<MapEntry> AlsoIn(MapEntry card, string relativePath)
+    {
+        if (card.LayoutPlatformFiles is null)
+        {
+            return [];
+        }
+
+        return LayoutsOf(card.FolderName)
+            .Where(l => !l.Key.Equals(card.Key, StringComparison.OrdinalIgnoreCase)
+                && l.LayoutFiles.Contains(relativePath, StringComparer.OrdinalIgnoreCase))
+            .ToList();
+    }
+
+    /// <summary>3.2: the quiet mark on a file another layout also draws, "also in Small World's End", or empty
+    /// when no other layout draws it.</summary>
+    public string AlsoInText(MapEntry card, string relativePath)
+    {
+        var others = AlsoIn(card, relativePath);
+        return others.Count == 0 ? "" : "also in " + string.Join(", ", others.Select(l => l.DisplayName));
+    }
+
+    /// <summary>3.2: the note the background editor shows for a folder with two or more layouts, which all draw
+    /// the one background: "Shared by every layout of this map: Small World's End, World's End." Empty for a
+    /// folder with one layout.</summary>
+    public string SharedBackgroundNote(string folderName)
+    {
+        var layouts = LayoutsOf(folderName);
+        return layouts.Count < 2
+            ? ""
+            : "Shared by every layout of this map: " + string.Join(", ", layouts.Select(l => l.DisplayName)) + ".";
+    }
+
     /// <summary>The chip label for a set name; an unlabelled set is shown under its own name.</summary>
     public static string LabelFor(string setName) =>
         SetLabels.TryGetValue(setName, out var label) ? label : setName;

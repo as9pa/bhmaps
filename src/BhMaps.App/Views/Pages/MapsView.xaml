@@ -441,6 +441,14 @@
                        Style="{StaticResource QuietNote}"
                        Text="changes nothing"
                        Visibility="{Binding ChangesNothing, Converter={StaticResource BoolToVis}}" />
+
+            <!-- 3.2: a file another layout of the folder also draws, said quietly. -->
+            <TextBlock Margin="6,0,0,0"
+                       VerticalAlignment="Center"
+                       Style="{StaticResource QuietNote}"
+                       Text="{Binding AlsoIn}"
+                       TextTrimming="CharacterEllipsis"
+                       Visibility="{Binding ShowAlsoIn, Converter={StaticResource BoolToVis}}" />
           </StackPanel>
         </StackPanel>
 
