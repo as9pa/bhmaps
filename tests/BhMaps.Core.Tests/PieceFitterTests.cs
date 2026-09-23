@@ -98,6 +98,70 @@ public sealed class PieceFitterTests
         Assert.Equal(Bytes(fromBitmaps), Bytes(fromPaths));
     }
 
+    // 3.2 F1: a 200 x 100 green piece whose top 20 rows are outside its shape, and a 100 x 100 red picture. Fit
+    // lands the picture at x 50 to 150 and Center keeps its own 100 x 100 there too, so the sides are left bare
+    // and must show the piece's own green. Fill and Stretch reach every pixel and stay all red.
+    [Theory]
+    [InlineData(FitMode.Cover, false)]
+    [InlineData(FitMode.Stretch, false)]
+    [InlineData(FitMode.Contain, true)]
+    [InlineData(FitMode.Center, true)]
+    public void Fit_EveryMode_KeepsTheShape_AndTheOriginalWhereUncovered(FitMode mode, bool leavesSides)
+    {
+        using var dir = new TempDir();
+        var source = BackgroundFitter.LoadSource(SyntheticImage.SavePng(dir.Sub("src.png"), 100, 100, (_, _) => (255, 0, 0, 255)));
+        var piece = BackgroundFitter.LoadSource(SyntheticImage.SavePng(dir.Sub("piece.png"), 200, 100, (_, y) => (0, 255, 0, y < 20 ? (byte)0 : (byte)255)));
+
+        var fitted = PieceFitter.Fit(source, piece, new FitOptions(mode));
+
+        Assert.Equal(200, fitted.PixelWidth);
+        Assert.Equal(100, fitted.PixelHeight);
+        AssertShapeFilled(fitted, piece);
+        AssertRed(SyntheticImage.PixelRgbaAt(fitted, 100, 60));
+        if (leavesSides)
+        {
+            AssertGreen(SyntheticImage.PixelRgbaAt(fitted, 10, 60));
+            AssertGreen(SyntheticImage.PixelRgbaAt(fitted, 190, 60));
+        }
+        else
+        {
+            AssertRed(SyntheticImage.PixelRgbaAt(fitted, 10, 60));
+            AssertRed(SyntheticImage.PixelRgbaAt(fitted, 190, 60));
+        }
+    }
+
+    [Fact]
+    public void Fit_UncoveredArea_IsTheOriginalPassedIn_WithThePiecesShape()
+    {
+        // The piece being edited can be a working copy; what shows where the picture does not reach is the art the
+        // caller names as the original, still cut to the piece's shape.
+        using var dir = new TempDir();
+        var source = BackgroundFitter.LoadSource(SyntheticImage.SavePng(dir.Sub("src.png"), 100, 100, (_, _) => (255, 0, 0, 255)));
+        var piece = BackgroundFitter.LoadSource(SyntheticImage.SavePng(dir.Sub("piece.png"), 200, 100, (_, y) => (0, 255, 0, y < 20 ? (byte)0 : (byte)255)));
+        var original = BackgroundFitter.LoadSource(SyntheticImage.SavePng(dir.Sub("original.png"), 200, 100, (_, _) => (0, 0, 255, 255)));
+
+        var fitted = PieceFitter.Fit(source, piece, new FitOptions(FitMode.Contain), original);
+
+        AssertBlue(SyntheticImage.PixelRgbaAt(fitted, 10, 60));
+        AssertRed(SyntheticImage.PixelRgbaAt(fitted, 100, 60));
+        Assert.Equal(0, SyntheticImage.PixelRgbaAt(fitted, 10, 10).A);
+    }
+
+    /// <summary>Every pixel keeps the piece's alpha: nothing inside the shape is left empty and nothing outside it
+    /// is drawn. A picture edge that falls between pixels may be a byte or two out.</summary>
+    internal static void AssertShapeFilled(BitmapSource fitted, BitmapSource piece)
+    {
+        for (var y = 0; y < piece.PixelHeight; y++)
+        {
+            for (var x = 0; x < piece.PixelWidth; x++)
+            {
+                var want = SyntheticImage.PixelRgbaAt(piece, x, y).A;
+                var got = SyntheticImage.PixelRgbaAt(fitted, x, y).A;
+                Assert.True(Math.Abs(want - got) <= 3, $"alpha at {x},{y} was {got}, the piece's is {want}");
+            }
+        }
+    }
+
     private static byte[] Bytes(BitmapSource bitmap)
     {
         var stride = bitmap.PixelWidth * 4;

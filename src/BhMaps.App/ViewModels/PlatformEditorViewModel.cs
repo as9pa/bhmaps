@@ -253,7 +253,8 @@ public partial class PlatformEditorViewModel : ObservableObject
     public partial ImageSource? Preview { get; set; }
 
     /// <summary>Spec 6.2: true lays one picture across every platform and cuts each piece out of it, false fits
-    /// the same picture to each piece on its own, as 2.4 did. Changing it cuts the ticked rows again.</summary>
+    /// the same picture to each piece on its own, as 2.4 did. Changing it cuts the ticked rows again. It can be
+    /// chosen before any picture is loaded, and the next Replace uses it (3.2 F2).</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanPan))]
     public partial bool FitAcross { get; set; } = true;
@@ -408,7 +409,8 @@ public partial class PlatformEditorViewModel : ObservableObject
     /// <summary>The full path the loaded picture came from, which is what the record writes down.</summary>
     public string? LoadedPicturePath { get; private set; }
 
-    /// <summary>Whether the fit switch can be used: there is a picture to lay (spec 6.2).</summary>
+    /// <summary>Whether the Fill, Fit, Center and Stretch row can be used: there is a picture to lay (spec 6.2).
+    /// The Across or Each pair is always open (3.2 F2).</summary>
     public bool CanUseFit => LoadedPicture is not null;
 
     /// <summary>Whether dragging the preview moves anything: a laid picture, not one fitted piece by piece, and
@@ -828,6 +830,16 @@ public partial class PlatformEditorViewModel : ObservableObject
             .ToList();
         if (spanning.Count == 0)
         {
+            // The Across or Each pair is open with no picture loaded, so a record that saved its pictures piece
+            // by piece shows that choice rather than the default (3.2 F2).
+            if (_sets.SelectMany(s => s.RecordRows).Any(r => r.Entry.Art == PlatformArt.EachPiece
+                && r.Entry.Picture is { Length: > 0 }))
+            {
+                _restoringFit = true;
+                FitAcross = false;
+                _restoringFit = false;
+            }
+
             return;
         }
 
@@ -1130,9 +1142,12 @@ public partial class PlatformEditorViewModel : ObservableObject
                     foreach (var row in rows)
                     {
                         var piece = BackgroundFitter.LoadSource(row.SourcePath);
+
+                        // Fit and Center show the piece's original art where the picture does not reach (3.2 F1).
+                        var original = row.WorkingCopyPath is null ? piece : BackgroundFitter.LoadSource(row.OriginalPath);
                         if (!across || box is not { } stage)
                         {
-                            results.Add((row, PieceFitter.Fit(picture, piece, options), false, ""));
+                            results.Add((row, PieceFitter.Fit(picture, piece, options, original), false, ""));
                             continue;
                         }
 
@@ -1141,7 +1156,7 @@ public partial class PlatformEditorViewModel : ObservableObject
                         {
                             results.Add((
                                 row,
-                                PieceFitter.Fit(picture, piece, options),
+                                PieceFitter.Fit(picture, piece, options, original),
                                 false,
                                 $"{row.FileName} not on this stage, fitted on its own."));
                             continue;
@@ -1152,7 +1167,7 @@ public partial class PlatformEditorViewModel : ObservableObject
                         var note = placements.Count > 1
                             ? $"{row.FileName} drawn {placements.Count} times, cut from the largest."
                             : "";
-                        results.Add((row, SpanFitter.Cut(picture, stage, pan, SpanFitter.Largest(placements)!, piece), true, note));
+                        results.Add((row, SpanFitter.Cut(picture, stage, pan, SpanFitter.Largest(placements)!, piece, original), true, note));
                     }
                 }
 
