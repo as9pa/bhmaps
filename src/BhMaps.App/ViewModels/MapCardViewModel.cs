@@ -19,6 +19,7 @@ public partial class MapCardViewModel : ObservableObject
     public MapCardViewModel(MapEntry map, MapStatus? status, IReadOnlyList<CustomPicture> customPictures)
     {
         Map = map;
+        Key = map.Key;
         FolderName = map.FolderName;
         DisplayName = map.DisplayName;
 
@@ -33,6 +34,10 @@ public partial class MapCardViewModel : ObservableObject
         };
         ToolTipText = TagText.Length == 0 ? DisplayName : $"{DisplayName} ({TagText})";
     }
+
+    /// <summary>3.2: the card's identity, the layout it shows. Two cards of one folder share
+    /// <see cref="FolderName"/>, which stays the key for the art itself.</summary>
+    public string Key { get; }
 
     public string FolderName { get; }
 
