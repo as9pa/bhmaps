@@ -11,12 +11,14 @@ public sealed record LevelBackground(string AssetName, double? W, double? H);
 public sealed record LevelAsset(string AssetName, double X, double Y, double W, double H);
 
 /// <summary>One transform node of a level's platform tree. Absent attributes mean identity. A node that names an
-/// image on itself owns the first entry of <see cref="Assets"/>, at the node's own origin.</summary>
+/// image on itself owns the first entry of <see cref="Assets"/>, at the node's own origin. <see cref="Moving"/> marks a
+/// MovingPlatform, whose subtree moves as one piece apart from the rest of the level (3.2 O1).</summary>
 public sealed record PlatformNode(
     double X, double Y, double Scale, double ScaleX, double ScaleY, double Rotation,
     string? Theme,
     IReadOnlyList<LevelAsset> Assets,
-    IReadOnlyList<PlatformNode> Children)
+    IReadOnlyList<PlatformNode> Children,
+    bool Moving = false)
 {
     /// <summary>A themed node is seasonal, and the compositor skips it.</summary>
     [JsonIgnore]

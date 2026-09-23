@@ -73,6 +73,11 @@ public sealed class AssetSources
         _transparency.GetOrAdd(path, static p => TransparentPng.IsFullyTransparent(p));
 }
 
+/// <summary>One drawn image of a level, in draw order. <see cref="Transform"/> takes the asset's node space to
+/// level space. <see cref="Group"/> is 0 for everything that stands still and one number per moving platform,
+/// because pieces of different groups do not keep their places relative to each other in game.</summary>
+public sealed record PlacedAsset(LevelAsset Asset, string RelativePath, Matrix Transform, int Group);
+
 /// <summary>Draws a map the way the game composes it: the background stretched over the camera bounds,
 /// then the platform tree walked depth-first. Safe to call from any thread; every bitmap it returns is frozen.</summary>
 public static class MapCompositor
@@ -165,9 +170,11 @@ public static class MapCompositor
                 });
 
                 DrawBackground(dc, level, sources, decoded);
-                foreach (var node in level.Platforms)
+                foreach (var placed in Walk(level))
                 {
-                    DrawNode(dc, node, level.AssetDir, sources, decoded, focus, ghostOpacity);
+                    dc.PushTransform(new MatrixTransform(placed.Transform));
+                    DrawAsset(dc, placed.Asset, placed.RelativePath, sources, decoded, focus, ghostOpacity);
+                    dc.Pop();
                 }
 
                 dc.Pop();
@@ -221,54 +228,78 @@ public static class MapCompositor
         }
     }
 
-    private static void DrawNode(
-        DrawingContext dc,
-        PlatformNode node,
-        string assetDir,
-        AssetSources sources,
-        Dictionary<string, BitmapSource?> decoded,
-        IReadOnlySet<string>? focus,
-        double ghostOpacity)
+    /// <summary>The platform tree walked depth-first the way it is drawn: a node's own assets, then its children,
+    /// each node applying Scale, Rotate, Translate inside its parent. A seasonal node is left out with everything
+    /// under it, because seasonal art never appears in game outside its event. The seam mask walks the same tree
+    /// (3.2 O1).</summary>
+    public static IReadOnlyList<PlacedAsset> Walk(LevelDesc level)
+    {
+        var placed = new List<PlacedAsset>();
+        var groups = 0;
+        foreach (var node in level.Platforms)
+        {
+            WalkNode(node, level.AssetDir, Matrix.Identity, 0, ref groups, placed);
+        }
+
+        return placed;
+    }
+
+    /// <summary>Takes a piece's own pixels (0..pixelWidth by 0..pixelHeight) to its node's space: stretched over
+    /// the asset's rectangle, where a missing W or H means the image's own size and a negative one is a flip about
+    /// the rectangle's centre.</summary>
+    public static Matrix AssetTransform(LevelAsset asset, int pixelWidth, int pixelHeight)
+    {
+        var w = asset.W == 0 ? pixelWidth : Math.Abs(asset.W);
+        var h = asset.H == 0 ? pixelHeight : Math.Abs(asset.H);
+        var matrix = Matrix.Identity;
+        matrix.Scale(pixelWidth > 0 ? w / pixelWidth : 1, pixelHeight > 0 ? h / pixelHeight : 1);
+        matrix.Translate(asset.X, asset.Y);
+        if (asset.W < 0 || asset.H < 0)
+        {
+            matrix.ScaleAt(asset.W < 0 ? -1 : 1, asset.H < 0 ? -1 : 1, asset.X + (w / 2), asset.Y + (h / 2));
+        }
+
+        return matrix;
+    }
+
+    private static void WalkNode(
+        PlatformNode node, string assetDir, Matrix parent, int group, ref int groups, List<PlacedAsset> placed)
     {
         if (node.IsThemed)
         {
-            // Seasonal art never appears in game outside its event, so it never appears in a preview.
             return;
         }
 
-        dc.PushTransform(new TransformGroup
+        var transform = Matrix.Identity;
+        transform.Scale(node.EffectiveScaleX, node.EffectiveScaleY);
+        transform.Rotate(node.Rotation);
+        transform.Translate(node.X, node.Y);
+        transform.Append(parent);
+        if (node.Moving)
         {
-            Children =
-            {
-                new ScaleTransform(node.EffectiveScaleX, node.EffectiveScaleY),
-                new RotateTransform(node.Rotation),
-                new TranslateTransform(node.X, node.Y),
-            },
-        });
+            group = ++groups;
+        }
 
         foreach (var asset in node.Assets)
         {
-            DrawAsset(dc, asset, assetDir, sources, decoded, focus, ghostOpacity);
+            placed.Add(new PlacedAsset(asset, AssetPath.Resolve(assetDir, asset.AssetName), transform, group));
         }
 
         foreach (var child in node.Children)
         {
-            DrawNode(dc, child, assetDir, sources, decoded, focus, ghostOpacity);
+            WalkNode(child, assetDir, transform, group, ref groups, placed);
         }
-
-        dc.Pop();
     }
 
     private static void DrawAsset(
         DrawingContext dc,
         LevelAsset asset,
-        string assetDir,
+        string relativePath,
         AssetSources sources,
         Dictionary<string, BitmapSource?> decoded,
         IReadOnlySet<string>? focus,
         double ghostOpacity)
     {
-        var relativePath = AssetPath.Resolve(assetDir, asset.AssetName);
         var path = sources.ResolveAsset(relativePath);
         var image = path is null ? null : Decode(path, decoded);
         if (image is null)
@@ -283,21 +314,9 @@ public static class MapCompositor
             dc.PushOpacity(ghostOpacity);
         }
 
-        // A missing W or H parses as 0 and means "the image's own size".
-        var w = asset.W == 0 ? image.PixelWidth : Math.Abs(asset.W);
-        var h = asset.H == 0 ? image.PixelHeight : Math.Abs(asset.H);
-        var mirrored = asset.W < 0 || asset.H < 0;
-        if (mirrored)
-        {
-            dc.PushTransform(new ScaleTransform(
-                asset.W < 0 ? -1 : 1, asset.H < 0 ? -1 : 1, asset.X + (w / 2), asset.Y + (h / 2)));
-        }
-
-        dc.DrawImage(image, new Rect(asset.X, asset.Y, w, h));
-        if (mirrored)
-        {
-            dc.Pop();
-        }
+        dc.PushTransform(new MatrixTransform(AssetTransform(asset, image.PixelWidth, image.PixelHeight)));
+        dc.DrawImage(image, new Rect(0, 0, image.PixelWidth, image.PixelHeight));
+        dc.Pop();
 
         if (ghost)
         {

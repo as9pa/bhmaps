@@ -27,7 +27,46 @@ public static class PlatformRecolor
 
     /// <summary>The same recolour over a bitmap already in memory, so a caller that has just built one (a picture
     /// fitted to a piece, say) does not have to write it out and read it back.</summary>
-    public static void Apply(BitmapSource source, string destPng, double opacity, double hueDegrees)
+    public static void Apply(BitmapSource source, string destPng, double opacity, double hueDegrees) =>
+        Apply(source, destPng, opacity, hueDegrees, null);
+
+    /// <summary>Reads <paramref name="sourcePng"/> and recolours it with a per-pixel alpha factor, as
+    /// <see cref="Apply(BitmapSource, string, double, double, float[])"/> does.</summary>
+    public static void Apply(string sourcePng, string destPng, double opacity, double hueDegrees, float[]? alphaScale) =>
+        Apply(Decode(sourcePng), destPng, opacity, hueDegrees, alphaScale);
+
+    /// <summary>The source as straight-alpha Bgra32, decoded in full.</summary>
+    public static BitmapSource Decode(string sourcePng)
+    {
+        using var stream = File.OpenRead(sourcePng);
+        var decoder = BitmapDecoder.Create(stream, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
+        var source = new FormatConvertedBitmap(decoder.Frames[0], PixelFormats.Bgra32, null, 0);
+        source.Freeze();
+        return source;
+    }
+
+    /// <summary>The alpha byte of every pixel, row by row, which is what <see cref="SeamMask"/> reads.</summary>
+    public static byte[] AlphaOf(BitmapSource source)
+    {
+        if (source.Format != PixelFormats.Bgra32)
+        {
+            source = new FormatConvertedBitmap(source, PixelFormats.Bgra32, null, 0);
+        }
+
+        var pixels = new byte[source.PixelWidth * source.PixelHeight * 4];
+        source.CopyPixels(pixels, source.PixelWidth * 4, 0);
+        var alpha = new byte[source.PixelWidth * source.PixelHeight];
+        for (var i = 0; i < alpha.Length; i++)
+        {
+            alpha[i] = pixels[(i * 4) + 3];
+        }
+
+        return alpha;
+    }
+
+    /// <summary>Spec 3.2 O1: <paramref name="alphaScale"/>, when given, is the seam mask's factor for each pixel
+    /// (row by row) and replaces <paramref name="opacity"/> pixel by pixel; the hue is the same everywhere.</summary>
+    public static void Apply(BitmapSource source, string destPng, double opacity, double hueDegrees, float[]? alphaScale)
     {
         if (source.Format != PixelFormats.Bgra32)
         {
@@ -39,12 +78,18 @@ public static class PlatformRecolor
         var stride = width * 4;
         var pixels = new byte[stride * height];
         source.CopyPixels(pixels, stride, 0);
+        if (alphaScale is not null && alphaScale.Length < width * height)
+        {
+            alphaScale = null;
+        }
+
         for (var y = 0; y < height; y++)
         {
             var row = y * stride;
             for (var i = row; i < row + stride; i += 4)
             {
-                var recoloured = Pixel(new Bgra(pixels[i], pixels[i + 1], pixels[i + 2], pixels[i + 3]), opacity, hueDegrees);
+                var strength = alphaScale is null ? opacity : alphaScale[i / 4];
+                var recoloured = Pixel(new Bgra(pixels[i], pixels[i + 1], pixels[i + 2], pixels[i + 3]), strength, hueDegrees);
                 pixels[i] = recoloured.B;
                 pixels[i + 1] = recoloured.G;
                 pixels[i + 2] = recoloured.R;

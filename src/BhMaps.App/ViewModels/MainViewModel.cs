@@ -1162,6 +1162,11 @@ public partial class MainViewModel : ObservableObject
         if (!saved.ApplyToGame)
         {
             // Saved into the pack and no further, so nothing in the game folder moved and there is nothing to undo.
+            if (vm.SeamFixSkipped)
+            {
+                Status.Note(PlatformPieceViewModel.SeamFixNote);
+            }
+
             return;
         }
 
