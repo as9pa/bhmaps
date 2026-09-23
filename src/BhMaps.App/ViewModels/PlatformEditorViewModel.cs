@@ -261,13 +261,14 @@ public partial class PlatformEditorViewModel : ObservableObject
     /// the same picture to each piece on its own, as 2.4 did. Changing it cuts the ticked rows again. It can be
     /// chosen before any picture is loaded, and the next Replace uses it (3.2 F2).</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanPan))]
+    [NotifyPropertyChangedFor(nameof(CanPan), nameof(ImageText))]
     public partial bool FitAcross { get; set; } = true;
 
     /// <summary>3.0 E: how the picture fills the piece's box, or the whole stage when it is laid across. The one
     /// fit set every window offers. Changing it cuts the ticked rows again.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanPan), nameof(FitFill), nameof(FitFit), nameof(FitCenter), nameof(FitStretch))]
+    [NotifyPropertyChangedFor(
+        nameof(CanPan), nameof(FitFill), nameof(FitFit), nameof(FitCenter), nameof(FitStretch), nameof(ImageText))]
     public partial PictureFit Fit { get; set; } = PictureFit.Fill;
 
     /// <summary>Where the laid picture sits inside the platform box, 0..1 (spec 6.2). The drag on the preview is
@@ -394,6 +395,14 @@ public partial class PlatformEditorViewModel : ObservableObject
             if (ticked.All(p => p.Art == PieceArt.Replacement)
                 && ticked.Select(p => p.ReplacementName).Distinct(StringComparer.Ordinal).Count() == 1)
             {
+                // 3.2: the rows are cut from the loaded picture the way the Across or Each pair and the fit row
+                // say, so the line reads those out rather than a size.
+                if (CanUseFit)
+                {
+                    var layout = FitAcross ? "across the platforms" : "on each piece";
+                    return $"{ticked[0].ReplacementName}, {layout}, {Fit}";
+                }
+
                 // One picture fitted to pieces of different shapes has no one size to read out.
                 return ticked.All(p => p.Width == ticked[0].Width && p.Height == ticked[0].Height)
                     ? ticked[0].ImageText
@@ -1095,6 +1104,7 @@ public partial class PlatformEditorViewModel : ObservableObject
         LoadedPicturePath = path;
         OnPropertyChanged(nameof(CanUseFit));
         OnPropertyChanged(nameof(CanPan));
+        OnPropertyChanged(nameof(ImageText));
         return true;
     }
 
@@ -1107,6 +1117,7 @@ public partial class PlatformEditorViewModel : ObservableObject
         _fitNoteRows.Clear();
         OnPropertyChanged(nameof(CanUseFit));
         OnPropertyChanged(nameof(CanPan));
+        OnPropertyChanged(nameof(ImageText));
     }
 
     /// <summary>Spec 6.2: every row named is cut from the loaded picture again with the switch and the pan as
