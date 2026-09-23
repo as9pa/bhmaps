@@ -11,7 +11,12 @@ public sealed record UiSet(string Name, string Label);
 /// owns every file its included levels name that no other folder's levels also name, so a folder whose levels
 /// name two or three different pictures owns all of them. <see cref="Candidates"/> holds every file its levels
 /// name, owned or not, <see cref="ThumbnailFile"/> is the first owned one for callers that want a single
-/// name, and <see cref="LevelFor"/> answers which level a file is the picture of.</summary>
+/// name, and <see cref="LevelFor"/> answers which level a file is the picture of.
+/// 3.2: the same record is also one card, a playable layout. <see cref="Layout"/> is the level the card is,
+/// null in the fallback, and <see cref="Key"/> tells cards apart. A layout card of a folder with two or more
+/// layouts carries its own name, sets, base level and thumbnail, and its own platform files in
+/// <see cref="LayoutFiles"/>; <see cref="PlatformFiles"/> and <see cref="BackgroundSlots"/> stay the whole
+/// folder's, because the art folder, the background and a pack's files are per folder.</summary>
 public sealed record MapEntry(
     string FolderName,
     string DisplayName,
@@ -22,8 +27,17 @@ public sealed record MapEntry(
     IReadOnlyList<string> PlatformFiles,
     IReadOnlyList<string>? OwnedThumbnails = null,
     IReadOnlyList<string>? ThumbnailCandidates = null,
-    IReadOnlyDictionary<string, LevelDesc>? ThumbnailLevels = null)
+    IReadOnlyDictionary<string, LevelDesc>? ThumbnailLevels = null,
+    string? Layout = null,
+    IReadOnlyList<string>? LayoutPlatformFiles = null)
 {
+    /// <summary>3.2: the card's identity: the layout's level name, or the folder name in the fallback.</summary>
+    public string Key => Layout ?? FolderName;
+
+    /// <summary>3.2: the platform files this layout draws, which is the whole folder's list for a folder with
+    /// one layout.</summary>
+    public IReadOnlyList<string> LayoutFiles => LayoutPlatformFiles ?? PlatformFiles;
+
     /// <summary>The map-select pictures this map owns outright, in level order, empty when it owns none.</summary>
     public IReadOnlyList<string> ThumbnailFiles => OwnedThumbnails ?? [];
 
@@ -45,8 +59,8 @@ public sealed record MapEntry(
 /// maps: they stay out of the catalog, and reset-all and pack operations reach them through the game tree.</summary>
 public sealed class MapCatalog
 {
-    public static readonly string[] RankedSetNames = ["Ranked1v1", "Ranked2v2", "Tournament1v1"];
-    public static readonly string[] StandardSetNames = ["Standard1v1", "Standard2v2", "Tournament1v1"];
+    public static readonly string[] RankedSetNames = ["Ranked1v1", "Ranked2v2", "Tournament1v1", "Tournament2v2"];
+    public static readonly string[] StandardSetNames = ["Standard1v1", "Standard2v2", "Tournament1v1", "Tournament2v2"];
 
     /// <summary>3.0: the set every level a game mode uses belongs to, minigame or not.</summary>
     public const string MinigameSetName = "GameModeAll";
@@ -68,7 +82,8 @@ public sealed class MapCatalog
     {
         ["Ranked1v1"] = "Ranked 1v1",
         ["Ranked2v2"] = "Ranked 2v2",
-        ["Tournament1v1"] = "Tournament",
+        ["Tournament1v1"] = "Tournament 1v1",
+        ["Tournament2v2"] = "Tournament 2v2",
         ["Standard1v1"] = "Standard 1v1",
         ["Standard2v2"] = "Standard 2v2",
         [MinigameSetName] = MinigameLabel,
@@ -94,10 +109,13 @@ public sealed class MapCatalog
         StringComparer.OrdinalIgnoreCase);
 
     private readonly Dictionary<string, MapEntry> byFolder;
+    private readonly Dictionary<string, MapEntry> byLayout;
 
-    private MapCatalog(IReadOnlyList<MapEntry> maps, IReadOnlyList<string> uiSetNames, bool hasLevelData)
+    private MapCatalog(
+        IReadOnlyList<MapEntry> maps, IReadOnlyList<MapEntry> layouts, IReadOnlyList<string> uiSetNames, bool hasLevelData)
     {
         Maps = maps;
+        Layouts = layouts;
         UiSetNames = uiSetNames;
         UiSets = uiSetNames.Select(n => new UiSet(n, LabelFor(n))).ToList();
         HasLevelData = hasLevelData;
@@ -106,10 +124,22 @@ public sealed class MapCatalog
         {
             byFolder[map.FolderName] = map;
         }
+
+        byLayout = new Dictionary<string, MapEntry>(StringComparer.OrdinalIgnoreCase);
+        foreach (var layout in layouts)
+        {
+            byLayout[layout.Key] = layout;
+        }
     }
 
-    /// <summary>Sorted by display name, ordinal ignore case.</summary>
+    /// <summary>One entry per art folder, sorted by display name, ordinal ignore case. Everything that writes,
+    /// resets or records art works on these, because art is organised per folder.</summary>
     public IReadOnlyList<MapEntry> Maps { get; }
+
+    /// <summary>3.2: one entry per playable layout, the cards the Maps page shows, sorted like
+    /// <see cref="Maps"/>. A folder with one layout is the same entry in both lists; the fallback's layouts are
+    /// its folders.</summary>
+    public IReadOnlyList<MapEntry> Layouts { get; }
 
     /// <summary>The chip sets in the order the UI shows them. Empty in the fallback.</summary>
     public IReadOnlyList<string> UiSetNames { get; }
@@ -123,6 +153,15 @@ public sealed class MapCatalog
 
     public MapEntry? ByFolder(string folderName) =>
         byFolder.TryGetValue(folderName, out var map) ? map : null;
+
+    /// <summary>3.2: the card whose <see cref="MapEntry.Key"/> is <paramref name="key"/>, or null.</summary>
+    public MapEntry? ByLayout(string key) =>
+        byLayout.TryGetValue(key, out var layout) ? layout : null;
+
+    /// <summary>3.2: every card of one art folder, in <see cref="Layouts"/> order: the cards a write to that
+    /// folder changes.</summary>
+    public IReadOnlyList<MapEntry> LayoutsOf(string folderName) =>
+        Layouts.Where(l => l.FolderName.Equals(folderName, StringComparison.OrdinalIgnoreCase)).ToList();
 
     /// <summary>The chip label for a set name; an unlabelled set is shown under its own name.</summary>
     public static string LabelFor(string setName) =>
@@ -173,7 +212,56 @@ public sealed class MapCatalog
             .OrderBy(m => m.DisplayName, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        return new MapCatalog(maps, PickUiSets(data.Sets), hasLevelData: true);
+        var layouts = maps
+            .SelectMany(m => CardsOf(m, data.Sets, Display, included))
+            .OrderBy(m => m.DisplayName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return new MapCatalog(maps, layouts, PickUiSets(data.Sets), hasLevelData: true);
+    }
+
+    /// <summary>3.2: a folder's cards. A layout is a level in a set a player picks a map from; a folder with two
+    /// or more of them gets one card each, so a set chip matches the layout the game really uses (Small World's
+    /// End, not World's End). A folder with one layout, and a folder with none (a minigame arena, the tutorial),
+    /// stays the one card it was. Levels that are not layouts, a mode's arena or a tutorial inside a map's folder,
+    /// get no card of their own: they stay on the folder entry, as they always were.</summary>
+    private static IEnumerable<MapEntry> CardsOf(
+        MapEntry folder,
+        IReadOnlyList<LevelSet> sets,
+        Func<LevelDesc, string> display,
+        IReadOnlyDictionary<string, LevelType> included)
+    {
+        List<string> SetsOf(LevelDesc level) =>
+            sets.Where(s => s.LevelNames.Contains(level.LevelName, StringComparer.OrdinalIgnoreCase))
+                .Select(s => s.Name)
+                .ToList();
+
+        var layouts = folder.Levels.Where(l => SetsOf(l).Any(PlayableSetNames.Contains)).ToList();
+        if (layouts.Count < 2)
+        {
+            yield return folder;
+            yield break;
+        }
+
+        foreach (var level in layouts)
+        {
+            var file = included[level.LevelName].ThumbnailFile;
+            IReadOnlyList<string> own = string.IsNullOrEmpty(file) ? [] : [file];
+
+            yield return folder with
+            {
+                DisplayName = display(level),
+                BaseLevel = level,
+                Levels = [level],
+                Sets = SetsOf(level),
+                OwnedThumbnails = own.Where(f => folder.ThumbnailFiles.Contains(f, StringComparer.OrdinalIgnoreCase))
+                    .ToList(),
+                ThumbnailCandidates = own,
+                ThumbnailLevels = own.ToDictionary(f => f, _ => level, StringComparer.OrdinalIgnoreCase),
+                Layout = level.LevelName,
+                LayoutPlatformFiles = PlatformFilesOf([level]),
+            };
+        }
     }
 
     /// <summary>Spec 3.6 fallback: one map per game folder, folder name as display name, no sets.</summary>
@@ -185,7 +273,7 @@ public sealed class MapCatalog
             .OrderBy(m => m.DisplayName, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        return new MapCatalog(maps, Array.Empty<string>(), hasLevelData: false);
+        return new MapCatalog(maps, maps, Array.Empty<string>(), hasLevelData: false);
     }
 
     private static MapEntry FolderEntry(GameFolder folder)
@@ -261,14 +349,19 @@ public sealed class MapCatalog
                 .Where(n => n.Length > 0)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList(),
-            levels
-                .SelectMany(l => Assets(l.Platforms).Select(a => AssetPath.Resolve(l.AssetDir, a.AssetName)))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList(),
+            PlatformFilesOf(levels),
             owned,
             candidates,
-            ThumbnailLevels(levels, baseLevel, included));
+            ThumbnailLevels(levels, baseLevel, included),
+            Layout: baseLevel.LevelName);
     }
+
+    /// <summary>Every platform file the levels draw, as paths relative to mapArt, in level order.</summary>
+    private static IReadOnlyList<string> PlatformFilesOf(IEnumerable<LevelDesc> levels) =>
+        levels
+            .SelectMany(l => Assets(l.Platforms).Select(a => AssetPath.Resolve(l.AssetDir, a.AssetName)))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
 
     /// <summary>Which level each of the folder's map-select pictures is the picture of, keyed by file name. A
     /// folder holds a big and a small level that name a file each, and each file has to be rendered from its own
