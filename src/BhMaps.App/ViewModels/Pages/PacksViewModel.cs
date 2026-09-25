@@ -358,7 +358,7 @@ public partial class PacksViewModel : PageViewModel
         string? error = null;
         var ok = await Shell.RunBusyAsync(
             $"Deleting {pack.Name}",
-            (_, _) => Task.Run(() => { error = PackDeleter.Delete(libraryPath, pack.Name); }));
+            (_, _) => Task.Run(() => { error = PackDeleter.Delete(libraryPath, pack); }));
         if (error is not null)
         {
             Shell.Dialogs.Error("Could not remove pack", error);
@@ -421,7 +421,7 @@ public partial class PacksViewModel : PageViewModel
         var pack = row.Pack;
         var libraryPath = Shell.Services.LibraryPath;
         var copyName = PackCopier.FreeCopyName(libraryPath, pack.Name);
-        var undoPaths = PackCopier.DuplicatePaths(libraryPath, pack.Name, copyName);
+        var undoPaths = PackCopier.DuplicatePaths(pack, copyName);
         string? error = null;
         await Shell.RunLibraryWriteAsync(
             $"Duplicating {pack.Name}",
@@ -431,7 +431,7 @@ public partial class PacksViewModel : PageViewModel
                 {
                     try
                     {
-                        PackCopier.DuplicatePack(libraryPath, pack.Name, copyName);
+                        PackCopier.DuplicatePack(libraryPath, pack, copyName);
                     }
                     catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                     {

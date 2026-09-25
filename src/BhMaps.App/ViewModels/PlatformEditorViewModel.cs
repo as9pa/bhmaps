@@ -159,7 +159,7 @@ public partial class PlatformEditorViewModel : ObservableObject
             row.PropertyChanged += OnRowPropertyChanged;
         }
 
-        PackChoices = packs.Select(p => p.Name).Concat([BackgroundEditorViewModel.NewPackChoice]).ToList();
+        PackChoices = packs.Where(p => !p.IsDiscovered).Select(p => p.Name).Concat([BackgroundEditorViewModel.NewPackChoice]).ToList();
         Error = "";
 
         // Spec 3.4: a panel row's Edit names one file, and that editor opens on it. Spec 3.5: every other way in

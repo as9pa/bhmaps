@@ -82,18 +82,27 @@ public static class PackCopier
 
     /// <summary>Every library-relative path an operation on these pack-relative files touches in this pack, the
     /// two record files included: a copy merges entries into the target's records and a move takes them out of
-    /// the source's, so both files are captured whether or not this call ends up rewriting them.</summary>
+    /// the source's, so both files are captured whether or not this call ends up rewriting them. A discovered pack
+    /// is read-only and never written, so it has nothing to capture.</summary>
     public static IReadOnlyList<string> Touched(Pack pack, IEnumerable<string> relativePaths) =>
-    [
-        .. relativePaths.Select(r => LibraryRelative(pack, r)),
-        .. RecordFileNames.Select(name => LibraryRelative(pack, name)),
-    ];
+        pack.IsDiscovered
+            ? []
+            :
+            [
+                .. relativePaths.Select(r => LibraryRelative(pack, r)),
+                .. RecordFileNames.Select(name => LibraryRelative(pack, name)),
+            ];
 
     /// <summary>Spec 4.1: the map's files into the target under the same relative paths, with its record entries
     /// merged into the target's records. Skipped, with nothing written, when the target already holds any of
     /// them and replace is false.</summary>
     public static PackCopyResult CopyMap(Pack source, Pack target, MapEntry map, MapCatalog catalog, bool replace)
     {
+        if (target.IsDiscovered)
+        {
+            return ReadOnly(target);
+        }
+
         var files = MapFiles(source, map, catalog);
         if (files.Count == 0)
         {
@@ -131,6 +140,11 @@ public static class PackCopier
     /// <summary>Spec 4.1: one Backgrounds jpg and its background record entry.</summary>
     public static PackCopyResult CopyFile(Pack source, Pack target, string relativePath, bool replace)
     {
+        if (target.IsDiscovered)
+        {
+            return ReadOnly(target);
+        }
+
         if (!File.Exists(Path.Combine(source.FullPath, relativePath)))
         {
             return PackCopyResult.Nothing;
@@ -159,6 +173,11 @@ public static class PackCopier
     /// left behind is deleted; Backgrounds is not, because it holds other maps' slots.</summary>
     public static PackCopyResult RemoveMap(Pack pack, MapEntry map, MapCatalog catalog)
     {
+        if (pack.IsDiscovered)
+        {
+            return ReadOnly(pack);
+        }
+
         var removed = new List<string>();
         var failures = new List<FileFailure>();
 
@@ -177,6 +196,11 @@ public static class PackCopier
     /// background record entry are left alone, because a platform delete is not a background delete.</summary>
     public static PackCopyResult RemovePlatforms(Pack pack, MapEntry map, MapCatalog catalog)
     {
+        if (pack.IsDiscovered)
+        {
+            return ReadOnly(pack);
+        }
+
         var removed = new List<string>();
         var failures = new List<FileFailure>();
         DeleteFiles(pack, PlatformFiles(pack, map), removed, failures);
@@ -190,6 +214,11 @@ public static class PackCopier
     /// way RemoveMap names a file that went missing between the scan and the delete, and is not a failure.</summary>
     public static PackCopyResult RemoveBackground(Pack pack, string fileName)
     {
+        if (pack.IsDiscovered)
+        {
+            return ReadOnly(pack);
+        }
+
         var removed = new List<string>();
         var failures = new List<FileFailure>();
         DeleteFiles(pack, [Path.Combine(BackgroundsFolder, fileName)], removed, failures);
@@ -202,6 +231,11 @@ public static class PackCopier
     /// that never reached the target. The copy result is returned as it stands, its Failures the report.</summary>
     public static PackCopyResult MoveMap(Pack source, Pack target, MapEntry map, MapCatalog catalog, bool replace)
     {
+        if (source.IsDiscovered)
+        {
+            return ReadOnly(source);
+        }
+
         var copied = CopyMap(source, target, map, catalog, replace);
         if (copied.Skipped || copied.Written.Count == 0 || copied.Failures.Count > 0)
         {
@@ -220,6 +254,11 @@ public static class PackCopier
     /// failed leaves the source alone, on the same rule as MoveMap.</summary>
     public static PackCopyResult MoveFile(Pack source, Pack target, string relativePath, bool replace)
     {
+        if (source.IsDiscovered)
+        {
+            return ReadOnly(source);
+        }
+
         var copied = CopyFile(source, target, relativePath, replace);
         if (copied.Skipped || copied.Written.Count == 0 || copied.Failures.Count > 0)
         {
@@ -275,9 +314,16 @@ public static class PackCopier
     /// <summary>Spec 4.2: the library-relative path of every file a duplicate lays down under
     /// <paramref name="copyName" />, for the undo session the caller opens before the copy is made. The whole
     /// source tree, edit records and all, because that is what the copy takes. A pack that is not there has none.</summary>
-    public static IReadOnlyList<string> DuplicatePaths(string libraryPath, string name, string copyName)
+    public static IReadOnlyList<string> DuplicatePaths(string libraryPath, string name, string copyName) =>
+        DuplicatePathsFrom(Path.Combine(libraryPath, PacksFolderName, name), copyName);
+
+    /// <summary>DuplicatePaths for a scanned pack, read from its content root, so a discovered pack (read-only,
+    /// outside packs\) can still be duplicated into packs\ as a pack of the user's own.</summary>
+    public static IReadOnlyList<string> DuplicatePaths(Pack pack, string copyName) =>
+        DuplicatePathsFrom(pack.FullPath, copyName);
+
+    private static IReadOnlyList<string> DuplicatePathsFrom(string from, string copyName)
     {
-        var from = Path.Combine(libraryPath, PacksFolderName, name);
         return Directory.Exists(from)
             ? [.. DuplicateSources(from).Select(r => Path.Combine(PacksFolderName, copyName, r))]
             : [];
@@ -290,11 +336,16 @@ public static class PackCopier
 
     /// <summary>The same copy under a name the caller already has, for a caller that has to name the copy before
     /// it is made, such as one holding the copy's paths for undo: the folder it named is the folder it gets.</summary>
-    public static string DuplicatePack(string libraryPath, string name, string copyName)
+    public static string DuplicatePack(string libraryPath, string name, string copyName) =>
+        DuplicatePackFrom(libraryPath, Path.Combine(libraryPath, PacksFolderName, name), copyName);
+
+    /// <summary>DuplicatePack for a scanned pack, read from its content root. The copy always lands in packs\.</summary>
+    public static string DuplicatePack(string libraryPath, Pack pack, string copyName) =>
+        DuplicatePackFrom(libraryPath, pack.FullPath, copyName);
+
+    private static string DuplicatePackFrom(string libraryPath, string from, string copyName)
     {
-        var packsRoot = Path.Combine(libraryPath, PacksFolderName);
-        var from = Path.Combine(packsRoot, name);
-        var to = Path.Combine(packsRoot, copyName);
+        var to = Path.Combine(libraryPath, PacksFolderName, copyName);
         try
         {
             foreach (var directory in Directory.EnumerateDirectories(from, "*", SearchOption.AllDirectories))
@@ -355,6 +406,10 @@ public static class PackCopier
 
         return new PackImportResult(written, removed, skipped, failures);
     }
+
+    /// <summary>The refusal for a change to a discovered pack, which is read-only: nothing written or removed.</summary>
+    private static PackCopyResult ReadOnly(Pack pack) =>
+        new([], [], false, [new FileFailure(pack.FullPath, Pack.ReadOnlyMessage(pack))]);
 
     private static void Collect(
         PackCopyResult result,

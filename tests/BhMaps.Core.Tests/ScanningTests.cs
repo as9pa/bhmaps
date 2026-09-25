@@ -119,4 +119,147 @@ public class ScanningTests
         Assert.Empty(PackScanner.ScanAll(tmp.Path));
         Assert.Empty(PackScanner.ScanAll(Path.Combine(tmp.Path, "missing-library")));
     }
+
+    [Fact]
+    public void PackScanner_OldLayoutPacksAreNotDiscovered()
+    {
+        using var tmp = new TempDir();
+        new FakeGameTree(Path.Combine(tmp.Path, "packs", "dark")).File("Swamp", "Mud1.png", "d");
+
+        var pack = Assert.Single(PackScanner.ScanAll(tmp.Path));
+
+        Assert.False(pack.IsDiscovered);
+        Assert.Equal(Path.Combine(tmp.Path, "packs", "dark"), pack.FullPath);
+    }
+
+    [Fact]
+    public void PackScanner_FindsNestedMapArtPack()
+    {
+        using var tmp = new TempDir();
+        var content = Path.Combine(tmp.Path, "Summer", "mapArt");
+        new FakeGameTree(content).File("BloodMoon", "a.png", "s").File("Backgrounds", "BG_Sewer.jpg", "s");
+
+        var pack = Assert.Single(PackScanner.ScanAll(tmp.Path));
+
+        Assert.Equal("Summer", pack.Name);
+        Assert.Equal(content, pack.FullPath);
+        Assert.True(pack.IsDiscovered);
+        Assert.Equal(2, pack.FileCount);
+        Assert.NotNull(pack.FindFolder("bloodmoon"));
+    }
+
+    [Fact]
+    public void PackScanner_MapArtChildMatchesIgnoringCase()
+    {
+        using var tmp = new TempDir();
+        new FakeGameTree(Path.Combine(tmp.Path, "Summer", "MAPART")).File("BloodMoon", "a.png", "s");
+
+        var pack = Assert.Single(PackScanner.ScanAll(tmp.Path));
+
+        Assert.Equal("Summer", pack.Name);
+    }
+
+    [Fact]
+    public void PackScanner_ReadsOldAndNestedLayoutsTogether()
+    {
+        using var tmp = new TempDir();
+        new FakeGameTree(Path.Combine(tmp.Path, "packs", "dark")).File("Swamp", "Mud1.png", "d");
+        new FakeGameTree(Path.Combine(tmp.Path, "Summer", "mapArt")).File("BloodMoon", "a.png", "s");
+        new FakeGameTree(Path.Combine(tmp.Path, "packs", "hidden", "mapArt")).File("BloodMoon", "a.png", "h");
+
+        var result = PackScanner.ScanAll(tmp.Path);
+
+        Assert.Equal(new[] { "dark", "hidden", "Summer" }, result.Select(p => p.Name));
+        Assert.Equal(new[] { false, false, true }, result.Select(p => p.IsDiscovered));
+    }
+
+    [Fact]
+    public void PackScanner_MapArtWithinThreeLevelsIsFoundAndDeeperIsIgnored()
+    {
+        using var tmp = new TempDir();
+        // mapArt at depth 3 (library children are depth 1): found.
+        new FakeGameTree(Path.Combine(tmp.Path, "a", "Near", "mapArt")).File("BloodMoon", "a.png", "n");
+        // mapArt at depth 4: past the cap.
+        new FakeGameTree(Path.Combine(tmp.Path, "b", "c", "Far", "mapArt")).File("BloodMoon", "a.png", "f");
+
+        var pack = Assert.Single(PackScanner.ScanAll(tmp.Path));
+
+        Assert.Equal("Near", pack.Name);
+    }
+
+    [Fact]
+    public void PackScanner_StopsDescendingBelowAPack()
+    {
+        using var tmp = new TempDir();
+        new FakeGameTree(Path.Combine(tmp.Path, "Outer", "mapArt")).File("BloodMoon", "a.png", "o");
+        new FakeGameTree(Path.Combine(tmp.Path, "Outer", "Inner", "mapArt")).File("BloodMoon", "a.png", "i");
+
+        var pack = Assert.Single(PackScanner.ScanAll(tmp.Path));
+
+        Assert.Equal("Outer", pack.Name);
+    }
+
+    [Fact]
+    public void PackScanner_DuplicateNamesTakeNumericSuffixes()
+    {
+        using var tmp = new TempDir();
+        new FakeGameTree(Path.Combine(tmp.Path, "packs", "Summer")).File("Swamp", "Mud1.png", "p");
+        new FakeGameTree(Path.Combine(tmp.Path, "summer", "mapArt")).File("BloodMoon", "a.png", "1");
+        new FakeGameTree(Path.Combine(tmp.Path, "Summer (1)", "mapArt")).File("BloodMoon", "a.png", "2");
+        new FakeGameTree(Path.Combine(tmp.Path, "x", "Summer", "mapArt")).File("BloodMoon", "a.png", "3");
+
+        var result = PackScanner.ScanAll(tmp.Path);
+        string NameOf(string fullPath) => result.Single(p => p.FullPath == fullPath).Name;
+
+        Assert.Equal(4, result.Count);
+        Assert.Equal(4, result.Select(p => p.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        Assert.Equal("Summer", NameOf(Path.Combine(tmp.Path, "packs", "Summer")));
+        Assert.Equal("Summer (1)", NameOf(Path.Combine(tmp.Path, "Summer (1)", "mapArt")));
+        Assert.Equal("summer (2)", NameOf(Path.Combine(tmp.Path, "summer", "mapArt")));
+        Assert.Equal("Summer (3)", NameOf(Path.Combine(tmp.Path, "x", "Summer", "mapArt")));
+    }
+
+    [Fact]
+    public void PackScanner_SkipsJunctions()
+    {
+        using var tmp = new TempDir();
+        var outside = Path.Combine(tmp.Path, "outside");
+        new FakeGameTree(Path.Combine(outside, "mapArt")).File("BloodMoon", "a.png", "o");
+        var library = Path.Combine(tmp.Path, "lib");
+        Directory.CreateDirectory(library);
+        var link = Path.Combine(library, "Linked");
+        if (!TryCreateJunction(link, outside))
+        {
+            // No junction support on this machine: nothing to test.
+            return;
+        }
+
+        Assert.Empty(PackScanner.ScanAll(library));
+        Directory.Delete(link);
+    }
+
+    // Unreadable folders are not simulated here: denying read access portably on Windows needs ACL edits the
+    // test account may not be allowed to undo. The scanner's catch covers them; the junction test covers the
+    // reparse point skip.
+
+    private static bool TryCreateJunction(string link, string target)
+    {
+        try
+        {
+            using var process = System.Diagnostics.Process.Start(
+                new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c mklink /J \"{link}\" \"{target}\"")
+                {
+                    CreateNoWindow = true,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                });
+            process!.WaitForExit();
+            return process.ExitCode == 0 && Directory.Exists(link);
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
 }

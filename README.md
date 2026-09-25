@@ -69,8 +69,11 @@ Brawlhalla open or closed, and show on the next match load.
 ## Files
 
 Game art lives in `<Steam>\steamapps\common\Brawlhalla\mapArt`. The pack library is
-`Documents\BhMaps` by default, holding packs at `packs\<name>\<GameFolder>\<file>`. Settings and
-caches are in `%APPDATA%\BhMaps`.
+`Documents\BhMaps` by default, holding packs at `packs\<name>\<GameFolder>\<file>`. A folder elsewhere
+in the library with a `mapArt` folder inside it, such as `<name>\mapArt\<GameFolder>\<file>`, is found
+as a pack too, as long as `mapArt` is at most three folders below the library. Those packs are read
+only: they can be viewed and applied but not deleted or changed. Settings and caches are in
+`%APPDATA%\BhMaps`.
 
 ## Build
 
