@@ -123,4 +123,5 @@ public class PackDeleterTests
         Assert.Empty(result.Removed);
         Assert.NotEmpty(result.Failures);
         Assert.True(File.Exists(Path.Combine(content, "Backgrounds", "BG_Sewer.jpg")));
-    }}
+    }
+}
