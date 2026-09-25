@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net.Http;
 using System.Reflection;
 using System.Windows;
@@ -5,6 +6,7 @@ using BhMaps.App.Services;
 using BhMaps.App.ViewModels;
 using BhMaps.App.Views;
 using BhMaps.Core.Settings;
+using BhMaps.Core.Update;
 
 namespace BhMaps.App;
 
@@ -25,6 +27,14 @@ public partial class App : Application
 
         var parsed = CommandLine.Parse(e.Args);
         Quiet = parsed.Quiet;
+
+        // The in-place update started this process from the old one, which is still closing. Wait for it before
+        // anything reads settings, so the two never write the same files at once.
+        if (parsed.AfterUpdatePid is { } oldPid)
+        {
+            WaitForExit(oldPid);
+        }
+
         if (parsed.MissingAppDataError() is { } overrideError)
         {
             // Refuse before anything loads settings or scans, so the real %APPDATA% files stay as they were.
@@ -48,6 +58,7 @@ public partial class App : Application
 
         // Spec 5: one sweep a run keeps the preview folder from growing without bound.
         services.Previews.Sweep(DateTimeOffset.UtcNow);
+        CleanUpAfterUpdate(services.UpdatesDir);
 
         // Spec 7.7: the welcome window is the first run, and it also stands in for the v1 settings loop, so a
         // saved game path that has stopped working comes back here rather than to a crash or an empty grid.
@@ -100,5 +111,42 @@ public partial class App : Application
         MainWindow = window;
         window.Closed += (_, _) => Shutdown();
         window.Show();
+    }
+
+    /// <summary>At most 15 s: an old process that will not go is not a reason for the new one not to start.</summary>
+    private static void WaitForExit(int pid)
+    {
+        try
+        {
+            using var old = Process.GetProcessById(pid);
+            old.WaitForExit(TimeSpan.FromSeconds(15));
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException
+            or System.ComponentModel.Win32Exception)
+        {
+            // Already gone.
+        }
+    }
+
+    /// <summary>Every start: the .old exe a finished update left, and the leftovers of an interrupted download
+    /// or the retired script flow. The .old file stays locked for a moment after the old process exits, so a
+    /// delete that fails is retried in the background a few times rather than holding up the window.</summary>
+    private static void CleanUpAfterUpdate(string updatesDir)
+    {
+        UpdateInstaller.CleanUpdatesFolder(updatesDir);
+        if (UpdateInstaller.DetectBuild() == UpdateBuild.Development
+            || Environment.ProcessPath is not { Length: > 0 } running
+            || UpdateInstaller.TryDeleteOld(running))
+        {
+            return;
+        }
+
+        _ = Task.Run(async () =>
+        {
+            for (var attempt = 0; attempt < 5 && !UpdateInstaller.TryDeleteOld(running); attempt++)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(2));
+            }
+        });
     }
 }

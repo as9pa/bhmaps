@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Net.Http;
 using System.Security.Cryptography;
 
@@ -38,36 +39,41 @@ public sealed class UpdateClient(HttpClient http)
         }
     }
 
-    /// <summary>Streams the exe to &lt;name&gt;.partial, verifies its SHA-256 against the line of SHA256SUMS.txt that
-    /// names it, then renames. A mismatch, or no line at all, deletes the file and throws InvalidDataException; a
-    /// cancel deletes it and rethrows. The caller decides what to say about either.</summary>
+    /// <summary>Streams the build's asset to &lt;name&gt;.partial, verifies its SHA-256 against the line of
+    /// SHA256SUMS.txt that names it, then renames. The self-contained build gets the exe itself; the
+    /// framework-dependent build gets the zip, and the one BhMaps.exe inside it is extracted beside it and the zip
+    /// deleted. Returns the exe the swap moves. A mismatch, no line at all, or a zip with no BhMaps.exe deletes
+    /// what was written and throws InvalidDataException; a cancel deletes it and rethrows. The caller decides what
+    /// to say about either.</summary>
     public async Task<string> DownloadAsync(
         ReleaseInfo release,
+        UpdateBuild build,
         string updatesDir,
         IProgress<(long Done, long Total)>? progress,
         CancellationToken ct)
     {
-        if (release.ExeUrl is not { Length: > 0 } exeUrl || release.ChecksumsUrl is not { Length: > 0 } sumsUrl)
+        if (release.UrlFor(build) is not { Length: > 0 } assetUrl
+            || release.ChecksumsUrl is not { Length: > 0 } sumsUrl)
         {
-            throw new InvalidDataException("The release does not carry a Windows exe and a checksum file.");
+            throw new InvalidDataException("The release does not carry this build and a checksum file.");
         }
 
         Directory.CreateDirectory(updatesDir);
-        var name = ReleaseChecker.ExeName(release.Version);
-        var finalPath = Path.Combine(updatesDir, name);
-        var partialPath = finalPath + ".partial";
-        if (File.Exists(partialPath))
-        {
-            File.Delete(partialPath);
-        }
+        var name = ReleaseChecker.AssetName(release.Version, build);
+        var assetPath = Path.Combine(updatesDir, name);
+        var partialPath = assetPath + ".partial";
+        var exePath = build == UpdateBuild.FrameworkDependent
+            ? Path.Combine(updatesDir, Path.GetFileNameWithoutExtension(name) + ".exe")
+            : assetPath;
+        TryDelete(partialPath);
 
         try
         {
             using var response = await http
-                .GetAsync(exeUrl, HttpCompletionOption.ResponseHeadersRead, ct)
+                .GetAsync(assetUrl, HttpCompletionOption.ResponseHeadersRead, ct)
                 .ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
-            var total = response.Content.Headers.ContentLength ?? release.ExeSize;
+            var total = response.Content.Headers.ContentLength ?? release.SizeFor(build);
 
             await using (var source = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false))
             await using (var target = new FileStream(
@@ -102,20 +108,38 @@ public sealed class UpdateClient(HttpClient http)
                     $"The downloaded file does not match the checksum in {ReleaseChecker.ChecksumsName}.");
             }
 
-            if (File.Exists(finalPath))
+            if (build == UpdateBuild.FrameworkDependent)
             {
-                File.Delete(finalPath);
+                // Only a verified zip is opened, and only its BhMaps.exe comes out of it.
+                await ExtractExeAsync(partialPath, exePath + ".partial", ct).ConfigureAwait(false);
+                File.Delete(partialPath);
+                partialPath = exePath + ".partial";
             }
 
-            File.Move(partialPath, finalPath);
-            return finalPath;
+            File.Move(partialPath, exePath, overwrite: true);
+            return exePath;
         }
         catch
         {
             // Nothing half-downloaded and nothing unverified is ever left behind for the swap to pick up.
-            TryDelete(partialPath);
+            TryDelete(assetPath + ".partial");
+            TryDelete(exePath + ".partial");
             throw;
         }
+    }
+
+    /// <summary>The zip's one BhMaps.exe, wherever in the zip it sits.</summary>
+    private static async Task ExtractExeAsync(string zipPath, string target, CancellationToken ct)
+    {
+        await using var zip = await ZipFile.OpenReadAsync(zipPath, ct).ConfigureAwait(false);
+        var entry = zip.Entries.FirstOrDefault(
+            e => e.Name.Equals(UpdateInstaller.ExeName, StringComparison.OrdinalIgnoreCase));
+        if (entry is null)
+        {
+            throw new InvalidDataException($"The zip does not contain {UpdateInstaller.ExeName}.");
+        }
+
+        await entry.ExtractToFileAsync(target, overwrite: true, ct).ConfigureAwait(false);
     }
 
     /// <summary>sha256sum's own format: the digest, two spaces (or a space and a star for binary mode), the file

@@ -226,17 +226,18 @@
                     Style="{StaticResource PlainButton}"
                     Visibility="{Binding Downloading, Converter={StaticResource BoolToVis}}" />
             <Button Margin="8,0,0,0"
-                    Command="{Binding WhatChangedCommand}"
-                    Content="What changed"
+                    Command="{Binding ChangelogCommand}"
+                    Content="Changelog"
                     FocusVisualStyle="{StaticResource DialogFocusRing}"
                     Style="{StaticResource PlainButton}"
-                    Visibility="{Binding ShowWhatChanged, Converter={StaticResource BoolToVis}}" />
+                    ToolTip="Opens the release notes on GitHub."
+                    Visibility="{Binding ShowChangelog, Converter={StaticResource BoolToVis}}" />
             <Button Margin="8,0,0,0"
                     Command="{Binding UpdateCommand}"
-                    Content="{Binding UpdateButtonText}"
+                    Content="Update"
                     FocusVisualStyle="{StaticResource DialogFocusRing}"
                     Style="{StaticResource PrimaryButton}"
-                    ToolTip="Downloads the new exe and swaps it in when you close BhMaps."
+                    ToolTip="Downloads the new version, checks it, replaces this copy of BhMaps and restarts it."
                     Visibility="{Binding CanUpdate, Converter={StaticResource BoolToVis}}" />
           </StackPanel>
 

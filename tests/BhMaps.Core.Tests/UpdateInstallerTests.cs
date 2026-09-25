@@ -5,116 +5,139 @@ namespace BhMaps.Core.Tests;
 
 public class UpdateInstallerTests
 {
+    [Theory]
+    [InlineData(@"C:\Apps\BhMaps.exe", true, true, UpdateBuild.SelfContained)]
+    [InlineData(@"C:\Apps\BhMaps.exe", false, true, UpdateBuild.FrameworkDependent)]
+    [InlineData(@"C:\src\bhmaps\bin\Debug\BhMaps.exe", false, false, UpdateBuild.Development)]
+    [InlineData(@"C:\Program Files\dotnet\dotnet.exe", false, false, UpdateBuild.Development)]
+    [InlineData(@"C:\Program Files\dotnet\dotnet.exe", false, true, UpdateBuild.Development)]
+    [InlineData("", true, true, UpdateBuild.Development)]
+    [InlineData(null, true, true, UpdateBuild.Development)]
+    public void DetectBuild_ReadsTheRunningBuild(string? processPath, bool runtimeBundled, bool appBundled, UpdateBuild expected) =>
+        Assert.Equal(expected, UpdateInstaller.DetectBuild(processPath, runtimeBundled, appBundled));
+
     [Fact]
-    public void WriteApplyScript_QuotesEveryPathAndWaitsForThePid()
+    public void Swap_MovesTheRunningExeAsideAndTheNewOneIntoItsPlace()
     {
         using var tmp = new TempDir();
-        var updates = tmp.Sub("updates", "x")[..^2];
-        var newExe = Path.Combine(updates, "bhmaps-v2.6.0-win-x64.exe");
-        var running = @"C:\Program Files\Bh Maps\BhMaps.exe";
+        var running = tmp.Sub("app", "BhMaps.exe");
+        var fresh = tmp.Sub("updates", "bhmaps-v2.6.0-win-x64.exe");
+        File.WriteAllText(running, "old build");
+        File.WriteAllText(fresh, "new build");
 
-        var script = UpdateInstaller.WriteApplyScript(updates, newExe, running, 4321);
-        var text = File.ReadAllText(script);
+        UpdateInstaller.Swap(fresh, running);
 
-        Assert.Equal(Path.Combine(updates, "apply-update.cmd"), script);
-        Assert.Contains("tasklist /FI \"PID eq 4321\"", text);
-        Assert.Contains("ping -n 2 127.0.0.1", text);
-        Assert.Contains($"\"{running}\"", text);
-        Assert.Contains($"\"{newExe}\"", text);
-        Assert.Contains($"\"{running}.old\"", text);
-        Assert.DoesNotContain("C:\\Program Files\\Bh Maps\\BhMaps.exe ", text.Replace($"\"{running}\"", ""));
+        Assert.Equal("new build", File.ReadAllText(running));
+        Assert.Equal("old build", File.ReadAllText(running + ".old"));
+        Assert.False(File.Exists(fresh));
     }
 
     [Fact]
-    public void WriteApplyScript_MovesRenamesStartsAndDeletesItself()
+    public void Swap_ReplacesAStaleOldFile()
     {
         using var tmp = new TempDir();
-        var script = UpdateInstaller.WriteApplyScript(
-            tmp.Path, Path.Combine(tmp.Path, "new.exe"), Path.Combine(tmp.Path, "BhMaps.exe"), 10);
-        var text = File.ReadAllText(script);
+        var running = tmp.Sub("BhMaps.exe");
+        var fresh = tmp.Sub("new.exe");
+        File.WriteAllText(running, "running");
+        File.WriteAllText(fresh, "new");
+        File.WriteAllText(running + ".old", "stale");
 
-        // The order matters: the running exe is out of the way before the new one takes its name, and the app is
-        // started before anything is deleted, so a failed start still leaves the .old file to go back to.
-        var rename = text.IndexOf("move /y", StringComparison.Ordinal);
-        var start = text.IndexOf("start \"\"", StringComparison.Ordinal);
-        var cleanup = text.IndexOf(".old\"", start, StringComparison.Ordinal);
-        Assert.True(rename > 0 && start > rename && cleanup > start);
-        Assert.Contains("del /f /q \"%~f0\"", text);
-        Assert.StartsWith("@echo off", text);
+        UpdateInstaller.Swap(fresh, running);
+
+        Assert.Equal("running", File.ReadAllText(running + ".old"));
+        Assert.Equal("new", File.ReadAllText(running));
     }
 
     [Fact]
-    public void WriteApplyScript_OverwritesAnOlderScript()
+    public void Swap_PutsTheRunningExeBackWhenTheNewOneCannotMove()
     {
         using var tmp = new TempDir();
-        var path = Path.Combine(tmp.Path, "apply-update.cmd");
-        File.WriteAllText(path, "stale");
+        var running = tmp.Sub("BhMaps.exe");
+        File.WriteAllText(running, "running");
 
-        UpdateInstaller.WriteApplyScript(tmp.Path, Path.Combine(tmp.Path, "n.exe"), Path.Combine(tmp.Path, "o.exe"), 1);
+        Assert.ThrowsAny<IOException>(() => UpdateInstaller.Swap(Path.Combine(tmp.Path, "missing.exe"), running));
 
-        Assert.DoesNotContain("stale", File.ReadAllText(path));
+        Assert.Equal("running", File.ReadAllText(running));
+        Assert.False(File.Exists(running + ".old"));
     }
 
     [Fact]
-    public void CanSwap_TrueForAWritableFolderAndASelfContainedRuntime()
+    public void Rollback_UndoesACompletedSwap()
     {
         using var tmp = new TempDir();
-        var exe = Path.Combine(tmp.Path, "BhMaps.exe");
-        File.WriteAllText(exe, "");
+        var running = tmp.Sub("BhMaps.exe");
+        var fresh = tmp.Sub("updates", "new.exe");
+        File.WriteAllText(running, "running");
+        File.WriteAllText(fresh, "new");
+        UpdateInstaller.Swap(fresh, running);
 
-        Assert.True(UpdateInstaller.CanSwap(exe, tmp.Path, tmp.Path));
+        UpdateInstaller.Rollback(fresh, running);
+
+        Assert.Equal("running", File.ReadAllText(running));
+        Assert.Equal("new", File.ReadAllText(fresh));
+        Assert.False(File.Exists(running + ".old"));
     }
 
     [Fact]
-    public void CanSwap_FalseWhenTheRuntimeIsASharedFrameworkInstall()
+    public void RestartArgs_AddsTheWaitAndDropsAnEarlierOne()
     {
-        using var tmp = new TempDir();
-        var exe = Path.Combine(tmp.Path, "BhMaps.exe");
-        File.WriteAllText(exe, "");
+        var args = UpdateInstaller.RestartArgs(["--appdata", @"C:\x", "--after-update", "12"], 345);
 
-        Assert.False(UpdateInstaller.CanSwap(exe, @"C:\Program Files\dotnet\shared\Microsoft.NETCore.App\10.0.0\", tmp.Path));
+        Assert.Equal(["--appdata", @"C:\x", "--after-update", "345"], args);
     }
 
     [Fact]
-    public void CanSwap_TrueWhenTheSingleFileRuntimeExtractedUnderTemp()
+    public void TryDeleteOld_RemovesTheLeftoverExe()
     {
-        // The shipped build is single-file self-contained: it unpacks its runtime under %TEMP%\.net, so the runtime
-        // folder is nowhere near the exe and the app can still swap itself.
         using var tmp = new TempDir();
-        var exe = Path.Combine(tmp.Path, "BhMaps.exe");
-        File.WriteAllText(exe, "");
+        var running = tmp.Sub("BhMaps.exe");
+        File.WriteAllText(running + ".old", "");
 
-        Assert.True(UpdateInstaller.CanSwap(exe, @"C:\Users\x\AppData\Local\Temp\.net\BhMaps\abc123\", tmp.Path));
+        Assert.True(UpdateInstaller.TryDeleteOld(running));
+        Assert.False(File.Exists(running + ".old"));
     }
 
     [Fact]
-    public void CanSwap_TrueWhenTheRuntimeSitsBesideTheExe()
+    public void TryDeleteOld_TrueWhenThereIsNothingToDelete()
     {
         using var tmp = new TempDir();
-        var app = tmp.Sub("app", "BhMaps.exe");
-        File.WriteAllText(app, "");
 
-        Assert.True(UpdateInstaller.CanSwap(app, Path.Combine(tmp.Path, "app"), Path.Combine(tmp.Path, "elsewhere")));
+        Assert.True(UpdateInstaller.TryDeleteOld(Path.Combine(tmp.Path, "BhMaps.exe")));
     }
 
     [Fact]
-    public void CanSwap_FalseWhenTheFolderIsNotThere()
+    public void TryDeleteOld_FalseWhileTheOldExeIsStillLocked()
     {
         using var tmp = new TempDir();
-        var missing = Path.Combine(tmp.Path, "gone", "BhMaps.exe");
+        var running = tmp.Sub("BhMaps.exe");
+        File.WriteAllText(running + ".old", "");
 
-        Assert.False(UpdateInstaller.CanSwap(missing, Path.Combine(tmp.Path, "gone"), Path.Combine(tmp.Path, "gone")));
+        using (new FileStream(running + ".old", FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            Assert.False(UpdateInstaller.TryDeleteOld(running));
+        }
+
+        Assert.True(File.Exists(running + ".old"));
     }
 
     [Fact]
-    public void CanSwap_LeavesNoProbeFileBehind()
+    public void CleanUpdatesFolder_RemovesTheScriptAndPartialDownloadsOnly()
     {
         using var tmp = new TempDir();
-        var exe = Path.Combine(tmp.Path, "BhMaps.exe");
-        File.WriteAllText(exe, "");
+        File.WriteAllText(Path.Combine(tmp.Path, "apply-update.cmd"), "");
+        File.WriteAllText(Path.Combine(tmp.Path, "bhmaps-v2.6.0-win-x64.exe.partial"), "");
+        File.WriteAllText(Path.Combine(tmp.Path, "keep.txt"), "");
 
-        UpdateInstaller.CanSwap(exe, tmp.Path, tmp.Path);
+        UpdateInstaller.CleanUpdatesFolder(tmp.Path);
 
-        Assert.Equal(new[] { "BhMaps.exe" }, Directory.GetFiles(tmp.Path).Select(Path.GetFileName));
+        Assert.Equal(["keep.txt"], Directory.GetFiles(tmp.Path).Select(Path.GetFileName));
+    }
+
+    [Fact]
+    public void CleanUpdatesFolder_IgnoresAMissingFolder()
+    {
+        using var tmp = new TempDir();
+
+        UpdateInstaller.CleanUpdatesFolder(Path.Combine(tmp.Path, "gone"));
     }
 }
