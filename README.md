@@ -18,7 +18,9 @@ exe is unsigned: choose "More info", then "Run anyway".
 
 From 2.6 the app checks this page for a newer release once a day and offers to update itself. It is
 one small request to github.com, nothing about you or your library is sent, and the check can be
-turned off in Settings under Updates.
+turned off in Settings under Updates. Both builds update in place: press **Update** in Settings and
+BhMaps downloads the new version, checks it, replaces itself and restarts, with nothing to download
+by hand. Keep BhMaps in a folder it can write to, such as Documents or Desktop, for that to work.
 
 ## First run
 

@@ -1,6 +1,10 @@
+using System.Globalization;
+using BhMaps.Core.Update;
+
 namespace BhMaps.App.Services;
 
-public sealed record CommandLineArgs(string? Game, string? Library, string? AppData, bool Quiet = false)
+public sealed record CommandLineArgs(
+    string? Game, string? Library, string? AppData, bool Quiet = false, int? AfterUpdatePid = null)
 {
     /// <summary>
     /// The settings file and hash cache follow --appdata alone, so --game or --library on their own
@@ -29,7 +33,8 @@ public sealed record CommandLineArgs(string? Game, string? Library, string? AppD
 
 /// <summary>Development overrides: --game &lt;path&gt; --library &lt;path&gt; --appdata &lt;dir&gt;. All optional,
 /// except that --game or --library also needs --appdata. --quiet opens every window without activating it,
-/// for automated captures.</summary>
+/// for automated captures. --after-update &lt;pid&gt; is not for people: the update passes it to the new exe so it
+/// waits for the old process to exit.</summary>
 public static class CommandLine
 {
     public static CommandLineArgs Parse(string[] args)
@@ -38,6 +43,7 @@ public static class CommandLine
         string? library = null;
         string? appData = null;
         var quiet = false;
+        int? afterUpdate = null;
         for (var i = 0; i < args.Length; i++)
         {
             switch (args[i])
@@ -51,12 +57,17 @@ public static class CommandLine
                 case "--appdata" when i + 1 < args.Length:
                     appData = args[++i];
                     break;
+                case UpdateInstaller.AfterUpdateArg when i + 1 < args.Length:
+                    afterUpdate = int.TryParse(args[++i], NumberStyles.None, CultureInfo.InvariantCulture, out var pid)
+                        ? pid
+                        : null;
+                    break;
                 case "--quiet":
                     quiet = true;
                     break;
             }
         }
 
-        return new CommandLineArgs(game, library, appData, quiet);
+        return new CommandLineArgs(game, library, appData, quiet, afterUpdate);
     }
 }

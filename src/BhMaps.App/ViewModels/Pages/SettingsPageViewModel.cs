@@ -1,3 +1,5 @@
+using System.ComponentModel;
+using System.Diagnostics;
 using System.Net.Http;
 using System.Reflection;
 using System.Windows;
@@ -73,11 +75,6 @@ public partial class SettingsPageViewModel : PageViewModel
     [ObservableProperty]
     public partial string GameDataStatus { get; set; }
 
-    /// <summary>Set once the download has finished and been verified: the path of the exe the swap will move.</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(UpdateButtonText))]
-    public partial string? ReadyExe { get; set; }
-
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasUpdateLine))]
     public partial string UpdateLine { get; set; }
@@ -98,18 +95,14 @@ public partial class SettingsPageViewModel : PageViewModel
 
     public bool HasUpdateLine => UpdateLine.Length > 0;
 
-    /// <summary>Spec 7.3: a build that cannot swap itself never offers a download at all.</summary>
-    public bool CanSwap { get; } = UpdateInstaller.CanSwap(Environment.ProcessPath ?? "");
+    /// <summary>Which asset Update downloads. A development run has none and never offers Update, only
+    /// Changelog. Fixed for the life of the process.</summary>
+    public UpdateBuild Build { get; } = UpdateInstaller.DetectBuild();
 
-    public bool ShowWhatChanged => Newer is not null && !Downloading;
+    public bool ShowChangelog => Newer is not null && !Downloading;
 
-    public bool CanUpdate => Newer is not null && !Downloading;
-
-    public string UpdateButtonText =>
-        !CanSwap ? "Release page"
-        : ReadyExe is not null ? "Close and update"
-        : Newer is not null ? "Get"
-        : "";
+    /// <summary>Spec 7.3: one Update button whenever a newer release carries the asset this build updates from.</summary>
+    public bool CanUpdate => Newer is { } release && release.CanDownload(Build) && !Downloading;
 
     private AppServices Services => Shell.Services;
 
@@ -137,21 +130,17 @@ public partial class SettingsPageViewModel : PageViewModel
         if (Downloading)
         {
             OnPropertyChanged(nameof(CanUpdate));
-            OnPropertyChanged(nameof(ShowWhatChanged));
-            OnPropertyChanged(nameof(UpdateButtonText));
+            OnPropertyChanged(nameof(ShowChangelog));
             return;
         }
 
-        if (ReadyExe is not null && Newer is { } ready)
+        if (Newer is { } release)
         {
-            UpdateLine = $"{UpdateText.Short(ready.Version)} is ready. It installs when you close BhMaps.";
-        }
-        else if (Newer is { } release)
-        {
-            // What the download does is the Get button's tooltip, so the line says only what is out there.
+            // What Update does is its tooltip, so the line says only what is out there.
             var available = $"Update available: {UpdateText.Short(release.Version)}.";
-            UpdateLine = CanSwap && release.CanDownload
-                ? available
+            UpdateLine =
+                Build == UpdateBuild.Development ? available + " A development build does not update itself."
+                : release.CanDownload(Build) ? available
                 : available + " Get it from the release page.";
         }
         else if (Shell.UpdateCheckFailed)
@@ -171,8 +160,7 @@ public partial class SettingsPageViewModel : PageViewModel
         }
 
         OnPropertyChanged(nameof(CanUpdate));
-        OnPropertyChanged(nameof(ShowWhatChanged));
-        OnPropertyChanged(nameof(UpdateButtonText));
+        OnPropertyChanged(nameof(ShowChangelog));
     }
 
     /// <summary>The shell calls this as the window closes, so a download in flight stops with it rather than
@@ -199,32 +187,22 @@ public partial class SettingsPageViewModel : PageViewModel
         RefreshUpdateRow();
     }
 
-    /// <summary>Spec 7.3: one button, three jobs. No swap possible, or no assets: the release page. Nothing
-    /// downloaded yet: download it. Downloaded and verified: write the script, start it hidden and close.</summary>
+    /// <summary>Spec 7.3, like openmacro: one button. Download and verify the asset this build updates from,
+    /// then swap it in place and restart on it. Nothing is left for a second click.</summary>
     [RelayCommand]
     private async Task UpdateAsync()
     {
-        if (Newer is not { } release)
+        if (Newer is not { } release || !release.CanDownload(Build) || !ReadyToClose())
         {
             return;
         }
 
-        if (!CanSwap || !release.CanDownload)
-        {
-            OpenReleasePage(release);
-            return;
-        }
-
-        if (ReadyExe is { } ready)
-        {
-            CloseAndUpdate(ready);
-            return;
-        }
-
+        string? downloaded = null;
         _downloadCts = new CancellationTokenSource();
         Downloading = true;
         DownloadProgress = 0;
-        UpdateLine = $"Downloading {UpdateText.Short(release.Version)}, {UpdateText.Megabytes(0, release.ExeSize)}";
+        UpdateLine =
+            $"Downloading {UpdateText.Short(release.Version)}, {UpdateText.Megabytes(0, release.SizeFor(Build))}";
         RefreshUpdateRow();
         try
         {
@@ -235,23 +213,19 @@ public partial class SettingsPageViewModel : PageViewModel
                     $"Downloading {UpdateText.Short(release.Version)}, {UpdateText.Megabytes(p.Done, p.Total)}";
             });
 
-            ReadyExe = await Services.Updates.DownloadAsync(
-                release, Services.UpdatesDir, progress, _downloadCts.Token);
+            downloaded = await Services.Updates.DownloadAsync(
+                release, Build, Services.UpdatesDir, progress, _downloadCts.Token);
         }
         catch (OperationCanceledException)
         {
-            ReadyExe = null;
+            // Cancel: the row goes back to offering Update.
         }
-        catch (InvalidDataException)
+        catch (InvalidDataException ex)
         {
-            ReadyExe = null;
-            Shell.Dialogs.Error(
-                "Update not installed",
-                "The downloaded file did not match the checksum on the release, so it was deleted. Try again later.");
+            Shell.Dialogs.Error("Update not installed", ex.Message + " It was deleted. Try again later.");
         }
         catch (Exception ex) when (ex is HttpRequestException or IOException or UnauthorizedAccessException)
         {
-            ReadyExe = null;
             Shell.Dialogs.Error("Update not downloaded", ex.Message);
         }
         finally
@@ -261,13 +235,20 @@ public partial class SettingsPageViewModel : PageViewModel
             _downloadCts = null;
             RefreshUpdateRow();
         }
+
+        // The download took a while: the app has to be free to close now, not only when the button was pressed.
+        if (downloaded is not null && ReadyToClose())
+        {
+            SwapAndRestart(downloaded, release);
+        }
     }
 
     [RelayCommand]
     private void CancelDownload() => _downloadCts?.Cancel();
 
+    /// <summary>The release notes, on the release page.</summary>
     [RelayCommand]
-    private void WhatChanged()
+    private void Changelog()
     {
         if (Newer is { } release)
         {
@@ -279,9 +260,25 @@ public partial class SettingsPageViewModel : PageViewModel
     [RelayCommand]
     private Task CheckNowAsync() => Shell.CheckForUpdateAsync(force: true);
 
-    /// <summary>Spec 7.3: the script is started hidden and the window closed; the script waits for this process to
-    /// be gone before it touches anything. Nothing restarts on its own: this runs only from the button.</summary>
-    private void CloseAndUpdate(string newExe)
+    /// <summary>The window has no close guard of its own; what closing could cut off is an operation still
+    /// writing. An update asked for while the shell is busy waits for it rather than stopping it.</summary>
+    private bool ReadyToClose()
+    {
+        if (!Shell.IsBusy)
+        {
+            return true;
+        }
+
+        Shell.Dialogs.Error(
+            "Update not installed",
+            "BhMaps is still working. Wait for it to finish, then press Update again.");
+        return false;
+    }
+
+    /// <summary>The openmacro swap: rename the running exe to .old, move the new one into its place, start it
+    /// with --after-update so it waits for this process, and close. Any failure puts both files back and says
+    /// why; only then is the release page offered, as the way to update by hand.</summary>
+    private void SwapAndRestart(string newExe, ReleaseInfo release)
     {
         if (Environment.ProcessPath is not { Length: > 0 } running)
         {
@@ -290,29 +287,59 @@ public partial class SettingsPageViewModel : PageViewModel
 
         try
         {
-            var script = UpdateInstaller.WriteApplyScript(
-                Services.UpdatesDir, newExe, running, Environment.ProcessId);
-            using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = script,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden,
-                WorkingDirectory = Services.UpdatesDir,
-            });
+            UpdateInstaller.Swap(newExe, running);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
-            or System.ComponentModel.Win32Exception)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            Shell.Dialogs.Error("Update not installed", ex.Message);
+            SwapFailed(ex.Message, release);
+            return;
+        }
+
+        try
+        {
+            var start = new ProcessStartInfo(running) { UseShellExecute = false };
+            foreach (var arg in UpdateInstaller.RestartArgs(Environment.GetCommandLineArgs()[1..], Environment.ProcessId))
+            {
+                start.ArgumentList.Add(arg);
+            }
+
+            using var process = Process.Start(start);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or Win32Exception)
+        {
+            try
+            {
+                UpdateInstaller.Rollback(newExe, running);
+            }
+            catch (Exception undo) when (undo is IOException or UnauthorizedAccessException)
+            {
+                Trace.WriteLine($"BhMaps: the update rollback failed: {undo.Message}");
+            }
+
+            SwapFailed(ex.Message, release);
             return;
         }
 
         Application.Current.MainWindow?.Close();
     }
 
-    /// <summary>The release page, for a build that cannot swap itself and for What changed. The browser not
-    /// opening is a dialog here: this row has no line of its own to put a reason on.</summary>
+    private void SwapFailed(string reason, ReleaseInfo release)
+    {
+        var open = Shell.Dialogs.Confirm(
+            "Update not installed",
+            reason
+                + " BhMaps was left as it was. To update itself it has to run from a folder it can write to, such"
+                + " as Documents or Desktop. Move BhMaps.exe there and press Update again, or get the new version"
+                + " from the release page.",
+            "Open release page");
+        if (open)
+        {
+            OpenReleasePage(release);
+        }
+    }
+
+    /// <summary>The release page, for Changelog and for a swap that failed. The browser not opening is a dialog
+    /// here: this row has no line of its own to put a reason on.</summary>
     private void OpenReleasePage(ReleaseInfo release)
     {
         if (ExplorerLauncher.OpenUrl(release.HtmlUrl) is { } reason)

@@ -35,6 +35,46 @@ public class ReleaseCheckerTests
     }
 
     [Fact]
+    public void Parse_ReadsTheFrameworkDependentZipToo()
+    {
+        var release = ReleaseChecker.Parse(UpdateSamples.LatestJson);
+
+        Assert.NotNull(release);
+        Assert.Equal(
+            "https://github.com/as9pa/bhmaps/releases/download/v2.6.0/bhmaps-v2.6.0-win-x64-dotnet.zip",
+            release!.ZipUrl);
+        Assert.Equal(3145728, release.ZipSize);
+        Assert.Equal("bhmaps-v2.6.0-win-x64-dotnet.zip", ReleaseChecker.ZipName(release.Version));
+    }
+
+    [Theory]
+    [InlineData(UpdateBuild.SelfContained, "bhmaps-v2.6.0-win-x64.exe", 141557760)]
+    [InlineData(UpdateBuild.FrameworkDependent, "bhmaps-v2.6.0-win-x64-dotnet.zip", 3145728)]
+    public void AssetFor_PicksTheAssetOfTheRunningBuild(UpdateBuild build, string name, long size)
+    {
+        var release = ReleaseChecker.Parse(UpdateSamples.LatestJson)!;
+
+        Assert.EndsWith(name, release.UrlFor(build));
+        Assert.Equal(size, release.SizeFor(build));
+        Assert.Equal(name, ReleaseChecker.AssetName(release.Version, build));
+        Assert.True(release.CanDownload(build));
+    }
+
+    [Fact]
+    public void CanDownload_FalseForADevelopmentBuild() =>
+        Assert.False(ReleaseChecker.Parse(UpdateSamples.LatestJson)!.CanDownload(UpdateBuild.Development));
+
+    [Fact]
+    public void CanDownload_FollowsTheAssetOfTheRunningBuild()
+    {
+        var release = ReleaseChecker.Parse(UpdateSamples.LatestJson.Replace("-dotnet.zip", "-dotnet.7z"))!;
+
+        Assert.Null(release.ZipUrl);
+        Assert.False(release.CanDownload(UpdateBuild.FrameworkDependent));
+        Assert.True(release.CanDownload(UpdateBuild.SelfContained));
+    }
+
+    [Fact]
     public void Parse_ReturnsNullForADraft() =>
         Assert.Null(ReleaseChecker.Parse(UpdateSamples.LatestJson.Replace("\"draft\": false", "\"draft\": true")));
 
