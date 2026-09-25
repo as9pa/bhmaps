@@ -330,7 +330,7 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
-        var vm = new ImportViewModel(Snapshot.Tree, Snapshot.Packs.Select(p => p.Name).ToList(), Dialogs);
+        var vm = new ImportViewModel(Snapshot.Tree, Snapshot.Packs.Where(p => !p.IsDiscovered).Select(p => p.Name).ToList(), Dialogs);
         var window = new ImportWindow { DataContext = vm, Owner = Application.Current.MainWindow };
         if (window.ShowDialog() != true)
         {
@@ -516,7 +516,7 @@ public partial class MainViewModel : ObservableObject
         var mapName = target.Map?.DisplayName;
         var vm = new AddPicturesViewModel(
             Dialogs,
-            snapshot.Packs.Select(p => p.Name).ToList(),
+            snapshot.Packs.Where(p => !p.IsDiscovered).Select(p => p.Name).ToList(),
             target.Kind,
             mapName,
             snapshot.Catalog.Maps.Count);
@@ -847,7 +847,7 @@ public partial class MainViewModel : ObservableObject
             Services,
             Dialogs,
             MapSlotChoices(snapshot),
-            snapshot.Packs.Select(p => p.Name).ToList(),
+            snapshot.Packs.Where(p => !p.IsDiscovered).Select(p => p.Name).ToList(),
             request with { SourcePack = BackgroundSourcePack(request, snapshot) });
         var window = new BackgroundEditorWindow { DataContext = vm, Owner = Application.Current.MainWindow, ShowActivated = !App.Quiet };
         if (window.ShowDialog() != true)
@@ -985,7 +985,7 @@ public partial class MainViewModel : ObservableObject
 
         var rows = new List<ChooserRow>();
         foreach (var pack in snapshot.Packs.Where(
-                     p => !p.Name.Equals(exclude.Name, StringComparison.OrdinalIgnoreCase)))
+                     p => !p.IsDiscovered && !p.Name.Equals(exclude.Name, StringComparison.OrdinalIgnoreCase)))
         {
             var maps = snapshot.Catalog.Maps.Count(m => pack.FindFolder(m.FolderName) is { Files.Count: > 0 });
             var backgrounds = pack.FindFolder(PackCopier.BackgroundsFolder)?.Files.Count ?? 0;

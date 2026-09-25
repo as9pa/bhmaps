@@ -363,6 +363,7 @@ describes things by where they are and what they do. Nothing on disk changes sha
 | Game map-select thumbnails, written with the map art | `C:\Program Files (x86)\Steam\steamapps\common\Brawlhalla\images\thumbnails` |
 | Pack library | `Documents\BhMaps` by default, changeable in Settings |
 | Packs inside the library | `<library>\packs\<pack name>\<GameFolder>\<file>` |
+| Discovered packs, read only | `<library>\...\<pack name>\mapArt\<GameFolder>\<file>`, with `mapArt` at most three folders below the library |
 | Settings | `%APPDATA%\BhMaps\settings.json` |
 | Applied record | `%APPDATA%\BhMaps\applied.json` |
 | Hash cache | `%APPDATA%\BhMaps\hashcache.json` |
@@ -373,8 +374,17 @@ describes things by where they are and what they do. Nothing on disk changes sha
 | Kept map-select thumbnails | `%APPDATA%\BhMaps\thumbnails-original\` |
 
 The map art folder and the library are chosen in the welcome window and editable in Settings; the
-data files are wherever the game folder is. Only `<library>\packs` is read and written, so anything
-else kept in the library folder is left alone. The settings file holds the two paths, the tile size
+data files are wherever the game folder is. Only `<library>\packs` is written, so anything
+else kept in the library folder is left alone. BhMaps also reads packs kept elsewhere in the library: any
+folder with a `mapArt` folder inside it is a pack named after that folder, with its game folders read from
+the `mapArt` folder, for example `<library>\Summer\mapArt\BloodMoon\<file>`. The search looks at most
+three folders deep, counting the library's own subfolders as the first, so `mapArt` itself has to sit
+within those three. It does not look inside a pack it has found, skips `packs`, and skips junctions,
+links and folders it cannot open. These discovered packs are read only: they can be viewed, applied,
+exported and duplicated into `packs`, but not deleted, edited, imported into, or used as a copy or move
+target. When a discovered pack has the same name as another pack, ignoring case, the pack in `packs`
+keeps its name and the discovered one gets a number, such as "Summer (1)", then "Summer (2)", in the
+order of their folder paths. The settings file holds the two paths, the tile size
 each page remembers, when each pack was last applied, whether the Backgrounds page is showing your own
 pictures, the names of the packs hidden from the lists, whether the welcome window has been
 finished, whether BhMaps checks for updates when it starts, when it last checked, and any update

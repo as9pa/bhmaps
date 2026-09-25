@@ -1,3 +1,4 @@
+using BhMaps.Core.Model;
 using BhMaps.Core.Scanning;
 
 namespace BhMaps.Core.Operations;
@@ -15,6 +16,10 @@ public static class PackDeleter
 
         return DeleteFolder(libraryPath, Path.Combine(PackScanner.PacksRoot(libraryPath), packName));
     }
+
+    /// <summary>Delete for a scanned pack. A discovered pack is read-only and is refused before any path is built.</summary>
+    public static string? Delete(string libraryPath, Pack pack) =>
+        pack.IsDiscovered ? Pack.ReadOnlyMessage(pack) : Delete(libraryPath, pack.Name);
 
     /// <summary>The path guard on its own. Internal so tests can reach it with paths a valid pack name can never produce.</summary>
     internal static string? DeleteFolder(string libraryPath, string packDirectory)

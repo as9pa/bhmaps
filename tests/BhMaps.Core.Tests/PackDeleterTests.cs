@@ -1,4 +1,6 @@
 using BhMaps.Core.Operations;
+using BhMaps.Core.Packs;
+using BhMaps.Core.Scanning;
 using BhMaps.Core.Tests.Helpers;
 
 namespace BhMaps.Core.Tests;
@@ -90,5 +92,36 @@ public class PackDeleterTests
         Assert.Null(error);
         Assert.False(Directory.Exists(Path.Combine(lib, "packs", "flower")));
         Assert.True(File.Exists(Path.Combine(lib, "packs", "keep", "BloodMoon", "B.png")));
+    }
+
+    [Fact]
+    public void RefusesToDeleteADiscoveredPack()
+    {
+        using var tmp = new TempDir();
+        var lib = Path.Combine(tmp.Path, "lib");
+        var content = Path.Combine(lib, "Summer", "mapArt");
+        new FakeGameTree(content).File("BloodMoon", "A.png", "x");
+        var pack = Assert.Single(PackScanner.ScanAll(lib));
+
+        var error = PackDeleter.Delete(lib, pack);
+
+        Assert.NotNull(error);
+        Assert.True(File.Exists(Path.Combine(content, "BloodMoon", "A.png")));
+    }
+
+    [Fact]
+    public void RefusesToRemoveFilesFromADiscoveredPack()
+    {
+        using var tmp = new TempDir();
+        var lib = Path.Combine(tmp.Path, "lib");
+        var content = Path.Combine(lib, "Summer", "mapArt");
+        new FakeGameTree(content).File("Backgrounds", "BG_Sewer.jpg", "x");
+        var pack = Assert.Single(PackScanner.ScanAll(lib));
+
+        var result = PackCopier.RemoveBackground(pack, "BG_Sewer.jpg");
+
+        Assert.Empty(result.Removed);
+        Assert.NotEmpty(result.Failures);
+        Assert.True(File.Exists(Path.Combine(content, "Backgrounds", "BG_Sewer.jpg")));
     }
 }
