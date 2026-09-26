@@ -15,7 +15,7 @@ public class ReleaseCheckerTests
         Assert.Equal(new DateTimeOffset(2026, 9, 14, 10, 30, 0, TimeSpan.Zero), release.PublishedAt);
         Assert.Equal("https://github.com/as9pa/bhmaps/releases/tag/v2.6.0", release.HtmlUrl);
         Assert.Equal(
-            "https://github.com/as9pa/bhmaps/releases/download/v2.6.0/bhmaps-v2.6.0-win-x64.exe",
+            "https://github.com/as9pa/bhmaps/releases/download/v2.6.0/bhmaps.exe",
             release.ExeUrl);
         Assert.Equal(141557760, release.ExeSize);
         Assert.Equal(
@@ -30,8 +30,8 @@ public class ReleaseCheckerTests
         var release = ReleaseChecker.Parse(UpdateSamples.LatestJson);
 
         Assert.NotNull(release);
-        Assert.EndsWith("bhmaps-v2.6.0-win-x64.exe", release!.ExeUrl);
-        Assert.Equal("bhmaps-v2.6.0-win-x64.exe", ReleaseChecker.ExeName(release.Version));
+        Assert.EndsWith("bhmaps.exe", release!.ExeUrl);
+        Assert.Equal("bhmaps.exe", ReleaseChecker.ExeName);
     }
 
     [Fact]
@@ -41,22 +41,22 @@ public class ReleaseCheckerTests
 
         Assert.NotNull(release);
         Assert.Equal(
-            "https://github.com/as9pa/bhmaps/releases/download/v2.6.0/bhmaps-v2.6.0-win-x64-dotnet.zip",
+            "https://github.com/as9pa/bhmaps/releases/download/v2.6.0/bhmaps-dotnet.zip",
             release!.ZipUrl);
         Assert.Equal(3145728, release.ZipSize);
-        Assert.Equal("bhmaps-v2.6.0-win-x64-dotnet.zip", ReleaseChecker.ZipName(release.Version));
+        Assert.Equal("bhmaps-dotnet.zip", ReleaseChecker.ZipName);
     }
 
     [Theory]
-    [InlineData(UpdateBuild.SelfContained, "bhmaps-v2.6.0-win-x64.exe", 141557760)]
-    [InlineData(UpdateBuild.FrameworkDependent, "bhmaps-v2.6.0-win-x64-dotnet.zip", 3145728)]
+    [InlineData(UpdateBuild.SelfContained, "bhmaps.exe", 141557760)]
+    [InlineData(UpdateBuild.FrameworkDependent, "bhmaps-dotnet.zip", 3145728)]
     public void AssetFor_PicksTheAssetOfTheRunningBuild(UpdateBuild build, string name, long size)
     {
         var release = ReleaseChecker.Parse(UpdateSamples.LatestJson)!;
 
         Assert.EndsWith(name, release.UrlFor(build));
         Assert.Equal(size, release.SizeFor(build));
-        Assert.Equal(name, ReleaseChecker.AssetName(release.Version, build));
+        Assert.Equal(name, ReleaseChecker.AssetName(build));
         Assert.True(release.CanDownload(build));
     }
 
@@ -101,7 +101,7 @@ public class ReleaseCheckerTests
     [Fact]
     public void Parse_KeepsTheReleaseWhenTheExeAssetIsMissing()
     {
-        var json = UpdateSamples.LatestJson.Replace("bhmaps-v2.6.0-win-x64.exe", "bhmaps-v2.6.0-win-arm64.exe");
+        var json = UpdateSamples.LatestJson.Replace("bhmaps.exe", "bhmaps-arm64.exe");
 
         var release = ReleaseChecker.Parse(json);
 

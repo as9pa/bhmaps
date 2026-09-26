@@ -10,7 +10,7 @@ namespace BhMaps.Core.Tests;
 public class UpdateClientTests
 {
     private const string ExeUrl =
-        "https://github.com/as9pa/bhmaps/releases/download/v2.6.0/bhmaps-v2.6.0-win-x64.exe";
+        "https://github.com/as9pa/bhmaps/releases/download/v2.6.0/bhmaps.exe";
 
     private const string SumsUrl =
         "https://github.com/as9pa/bhmaps/releases/download/v2.6.0/SHA256SUMS.txt";
@@ -20,15 +20,15 @@ public class UpdateClientTests
     private static string Hex(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
 
     private static string Sums(string exeHex) =>
-        $"{exeHex}  bhmaps-v2.6.0-win-x64.exe\n"
-        + "0000000000000000000000000000000000000000000000000000000000000000  bhmaps-v2.6.0-win-x64-dotnet.zip\n";
+        $"{exeHex}  bhmaps.exe\n"
+        + "0000000000000000000000000000000000000000000000000000000000000000  bhmaps-dotnet.zip\n";
 
     private const string ZipUrl =
-        "https://github.com/as9pa/bhmaps/releases/download/v2.6.0/bhmaps-v2.6.0-win-x64-dotnet.zip";
+        "https://github.com/as9pa/bhmaps/releases/download/v2.6.0/bhmaps-dotnet.zip";
 
     private static string ZipSums(string zipHex) =>
-        "0000000000000000000000000000000000000000000000000000000000000000  bhmaps-v2.6.0-win-x64.exe\n"
-        + $"{zipHex}  bhmaps-v2.6.0-win-x64-dotnet.zip\n";
+        "0000000000000000000000000000000000000000000000000000000000000000  bhmaps.exe\n"
+        + $"{zipHex}  bhmaps-dotnet.zip\n";
 
     private static byte[] Zip(params (string Name, byte[] Body)[] entries)
     {
@@ -107,7 +107,7 @@ public class UpdateClientTests
         var path = await new UpdateClient(http).DownloadAsync(
             Release(), UpdateBuild.SelfContained, tmp.Path, new Progress<(long, long)>(seen.Add), CancellationToken.None);
 
-        Assert.Equal(Path.Combine(tmp.Path, "bhmaps-v2.6.0-win-x64.exe"), path);
+        Assert.Equal(Path.Combine(tmp.Path, "bhmaps.exe"), path);
         Assert.Equal(Exe, await File.ReadAllBytesAsync(path));
         Assert.Empty(Directory.GetFiles(tmp.Path, "*.partial"));
         Assert.Contains(SumsUrl, fake.Requested);
@@ -164,9 +164,9 @@ public class UpdateClientTests
         var path = await new UpdateClient(http).DownloadAsync(
             Release(), UpdateBuild.FrameworkDependent, tmp.Path, null, CancellationToken.None);
 
-        Assert.Equal(Path.Combine(tmp.Path, "bhmaps-v2.6.0-win-x64-dotnet.exe"), path);
+        Assert.Equal(Path.Combine(tmp.Path, "bhmaps-dotnet.exe"), path);
         Assert.Equal(Exe, await File.ReadAllBytesAsync(path));
-        Assert.Equal(["bhmaps-v2.6.0-win-x64-dotnet.exe"], Directory.GetFiles(tmp.Path).Select(Path.GetFileName));
+        Assert.Equal(["bhmaps-dotnet.exe"], Directory.GetFiles(tmp.Path).Select(Path.GetFileName));
         Assert.DoesNotContain(ExeUrl, fake.Requested);
     }
 
@@ -211,15 +211,15 @@ public class UpdateClientTests
     }
 
     [Theory]
-    [InlineData("abc123  bhmaps-v2.6.0-win-x64.exe", "abc123")]
-    [InlineData("abc123 *bhmaps-v2.6.0-win-x64.exe", "abc123")]
-    [InlineData("ABC123  BHMAPS-V2.6.0-WIN-X64.EXE", "abc123")]
+    [InlineData("abc123  bhmaps.exe", "abc123")]
+    [InlineData("abc123 *bhmaps.exe", "abc123")]
+    [InlineData("ABC123  BHMAPS.EXE", "abc123")]
     public void ChecksumFor_ReadsSha256sumStyleLines(string line, string expected) =>
-        Assert.Equal(expected, UpdateClient.ChecksumFor(line, "bhmaps-v2.6.0-win-x64.exe"));
+        Assert.Equal(expected, UpdateClient.ChecksumFor(line, "bhmaps.exe"));
 
     [Fact]
     public void ChecksumFor_ReturnsNullWhenNoLineNamesTheFile() =>
-        Assert.Null(UpdateClient.ChecksumFor("abc123  other.exe\n", "bhmaps-v2.6.0-win-x64.exe"));
+        Assert.Null(UpdateClient.ChecksumFor("abc123  other.exe\n", "bhmaps.exe"));
 }
 
 /// <summary>The one copy of the releases/latest sample, shared by every test of the update classes.</summary>
@@ -239,14 +239,14 @@ internal static class UpdateSamples
       "body": "Pack tile menus, copy and move, auto-update.",
       "assets": [
         {
-          "name": "bhmaps-v2.6.0-win-x64.exe",
+          "name": "bhmaps.exe",
           "size": 141557760,
-          "browser_download_url": "https://github.com/as9pa/bhmaps/releases/download/v2.6.0/bhmaps-v2.6.0-win-x64.exe"
+          "browser_download_url": "https://github.com/as9pa/bhmaps/releases/download/v2.6.0/bhmaps.exe"
         },
         {
-          "name": "bhmaps-v2.6.0-win-x64-dotnet.zip",
+          "name": "bhmaps-dotnet.zip",
           "size": 3145728,
-          "browser_download_url": "https://github.com/as9pa/bhmaps/releases/download/v2.6.0/bhmaps-v2.6.0-win-x64-dotnet.zip"
+          "browser_download_url": "https://github.com/as9pa/bhmaps/releases/download/v2.6.0/bhmaps-dotnet.zip"
         },
         {
           "name": "SHA256SUMS.txt",
