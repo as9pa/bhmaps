@@ -9,6 +9,15 @@ and `.jpg` files inside the `mapArt` folder and inside its own library, plus its
 folder, and it keeps a copy of every original so it can put it back. The game's data files are read and never written, and
 nothing else in the game install is touched.
 
+## What is new in 3.5
+
+A map's panel previews before it applies. Click any background or platform set in the panel and the
+big picture at the top redraws the whole map with it, without changing anything in the game. Click a
+background and then a platform set to see both together. A previewed tile wears a ring, the picture
+carries a "Preview" tag, and a line under it names what is shown, with Apply (or Apply both) and Show
+current. Escape clears the preview first and closes the panel on the next press. The tile the game is
+showing keeps its check and no longer has a border, so the ring is the only outline in the panel.
+
 ## What is new in 3.4
 
 Updating happens in place. When a newer release is out, Settings shows one Update button. It downloads
@@ -476,6 +485,14 @@ stops a long operation.
   maps, then Edit and Show in folder for a picture, or Edit, apply to
   this map, Show files and Open folder for a platform set. Reset all to default is in the page
   header.
+- **Clicking a choice in the map panel previews it** in the larger preview without applying anything;
+  Enter or Space does the same on a focused choice. A background and a platform set preview together,
+  so picking one of each shows the whole map as it would look. The previewed choice wears a ring, the
+  preview carries a "Preview" tag, and a line under it names what is shown with **Apply** (or **Apply
+  both**) and **Show current**. Clicking the previewed choice again, or the one the game is showing,
+  takes that half back out. Escape clears the preview first and closes the panel on the next press,
+  and opening another map drops it. The Show chip applies here too, so with Backgrounds only a
+  background preview is the picture alone.
 - **Backgrounds** is one row per map: the map's name and its tag on the left, then a strip of every
   background that map could have. The picture the game is showing comes first, with a check and a
   border; then Default, then one thumbnail for each pack that has a picture for that map in the Packs
