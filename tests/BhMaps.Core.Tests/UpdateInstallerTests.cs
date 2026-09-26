@@ -21,7 +21,7 @@ public class UpdateInstallerTests
     {
         using var tmp = new TempDir();
         var running = tmp.Sub("app", "BhMaps.exe");
-        var fresh = tmp.Sub("updates", "bhmaps-v2.6.0-win-x64.exe");
+        var fresh = tmp.Sub("updates", "bhmaps.exe");
         File.WriteAllText(running, "old build");
         File.WriteAllText(fresh, "new build");
 
@@ -125,7 +125,7 @@ public class UpdateInstallerTests
     {
         using var tmp = new TempDir();
         File.WriteAllText(Path.Combine(tmp.Path, "apply-update.cmd"), "");
-        File.WriteAllText(Path.Combine(tmp.Path, "bhmaps-v2.6.0-win-x64.exe.partial"), "");
+        File.WriteAllText(Path.Combine(tmp.Path, "bhmaps.exe.partial"), "");
         File.WriteAllText(Path.Combine(tmp.Path, "keep.txt"), "");
 
         UpdateInstaller.CleanUpdatesFolder(tmp.Path);

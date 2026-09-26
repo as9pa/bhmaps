@@ -17,6 +17,8 @@ background and then a platform set to see both together. A previewed tile wears 
 carries a "Preview" tag, and a line under it names what is shown, with Apply (or Apply both) and Show
 current. Escape clears the preview first and closes the panel on the next press. The tile the game is
 showing keeps its check and no longer has a border, so the ring is the only outline in the panel.
+The release files are now named `bhmaps.exe` and `bhmaps-dotnet.zip`, with no version in the name,
+since the app updates itself.
 
 ## What is new in 3.4
 
@@ -815,12 +817,14 @@ window instead.
 pwsh -File scripts\publish.ps1
 ```
 
-That writes three files into `dist\`: a self-contained `bhmaps-v<version>-win-x64.exe` that carries
-its own runtime, `bhmaps-v<version>-win-x64-dotnet.zip`, a framework-dependent build that needs the
-.NET 10 Desktop Runtime on whatever machine runs it, and `SHA256SUMS.txt`, which the app's update
-check verifies a download against, so all three go on the release. Each build updates from its own
-asset, so the zip must keep holding a single `BhMaps.exe`. The repository has to be public
-for the update check to reach the release at all.
+That writes three files into `dist\`: a self-contained `bhmaps.exe` that carries its own runtime,
+`bhmaps-dotnet.zip`, a framework-dependent build that needs the .NET 10 Desktop Runtime on whatever
+machine runs it, and `SHA256SUMS.txt`, which the app's update check verifies a download against, so
+all three go on the release. Each build updates from its own asset, so the zip must keep holding a
+single `BhMaps.exe`. Add `-Compat` to also write copies under the old versioned names
+(`bhmaps-v<version>-win-x64.exe` and `bhmaps-v<version>-win-x64-dotnet.zip`), which installs older
+than 3.5 look for, and upload all five. The repository has to be public for the update check to
+reach the release at all.
 
 Never point a development run at the real game folder. Build a throwaway copy instead:
 

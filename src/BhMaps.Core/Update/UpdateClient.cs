@@ -41,8 +41,8 @@ public sealed class UpdateClient(HttpClient http)
 
     /// <summary>Streams the build's asset to &lt;name&gt;.partial, verifies its SHA-256 against the line of
     /// SHA256SUMS.txt that names it, then renames. The self-contained build gets the exe itself; the
-    /// framework-dependent build gets the zip, and the one BhMaps.exe inside it is extracted beside it and the zip
-    /// deleted. Returns the exe the swap moves. A mismatch, no line at all, or a zip with no BhMaps.exe deletes
+    /// framework-dependent build gets the zip, and the one BhMaps.exe inside it is extracted beside it as
+    /// bhmaps-dotnet.exe and the zip deleted. Returns the exe the swap moves. A mismatch, no line at all, or a zip with no BhMaps.exe deletes
     /// what was written and throws InvalidDataException; a cancel deletes it and rethrows. The caller decides what
     /// to say about either.</summary>
     public async Task<string> DownloadAsync(
@@ -59,7 +59,7 @@ public sealed class UpdateClient(HttpClient http)
         }
 
         Directory.CreateDirectory(updatesDir);
-        var name = ReleaseChecker.AssetName(release.Version, build);
+        var name = ReleaseChecker.AssetName(build);
         var assetPath = Path.Combine(updatesDir, name);
         var partialPath = assetPath + ".partial";
         var exePath = build == UpdateBuild.FrameworkDependent

@@ -550,6 +550,23 @@
     <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
     <Setter Property="ItemContainerStyle" Value="{StaticResource TileListBoxItem}" />
     <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+    <!-- 3.5: the stock ListBox template, minus its IsEnabled=False trigger. That trigger paints the system's
+         light control brush, so the chip rows on Packs and a pack's page, which sit in a panel that is disabled
+         while an apply runs, turned into a white box behind the chips whenever the page dimmed. -->
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ListBox">
+          <Border Background="{TemplateBinding Background}"
+                  BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}"
+                  SnapsToDevicePixels="True">
+            <ScrollViewer Focusable="False" Padding="{TemplateBinding Padding}">
+              <ItemsPresenter SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" />
+            </ScrollViewer>
+          </Border>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
   </Style>
 
   <!-- The app's one slider: a 2 px Line2 groove with a 12 px Text thumb, no ticks drawn. Shared by the zoom

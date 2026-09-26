@@ -9,20 +9,19 @@ public static class ReleaseChecker
 {
     public const string ChecksumsName = "SHA256SUMS.txt";
 
-    /// <summary>The self-contained exe publish.ps1 writes and the release carries, for the version given.</summary>
-    public static string ExeName(Version version) =>
-        $"bhmaps-v{version.Major}.{version.Minor}.{version.Build}-win-x64.exe";
+    /// <summary>The self-contained exe publish.ps1 writes and every release carries. The tag says which version it
+    /// is, so the name does not.</summary>
+    public const string ExeName = "bhmaps.exe";
 
     /// <summary>The framework-dependent zip the release carries beside the exe. It holds one BhMaps.exe.</summary>
-    public static string ZipName(Version version) =>
-        $"bhmaps-v{version.Major}.{version.Minor}.{version.Build}-win-x64-dotnet.zip";
+    public const string ZipName = "bhmaps-dotnet.zip";
 
     /// <summary>The asset the given build updates from. Empty for a development run, which has none.</summary>
-    public static string AssetName(Version version, UpdateBuild build) =>
+    public static string AssetName(UpdateBuild build) =>
         build switch
         {
-            UpdateBuild.SelfContained => ExeName(version),
-            UpdateBuild.FrameworkDependent => ZipName(version),
+            UpdateBuild.SelfContained => ExeName,
+            UpdateBuild.FrameworkDependent => ZipName,
             _ => "",
         };
 
@@ -49,8 +48,6 @@ public static class ReleaseChecker
             return null;
         }
 
-        var exeName = ExeName(version);
-        var zipName = ZipName(version);
         string? exeUrl = null;
         string? zipUrl = null;
         string? checksumsUrl = null;
@@ -61,12 +58,12 @@ public static class ReleaseChecker
             foreach (var asset in assets.EnumerateArray())
             {
                 var name = Str(asset, "name");
-                if (name.Equals(exeName, StringComparison.OrdinalIgnoreCase))
+                if (name.Equals(ExeName, StringComparison.OrdinalIgnoreCase))
                 {
                     exeUrl = Str(asset, "browser_download_url");
                     exeSize = Size(asset);
                 }
-                else if (name.Equals(zipName, StringComparison.OrdinalIgnoreCase))
+                else if (name.Equals(ZipName, StringComparison.OrdinalIgnoreCase))
                 {
                     zipUrl = Str(asset, "browser_download_url");
                     zipSize = Size(asset);

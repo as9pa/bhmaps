@@ -6,9 +6,9 @@ public enum UpdateBuild
 {
     Development,
 
-    /// <summary>bhmaps-vX.Y.Z-win-x64.exe: single file, runtime bundled.</summary>
+    /// <summary>bhmaps.exe: single file, runtime bundled.</summary>
     SelfContained,
 
-    /// <summary>bhmaps-vX.Y.Z-win-x64-dotnet.zip: one single-file BhMaps.exe that runs on the installed runtime.</summary>
+    /// <summary>bhmaps-dotnet.zip: one single-file BhMaps.exe that runs on the installed runtime.</summary>
     FrameworkDependent,
 }
