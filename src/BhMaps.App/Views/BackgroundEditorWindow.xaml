@@ -216,74 +216,6 @@
                          IsChecked="{Binding FitStretch}" />
           </StackPanel>
 
-          <Grid Style="{StaticResource PanRow}">
-            <Grid.ColumnDefinitions>
-              <ColumnDefinition Width="*" />
-              <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-            <Grid.RowDefinitions>
-              <RowDefinition Height="Auto" />
-              <RowDefinition Height="Auto" />
-            </Grid.RowDefinitions>
-            <StackPanel Orientation="Horizontal">
-              <TextBlock Style="{StaticResource FieldLabel}" Text="Pan X" />
-              <Button Margin="0,18,0,6"
-                      Command="{Binding ResetPanXCommand}"
-                      Content="Reset"
-                      Style="{StaticResource ResetLink}" />
-            </StackPanel>
-            <Slider Grid.Row="1"
-                    AutomationProperties.Name="Pan X"
-                    FocusVisualStyle="{StaticResource DialogFocusRing}"
-                    IsEnabled="{Binding IsFill}"
-                    LargeChange="0.1"
-                    Maximum="1"
-                    Minimum="0"
-                    SmallChange="0.01"
-                    Style="{StaticResource EditorSlider}"
-                    Thumb.DragCompleted="Slider_DragCompleted"
-                    Value="{Binding PanX}" />
-            <TextBlock Grid.Row="1"
-                       Grid.Column="1"
-                       Margin="10,0,0,0"
-                       Style="{StaticResource Readout}"
-                       Text="{Binding PanX, StringFormat=N2}" />
-          </Grid>
-
-          <Grid Style="{StaticResource PanRow}">
-            <Grid.ColumnDefinitions>
-              <ColumnDefinition Width="*" />
-              <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-            <Grid.RowDefinitions>
-              <RowDefinition Height="Auto" />
-              <RowDefinition Height="Auto" />
-            </Grid.RowDefinitions>
-            <StackPanel Orientation="Horizontal">
-              <TextBlock Style="{StaticResource FieldLabel}" Text="Pan Y" />
-              <Button Margin="0,18,0,6"
-                      Command="{Binding ResetPanYCommand}"
-                      Content="Reset"
-                      Style="{StaticResource ResetLink}" />
-            </StackPanel>
-            <Slider Grid.Row="1"
-                    AutomationProperties.Name="Pan Y"
-                    FocusVisualStyle="{StaticResource DialogFocusRing}"
-                    IsEnabled="{Binding IsFill}"
-                    LargeChange="0.1"
-                    Maximum="1"
-                    Minimum="0"
-                    SmallChange="0.01"
-                    Style="{StaticResource EditorSlider}"
-                    Thumb.DragCompleted="Slider_DragCompleted"
-                    Value="{Binding PanY}" />
-            <TextBlock Grid.Row="1"
-                       Grid.Column="1"
-                       Margin="10,0,0,0"
-                       Style="{StaticResource Readout}"
-                       Text="{Binding PanY, StringFormat=N2}" />
-          </Grid>
-
           <!-- 3.3 E4: two 172 px columns with a gap, which is the panel's width once its padding is taken off. -->
           <Grid>
             <Grid.ColumnDefinitions>
@@ -294,9 +226,78 @@
             <Grid.RowDefinitions>
               <RowDefinition Height="Auto" />
               <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <Grid>
+            <Grid Style="{StaticResource PanRow}">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+              </Grid.RowDefinitions>
+              <StackPanel Orientation="Horizontal">
+                <TextBlock Style="{StaticResource SliderLabel}" Text="Pan X" />
+                <Button Margin="0,10,0,4"
+                        Command="{Binding ResetPanXCommand}"
+                        Content="Reset"
+                        Style="{StaticResource ResetLink}" />
+              </StackPanel>
+              <Slider Grid.Row="1"
+                      AutomationProperties.Name="Pan X"
+                      FocusVisualStyle="{StaticResource DialogFocusRing}"
+                      IsEnabled="{Binding IsFill}"
+                      LargeChange="0.1"
+                      Maximum="1"
+                      Minimum="0"
+                      SmallChange="0.01"
+                      Style="{StaticResource EditorSlider}"
+                      Thumb.DragCompleted="Slider_DragCompleted"
+                      Value="{Binding PanX}" />
+              <TextBlock Grid.Row="1"
+                         Grid.Column="1"
+                         Margin="10,0,0,0"
+                         Style="{StaticResource Readout}"
+                         Text="{Binding PanX, StringFormat=N2}" />
+            </Grid>
+
+            <Grid Grid.Column="2" Style="{StaticResource PanRow}">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+              </Grid.RowDefinitions>
+              <StackPanel Orientation="Horizontal">
+                <TextBlock Style="{StaticResource SliderLabel}" Text="Pan Y" />
+                <Button Margin="0,10,0,4"
+                        Command="{Binding ResetPanYCommand}"
+                        Content="Reset"
+                        Style="{StaticResource ResetLink}" />
+              </StackPanel>
+              <Slider Grid.Row="1"
+                      AutomationProperties.Name="Pan Y"
+                      FocusVisualStyle="{StaticResource DialogFocusRing}"
+                      IsEnabled="{Binding IsFill}"
+                      LargeChange="0.1"
+                      Maximum="1"
+                      Minimum="0"
+                      SmallChange="0.01"
+                      Style="{StaticResource EditorSlider}"
+                      Thumb.DragCompleted="Slider_DragCompleted"
+                      Value="{Binding PanY}" />
+              <TextBlock Grid.Row="1"
+                         Grid.Column="1"
+                         Margin="10,0,0,0"
+                         Style="{StaticResource Readout}"
+                         Text="{Binding PanY, StringFormat=N2}" />
+            </Grid>
+
+            <Grid Grid.Row="1">
               <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
@@ -329,7 +330,7 @@
                          Text="{Binding HueText}" />
             </Grid>
 
-            <Grid Grid.Column="2">
+            <Grid Grid.Row="1" Grid.Column="2">
               <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
@@ -362,7 +363,7 @@
                          Text="{Binding SaturationPercent, StringFormat=F0}" />
             </Grid>
 
-            <Grid Grid.Row="1">
+            <Grid Grid.Row="2">
               <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
@@ -395,7 +396,7 @@
                          Text="{Binding ContrastPercent, StringFormat=F0}" />
             </Grid>
 
-            <Grid Grid.Row="1" Grid.Column="2">
+            <Grid Grid.Row="2" Grid.Column="2">
               <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />

@@ -168,8 +168,16 @@ public partial class PlatformEditorViewModel : ObservableObject
         IsolatePreview = request.OnlyFile is not null || services.Settings.PlatformPreviewIsolate;
         _restoringMode = false;
 
-        // 3.3 E2: custom platforms go into a pack of their own, so the default is a fresh New Pack N.
+        // 3.3 E2: custom platforms go into a pack of their own, so the default is a fresh New Pack N. Opened on
+        // a pack's own tile, the edit is of that pack and goes back into it; the Default pack is the one
+        // exception, because it is the game's own art and Reset reads from it.
         PackName = PackNames.NextFree(TakenPackNames());
+        if (request.Pack is { } ownPack
+            && !ownPack.Name.Equals(DefaultPack.Name, StringComparison.OrdinalIgnoreCase)
+            && PackChoices.Any(p => p.Equals(ownPack.Name, StringComparison.OrdinalIgnoreCase)))
+        {
+            PackName = ownPack.Name;
+        }
 
         // Spec 5.3: the line names the pack the values came from, and Save goes back to that pack when the list
         // still has it, because that is the set the user is carrying on with. With many maps that is the first
