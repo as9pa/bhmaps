@@ -9,6 +9,12 @@ and `.jpg` files inside the `mapArt` folder and inside its own library, plus its
 folder, and it keeps a copy of every original so it can put it back. The game's data files are read and never written, and
 nothing else in the game install is touched.
 
+## What is new in 3.6.1
+
+The Shortcuts section on the Settings page has two buttons, Add to Start menu and Add desktop shortcut,
+in place of the two ticks. Each button only makes its shortcut, writing over one that is already there.
+To take a shortcut away, delete it in Windows.
+
 ## What is new in 3.6
 
 The welcome window has a fourth step, Shortcuts: a tick to put BhMaps in the Start menu (on by default)

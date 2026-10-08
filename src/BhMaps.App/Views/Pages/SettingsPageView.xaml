@@ -261,8 +261,9 @@
           </StackPanel>
         </Grid>
 
-        <!-- 3.6 O1. The boxes read the shortcut files themselves, so they say what is on disk, not what was
-             once chosen. A dev run shows them disabled with its hint, because its exe is a build output. -->
+        <!-- 3.6 O1. Each button only adds its shortcut, writing over one that is already there. Nothing here
+             removes one: deleting the .lnk does that. A dev run shows the buttons disabled with its hint,
+             because its exe is a build output. -->
         <TextBlock Style="{StaticResource SettingSection}" Text="Shortcuts" />
         <Grid>
           <Grid.ColumnDefinitions>
@@ -272,24 +273,43 @@
           </Grid.ColumnDefinitions>
           <Grid.RowDefinitions>
             <RowDefinition Height="Auto" MinHeight="56" />
+            <RowDefinition Height="Auto" MinHeight="56" />
+            <RowDefinition Height="Auto" />
           </Grid.RowDefinitions>
 
+          <!-- Start menu -->
           <Border Grid.Row="0" Style="{StaticResource SettingRule}" />
-          <!-- No label of its own: the section is called Shortcuts, and each box's text says the rest. -->
-          <StackPanel Grid.Row="0" Grid.Column="1" Style="{StaticResource SettingCell}">
-            <CheckBox Content="Add to the Start menu"
-                      FocusVisualStyle="{StaticResource DialogFocusRing}"
-                      Foreground="{StaticResource TextBrush}"
-                      IsChecked="{Binding ShortcutStartMenu}"
-                      IsEnabled="{Binding CanChangeShortcuts}" />
-            <TextBlock Margin="20,2,0,0" Style="{StaticResource SettingHelp}" Text="Shows BhMaps in Start and in Windows search." />
-            <CheckBox Margin="0,10,0,0"
-                      Content="Desktop shortcut"
-                      FocusVisualStyle="{StaticResource DialogFocusRing}"
-                      Foreground="{StaticResource TextBrush}"
-                      IsChecked="{Binding ShortcutDesktop}"
-                      IsEnabled="{Binding CanChangeShortcuts}" />
-            <TextBlock Margin="20,2,0,0" Style="{StaticResource SettingHelp}" Text="A BhMaps icon on the desktop." />
+          <TextBlock Grid.Row="0" Grid.Column="0" Style="{StaticResource SettingLabel}" Text="Start menu" />
+          <TextBlock Grid.Row="0"
+                     Grid.Column="1"
+                     Margin="0,10"
+                     VerticalAlignment="Center"
+                     Style="{StaticResource SettingHelp}"
+                     Text="Shows BhMaps in Start and in Windows search." />
+          <StackPanel Grid.Row="0" Style="{StaticResource SettingActions}">
+            <Button Command="{Binding AddStartMenuShortcutCommand}"
+                    Content="Add to Start menu"
+                    FocusVisualStyle="{StaticResource DialogFocusRing}"
+                    Style="{StaticResource PlainButton}" />
+          </StackPanel>
+
+          <!-- Desktop -->
+          <Border Grid.Row="1" Style="{StaticResource SettingRule}" />
+          <TextBlock Grid.Row="1" Grid.Column="0" Style="{StaticResource SettingLabel}" Text="Desktop" />
+          <TextBlock Grid.Row="1"
+                     Grid.Column="1"
+                     Margin="0,10"
+                     VerticalAlignment="Center"
+                     Style="{StaticResource SettingHelp}"
+                     Text="A BhMaps icon on the desktop." />
+          <StackPanel Grid.Row="1" Style="{StaticResource SettingActions}">
+            <Button Command="{Binding AddDesktopShortcutCommand}"
+                    Content="Add desktop shortcut"
+                    FocusVisualStyle="{StaticResource DialogFocusRing}"
+                    Style="{StaticResource PlainButton}" />
+          </StackPanel>
+
+          <StackPanel Grid.Row="2" Grid.Column="1">
             <TextBlock Foreground="{StaticResource Text3Brush}"
                        Style="{StaticResource SettingHelp}"
                        Text="{Binding ShortcutHint}"

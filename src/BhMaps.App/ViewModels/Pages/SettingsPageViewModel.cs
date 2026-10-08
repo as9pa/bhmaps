@@ -35,7 +35,6 @@ public partial class SettingsPageViewModel : PageViewModel
         CheckForUpdates = shell.Services.Settings.CheckForUpdates;
         ShortcutError = "";
         CanChangeShortcuts = !Shortcuts.IsDevRun(shell.Services);
-        ReadShortcuts();
         Version = ReadVersion();
         _refreshing = false;
         RefreshUpdateRow();
@@ -92,19 +91,13 @@ public partial class SettingsPageViewModel : PageViewModel
     [ObservableProperty]
     public partial bool CheckForUpdates { get; set; }
 
-    /// <summary>3.6 O1: the Shortcuts row's two boxes. The files on disk are the state, read on every refresh;
-    /// ticking writes the shortcut and unticking deletes it.</summary>
-    [ObservableProperty]
-    public partial bool ShortcutStartMenu { get; set; }
-
-    [ObservableProperty]
-    public partial bool ShortcutDesktop { get; set; }
-
+    /// <summary>3.6 O1: the Shortcuts rows' two buttons only add a shortcut, writing over one that exists. Nothing
+    /// here removes one; Windows does that, by deleting the .lnk.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasShortcutError))]
     public partial string ShortcutError { get; set; }
 
-    /// <summary>False in a dev run (an --appdata override): its exe is a build output, so the boxes are shown
+    /// <summary>False in a dev run (an --appdata override): its exe is a build output, so the buttons are shown
     /// disabled with <see cref="ShortcutHint" /> beside them.</summary>
     public bool CanChangeShortcuts { get; }
 
@@ -144,38 +137,23 @@ public partial class SettingsPageViewModel : PageViewModel
         LibraryPath = Services.LibraryPath;
         GameDataStatus = Services.LevelData.StatusSentence;
         CheckForUpdates = Services.Settings.CheckForUpdates;
-        ReadShortcuts();
         _refreshing = false;
         RefreshUpdateRow();
     }
 
-    /// <summary>The boxes follow the files, so a shortcut the user deleted by hand reads as unticked here. Called
-    /// with _refreshing set, so the read is not taken for a tick.</summary>
-    private void ReadShortcuts()
+    [RelayCommand(CanExecute = nameof(CanChangeShortcuts))]
+    private void AddStartMenuShortcut() => AddShortcut(Shortcuts.StartMenuPath, "Start menu shortcut made.");
+
+    [RelayCommand(CanExecute = nameof(CanChangeShortcuts))]
+    private void AddDesktopShortcut() => AddShortcut(Shortcuts.DesktopPath, "Desktop shortcut made.");
+
+    /// <summary>Writes one shortcut. A success is a status line; a failure is the row's error line.</summary>
+    private void AddShortcut(string path, string done)
     {
-        ShortcutStartMenu = Shortcuts.Exists(Shortcuts.StartMenuPath);
-        ShortcutDesktop = Shortcuts.Exists(Shortcuts.DesktopPath);
-    }
-
-    partial void OnShortcutStartMenuChanged(bool value) => ApplyShortcut(Shortcuts.StartMenuPath, value);
-
-    partial void OnShortcutDesktopChanged(bool value) => ApplyShortcut(Shortcuts.DesktopPath, value);
-
-    /// <summary>Writes or deletes one shortcut. On a failure the row's error line says why and the boxes go back
-    /// to what is on disk.</summary>
-    private void ApplyShortcut(string path, bool wanted)
-    {
-        if (_refreshing || !CanChangeShortcuts)
+        ShortcutError = Shortcuts.Create(path) ?? "";
+        if (!HasShortcutError)
         {
-            return;
-        }
-
-        ShortcutError = (wanted ? Shortcuts.Create(path) : Shortcuts.Remove(path)) ?? "";
-        if (HasShortcutError)
-        {
-            _refreshing = true;
-            ReadShortcuts();
-            _refreshing = false;
+            Shell.Status.Done(done, undoable: false);
         }
     }
 
