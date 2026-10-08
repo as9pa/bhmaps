@@ -55,6 +55,20 @@ public sealed class ThumbnailCache
         }
     }
 
+    /// <summary>3.3 L1: forgets only the decodes under the folders a save wrote, so the rows left as they were
+    /// keep theirs. "Backgrounds" in the list reaches every background picture.</summary>
+    public void Evict(IReadOnlyList<string> folders)
+    {
+        var parts = folders.Select(f => $"{Path.DirectorySeparatorChar}{f}{Path.DirectorySeparatorChar}").ToList();
+        lock (_gate)
+        {
+            foreach (var path in _loads.Keys.Where(p => parts.Any(s => p.Contains(s, StringComparison.OrdinalIgnoreCase))).ToList())
+            {
+                _loads.Remove(path);
+            }
+        }
+    }
+
     /// <summary>Never throws: a file that vanished between the scan and the decode leaves the tile blank, which
     /// is what every other thumbnail path in the app does with the same failure.</summary>
     private async Task<ImageSource?> LoadAsync(string fullPath)

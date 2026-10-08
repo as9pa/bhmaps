@@ -92,6 +92,15 @@ public sealed partial class MapRowViewModel : ObservableObject
 
     public bool ShowMore => Overflow > 0 && !IsUnfolded;
 
+    /// <summary>3.3 L1: true for a row rebuilt in place after a save, until its first picture arrives. The
+    /// template dims the strip on it.</summary>
+    [ObservableProperty]
+    public partial bool IsRefreshing { get; set; }
+
+    /// <summary>Whether the row has asked for its pictures, so a row rebuilt in place can be realised like the
+    /// one it replaces.</summary>
+    public bool LoadStarted => _loadStarted;
+
     /// <summary>Fills every tile's menu, which the row does once, when it is built.</summary>
     public void RebuildMenus()
     {
@@ -133,6 +142,7 @@ public sealed partial class MapRowViewModel : ObservableObject
             {
                 ct.ThrowIfCancellationRequested();
                 await tile.LoadThumbnailAsync(services.RowThumbnails, ct);
+                IsRefreshing = false;
             }
 
             if (_composeSet is { } compose)
@@ -141,12 +151,18 @@ public sealed partial class MapRowViewModel : ObservableObject
                 {
                     ct.ThrowIfCancellationRequested();
                     await compose(tile, ct);
+                    IsRefreshing = false;
                 }
             }
         }
         catch (OperationCanceledException)
         {
             // The page was rebuilt by a scan, so what was still loading is for a row nothing shows any more.
+        }
+        finally
+        {
+            // A row with no tiles, or one whose load stopped, must not stay dimmed.
+            IsRefreshing = false;
         }
     }
 

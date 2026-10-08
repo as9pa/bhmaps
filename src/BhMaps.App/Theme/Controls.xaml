@@ -1167,7 +1167,18 @@
         </StackPanel>
 
         <Grid Grid.Column="1">
+          <!-- 3.3 L1: a row rebuilt in place after a save draws its tiles dimmed until its first picture is in, so
+               the change reads as on its way rather than as a row gone blank. -->
           <ItemsControl Focusable="False" ItemsSource="{Binding Choices}">
+            <ItemsControl.Style>
+              <Style TargetType="ItemsControl">
+                <Style.Triggers>
+                  <DataTrigger Binding="{Binding IsRefreshing}" Value="True">
+                    <Setter Property="Opacity" Value="0.45" />
+                  </DataTrigger>
+                </Style.Triggers>
+              </Style>
+            </ItemsControl.Style>
             <ItemsControl.ItemsPanel>
               <ItemsPanelTemplate>
                 <!-- SetCurrentValue writes Overflow from the measure, so this OneWayToSource binding survives it

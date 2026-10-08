@@ -858,7 +858,24 @@ public partial class MainViewModel : ObservableObject
         if (vm.Saved is not { ApplyToGame: true } saved)
         {
             // Saved into the pack and no further, so nothing in the game folder moved and there is nothing to undo.
-            await RescanAsync();
+            // 3.3 L1: a slot's picture changes only the rows of the maps on that slot, so only those are rebuilt.
+            // An all-maps picture reaches every row, which is the full refresh.
+            if (vm.Saved is { AllMaps: false } packOnly)
+            {
+                await RescanAsync(
+                [
+                    .. snapshot.Catalog.Maps
+                        .Where(m => m.BackgroundSlots.Contains(packOnly.Slot, StringComparer.OrdinalIgnoreCase))
+                        .Select(m => m.FolderName)
+                        .Distinct(StringComparer.OrdinalIgnoreCase),
+                    PictureImporter.BackgroundsFolder,
+                ]);
+            }
+            else
+            {
+                await RescanAsync();
+            }
+
             return;
         }
 
@@ -1374,12 +1391,30 @@ public partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowFirstRunBanner));
 
         // A file may be a different picture now, so the rows pages' decodes are forgotten before they rebuild.
-        Services.RowThumbnails.Clear();
+        // 3.3 L1: a save that names its folders forgets only theirs, and the rows pages rebuild only their rows.
+        var inPlace = writtenFolders is { Count: > 0 };
+        if (inPlace)
+        {
+            // The game's Backgrounds folder goes too: WrittenFolders drops it from the list because no row is
+            // named after it, but a game write can still have changed the pictures under it.
+            Services.RowThumbnails.Evict([.. writtenFolders!, PictureImporter.BackgroundsFolder]);
+        }
+        else
+        {
+            Services.RowThumbnails.Clear();
+        }
 
         // Maps rebuilds its cards first, because the rows pages build their own rows from its cards.
         foreach (var page in _pages)
         {
-            page.Refresh(snapshot, writtenFolders);
+            if (inPlace)
+            {
+                page.UpdateFolders(snapshot, writtenFolders!);
+            }
+            else
+            {
+                page.Refresh(snapshot, writtenFolders);
+            }
         }
 
         // Spec 7.3: once a run, 5 s after the first scan finished, off the UI thread and blocking nothing. A
