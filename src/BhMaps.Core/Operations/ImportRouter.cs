@@ -78,7 +78,7 @@ public static class ImportRouter
             throw new ArgumentException(error, nameof(packName));
         }
 
-        var packRoot = Path.Combine(PackScanner.PacksRoot(libraryPath), packName);
+        var packRoot = PackScanner.PackRootFor(libraryPath, packName);
         var copied = 0;
         var failures = new List<FileFailure>();
         foreach (var row in plan.IncludedRows)

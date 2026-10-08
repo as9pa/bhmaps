@@ -30,7 +30,7 @@ public static class PictureImporter
     /// dodge. A pack that does not exist yet holds nothing.</summary>
     public static IReadOnlyList<string> ExistingNames(string libraryPath, string packName)
     {
-        var folder = Path.Combine(PackScanner.PacksRoot(libraryPath), packName, BackgroundsFolder);
+        var folder = Path.Combine(PackScanner.PackRootFor(libraryPath, packName), BackgroundsFolder);
         try
         {
             return [.. Directory.EnumerateFiles(folder).Select(Path.GetFileName).OfType<string>()];
@@ -54,7 +54,7 @@ public static class PictureImporter
         }
 
         var options = ToFitOptions(fit);
-        var targetDir = Path.Combine(PackScanner.PacksRoot(libraryPath), packName, BackgroundsFolder);
+        var targetDir = Path.Combine(PackScanner.PackRootFor(libraryPath, packName), BackgroundsFolder);
         var written = new List<string>();
         var failures = new List<FileFailure>();
         var taken = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

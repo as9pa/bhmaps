@@ -54,6 +54,7 @@ public partial class App : Application
         // Shown at most once: with a command-line override in play, Finish cannot change the path this run uses,
         // so a loop on the same condition would never end.
         WelcomeCapture? captured = null;
+        WelcomeShortcutFailure? shortcutFailure = null;
         var startOnPacks = false;
         if (!services.Settings.WelcomeDone || !SettingsStore.ValidateGamePath(services.GamePath, out _))
         {
@@ -68,7 +69,20 @@ public partial class App : Application
             // 3.0: step 3 answered No leaves a library with no pack in it, so the shell opens where the offer to
             // capture one is: the Packs page's empty state, with the first-run line above it.
             captured = welcomeModel.Capture;
+            shortcutFailure = welcomeModel.ShortcutFailure;
             startOnPacks = captured is null;
+        }
+
+        // 3.3 O1: a shortcut left pointing at an exe that has since moved follows the one running now. Off the UI
+        // thread, and quiet: a shortcut that cannot be fixed here is the Settings row's to say. A dev run never
+        // touches shortcuts.
+        if (!Shortcuts.IsDevRun(services))
+        {
+            _ = Task.Run(() =>
+            {
+                Shortcuts.RepointIfStale(Shortcuts.StartMenuPath);
+                Shortcuts.RepointIfStale(Shortcuts.DesktopPath);
+            });
         }
 
         // Spec 3.5: an unchanged game starts from the cache. A game that changed is re-read by the shell once
@@ -96,9 +110,33 @@ public partial class App : Application
             model.NavigatePacks();
         }
 
+        // 3.3 O1: a shortcut step 4 could not write says so on the same strip, with a retry, unless the capture
+        // failed too: that line is the one that matters more and the Settings row offers the shortcuts again.
+        if (shortcutFailure is { } failure && captured is not { Failed: true })
+        {
+            ShowShortcutFailure(model, failure);
+        }
+
         var window = new MainWindow { DataContext = model, ShowActivated = !Quiet };
         MainWindow = window;
         window.Closed += (_, _) => Shutdown();
         window.Show();
     }
+
+    /// <summary>The strip's line for step 4's failed shortcuts. Retry writes only the ones that failed, and a
+    /// retry that fails again puts the line back with what is still missing.</summary>
+    private static void ShowShortcutFailure(MainViewModel model, WelcomeShortcutFailure failure) =>
+        model.Status.Error(failure.Text, retry: () =>
+        {
+            if (WelcomeViewModel.CreateShortcuts(failure.Paths) is { } again)
+            {
+                ShowShortcutFailure(model, again);
+            }
+            else
+            {
+                model.Status.Done(failure.Paths.Count == 1 ? "Shortcut made." : "Shortcuts made.", undoable: false);
+            }
+
+            return Task.CompletedTask;
+        });
 }

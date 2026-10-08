@@ -10,7 +10,9 @@ public static class PackExporter
     private static readonly string[] RecordFileNames = [PlatformEditRecord.FileName, BackgroundEditRecord.FileName];
 
     /// <summary>Copies the pack folder to destinationRoot\&lt;pack name&gt;\&lt;Folder&gt;\&lt;file&gt;, then the pack's
-    /// edit records to destinationRoot\&lt;pack name&gt;\ (spec 3.2). A pack with no records exports its pictures alone.</summary>
+    /// edit records to destinationRoot\&lt;pack name&gt;\ (spec 3.2). A pack with no records exports its pictures alone.
+    /// A pack that wraps a mapArt folder (3.3 P2) exports its content root under the pack's own name, without the
+    /// wrapper, so the exported folder is laid out like the game tree either way.</summary>
     public static ApplyResult Export(Pack pack, string destinationRoot, IProgress<string>? progress = null, CancellationToken ct = default)
     {
         var destination = Path.Combine(destinationRoot, pack.Name);

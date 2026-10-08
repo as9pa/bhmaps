@@ -159,7 +159,7 @@ public partial class PlatformEditorViewModel : ObservableObject
             row.PropertyChanged += OnRowPropertyChanged;
         }
 
-        PackChoices = packs.Select(p => p.Name).Concat([BackgroundEditorViewModel.NewPackChoice]).ToList();
+        PackChoices = packs.Select(p => p.Name).ToList();
         Error = "";
 
         // Spec 3.4: a panel row's Edit names one file, and that editor opens on it. Spec 3.5: every other way in
@@ -168,11 +168,8 @@ public partial class PlatformEditorViewModel : ObservableObject
         IsolatePreview = request.OnlyFile is not null || services.Settings.PlatformPreviewIsolate;
         _restoringMode = false;
 
-        // The background editor's rule: the pack the user would mean is there, or it is a new pack already named.
-        var existingDefault = PackChoices.FirstOrDefault(
-            p => p.Equals(BackgroundEditorViewModel.DefaultPackName, StringComparison.OrdinalIgnoreCase));
-        TargetPack = existingDefault ?? BackgroundEditorViewModel.NewPackChoice;
-        NewPackName = existingDefault is null ? BackgroundEditorViewModel.DefaultPackName : "";
+        // 3.3 E2: custom platforms go into a pack of their own, so the default is a fresh New Pack N.
+        PackName = PackNames.NextFree(TakenPackNames());
 
         // Spec 5.3: the line names the pack the values came from, and Save goes back to that pack when the list
         // still has it, because that is the set the user is carrying on with. With many maps that is the first
@@ -182,7 +179,7 @@ public partial class PlatformEditorViewModel : ObservableObject
         if (_sets.FirstOrDefault(s => s.HasValuesFrom)?.SourcePack is { } valuesFrom
             && PackChoices.Any(p => p.Equals(valuesFrom.Name, StringComparison.OrdinalIgnoreCase)))
         {
-            TargetPack = valuesFrom.Name;
+            PackName = valuesFrom.Name;
         }
 
         // The sliders open on the first ticked row, which is where a loaded record put its values, and on the
@@ -242,8 +239,8 @@ public partial class PlatformEditorViewModel : ObservableObject
     /// <summary>Spec 9: true while the save loop is running, which is what shows the progress line and its
     /// Cancel and holds the window's own two buttons.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanSave), nameof(CanCloseWindow))]
-    [NotifyCanExecuteChangedFor(nameof(SaveAndApplyCommand), nameof(SaveOnlyCommand), nameof(CancelSaveCommand), nameof(PreviousMapCommand), nameof(NextMapCommand))]
+    [NotifyPropertyChangedFor(nameof(CanSave), nameof(CanAddAsNew), nameof(CanCloseWindow))]
+    [NotifyCanExecuteChangedFor(nameof(SaveAndApplyCommand), nameof(SaveOnlyCommand), nameof(AddAsNewCommand), nameof(CancelSaveCommand), nameof(PreviousMapCommand), nameof(NextMapCommand))]
     public partial bool IsSaving { get; set; }
 
     [ObservableProperty]
@@ -286,15 +283,12 @@ public partial class PlatformEditorViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsolateHint))]
     public partial bool IsolatePreview { get; set; }
 
+    /// <summary>3.3 E3: the editable box's text. An existing pack's name saves into it; anything else is a new
+    /// pack.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsNewPack), nameof(PackNameError), nameof(CanSave), nameof(CanEditOutside))]
+    [NotifyPropertyChangedFor(nameof(IsNewPack), nameof(PackNameError), nameof(PackNameHint), nameof(CanSave), nameof(CanEditOutside))]
     [NotifyCanExecuteChangedFor(nameof(SaveAndApplyCommand), nameof(SaveOnlyCommand), nameof(EditOutsideCommand))]
-    public partial string TargetPack { get; set; }
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(PackNameError), nameof(CanSave), nameof(CanEditOutside))]
-    [NotifyCanExecuteChangedFor(nameof(SaveAndApplyCommand), nameof(SaveOnlyCommand), nameof(EditOutsideCommand))]
-    public partial string NewPackName { get; set; }
+    public partial string PackName { get; set; }
 
     [ObservableProperty]
     public partial string Error { get; set; }
@@ -468,16 +462,25 @@ public partial class PlatformEditorViewModel : ObservableObject
     /// <summary>What the preview says instead of a picture, which is only ever the map having no art of its own.</summary>
     public string EmptyText => CanEdit ? "" : NoFilesText;
 
-    public bool IsNewPack => TargetPack == BackgroundEditorViewModel.NewPackChoice;
+    public bool IsNewPack =>
+        !PackChoices.Any(p => p.Equals(EffectivePackName, StringComparison.OrdinalIgnoreCase));
 
-    public string EffectivePackName => IsNewPack ? NewPackName.Trim() : TargetPack;
+    public string EffectivePackName => PackName.Trim();
 
     public string PackNameError =>
         IsNewPack && !PackNameValidator.IsValid(EffectivePackName, out var error) ? error : "";
 
+    /// <summary>Under the box while the name is a new pack that can be made; the error line takes its place
+    /// otherwise. Null hides the line.</summary>
+    public string? PackNameHint =>
+        IsNewPack && PackNameError.Length == 0 ? BackgroundEditorViewModel.NewPackHint : null;
+
     /// <summary>Spec 9: one map with no art of its own does not stop the rest of the set being written, so what
     /// Save needs is a map in the set that has something to write.</summary>
-    public bool CanSave => _sets.Any(s => s.Rows.Count > 0) && PackNameError.Length == 0 && !IsSaving;
+    public bool CanSave => CanAddAsNew && PackNameError.Length == 0;
+
+    /// <summary>3.3 E1: the Save rule without the pack name, because Add as new asks for its own.</summary>
+    public bool CanAddAsNew => _sets.Any(s => s.Rows.Count > 0) && !IsSaving;
 
     /// <summary>The map the strip is on: the one the file list lists and the preview draws (spec 9).</summary>
     private MapSet Current => _sets[CurrentIndex];
@@ -1432,8 +1435,8 @@ public partial class PlatformEditorViewModel : ObservableObject
         packName = EffectivePackName;
         error = "";
         var packRoot = Path.Combine(PackScanner.PacksRoot(_services.LibraryPath), packName);
-        // TryCreate refuses a name another pack already holds, which is not a failure here: a "New pack..." the
-        // user already edited into once is the pack this one goes in too.
+        // TryCreate refuses a name another pack already holds, which is not a failure here: a new name the user
+        // already edited into once is the pack this one goes in too.
         if (IsNewPack && !Directory.Exists(packRoot) && !PackCreator.TryCreate(_services.LibraryPath, packName, out error))
         {
             return null;
@@ -1452,15 +1455,13 @@ public partial class PlatformEditorViewModel : ObservableObject
 
         if (IsNewPack)
         {
-            // The pack exists now, so the row reads as the pack it is and Save writes there rather than
-            // making a second one.
-            PackChoices = PackChoices
-                .Where(c => c != BackgroundEditorViewModel.NewPackChoice)
-                .Append(packName)
-                .Concat([BackgroundEditorViewModel.NewPackChoice])
-                .ToList();
+            // The pack exists now, so the list has it and Save writes there rather than making a second one.
+            // A new list can clear the editable box's text, so the name goes back in after it.
+            PackChoices = PackChoices.Append(packName).ToList();
             OnPropertyChanged(nameof(PackChoices));
-            TargetPack = packName;
+            PackName = packName;
+            OnPropertyChanged(nameof(IsNewPack));
+            OnPropertyChanged(nameof(PackNameHint));
         }
 
         return folder;
@@ -1654,6 +1655,55 @@ public partial class PlatformEditorViewModel : ObservableObject
     /// <summary>"Save only": the same write into the library, with nothing said to the game (3.0 E).</summary>
     [RelayCommand(CanExecute = nameof(CanSave))]
     private Task SaveOnlyAsync() => SaveAsync(apply: false);
+
+    /// <summary>3.3 E1: "Add as new" asks for a fresh pack's name, then runs Save only into it. The pack is new,
+    /// so no Replace question can come up.</summary>
+    [RelayCommand(CanExecute = nameof(CanAddAsNew))]
+    private Task AddAsNewAsync()
+    {
+        var taken = TakenPackNames();
+        var name = _dialogs.PromptText("Add as new", "Pack name", PackNames.NextFree(taken))?.Trim();
+        if (name is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        if (!PackNameValidator.IsValid(name, out var error))
+        {
+            _dialogs.Error("Add as new", error);
+            return Task.CompletedTask;
+        }
+
+        if (taken.Any(p => p.Equals(name, StringComparison.OrdinalIgnoreCase)))
+        {
+            _dialogs.Error("Add as new", $"A pack called {name} already exists.");
+            return Task.CompletedTask;
+        }
+
+        PackName = name;
+        return SaveAsync(apply: false);
+    }
+
+    /// <summary>Every pack name a new pack must not reuse: the list's, plus folders on disk the snapshot has not
+    /// picked up.</summary>
+    private List<string> TakenPackNames()
+    {
+        var names = PackChoices.ToList();
+        var root = PackScanner.PacksRoot(_services.LibraryPath);
+        try
+        {
+            if (Directory.Exists(root))
+            {
+                names.AddRange(Directory.EnumerateDirectories(root).Select(Path.GetFileName).OfType<string>());
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // An unreadable packs folder leaves the list's names, which is what the editor saves against anyway.
+        }
+
+        return names;
+    }
 
     private async Task SaveAsync(bool apply)
     {

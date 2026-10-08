@@ -77,6 +77,44 @@ public sealed record AppSettings(
     public bool IsTransparentNoteDismissed(string packName, int count) =>
         DismissedTransparent.TryGetValue(packName, out var dismissed) && dismissed == count;
 
+    /// <summary>3.3 P1: a copy with every per-pack setting of <paramref name="oldName"/> moved to
+    /// <paramref name="newName"/>: the hidden list, the last-applied stamp and the dismissed transparent note.
+    /// Names are matched ignoring case; a setting the file never carried stays absent.</summary>
+    public AppSettings WithPackRenamed(string oldName, string newName) =>
+        this with
+        {
+            HiddenPackNames = HiddenPackNames is null
+                ? null
+                : [.. HiddenPackNames
+                    .Select(n => n.Equals(oldName, StringComparison.OrdinalIgnoreCase) ? newName : n)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)],
+            PackLastApplied = RenameKey(PackLastApplied, oldName, newName),
+            DismissedTransparentNotes = RenameKey(DismissedTransparentNotes, oldName, newName),
+        };
+
+    private static IReadOnlyDictionary<string, T>? RenameKey<T>(
+        IReadOnlyDictionary<string, T>? source, string oldName, string newName)
+    {
+        if (source is null)
+        {
+            return null;
+        }
+
+        var renamed = new Dictionary<string, T>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (key, value) in source.Where(p => !p.Key.Equals(oldName, StringComparison.OrdinalIgnoreCase)))
+        {
+            renamed[key] = value;
+        }
+
+        // The renamed pack's own value wins over anything left behind under the new name.
+        foreach (var (_, value) in source.Where(p => p.Key.Equals(oldName, StringComparison.OrdinalIgnoreCase)))
+        {
+            renamed[newName] = value;
+        }
+
+        return renamed;
+    }
+
     /// <summary>Properties from settings.json this version does not know. Written back untouched.</summary>
     public System.Text.Json.Nodes.JsonObject? Unknown { get; init; }
 }

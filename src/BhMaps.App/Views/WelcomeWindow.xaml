@@ -58,7 +58,7 @@
     <TextBlock FontSize="{StaticResource FontTitle}" FontWeight="SemiBold" Text="Welcome to BhMaps" />
     <TextBlock Style="{StaticResource StepText}"
                Margin="0,6,0,0"
-               Text="Three things to set up. All of them can be changed later in Settings." />
+               Text="Four things to set up. All of them can be changed later in Settings." />
 
     <!-- Disabled as a block while step 3 runs, so a capture in progress cannot have its own inputs edited. -->
     <StackPanel IsEnabled="{Binding IsNotBusy}">
@@ -135,6 +135,32 @@
                          IsChecked="{Binding CaptureNow}" />
             <RadioButton Content="No" FocusVisualStyle="{StaticResource DialogFocusRing}" GroupName="Capture" />
           </StackPanel>
+        </StackPanel>
+      </Grid>
+
+      <!-- 3.3 O1. A dev run shows the boxes too; Finish is what skips the writes there. -->
+      <Grid Style="{StaticResource StepGrid}">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="28" />
+          <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+        <TextBlock Style="{StaticResource StepNumber}" Text="4" />
+        <StackPanel Grid.Column="1">
+          <TextBlock Style="{StaticResource StepTitle}" Text="Shortcuts" />
+          <TextBlock Style="{StaticResource StepText}"
+                     Text="Where Windows can find BhMaps. The exe stays where it is; a shortcut only points at it." />
+          <CheckBox Margin="0,10,0,0"
+                    Content="Add to the Start menu"
+                    FocusVisualStyle="{StaticResource DialogFocusRing}"
+                    Foreground="{StaticResource TextBrush}"
+                    IsChecked="{Binding AddStartMenu}" />
+          <TextBlock Margin="20,2,0,0" Style="{StaticResource StepText}" Text="Shows BhMaps in Start and in Windows search." />
+          <CheckBox Margin="0,8,0,0"
+                    Content="Desktop shortcut"
+                    FocusVisualStyle="{StaticResource DialogFocusRing}"
+                    Foreground="{StaticResource TextBrush}"
+                    IsChecked="{Binding AddDesktop}" />
+          <TextBlock Margin="20,2,0,0" Style="{StaticResource StepText}" Text="A BhMaps icon on the desktop." />
         </StackPanel>
       </Grid>
     </StackPanel>

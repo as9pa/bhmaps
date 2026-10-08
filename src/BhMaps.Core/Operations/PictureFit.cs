@@ -32,8 +32,16 @@ public static class PictureFits
     /// <summary>Fill covers the box and hangs over the edges, which is the only mode the pan moves; Fit sits the
     /// whole picture inside it; Center draws it at its natural pixel size and crops what falls outside; Stretch
     /// pulls it to the box's own shape (decision D9, 3.0 E).</summary>
-    public static FitOptions Options(PictureFit fit, double panX = 0.5, double panY = 0.5, double darken = 0.0) =>
-        new(ToFitMode(fit), panX, panY, darken);
+    public static FitOptions Options(
+        PictureFit fit,
+        double panX = 0.5,
+        double panY = 0.5,
+        double darken = 0.0,
+        double hue = 0.0,
+        double saturation = 0.0,
+        double contrast = 0.0,
+        double blur = 0.0) =>
+        new(ToFitMode(fit), panX, panY, darken, Hue: hue, Saturation: saturation, Contrast: contrast, Blur: blur);
 
     public static FitMode ToFitMode(PictureFit fit) => fit switch
     {

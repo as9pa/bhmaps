@@ -34,6 +34,9 @@ public partial class BackgroundEditorViewModel : ObservableObject
     public const int PreviewWidth = 640;
     public const int PreviewHeight = 360;
     public const string NewPackChoice = "New pack...";
+
+    /// <summary>3.3 E3: under the editable pack box while its name is a new pack that can be made.</summary>
+    public const string NewPackHint = "Type a name, or open the list to pick a pack.";
     public const string DefaultPackName = "My Backgrounds";
     public const string NoSourceText = "No picture yet. Drop one here or browse.";
     public const string NoMapsText = "No maps yet. Refresh the game data in Settings.";
@@ -64,7 +67,7 @@ public partial class BackgroundEditorViewModel : ObservableObject
         _dialogs = dialogs;
         _request = request;
         Maps = maps;
-        PackChoices = packNames.Concat([NewPackChoice]).ToList();
+        PackChoices = packNames.ToList();
         // No slot means the source belongs to no map, so All maps is the row that keeps it that way (spec 5).
         SelectedMap = request.Slot is null
             ? maps.FirstOrDefault(m => m.IsAllMaps) ?? maps.FirstOrDefault()
@@ -75,11 +78,10 @@ public partial class BackgroundEditorViewModel : ObservableObject
         PanX = 0.5;
         PanY = 0.5;
 
-        // The tile's own pack, so Save replaces the picture the user was looking at; anything else keeps it.
+        // The tile's own pack, so Save replaces the picture the user was looking at. Opened from anywhere else
+        // it is a fresh New Pack N (3.3 E2): custom backgrounds are a pack of their own, not My Backgrounds.
         var requested = packNames.FirstOrDefault(p => p.Equals(request.PackName, StringComparison.OrdinalIgnoreCase));
-        var existingDefault = packNames.FirstOrDefault(p => p.Equals(DefaultPackName, StringComparison.OrdinalIgnoreCase));
-        TargetPack = requested ?? existingDefault ?? NewPackChoice;
-        NewPackName = TargetPack == NewPackChoice ? DefaultPackName : "";
+        PackName = requested ?? PackNames.NextFree(TakenPackNames());
         ValuesFromText = "";
 
         // Last: the change hook reads everything above it.
@@ -101,12 +103,12 @@ public partial class BackgroundEditorViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanSave), nameof(OverwriteHint), nameof(MapLabel), nameof(SaveAndApplyText), nameof(Title))]
-    [NotifyCanExecuteChangedFor(nameof(SaveAndApplyCommand), nameof(SaveOnlyCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SaveAndApplyCommand), nameof(SaveOnlyCommand), nameof(AddAsNewCommand))]
     public partial MapSlotChoice? SelectedMap { get; set; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanSave), nameof(HasSource), nameof(Title), nameof(SourceFileName), nameof(EmptyText), nameof(OverwriteHint))]
-    [NotifyCanExecuteChangedFor(nameof(SaveAndApplyCommand), nameof(SaveOnlyCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SaveAndApplyCommand), nameof(SaveOnlyCommand), nameof(AddAsNewCommand))]
     public partial string SourcePath { get; set; }
 
     [ObservableProperty]
@@ -132,15 +134,12 @@ public partial class BackgroundEditorViewModel : ObservableObject
     [ObservableProperty]
     public partial double DarkenPercent { get; set; }
 
+    /// <summary>3.3 E3: the editable box's text. An existing pack's name saves into it; anything else is a new
+    /// pack.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsNewPack), nameof(CanSave), nameof(OverwriteHint))]
+    [NotifyPropertyChangedFor(nameof(IsNewPack), nameof(PackNameError), nameof(PackNameHint), nameof(CanSave), nameof(OverwriteHint))]
     [NotifyCanExecuteChangedFor(nameof(SaveAndApplyCommand), nameof(SaveOnlyCommand))]
-    public partial string TargetPack { get; set; }
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanSave), nameof(OverwriteHint))]
-    [NotifyCanExecuteChangedFor(nameof(SaveAndApplyCommand), nameof(SaveOnlyCommand))]
-    public partial string NewPackName { get; set; }
+    public partial string PackName { get; set; }
 
     [ObservableProperty]
     public partial string Error { get; set; }
@@ -174,9 +173,17 @@ public partial class BackgroundEditorViewModel : ObservableObject
 
     public bool IsFill => Fit == PictureFit.Fill;
 
-    public bool IsNewPack => TargetPack == NewPackChoice;
+    public bool IsNewPack =>
+        !PackChoices.Any(p => p.Equals(EffectivePackName, StringComparison.OrdinalIgnoreCase));
 
-    public string EffectivePackName => IsNewPack ? NewPackName.Trim() : TargetPack;
+    public string EffectivePackName => PackName.Trim();
+
+    public string PackNameError =>
+        IsNewPack && !PackNameValidator.IsValid(EffectivePackName, out var error) ? error : "";
+
+    /// <summary>Under the box while the name is a new pack that can be made; the error line takes its place
+    /// otherwise. Null hides the line.</summary>
+    public string? PackNameHint => IsNewPack && PackNameError.Length == 0 ? NewPackHint : null;
 
     public string Slot => SelectedMap?.Slot ?? "";
 
@@ -187,7 +194,7 @@ public partial class BackgroundEditorViewModel : ObservableObject
     /// <summary>Spec 7.2, shown only when Save would replace a file that is already in the pack.</summary>
     public string OverwriteHint =>
         PackFileName() is { Length: > 0 } name && !IsNewPack && File.Exists(PackFilePath())
-            ? $"Replaces {name} in {TargetPack}. Pick another pack to keep the original."
+            ? $"Replaces {name} in {EffectivePackName}. Pick another pack to keep the original."
             : "";
 
     public bool FitFill
@@ -214,7 +221,10 @@ public partial class BackgroundEditorViewModel : ObservableObject
         set { if (value) { Fit = PictureFit.Stretch; } }
     }
 
-    public bool CanSave => HasSource && SelectedMap is not null && PackNameValidator.IsValid(EffectivePackName, out _);
+    public bool CanSave => CanAddAsNew && PackNameError.Length == 0;
+
+    /// <summary>3.3 E1: the Save rule without the pack name, because Add as new asks for its own.</summary>
+    public bool CanAddAsNew => HasSource && SelectedMap is not null;
 
     private FitOptions Options => PictureFits.Options(Fit, PanX, PanY, DarkenPercent / 100.0);
 
@@ -308,7 +318,7 @@ public partial class BackgroundEditorViewModel : ObservableObject
         // user is carrying on with (spec 5.3).
         if (PackChoices.Any(p => p.Equals(pack.Name, StringComparison.OrdinalIgnoreCase)))
         {
-            TargetPack = pack.Name;
+            PackName = pack.Name;
         }
 
         if (request.SourcePath.Length > 0)
@@ -380,6 +390,55 @@ public partial class BackgroundEditorViewModel : ObservableObject
     /// <summary>"Save only": the same write into the library, with nothing said to the game (3.0 E).</summary>
     [RelayCommand(CanExecute = nameof(CanSave))]
     private Task SaveOnlyAsync() => SaveAsync(apply: false);
+
+    /// <summary>3.3 E1: "Add as new" asks for a fresh pack's name, then runs Save only into it. The pack is new,
+    /// so no Replace question can come up.</summary>
+    [RelayCommand(CanExecute = nameof(CanAddAsNew))]
+    private Task AddAsNewAsync()
+    {
+        var taken = TakenPackNames();
+        var name = _dialogs.PromptText("Add as new", "Pack name", PackNames.NextFree(taken))?.Trim();
+        if (name is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        if (!PackNameValidator.IsValid(name, out var error))
+        {
+            _dialogs.Error("Add as new", error);
+            return Task.CompletedTask;
+        }
+
+        if (taken.Any(p => p.Equals(name, StringComparison.OrdinalIgnoreCase)))
+        {
+            _dialogs.Error("Add as new", $"A pack called {name} already exists.");
+            return Task.CompletedTask;
+        }
+
+        PackName = name;
+        return SaveAsync(apply: false);
+    }
+
+    /// <summary>Every pack name a new pack must not reuse: the list's, plus folders on disk the snapshot has not
+    /// picked up.</summary>
+    private List<string> TakenPackNames()
+    {
+        var names = PackChoices.ToList();
+        var root = PackScanner.PacksRoot(_services.LibraryPath);
+        try
+        {
+            if (Directory.Exists(root))
+            {
+                names.AddRange(Directory.EnumerateDirectories(root).Select(Path.GetFileName).OfType<string>());
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // An unreadable packs folder leaves the list's names, which is what the editor saves against anyway.
+        }
+
+        return names;
+    }
 
     private async Task SaveAsync(bool apply)
     {

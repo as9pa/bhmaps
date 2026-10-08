@@ -31,6 +31,9 @@ public partial class SettingsPageViewModel : PageViewModel
         LibraryPath = shell.Services.LibraryPath;
         GameDataStatus = shell.Services.LevelData.StatusSentence;
         CheckForUpdates = shell.Services.Settings.CheckForUpdates;
+        ShortcutError = "";
+        CanChangeShortcuts = !Shortcuts.IsDevRun(shell.Services);
+        ReadShortcuts();
         Version = ReadVersion();
         _refreshing = false;
         RefreshUpdateRow();
@@ -92,6 +95,28 @@ public partial class SettingsPageViewModel : PageViewModel
     [ObservableProperty]
     public partial bool CheckForUpdates { get; set; }
 
+    /// <summary>3.3 O1: the Shortcuts row's two boxes. The files on disk are the state, read on every refresh;
+    /// ticking writes the shortcut and unticking deletes it.</summary>
+    [ObservableProperty]
+    public partial bool ShortcutStartMenu { get; set; }
+
+    [ObservableProperty]
+    public partial bool ShortcutDesktop { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasShortcutError))]
+    public partial string ShortcutError { get; set; }
+
+    /// <summary>False in a dev run (an --appdata override): its exe is a build output, so the boxes are shown
+    /// disabled with <see cref="ShortcutHint" /> beside them.</summary>
+    public bool CanChangeShortcuts { get; }
+
+    public string ShortcutHint => CanChangeShortcuts ? "" : "Not in a dev run";
+
+    public bool HasShortcutHint => !CanChangeShortcuts;
+
+    public bool HasShortcutError => ShortcutError.Length > 0;
+
     public bool HasGameError => GameError.Length > 0;
 
     public bool HasLibraryError => LibraryError.Length > 0;
@@ -126,8 +151,39 @@ public partial class SettingsPageViewModel : PageViewModel
         LibraryPath = Services.LibraryPath;
         GameDataStatus = Services.LevelData.StatusSentence;
         CheckForUpdates = Services.Settings.CheckForUpdates;
+        ReadShortcuts();
         _refreshing = false;
         RefreshUpdateRow();
+    }
+
+    /// <summary>The boxes follow the files, so a shortcut the user deleted by hand reads as unticked here. Called
+    /// with _refreshing set, so the read is not taken for a tick.</summary>
+    private void ReadShortcuts()
+    {
+        ShortcutStartMenu = Shortcuts.Exists(Shortcuts.StartMenuPath);
+        ShortcutDesktop = Shortcuts.Exists(Shortcuts.DesktopPath);
+    }
+
+    partial void OnShortcutStartMenuChanged(bool value) => ApplyShortcut(Shortcuts.StartMenuPath, value);
+
+    partial void OnShortcutDesktopChanged(bool value) => ApplyShortcut(Shortcuts.DesktopPath, value);
+
+    /// <summary>Writes or deletes one shortcut. On a failure the row's error line says why and the boxes go back
+    /// to what is on disk.</summary>
+    private void ApplyShortcut(string path, bool wanted)
+    {
+        if (_refreshing || !CanChangeShortcuts)
+        {
+            return;
+        }
+
+        ShortcutError = (wanted ? Shortcuts.Create(path) : Shortcuts.Remove(path)) ?? "";
+        if (HasShortcutError)
+        {
+            _refreshing = true;
+            ReadShortcuts();
+            _refreshing = false;
+        }
     }
 
     /// <summary>Spec 7.3's four states of the Version row's second line, plus the two download states. Called

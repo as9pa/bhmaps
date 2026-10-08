@@ -203,6 +203,35 @@ public sealed class AppliedRecord
         }
     }
 
+    /// <summary>3.3 P1: points every entry that names pack <paramref name="oldName"/> (compared ignoring case) at
+    /// <paramref name="newName"/>, for a pack folder that has been renamed. A source stored under the old folder,
+    /// packs\&lt;old&gt;\..., moves with it, since that is where the file now lives.</summary>
+    public static void PackRenamed(string recordPath, string oldName, string newName)
+    {
+        var record = Load(recordPath);
+        var oldPrefix = Path.Combine("packs", oldName) + Path.DirectorySeparatorChar;
+        var newPrefix = Path.Combine("packs", newName) + Path.DirectorySeparatorChar;
+        var changed = false;
+        foreach (var (gameRelativePath, entry) in record._entries.ToList())
+        {
+            if (entry.Pack is not { } pack || !pack.Equals(oldName, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var source = entry.Source.StartsWith(oldPrefix, StringComparison.OrdinalIgnoreCase)
+                ? newPrefix + entry.Source[oldPrefix.Length..]
+                : entry.Source;
+            record._entries[gameRelativePath] = entry with { Pack = newName, Source = source };
+            changed = true;
+        }
+
+        if (changed)
+        {
+            SaveQuietly(record, recordPath);
+        }
+    }
+
     /// <summary>Drops these game-relative paths from the record, for a caller that knows the files have gone.</summary>
     public static void Forget(string recordPath, IEnumerable<string> gameRelativePaths)
     {

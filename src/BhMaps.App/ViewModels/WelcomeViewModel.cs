@@ -7,7 +7,7 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace BhMaps.App.ViewModels;
 
-/// <summary>Spec 7.7: the three numbered steps the app asks for before the shell exists. Replaces the v1
+/// <summary>Spec 7.7: the numbered steps the app asks for before the shell exists (four since 3.3). Replaces the v1
 /// first-run backup prompt; firstRunDone stays in settings for compatibility and is not read here.</summary>
 public partial class WelcomeViewModel : ObservableObject
 {
@@ -37,6 +37,7 @@ public partial class WelcomeViewModel : ObservableObject
         LibraryError = "";
         ProgressText = "";
         CaptureNow = true;
+        AddStartMenu = true;
     }
 
     public event Action<bool>? CloseRequested;
@@ -44,6 +45,10 @@ public partial class WelcomeViewModel : ObservableObject
     /// <summary>What step 3's capture did, or null when it was not run, was cancelled, or has not finished. The
     /// window is gone by the time the outcome can be read, so the shell's strip says it instead.</summary>
     public WelcomeCapture? Capture { get; private set; }
+
+    /// <summary>Step 4's shortcuts that could not be written, or null when every ticked one was. Finish does not
+    /// stop for it; the shell's strip says it, with a retry.</summary>
+    public WelcomeShortcutFailure? ShortcutFailure { get; private set; }
 
     [ObservableProperty]
     public partial string GamePath { get; set; }
@@ -60,6 +65,14 @@ public partial class WelcomeViewModel : ObservableObject
     /// <summary>Step 3's answer. Yes by default, because a library with no Default pack cannot reset anything.</summary>
     [ObservableProperty]
     public partial bool CaptureNow { get; set; }
+
+    /// <summary>Step 4 (3.3 O1). On by default: Start and Windows search are where an app is looked for.</summary>
+    [ObservableProperty]
+    public partial bool AddStartMenu { get; set; }
+
+    /// <summary>Step 4. Off by default: a desktop icon is the user's call.</summary>
+    [ObservableProperty]
+    public partial bool AddDesktop { get; set; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsNotBusy))]
@@ -126,6 +139,24 @@ public partial class WelcomeViewModel : ObservableObject
             return;
         }
 
+        // Step 4. A dev run (an --appdata override) still shows the boxes but never writes a shortcut, because
+        // its exe is a build output. A failed write does not stop Finish either.
+        if (!Shortcuts.IsDevRun(_services))
+        {
+            var ticked = new List<string>();
+            if (AddStartMenu)
+            {
+                ticked.Add(Shortcuts.StartMenuPath);
+            }
+
+            if (AddDesktop)
+            {
+                ticked.Add(Shortcuts.DesktopPath);
+            }
+
+            ShortcutFailure = CreateShortcuts(ticked);
+        }
+
         if (CaptureNow)
         {
             if (!await CaptureAsync(game, library))
@@ -144,6 +175,32 @@ public partial class WelcomeViewModel : ObservableObject
     partial void OnGamePathChanged(string value) => GameError = "";
 
     partial void OnLibraryPathChanged(string value) => LibraryError = "";
+
+    /// <summary>Writes each shortcut and gathers the ones that failed into one strip line naming them. Also the
+    /// strip's retry, which passes back only the paths that failed.</summary>
+    public static WelcomeShortcutFailure? CreateShortcuts(IReadOnlyList<string> paths)
+    {
+        var failed = new List<string>();
+        string? firstError = null;
+        foreach (var path in paths)
+        {
+            if (Shortcuts.Create(path) is { } error)
+            {
+                failed.Add(path);
+                firstError ??= error;
+            }
+        }
+
+        if (failed.Count == 0)
+        {
+            return null;
+        }
+
+        var names = failed.Count == 2
+            ? "Start menu and desktop shortcuts"
+            : failed[0] == Shortcuts.StartMenuPath ? "Start menu shortcut" : "Desktop shortcut";
+        return new WelcomeShortcutFailure($"{names} not made: {firstError}", failed);
+    }
 
     /// <summary>Step 3, spec 6.1. The shell and its busy boundary do not exist yet, so this is the window's own:
     /// the rows are disabled through IsNotBusy, the progress line stands where the buttons were and Cancel beside
@@ -202,3 +259,6 @@ public partial class WelcomeViewModel : ObservableObject
 /// <summary>What step 3's capture did, in the line the status strip will show: the done line the in-app capture
 /// says, or the failure line, which the shell tells apart by <paramref name="Failed"/>.</summary>
 public readonly record struct WelcomeCapture(string Text, bool Failed);
+
+/// <summary>Step 4's shortcuts that were not made: the strip line, and the paths its retry writes again.</summary>
+public sealed record WelcomeShortcutFailure(string Text, IReadOnlyList<string> Paths);
