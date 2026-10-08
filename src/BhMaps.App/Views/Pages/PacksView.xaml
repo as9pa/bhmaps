@@ -117,9 +117,11 @@
           <ItemsControl.ItemTemplate>
             <DataTemplate>
               <!-- The menu is the row's own instance, because TileMenu is x:Shared="False", and it inherits this
-                   Border's DataContext, which is the row (q7). Realise is what starts the row's pictures. -->
+                   Border's DataContext, which is the row (q7). Realise is what starts the row's pictures. 3.3:
+                   F2 anywhere in the row renames its pack. -->
               <Border Margin="0,0,0,8"
                       ContextMenu="{StaticResource TileMenu}"
+                      KeyDown="OnRowKeyDown"
                       controls:RowRealiser.Realise="True"
                       Style="{StaticResource CardBorder}">
                 <Grid>

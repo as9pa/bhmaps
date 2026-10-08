@@ -134,6 +134,27 @@ public partial class BackgroundEditorViewModel : ObservableObject
     [ObservableProperty]
     public partial double DarkenPercent { get; set; }
 
+    /// <summary>3.3 E4: hue rotation in degrees, -180..180.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HueText))]
+    public partial int Hue { get; set; }
+
+    /// <summary>3.3 E4: -100..100, where 0 leaves the picture as it is.</summary>
+    [ObservableProperty]
+    public partial double SaturationPercent { get; set; }
+
+    /// <summary>3.3 E4: -100..100, where 0 leaves the picture as it is.</summary>
+    [ObservableProperty]
+    public partial double ContrastPercent { get; set; }
+
+    /// <summary>3.3 E4: 0..100.</summary>
+    [ObservableProperty]
+    public partial double BlurPercent { get; set; }
+
+    /// <summary>3.3 E4: the sign is part of the reading, as on the platform editor: "+12" one way, "-30" the
+    /// other, and "0" neither.</summary>
+    public string HueText => Hue > 0 ? $"+{Hue}" : Hue.ToString();
+
     /// <summary>3.3 E3: the editable box's text. An existing pack's name saves into it; anything else is a new
     /// pack.</summary>
     [ObservableProperty]
@@ -226,7 +247,8 @@ public partial class BackgroundEditorViewModel : ObservableObject
     /// <summary>3.3 E1: the Save rule without the pack name, because Add as new asks for its own.</summary>
     public bool CanAddAsNew => HasSource && SelectedMap is not null;
 
-    private FitOptions Options => PictureFits.Options(Fit, PanX, PanY, DarkenPercent / 100.0);
+    private FitOptions Options => PictureFits.Options(
+        Fit, PanX, PanY, DarkenPercent / 100.0, Hue, SaturationPercent / 100.0, ContrastPercent / 100.0, BlurPercent / 100.0);
 
     public void AcceptDroppedFile(string path) => SourcePath = path;
 
@@ -254,6 +276,14 @@ public partial class BackgroundEditorViewModel : ObservableObject
 
     partial void OnDarkenPercentChanged(double value) => SchedulePreview();
 
+    partial void OnHueChanged(int value) => SchedulePreview();
+
+    partial void OnSaturationPercentChanged(double value) => SchedulePreview();
+
+    partial void OnContrastPercentChanged(double value) => SchedulePreview();
+
+    partial void OnBlurPercentChanged(double value) => SchedulePreview();
+
     [RelayCommand]
     private void Replace()
     {
@@ -272,6 +302,18 @@ public partial class BackgroundEditorViewModel : ObservableObject
     [RelayCommand]
     private void ResetDarken() => DarkenPercent = 0;
 
+    [RelayCommand]
+    private void ResetHue() => Hue = 0;
+
+    [RelayCommand]
+    private void ResetSaturation() => SaturationPercent = 0;
+
+    [RelayCommand]
+    private void ResetContrast() => ContrastPercent = 0;
+
+    [RelayCommand]
+    private void ResetBlur() => BlurPercent = 0;
+
     /// <summary>Spec 8: the remembered values go and the editor is the one a first save would have opened. A
     /// request that named a picture keeps it, because that picture is what the user opened.</summary>
     [RelayCommand]
@@ -282,6 +324,10 @@ public partial class BackgroundEditorViewModel : ObservableObject
         PanX = 0.5;
         PanY = 0.5;
         DarkenPercent = 0;
+        Hue = 0;
+        SaturationPercent = 0;
+        ContrastPercent = 0;
+        BlurPercent = 0;
         HasValuesFrom = false;
         ValuesFromText = "";
 
@@ -311,6 +357,12 @@ public partial class BackgroundEditorViewModel : ObservableObject
         PanX = entry.PanX;
         PanY = entry.PanY;
         DarkenPercent = entry.Darken;
+
+        // 3.3 E4: records written before 3.3 have no adjustments, which reads as none.
+        Hue = (int)Math.Round(entry.Hue ?? 0);
+        SaturationPercent = (entry.Saturation ?? 0) * 100;
+        ContrastPercent = (entry.Contrast ?? 0) * 100;
+        BlurPercent = (entry.Blur ?? 0) * 100;
         HasValuesFrom = true;
         ValuesFromText = $"Values from {pack.Name}, saved {entry.SavedAt.ToLocalTime():d MMM HH:mm}.";
 
@@ -458,7 +510,7 @@ public partial class BackgroundEditorViewModel : ObservableObject
         var fit = Fit;
         var options = Options;
         var darken = DarkenPercent;
-        var packRoot = Path.Combine(PackScanner.PacksRoot(_services.LibraryPath), EffectivePackName);
+        var packRoot = PackScanner.PackRootFor(_services.LibraryPath, EffectivePackName);
         try
         {
             // The original, not the working bitmap: Save fits at 2048x1151 (spec 7.2).
@@ -482,6 +534,10 @@ public partial class BackgroundEditorViewModel : ObservableObject
                         PanX = options.PanX,
                         PanY = options.PanY,
                         Darken = darken,
+                        Hue = options.Hue,
+                        Saturation = options.Saturation,
+                        Contrast = options.Contrast,
+                        Blur = options.Blur,
                         Hash = FileHasher.Hash(packFile),
                     });
                 record.Save(packRoot);
@@ -497,7 +553,7 @@ public partial class BackgroundEditorViewModel : ObservableObject
     }
 
     private string PackFilePath() =>
-        Path.Combine(PackScanner.PacksRoot(_services.LibraryPath), EffectivePackName, BackgroundsFolder, PackFileName());
+        Path.Combine(PackScanner.PackRootFor(_services.LibraryPath, EffectivePackName), BackgroundsFolder, PackFileName());
 
     /// <summary>The name Save writes under: the map's slot, or under All maps the source's own name, which is what
     /// makes the file an any-map picture rather than one map's (spec 5). A source already named like a slot gets

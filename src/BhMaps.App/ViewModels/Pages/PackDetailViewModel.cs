@@ -639,7 +639,7 @@ public partial class PackDetailViewModel : PageViewModel, ITileSized
     {
         if (Pack is { } pack)
         {
-            OpenInExplorer(pack.FullPath);
+            OpenInExplorer(pack.FolderPath);
         }
     }
 

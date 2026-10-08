@@ -6,6 +6,7 @@ using BhMaps.Core.Maps;
 using BhMaps.Core.Model;
 using BhMaps.Core.Operations;
 using BhMaps.Core.Packs;
+using BhMaps.Core.Scanning;
 using BhMaps.Core.Settings;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -30,6 +31,9 @@ public partial class PacksViewModel : PageViewModel
     /// <summary>Cancels the loads the last scan's rows started. Replaced, never disposed, exactly as
     /// PackDetailViewModel does, because those loads still hold the token.</summary>
     private CancellationTokenSource? _cts;
+
+    /// <summary>3.3 P2: the mapArt-as-a-pack note is said once a run, not after every scan.</summary>
+    private bool _mapArtNoted;
 
     public PacksViewModel(MainViewModel shell)
         : base(shell)
@@ -92,6 +96,15 @@ public partial class PacksViewModel : PageViewModel
         // An empty library, not a switch that filtered every row away: the empty state offers to capture the
         // Default pack, which is no answer to a filter.
         IsEmpty = snapshot.Packs.Count == 0;
+
+        // 3.3 P2: a mapArt folder dropped straight into packs\ is a pack called mapArt, which names nothing the
+        // owner would recognise. Said once a run and quietly; the pack works as it is.
+        if (!_mapArtNoted
+            && snapshot.Packs.Any(p => p.Name.Equals(PackScanner.MapArtFolder, StringComparison.OrdinalIgnoreCase)))
+        {
+            _mapArtNoted = true;
+            Shell.Status.Note("mapArt is a pack name; rename it to what the maps are.");
+        }
     }
 
     /// <summary>3.2 P1: the rows are rebuilt for the new mode; the previews each mode drew before are cache hits.</summary>
@@ -210,10 +223,17 @@ public partial class PacksViewModel : PageViewModel
         {
             TileMenuCommand.Header(row.Name),
             new("Duplicate", new RelayCommand(() => DuplicateCommand.Execute(row))),
-            new("Import from another pack...", new RelayCommand(() => ImportIntoCommand.Execute(row))),
-            new("Export", new RelayCommand(() => ExportCommand.Execute(row))),
-            new("Open folder", new RelayCommand(() => OpenFolderCommand.Execute(row))),
         };
+
+        // 3.3 P1: the Default pack keeps its name, because every Reset to default restores from it by that name.
+        if (!row.IsDefault)
+        {
+            items.Add(new TileMenuCommand("Rename...", new RelayCommand(() => RenameCommand.Execute(row))));
+        }
+
+        items.Add(new TileMenuCommand("Import from another pack...", new RelayCommand(() => ImportIntoCommand.Execute(row))));
+        items.Add(new TileMenuCommand("Export", new RelayCommand(() => ExportCommand.Execute(row))));
+        items.Add(new TileMenuCommand("Open folder", new RelayCommand(() => OpenFolderCommand.Execute(row))));
         items.Add(new TileMenuCommand(
             row.IsHidden ? "Show in lists" : "Hide from lists",
             new RelayCommand(() => ToggleHiddenCommand.Execute(row))));
@@ -454,6 +474,14 @@ public partial class PacksViewModel : PageViewModel
     private Task ImportIntoAsync(PackRowViewModel? row) =>
         row is null ? Task.CompletedTask : Shell.ImportFromPackAsync(row.Pack);
 
+    /// <summary>3.3 P1: the dots menu's Rename... and F2 on a focused row. The Default pack is refused here too,
+    /// so the key cannot reach what the menu leaves out.</summary>
+    [RelayCommand]
+    private Task RenameAsync(PackRowViewModel? row) =>
+        row is null || row.IsDefault ? Task.CompletedTask : Shell.RenamePackAsync(row.Pack);
+
+    /// <summary>3.3 P2: the outer folder, not the mapArt inside a wrapped pack, because the outer folder is what
+    /// the owner named and what they would drag.</summary>
     [RelayCommand]
     private void OpenFolder(PackRowViewModel? row)
     {
@@ -462,7 +490,7 @@ public partial class PacksViewModel : PageViewModel
             return;
         }
 
-        OpenInExplorer(row.Pack.FullPath);
+        OpenInExplorer(row.Pack.FolderPath);
     }
 
     /// <summary>2.8: the eye on the row. Hiding a pack keeps it out of the Backgrounds and Platforms lists and

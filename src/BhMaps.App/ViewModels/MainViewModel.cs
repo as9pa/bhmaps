@@ -629,7 +629,7 @@ public partial class MainViewModel : ObservableObject
         }
 
         var backgrounds = Path.Combine(
-            PackScanner.PacksRoot(Services.LibraryPath), packName, PictureImporter.BackgroundsFolder);
+            PackScanner.PackRootFor(Services.LibraryPath, packName), PictureImporter.BackgroundsFolder);
         var pictures = written.Select(name => Path.Combine(backgrounds, name)).ToList();
 
         var gamePath = Services.GamePath;
@@ -1033,6 +1033,30 @@ public partial class MainViewModel : ObservableObject
 
         await RescanAsync();
         return FindPack(name.Trim());
+    }
+
+    /// <summary>3.3 P1: the outer pack folder moves to the new name, and every place that names the pack follows
+    /// it: the hidden list, the last-applied stamps, the dismissed transparent notes and the applied record. No
+    /// Undo on the line: renaming back is the same two clicks.</summary>
+    public async Task RenamePackAsync(Pack pack)
+    {
+        var name = Dialogs.PromptText("Rename pack", "Name", pack.Name)?.Trim();
+        if (string.IsNullOrEmpty(name) || name.Equals(pack.Name, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        var oldName = pack.Name;
+        if (!PackRenamer.TryRename(Services.LibraryPath, oldName, name, out var error))
+        {
+            Dialogs.Error("Could not rename the pack", error);
+            return;
+        }
+
+        Services.UpdateSettings(Services.Settings.WithPackRenamed(oldName, name));
+        AppliedRecord.PackRenamed(AppliedRecord.PathFor(Services.AppDataDir), oldName, name);
+        await RescanAsync();
+        Status.Done($"Renamed {oldName} to {name}", undoable: false);
     }
 
     /// <summary>The chooser's window, opened the way every other owned window here is. The thumbnails load while it

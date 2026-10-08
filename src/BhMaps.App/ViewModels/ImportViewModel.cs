@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using BhMaps.App.Services;
 using BhMaps.Core.Model;
 using BhMaps.Core.Operations;
+using BhMaps.Core.Scanning;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -268,7 +269,9 @@ public partial class ImportViewModel : ObservableObject
                 var source = entry.SourcePath;
                 try
                 {
-                    entry.Plan = await Task.Run(() => ImportRouter.Plan(source, _tree));
+                    // 3.3 P2: a folder that wraps a mapArt folder is planned from the mapArt inside it, while the
+                    // pack keeps the picked folder's name (filled in when it was added).
+                    entry.Plan = await Task.Run(() => ImportRouter.Plan(PackScanner.ContentRoot(source), _tree));
                 }
                 catch (Exception ex)
                 {

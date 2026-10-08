@@ -1434,7 +1434,7 @@ public partial class PlatformEditorViewModel : ObservableObject
     {
         packName = EffectivePackName;
         error = "";
-        var packRoot = Path.Combine(PackScanner.PacksRoot(_services.LibraryPath), packName);
+        var packRoot = PackScanner.PackRootFor(_services.LibraryPath, packName);
         // TryCreate refuses a name another pack already holds, which is not a failure here: a new name the user
         // already edited into once is the pack this one goes in too.
         if (IsNewPack && !Directory.Exists(packRoot) && !PackCreator.TryCreate(_services.LibraryPath, packName, out error))
@@ -1707,7 +1707,7 @@ public partial class PlatformEditorViewModel : ObservableObject
 
     private async Task SaveAsync(bool apply)
     {
-        var packRoot = Path.Combine(PackScanner.PacksRoot(_services.LibraryPath), EffectivePackName);
+        var packRoot = PackScanner.PackRootFor(_services.LibraryPath, EffectivePackName);
         var replacing = _sets.Count(s => HasOwnFiles(Path.Combine(packRoot, s.Map.FolderName)));
         if (replacing > 0
             && !_dialogs.Confirm(
