@@ -40,9 +40,12 @@ public static class PackCopier
 
     private static readonly string[] RecordFileNames = [PlatformEditRecord.FileName, BackgroundEditRecord.FileName];
 
-    /// <summary>"packs\&lt;pack&gt;\&lt;relative&gt;": the form UndoSession.CaptureLibrary takes.</summary>
+    /// <summary>"packs\&lt;pack&gt;\&lt;relative&gt;": the form UndoSession.CaptureLibrary takes. A pack that wraps
+    /// a mapArt folder (3.6 P2) keeps its files under it, so the wrapper is part of the path.</summary>
     public static string LibraryRelative(Pack pack, string relativePath) =>
-        Path.Combine(PacksFolderName, pack.Name, relativePath);
+        pack.FullPath.Equals(pack.FolderPath, StringComparison.OrdinalIgnoreCase)
+            ? Path.Combine(PacksFolderName, pack.Name, relativePath)
+            : Path.Combine(PacksFolderName, pack.Name, Path.GetRelativePath(pack.FolderPath, pack.FullPath), relativePath);
 
     /// <summary>The first map, in catalog order, whose levels name this background slot. The rule pack detail
     /// has used since 2.2 (decision C-D4), here so one implementation of it serves the page and the copier.</summary>

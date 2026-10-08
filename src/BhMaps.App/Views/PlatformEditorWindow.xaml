@@ -519,14 +519,17 @@
           </Grid>
 
           <TextBlock Style="{StaticResource FieldLabel}" Text="Save into pack" />
+          <!-- 3.6 E3: one editable box. The list picks a pack, typing names a new one, and the hint or the
+               error sits right under it so neither can fall below the window. -->
           <ComboBox AutomationProperties.Name="Save into pack"
+                    IsEditable="True"
+                    IsTextSearchEnabled="False"
                     ItemsSource="{Binding PackChoices}"
-                    SelectedItem="{Binding TargetPack}" />
-          <TextBox Margin="0,8,0,0"
-                   AutomationProperties.Name="New pack name"
-                   Style="{StaticResource FieldTextBox}"
-                   Text="{Binding NewPackName, UpdateSourceTrigger=PropertyChanged}"
-                   Visibility="{Binding IsNewPack, Converter={StaticResource BoolToVis}}" />
+                    Text="{Binding PackName, UpdateSourceTrigger=PropertyChanged}" />
+          <TextBlock Margin="0,6,0,0"
+                     Style="{StaticResource HintText}"
+                     Text="{Binding PackNameHint}"
+                     Visibility="{Binding PackNameHint, Converter={StaticResource NullToVis}}" />
           <TextBlock Style="{StaticResource ErrorText}" Text="{Binding PackNameError}" />
 
           <TextBlock Margin="0,18,0,0" Style="{StaticResource ErrorText}" Text="{Binding Error}" />
@@ -565,6 +568,13 @@
         <!-- 3.0 E: the two saves in place of one Save and an "Apply to game" tick, in the order every dialog
              uses: Cancel, then the quieter save, then the primary at the end. Enter takes the primary, which is
              the one that puts the platforms in the game. -->
+        <!-- 3.6 E1: asks for its own pack name, so a bad name in the box does not hold it. -->
+        <Button Margin="0,0,8,0"
+                Command="{Binding AddAsNewCommand}"
+                Content="Add as new"
+                FocusVisualStyle="{StaticResource DialogFocusRing}"
+                Style="{StaticResource OutlineButton}"
+                ToolTip="Save into a fresh pack with its own name." />
         <Button Margin="0,0,8,0"
                 Command="{Binding SaveOnlyCommand}"
                 Content="Save only"

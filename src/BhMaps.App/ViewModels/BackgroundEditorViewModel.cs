@@ -34,6 +34,9 @@ public partial class BackgroundEditorViewModel : ObservableObject
     public const int PreviewWidth = 640;
     public const int PreviewHeight = 360;
     public const string NewPackChoice = "New pack...";
+
+    /// <summary>3.6 E3: under the editable pack box while its name is a new pack that can be made.</summary>
+    public const string NewPackHint = "Type a name, or open the list to pick a pack.";
     public const string DefaultPackName = "My Backgrounds";
     public const string NoSourceText = "No picture yet. Drop one here or browse.";
     public const string NoMapsText = "No maps yet. Refresh the game data in Settings.";
@@ -64,7 +67,7 @@ public partial class BackgroundEditorViewModel : ObservableObject
         _dialogs = dialogs;
         _request = request;
         Maps = maps;
-        PackChoices = packNames.Concat([NewPackChoice]).ToList();
+        PackChoices = packNames.ToList();
         // No slot means the source belongs to no map, so All maps is the row that keeps it that way (spec 5).
         SelectedMap = request.Slot is null
             ? maps.FirstOrDefault(m => m.IsAllMaps) ?? maps.FirstOrDefault()
@@ -75,11 +78,10 @@ public partial class BackgroundEditorViewModel : ObservableObject
         PanX = 0.5;
         PanY = 0.5;
 
-        // The tile's own pack, so Save replaces the picture the user was looking at; anything else keeps it.
+        // The tile's own pack, so Save replaces the picture the user was looking at. Opened from anywhere else
+        // it is a fresh New Pack N (3.6 E2): custom backgrounds are a pack of their own, not My Backgrounds.
         var requested = packNames.FirstOrDefault(p => p.Equals(request.PackName, StringComparison.OrdinalIgnoreCase));
-        var existingDefault = packNames.FirstOrDefault(p => p.Equals(DefaultPackName, StringComparison.OrdinalIgnoreCase));
-        TargetPack = requested ?? existingDefault ?? NewPackChoice;
-        NewPackName = TargetPack == NewPackChoice ? DefaultPackName : "";
+        PackName = requested ?? PackNames.NextFree(TakenPackNames());
         ValuesFromText = "";
 
         // Last: the change hook reads everything above it.
@@ -101,12 +103,12 @@ public partial class BackgroundEditorViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanSave), nameof(OverwriteHint), nameof(MapLabel), nameof(SaveAndApplyText), nameof(Title))]
-    [NotifyCanExecuteChangedFor(nameof(SaveAndApplyCommand), nameof(SaveOnlyCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SaveAndApplyCommand), nameof(SaveOnlyCommand), nameof(AddAsNewCommand))]
     public partial MapSlotChoice? SelectedMap { get; set; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanSave), nameof(HasSource), nameof(Title), nameof(SourceFileName), nameof(EmptyText), nameof(OverwriteHint))]
-    [NotifyCanExecuteChangedFor(nameof(SaveAndApplyCommand), nameof(SaveOnlyCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SaveAndApplyCommand), nameof(SaveOnlyCommand), nameof(AddAsNewCommand))]
     public partial string SourcePath { get; set; }
 
     [ObservableProperty]
@@ -132,15 +134,33 @@ public partial class BackgroundEditorViewModel : ObservableObject
     [ObservableProperty]
     public partial double DarkenPercent { get; set; }
 
+    /// <summary>3.6 E4: hue rotation in degrees, -180..180.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsNewPack), nameof(CanSave), nameof(OverwriteHint))]
-    [NotifyCanExecuteChangedFor(nameof(SaveAndApplyCommand), nameof(SaveOnlyCommand))]
-    public partial string TargetPack { get; set; }
+    [NotifyPropertyChangedFor(nameof(HueText))]
+    public partial int Hue { get; set; }
 
+    /// <summary>3.6 E4: -100..100, where 0 leaves the picture as it is.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanSave), nameof(OverwriteHint))]
+    public partial double SaturationPercent { get; set; }
+
+    /// <summary>3.6 E4: -100..100, where 0 leaves the picture as it is.</summary>
+    [ObservableProperty]
+    public partial double ContrastPercent { get; set; }
+
+    /// <summary>3.6 E4: 0..100.</summary>
+    [ObservableProperty]
+    public partial double BlurPercent { get; set; }
+
+    /// <summary>3.6 E4: the sign is part of the reading, as on the platform editor: "+12" one way, "-30" the
+    /// other, and "0" neither.</summary>
+    public string HueText => Hue > 0 ? $"+{Hue}" : Hue.ToString();
+
+    /// <summary>3.6 E3: the editable box's text. An existing pack's name saves into it; anything else is a new
+    /// pack.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsNewPack), nameof(PackNameError), nameof(PackNameHint), nameof(CanSave), nameof(OverwriteHint))]
     [NotifyCanExecuteChangedFor(nameof(SaveAndApplyCommand), nameof(SaveOnlyCommand))]
-    public partial string NewPackName { get; set; }
+    public partial string PackName { get; set; }
 
     [ObservableProperty]
     public partial string Error { get; set; }
@@ -174,9 +194,17 @@ public partial class BackgroundEditorViewModel : ObservableObject
 
     public bool IsFill => Fit == PictureFit.Fill;
 
-    public bool IsNewPack => TargetPack == NewPackChoice;
+    public bool IsNewPack =>
+        !PackChoices.Any(p => p.Equals(EffectivePackName, StringComparison.OrdinalIgnoreCase));
 
-    public string EffectivePackName => IsNewPack ? NewPackName.Trim() : TargetPack;
+    public string EffectivePackName => PackName.Trim();
+
+    public string PackNameError =>
+        IsNewPack && !PackNameValidator.IsValid(EffectivePackName, out var error) ? error : "";
+
+    /// <summary>Under the box while the name is a new pack that can be made; the error line takes its place
+    /// otherwise. Null hides the line.</summary>
+    public string? PackNameHint => IsNewPack && PackNameError.Length == 0 ? NewPackHint : null;
 
     public string Slot => SelectedMap?.Slot ?? "";
 
@@ -187,7 +215,7 @@ public partial class BackgroundEditorViewModel : ObservableObject
     /// <summary>Spec 7.2, shown only when Save would replace a file that is already in the pack.</summary>
     public string OverwriteHint =>
         PackFileName() is { Length: > 0 } name && !IsNewPack && File.Exists(PackFilePath())
-            ? $"Replaces {name} in {TargetPack}. Pick another pack to keep the original."
+            ? $"Replaces {name} in {EffectivePackName}. Pick another pack to keep the original."
             : "";
 
     public bool FitFill
@@ -214,9 +242,13 @@ public partial class BackgroundEditorViewModel : ObservableObject
         set { if (value) { Fit = PictureFit.Stretch; } }
     }
 
-    public bool CanSave => HasSource && SelectedMap is not null && PackNameValidator.IsValid(EffectivePackName, out _);
+    public bool CanSave => CanAddAsNew && PackNameError.Length == 0;
 
-    private FitOptions Options => PictureFits.Options(Fit, PanX, PanY, DarkenPercent / 100.0);
+    /// <summary>3.6 E1: the Save rule without the pack name, because Add as new asks for its own.</summary>
+    public bool CanAddAsNew => HasSource && SelectedMap is not null;
+
+    private FitOptions Options => PictureFits.Options(
+        Fit, PanX, PanY, DarkenPercent / 100.0, Hue, SaturationPercent / 100.0, ContrastPercent / 100.0, BlurPercent / 100.0);
 
     public void AcceptDroppedFile(string path) => SourcePath = path;
 
@@ -244,6 +276,14 @@ public partial class BackgroundEditorViewModel : ObservableObject
 
     partial void OnDarkenPercentChanged(double value) => SchedulePreview();
 
+    partial void OnHueChanged(int value) => SchedulePreview();
+
+    partial void OnSaturationPercentChanged(double value) => SchedulePreview();
+
+    partial void OnContrastPercentChanged(double value) => SchedulePreview();
+
+    partial void OnBlurPercentChanged(double value) => SchedulePreview();
+
     [RelayCommand]
     private void Replace()
     {
@@ -262,6 +302,18 @@ public partial class BackgroundEditorViewModel : ObservableObject
     [RelayCommand]
     private void ResetDarken() => DarkenPercent = 0;
 
+    [RelayCommand]
+    private void ResetHue() => Hue = 0;
+
+    [RelayCommand]
+    private void ResetSaturation() => SaturationPercent = 0;
+
+    [RelayCommand]
+    private void ResetContrast() => ContrastPercent = 0;
+
+    [RelayCommand]
+    private void ResetBlur() => BlurPercent = 0;
+
     /// <summary>Spec 8: the remembered values go and the editor is the one a first save would have opened. A
     /// request that named a picture keeps it, because that picture is what the user opened.</summary>
     [RelayCommand]
@@ -272,6 +324,10 @@ public partial class BackgroundEditorViewModel : ObservableObject
         PanX = 0.5;
         PanY = 0.5;
         DarkenPercent = 0;
+        Hue = 0;
+        SaturationPercent = 0;
+        ContrastPercent = 0;
+        BlurPercent = 0;
         HasValuesFrom = false;
         ValuesFromText = "";
 
@@ -301,6 +357,12 @@ public partial class BackgroundEditorViewModel : ObservableObject
         PanX = entry.PanX;
         PanY = entry.PanY;
         DarkenPercent = entry.Darken;
+
+        // 3.6 E4: records written before 3.6 have no adjustments, which reads as none.
+        Hue = (int)Math.Round(entry.Hue ?? 0);
+        SaturationPercent = (entry.Saturation ?? 0) * 100;
+        ContrastPercent = (entry.Contrast ?? 0) * 100;
+        BlurPercent = (entry.Blur ?? 0) * 100;
         HasValuesFrom = true;
         ValuesFromText = $"Values from {pack.Name}, saved {entry.SavedAt.ToLocalTime():d MMM HH:mm}.";
 
@@ -308,7 +370,7 @@ public partial class BackgroundEditorViewModel : ObservableObject
         // user is carrying on with (spec 5.3).
         if (PackChoices.Any(p => p.Equals(pack.Name, StringComparison.OrdinalIgnoreCase)))
         {
-            TargetPack = pack.Name;
+            PackName = pack.Name;
         }
 
         if (request.SourcePath.Length > 0)
@@ -381,6 +443,55 @@ public partial class BackgroundEditorViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanSave))]
     private Task SaveOnlyAsync() => SaveAsync(apply: false);
 
+    /// <summary>3.6 E1: "Add as new" asks for a fresh pack's name, then runs Save only into it. The pack is new,
+    /// so no Replace question can come up.</summary>
+    [RelayCommand(CanExecute = nameof(CanAddAsNew))]
+    private Task AddAsNewAsync()
+    {
+        var taken = TakenPackNames();
+        var name = _dialogs.PromptText("Add as new", "Pack name", PackNames.NextFree(taken))?.Trim();
+        if (name is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        if (!PackNameValidator.IsValid(name, out var error))
+        {
+            _dialogs.Error("Add as new", error);
+            return Task.CompletedTask;
+        }
+
+        if (taken.Any(p => p.Equals(name, StringComparison.OrdinalIgnoreCase)))
+        {
+            _dialogs.Error("Add as new", $"A pack called {name} already exists.");
+            return Task.CompletedTask;
+        }
+
+        PackName = name;
+        return SaveAsync(apply: false);
+    }
+
+    /// <summary>Every pack name a new pack must not reuse: the list's, plus folders on disk the snapshot has not
+    /// picked up.</summary>
+    private List<string> TakenPackNames()
+    {
+        var names = PackChoices.ToList();
+        var root = PackScanner.PacksRoot(_services.LibraryPath);
+        try
+        {
+            if (Directory.Exists(root))
+            {
+                names.AddRange(Directory.EnumerateDirectories(root).Select(Path.GetFileName).OfType<string>());
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // An unreadable packs folder leaves the list's names, which is what the editor saves against anyway.
+        }
+
+        return names;
+    }
+
     private async Task SaveAsync(bool apply)
     {
         var packFile = PackFilePath();
@@ -399,7 +510,7 @@ public partial class BackgroundEditorViewModel : ObservableObject
         var fit = Fit;
         var options = Options;
         var darken = DarkenPercent;
-        var packRoot = Path.Combine(PackScanner.PacksRoot(_services.LibraryPath), EffectivePackName);
+        var packRoot = PackScanner.PackRootFor(_services.LibraryPath, EffectivePackName);
         try
         {
             // The original, not the working bitmap: Save fits at 2048x1151 (spec 7.2).
@@ -423,6 +534,10 @@ public partial class BackgroundEditorViewModel : ObservableObject
                         PanX = options.PanX,
                         PanY = options.PanY,
                         Darken = darken,
+                        Hue = options.Hue,
+                        Saturation = options.Saturation,
+                        Contrast = options.Contrast,
+                        Blur = options.Blur,
                         Hash = FileHasher.Hash(packFile),
                     });
                 record.Save(packRoot);
@@ -438,7 +553,7 @@ public partial class BackgroundEditorViewModel : ObservableObject
     }
 
     private string PackFilePath() =>
-        Path.Combine(PackScanner.PacksRoot(_services.LibraryPath), EffectivePackName, BackgroundsFolder, PackFileName());
+        Path.Combine(PackScanner.PackRootFor(_services.LibraryPath, EffectivePackName), BackgroundsFolder, PackFileName());
 
     /// <summary>The name Save writes under: the map's slot, or under All maps the source's own name, which is what
     /// makes the file an any-map picture rather than one map's (spec 5). A source already named like a slot gets

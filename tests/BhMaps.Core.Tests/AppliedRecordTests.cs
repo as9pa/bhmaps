@@ -231,6 +231,32 @@ public class AppliedRecordTests
     }
 
     [Fact]
+    public void PackRenamed_MovesThePackNameAndItsSourcesAndLeavesOtherPacksAlone()
+    {
+        using var tmp = new TempDir();
+        var (record, game, library, pack) = Arrange(tmp, "art");
+        new FakeGameTree(game).File("Grove", "b.png", "art");
+        var lightFile = Path.Combine(library, "packs", "light", "Grove", "a.png");
+        Directory.CreateDirectory(Path.GetDirectoryName(lightFile)!);
+        File.WriteAllText(lightFile, "art");
+        AppliedRecord.Note(
+            record,
+            game,
+            library,
+            [Source(pack), new AppliedSource("Grove\\b.png", lightFile, "light")],
+            Noted, Nothing);
+
+        AppliedRecord.PackRenamed(record, "DARK", "Night");
+
+        var loaded = AppliedRecord.Load(record);
+        Assert.Equal("Night", loaded.Entries["Grove\\a.png"].Pack);
+        Assert.Equal(Path.Combine("packs", "Night", "Grove", "a.png"), loaded.Entries["Grove\\a.png"].Source);
+        Assert.Equal(Noted, loaded.Entries["Grove\\a.png"].At);
+        Assert.Equal("light", loaded.Entries["Grove\\b.png"].Pack);
+        Assert.Equal(Path.Combine("packs", "light", "Grove", "a.png"), loaded.Entries["Grove\\b.png"].Source);
+    }
+
+    [Fact]
     public void Renamed_PointsEveryEntryFromTheOldPathAtTheNewOne()
     {
         using var tmp = new TempDir();

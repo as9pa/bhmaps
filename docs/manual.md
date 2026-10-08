@@ -9,6 +9,31 @@ and `.jpg` files inside the `mapArt` folder and inside its own library, plus its
 folder, and it keeps a copy of every original so it can put it back. The game's data files are read and never written, and
 nothing else in the game install is touched.
 
+## What is new in 3.6
+
+The welcome window has a fourth step, Shortcuts: a tick to put BhMaps in the Start menu (on by default)
+and one for a desktop shortcut (off). The exe stays where it is; a shortcut only points at it, and the app
+re-points a shortcut whose exe has moved. The same two ticks are on the Settings page. A run with the
+`--appdata` flag never writes shortcuts.
+
+A pack's row menu has Rename, right under Duplicate, and F2 on a focused row opens the same prompt. The
+folder is renamed, the hidden list and the applied record follow the new name, and the Default pack cannot
+be renamed. A pack folder that wraps a `mapArt` folder, the way a pack is laid out for dropping into the
+game, is read as that pack under the outer folder's name, and everything written into it goes under its
+`mapArt`. Import folder understands the same layout.
+
+Both editors have a third button, Add as new: it asks for a pack name, offers the next free New Pack,
+New Pack 2 and so on, and saves into that fresh pack. The Save into pack box is one editable box now:
+open the list to pick a pack or type a name for a new one; the hint and any error sit right under it.
+Opened on a map that is in no pack, both editors start on a fresh New Pack N rather than My Backgrounds;
+opened from a pack's own tile they save back into that pack. My Backgrounds stays the picture library.
+
+The background editor has Hue, Saturation, Contrast and Blur beside Darken, each with its own Reset. The
+values are written into the saved picture and remembered, so a saved background reopens where it was left.
+
+After a save, only the rows for the maps that were written are rebuilt; the list keeps its scroll and
+the rest of the rows stay as they were. The top bar Refresh and F5 still rebuild everything.
+
 ## What is new in 3.5
 
 A map's panel previews before it applies. Click any background or platform set in the panel and the

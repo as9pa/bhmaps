@@ -70,11 +70,11 @@ public class PlatformRecolorTests
     public void Pixel_HueKeepsLightnessAndSaturation()
     {
         var input = new Bgra(40, 90, 200, 255);
-        var (_, s, l) = PlatformRecolor.ToHsl(input.R, input.G, input.B);
+        var (_, s, l) = ColorMath.ToHsl(input.R, input.G, input.B);
 
         var output = PlatformRecolor.Pixel(input, 1, 37);
 
-        var (_, shiftedS, shiftedL) = PlatformRecolor.ToHsl(output.R, output.G, output.B);
+        var (_, shiftedS, shiftedL) = ColorMath.ToHsl(output.R, output.G, output.B);
         Assert.Equal(s, shiftedS, 1.0 / 255);
         Assert.Equal(l, shiftedL, 1.0 / 255);
     }

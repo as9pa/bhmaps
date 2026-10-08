@@ -260,6 +260,45 @@
                     Style="{StaticResource PlainButton}" />
           </StackPanel>
         </Grid>
+
+        <!-- 3.6 O1. The boxes read the shortcut files themselves, so they say what is on disk, not what was
+             once chosen. A dev run shows them disabled with its hint, because its exe is a build output. -->
+        <TextBlock Style="{StaticResource SettingSection}" Text="Shortcuts" />
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="180" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" MinWidth="160" SharedSizeGroup="SettingActions" />
+          </Grid.ColumnDefinitions>
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" MinHeight="56" />
+          </Grid.RowDefinitions>
+
+          <Border Grid.Row="0" Style="{StaticResource SettingRule}" />
+          <!-- No label of its own: the section is called Shortcuts, and each box's text says the rest. -->
+          <StackPanel Grid.Row="0" Grid.Column="1" Style="{StaticResource SettingCell}">
+            <CheckBox Content="Add to the Start menu"
+                      FocusVisualStyle="{StaticResource DialogFocusRing}"
+                      Foreground="{StaticResource TextBrush}"
+                      IsChecked="{Binding ShortcutStartMenu}"
+                      IsEnabled="{Binding CanChangeShortcuts}" />
+            <TextBlock Margin="20,2,0,0" Style="{StaticResource SettingHelp}" Text="Shows BhMaps in Start and in Windows search." />
+            <CheckBox Margin="0,10,0,0"
+                      Content="Desktop shortcut"
+                      FocusVisualStyle="{StaticResource DialogFocusRing}"
+                      Foreground="{StaticResource TextBrush}"
+                      IsChecked="{Binding ShortcutDesktop}"
+                      IsEnabled="{Binding CanChangeShortcuts}" />
+            <TextBlock Margin="20,2,0,0" Style="{StaticResource SettingHelp}" Text="A BhMaps icon on the desktop." />
+            <TextBlock Foreground="{StaticResource Text3Brush}"
+                       Style="{StaticResource SettingHelp}"
+                       Text="{Binding ShortcutHint}"
+                       Visibility="{Binding HasShortcutHint, Converter={StaticResource BoolToVis}}" />
+            <TextBlock Style="{StaticResource SettingError}"
+                       Text="{Binding ShortcutError}"
+                       Visibility="{Binding HasShortcutError, Converter={StaticResource BoolToVis}}" />
+          </StackPanel>
+        </Grid>
       </StackPanel>
     </ScrollViewer>
   </DockPanel>

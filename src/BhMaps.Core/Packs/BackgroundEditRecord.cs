@@ -27,6 +27,18 @@ public sealed class BackgroundSlotEntry
 
     public double Darken { get; set; }
 
+    /// <summary>Hue rotation in degrees. Null on records written before 3.6; callers read null as 0.</summary>
+    public double? Hue { get; set; }
+
+    /// <summary>-1..1. Null on records written before 3.6; callers read null as 0.</summary>
+    public double? Saturation { get; set; }
+
+    /// <summary>-1..1. Null on records written before 3.6; callers read null as 0.</summary>
+    public double? Contrast { get; set; }
+
+    /// <summary>0..1. Null on records written before 3.6; callers read null as 0.</summary>
+    public double? Blur { get; set; }
+
     /// <summary>Lowercase hex SHA-256 of the file this entry was written for, so a slot replaced outside BhMaps
     /// can be spotted.</summary>
     public string Hash { get; set; } = "";

@@ -1,0 +1,9 @@
+- generic [ref=e4]:
+  - generic [ref=e5]: "4"
+  - generic [ref=e6]:
+    - heading "Shortcuts" [level=4] [ref=e7]
+    - paragraph [ref=e8]: Where Windows can find BhMaps. The exe stays where it is; a shortcut only points at it.
+    - generic [ref=e9]: Add to the Start menu
+    - generic [ref=e12]: Shows BhMaps in Start and in Windows search.
+    - generic [ref=e13]: Desktop shortcut
+    - generic [ref=e16]: A BhMaps icon on the desktop.

@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Media;
+using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
 
 namespace BhMaps.Core.Imaging;
@@ -12,8 +13,18 @@ public enum FitMode
     Center,
 }
 
-/// <summary>PanX/PanY are 0..1 and only matter for Cover (0.5 = centered). Darken is 0..1 and multiplies every channel by (1 - Darken). NoUpscale only matters for Contain: a source smaller than the canvas stays at 1:1 instead of growing.</summary>
-public sealed record FitOptions(FitMode Mode = FitMode.Cover, double PanX = 0.5, double PanY = 0.5, double Darken = 0.0, bool NoUpscale = false);
+/// <summary>PanX/PanY are 0..1 and only matter for Cover (0.5 = centered). Darken is 0..1 and multiplies every channel by (1 - Darken). NoUpscale only matters for Contain: a source smaller than the canvas stays at 1:1 instead of growing.
+/// Hue is a rotation in degrees; Saturation and Contrast are -1..1 with 0 leaving the picture alone; Blur is 0..1 (3.6 E4).</summary>
+public sealed record FitOptions(
+    FitMode Mode = FitMode.Cover,
+    double PanX = 0.5,
+    double PanY = 0.5,
+    double Darken = 0.0,
+    bool NoUpscale = false,
+    double Hue = 0.0,
+    double Saturation = 0.0,
+    double Contrast = 0.0,
+    double Blur = 0.0);
 
 /// <summary>A picture ready to draw, plus the pixel size the picture really is. A preview's working copy is
 /// downsampled to about the preview canvas, so its bitmap is no longer that size, and Center is the one mode that
@@ -151,26 +162,133 @@ public static class BackgroundFitter
             source.NaturalHeight,
             outputWidth,
             outputHeight);
+        var darken = Math.Clamp(options.Darken, 0, 1);
+        var blur = Math.Clamp(options.Blur, 0, 1);
+        var adjust = ColorMath.Wrap(options.Hue) != 0 || options.Saturation != 0 || options.Contrast != 0;
+
+        // With no blur and no colour pass the shade goes in the same draw as the picture, exactly as before 3.6.
+        var shadeInDraw = blur == 0 && !adjust;
         var visual = new DrawingVisual();
         RenderOptions.SetBitmapScalingMode(visual, BitmapScalingMode.HighQuality);
         using (var dc = visual.RenderOpen())
         {
             dc.DrawRectangle(Brushes.Black, null, new Rect(0, 0, width, height));
             dc.DrawImage(bitmap, dest);
-            var darken = Math.Clamp(options.Darken, 0, 1);
-            if (darken > 0)
+            if (shadeInDraw && darken > 0)
             {
-                var shade = new SolidColorBrush(Color.FromArgb((byte)Math.Round(darken * 255), 0, 0, 0));
+                var shade = new SolidColorBrush(Color.FromArgb(ShadeAlpha(darken), 0, 0, 0));
                 shade.Freeze();
                 dc.DrawRectangle(shade, null, new Rect(0, 0, width, height));
             }
         }
 
-        var target = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
-        target.Render(visual);
+        BitmapSource target = RenderVisual(visual, width, height);
+        if (blur > 0)
+        {
+            target = Blurred(target, blur * 40 * ((double)width / outputWidth), width, height);
+        }
+
+        if (adjust || (!shadeInDraw && darken > 0))
+        {
+            target = Adjusted(target, options, shadeInDraw ? 0 : darken, width, height);
+        }
+
         var rgb = new FormatConvertedBitmap(target, PixelFormats.Bgr24, null, 0);
         rgb.Freeze();
         return rgb;
+    }
+
+    private static byte ShadeAlpha(double darken) => (byte)Math.Round(darken * 255);
+
+    private static RenderTargetBitmap RenderVisual(Visual visual, int width, int height)
+    {
+        var target = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+        target.Render(visual);
+        return target;
+    }
+
+    /// <summary>The fitted frame under a Gaussian BlurEffect. The frame is drawn with mirrored copies around it, out
+    /// to a little past the radius, so the blur near the canvas edge mixes in picture rather than fading to
+    /// transparent (which the Bgr24 output would turn into a dark rim).</summary>
+    private static BitmapSource Blurred(BitmapSource frame, double radius, int width, int height)
+    {
+        var pad = Math.Ceiling(radius) + 2;
+        var visual = new DrawingVisual { Effect = new BlurEffect { Radius = radius, KernelType = KernelType.Gaussian } };
+        RenderOptions.SetBitmapScalingMode(visual, BitmapScalingMode.HighQuality);
+        using (var dc = visual.RenderOpen())
+        {
+            dc.PushClip(new RectangleGeometry(new Rect(-pad, -pad, width + (2 * pad), height + (2 * pad))));
+            for (var dy = -1; dy <= 1; dy++)
+            {
+                for (var dx = -1; dx <= 1; dx++)
+                {
+                    // dx = -1 flips the frame onto [-w, 0], +1 onto [w, 2w]; the same for dy.
+                    var sx = dx == 0 ? 1 : -1;
+                    var sy = dy == 0 ? 1 : -1;
+                    var ox = dx == 1 ? 2.0 * width : 0;
+                    var oy = dy == 1 ? 2.0 * height : 0;
+                    dc.PushTransform(new MatrixTransform(sx, 0, 0, sy, ox, oy));
+                    dc.DrawImage(frame, new Rect(0, 0, width, height));
+                    dc.Pop();
+                }
+            }
+
+            dc.Pop();
+        }
+
+        return RenderVisual(visual, width, height);
+    }
+
+    /// <summary>Hue, saturation and contrast run over every pixel of the rendered frame, then the Darken shade. The
+    /// frame is opaque, so its premultiplied bytes are its colour bytes.</summary>
+    private static BitmapSource Adjusted(BitmapSource frame, FitOptions options, double darken, int width, int height)
+    {
+        var source = new FormatConvertedBitmap(frame, PixelFormats.Bgra32, null, 0);
+        var stride = width * 4;
+        var pixels = new byte[stride * height];
+        source.CopyPixels(pixels, stride, 0);
+
+        var shift = ColorMath.Wrap(options.Hue);
+        var saturation = Math.Clamp(options.Saturation, -1, 1);
+        var hsl = shift != 0 || saturation != 0;
+        var contrast = Math.Clamp(options.Contrast, -1, 1);
+        var slope = ColorMath.ContrastSlope(contrast);
+        var keep = 255 - ShadeAlpha(darken);
+        for (var i = 0; i < pixels.Length; i += 4)
+        {
+            var b = pixels[i];
+            var g = pixels[i + 1];
+            var r = pixels[i + 2];
+            if (hsl)
+            {
+                var (h, s, l) = ColorMath.ToHsl(r, g, b);
+                (r, g, b) = ColorMath.ToRgb((h + shift) % 360, ColorMath.Saturate(s, saturation), l);
+            }
+
+            if (contrast != 0)
+            {
+                r = ColorMath.Contrast(r, slope);
+                g = ColorMath.Contrast(g, slope);
+                b = ColorMath.Contrast(b, slope);
+            }
+
+            if (keep < 255)
+            {
+                r = (byte)Math.Round(r * keep / 255.0);
+                g = (byte)Math.Round(g * keep / 255.0);
+                b = (byte)Math.Round(b * keep / 255.0);
+            }
+
+            pixels[i] = b;
+            pixels[i + 1] = g;
+            pixels[i + 2] = r;
+            pixels[i + 3] = 255;
+        }
+
+        var target = new WriteableBitmap(width, height, 96, 96, PixelFormats.Bgra32, null);
+        target.WritePixels(new Int32Rect(0, 0, width, height), pixels, stride, 0);
+        target.Freeze();
+        return target;
     }
 
     /// <summary>Full-size render encoded as JPEG bytes at quality 90.</summary>

@@ -48,6 +48,16 @@ public partial class BackgroundsViewModel : RowsPageViewModel
         OnPropertyChanged(nameof(HasPictures));
     }
 
+    /// <summary>3.6 L1: the count is not reset here, because the rows left as they were are not counted again;
+    /// a save that names its folders writes no any-map picture, so the count it had still holds. A fallback to
+    /// the full refresh comes back through the override above, which does reset it.</summary>
+    public override void UpdateFolders(ScanSnapshot snapshot, IReadOnlyList<string> folders)
+    {
+        base.UpdateFolders(snapshot, folders);
+        OnPropertyChanged(nameof(PicturesLabel));
+        OnPropertyChanged(nameof(HasPictures));
+    }
+
     /// <summary>Spec 4's one header action. The page adds to the library and names no maps, which is what the
     /// None kind says (spec 7.1).</summary>
     [RelayCommand]

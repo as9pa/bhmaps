@@ -117,103 +117,15 @@ public static class PlatformRecolor
     public static Bgra Pixel(Bgra p, double opacity, double hueDegrees)
     {
         var alpha = (byte)Math.Round(p.A * Math.Clamp(opacity, 0, 1), MidpointRounding.AwayFromZero);
-        var shift = Wrap(hueDegrees);
-        var (h, s, l) = ToHsl(p.R, p.G, p.B);
+        var shift = ColorMath.Wrap(hueDegrees);
+        var (h, s, l) = ColorMath.ToHsl(p.R, p.G, p.B);
         if (shift == 0 || s == 0)
         {
             // Nothing to rotate, or a grey pixel that has no hue to rotate: the colour bytes pass through.
             return new Bgra(p.B, p.G, p.R, alpha);
         }
 
-        var (r, g, b) = ToRgb((h + shift) % 360, s, l);
+        var (r, g, b) = ColorMath.ToRgb((h + shift) % 360, s, l);
         return new Bgra(b, g, r, alpha);
     }
-
-    /// <summary>RGB bytes to a hue in degrees (0..360) with saturation and lightness in 0..1.</summary>
-    internal static (double H, double S, double L) ToHsl(byte r, byte g, byte b)
-    {
-        var rd = r / 255.0;
-        var gd = g / 255.0;
-        var bd = b / 255.0;
-        var max = Math.Max(rd, Math.Max(gd, bd));
-        var min = Math.Min(rd, Math.Min(gd, bd));
-        var lightness = (max + min) / 2;
-        var delta = max - min;
-        if (delta == 0)
-        {
-            return (0, 0, lightness);
-        }
-
-        var saturation = lightness > 0.5 ? delta / (2 - max - min) : delta / (max + min);
-        double hue;
-        if (max == rd)
-        {
-            hue = ((gd - bd) / delta) + (gd < bd ? 6 : 0);
-        }
-        else if (max == gd)
-        {
-            hue = ((bd - rd) / delta) + 2;
-        }
-        else
-        {
-            hue = ((rd - gd) / delta) + 4;
-        }
-
-        return (hue * 60, saturation, lightness);
-    }
-
-    /// <summary>A hue in degrees (0..360) with saturation and lightness in 0..1 back to RGB bytes.</summary>
-    internal static (byte R, byte G, byte B) ToRgb(double h, double s, double l)
-    {
-        if (s == 0)
-        {
-            var grey = Channel(l);
-            return (grey, grey, grey);
-        }
-
-        var q = l < 0.5 ? l * (1 + s) : l + s - (l * s);
-        var p = (2 * l) - q;
-        var turn = h / 360;
-        return (Channel(FromTurn(p, q, turn + (1.0 / 3))), Channel(FromTurn(p, q, turn)), Channel(FromTurn(p, q, turn - (1.0 / 3))));
-    }
-
-    /// <summary>Negative shifts wrap up, so -120 and +240 name the same rotation.</summary>
-    private static double Wrap(double degrees)
-    {
-        var wrapped = degrees % 360;
-        return wrapped < 0 ? wrapped + 360 : wrapped;
-    }
-
-    /// <summary>One channel of the HSL to RGB inverse, at <paramref name="t"/> turns around the colour wheel.</summary>
-    private static double FromTurn(double p, double q, double t)
-    {
-        if (t < 0)
-        {
-            t += 1;
-        }
-        else if (t > 1)
-        {
-            t -= 1;
-        }
-
-        if (t < 1.0 / 6)
-        {
-            return p + ((q - p) * 6 * t);
-        }
-
-        if (t < 1.0 / 2)
-        {
-            return q;
-        }
-
-        if (t < 2.0 / 3)
-        {
-            return p + ((q - p) * ((2.0 / 3) - t) * 6);
-        }
-
-        return p;
-    }
-
-    private static byte Channel(double value) =>
-        (byte)Math.Round(Math.Clamp(value, 0, 1) * 255, MidpointRounding.AwayFromZero);
 }

@@ -149,18 +149,8 @@ public abstract partial class RowsPageViewModel : PageViewModel, ITileSized
         _loads = new CancellationTokenSource();
 
         _all.Clear();
-
-        // The Maps page rebuilt its cards first (it is first in the shell's page list), so its tag for each map
-        // is the one this page shows rather than a second copy of the rule that works it out.
-        foreach (var card in Shell.Maps.AllCards)
+        foreach (var card in RowCards(snapshot))
         {
-            if (OneRowPerFolder
-                && snapshot.Catalog.PrimaryLayoutOf(card.FolderName) is { } primary
-                && !primary.Key.Equals(card.Key, StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
             snapshot.MapStatuses.TryGetValue(card.FolderName, out var status);
             _all.Add(BuildRow(card, status, snapshot));
         }
@@ -168,12 +158,63 @@ public abstract partial class RowsPageViewModel : PageViewModel, ITileSized
         RebuildChips(snapshot.Catalog);
         ApplyFilter();
         RebuildMenus();
+        CountHiddenPacks(snapshot);
+    }
 
-        // 3.1: the Default pack counts like any other, because it hides from the lists like any other.
-        HiddenPackCount = snapshot.Packs.Count(p => Shell.Services.Settings.IsHidden(p.Name));
-        OnPropertyChanged(nameof(HiddenPackCount));
-        OnPropertyChanged(nameof(HiddenPacksText));
-        OnPropertyChanged(nameof(ShowHiddenPacks));
+    /// <summary>3.6 L1: after a save, only the rows of the folders it wrote are built again, each in its own
+    /// place in the list, so the list keeps its scroll and the other rows keep their pictures and their loads. A
+    /// list whose shape changed (a map gained or lost its row) takes the full refresh instead.</summary>
+    public override void UpdateFolders(ScanSnapshot snapshot, IReadOnlyList<string> folders)
+    {
+        var cards = RowCards(snapshot);
+        if (_loads is null
+            || cards.Count != _all.Count
+            || cards.Where((c, i) => !c.FolderName.Equals(_all[i].FolderName, StringComparison.OrdinalIgnoreCase)).Any())
+        {
+            Refresh(snapshot);
+            return;
+        }
+
+        Snapshot = snapshot;
+        var written = new HashSet<string>(folders, StringComparer.OrdinalIgnoreCase);
+        var filterChanged = false;
+        for (var i = 0; i < _all.Count; i++)
+        {
+            var old = _all[i];
+            if (!written.Contains(old.FolderName))
+            {
+                continue;
+            }
+
+            snapshot.MapStatuses.TryGetValue(cards[i].FolderName, out var status);
+            var row = BuildRow(cards[i], status, snapshot);
+            row.IsUnfolded = old.IsUnfolded;
+            row.IsRefreshing = true;
+            _all[i] = row;
+
+            // The old row's load runs on into tiles nothing shows; cancelling it would mean cancelling every row's.
+            var shown = Rows.IndexOf(old);
+            if (shown >= 0)
+            {
+                Rows[shown] = row;
+            }
+
+            // A new pack name in the haystack can move the row in or out of a search.
+            filterChanged |= (shown >= 0) != Matches(row);
+
+            if (old.LoadStarted)
+            {
+                RealiseRow(row);
+            }
+        }
+
+        if (filterChanged)
+        {
+            ApplyFilter();
+        }
+
+        RebuildMenus();
+        CountHiddenPacks(snapshot);
     }
 
     /// <summary>A row has come on screen. Fire and forget: the row turns every file failure into a blank tile, so
@@ -232,6 +273,25 @@ public abstract partial class RowsPageViewModel : PageViewModel, ITileSized
 
         OnPropertyChanged(nameof(SelectedChip));
         ApplyFilter();
+    }
+
+    /// <summary>The cards that get a row, in row order. The Maps page rebuilt its cards first (it is first in the
+    /// shell's page list), so its tag for each map is the one this page shows rather than a second copy of the
+    /// rule that works it out.</summary>
+    private List<MapCardViewModel> RowCards(ScanSnapshot snapshot) =>
+        [
+            .. Shell.Maps.AllCards.Where(card => !OneRowPerFolder
+                || snapshot.Catalog.PrimaryLayoutOf(card.FolderName) is not { } primary
+                || primary.Key.Equals(card.Key, StringComparison.OrdinalIgnoreCase)),
+        ];
+
+    /// <summary>3.1: the Default pack counts like any other, because it hides from the lists like any other.</summary>
+    private void CountHiddenPacks(ScanSnapshot snapshot)
+    {
+        HiddenPackCount = snapshot.Packs.Count(p => Shell.Services.Settings.IsHidden(p.Name));
+        OnPropertyChanged(nameof(HiddenPackCount));
+        OnPropertyChanged(nameof(HiddenPacksText));
+        OnPropertyChanged(nameof(ShowHiddenPacks));
     }
 
     private void RebuildMenus()

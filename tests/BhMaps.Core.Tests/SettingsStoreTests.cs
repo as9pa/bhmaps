@@ -6,6 +6,40 @@ namespace BhMaps.Core.Tests;
 public class SettingsStoreTests
 {
     [Fact]
+    public void WithPackRenamed_MovesHiddenStampAndDismissedNoteIgnoringCase()
+    {
+        var at = new DateTimeOffset(2026, 10, 8, 9, 0, 0, TimeSpan.Zero);
+        var settings = new AppSettings(@"D:\game\mapArt", @"D:\lib", true)
+        {
+            HiddenPackNames = ["Dark", "Light"],
+            PackLastApplied = new Dictionary<string, DateTimeOffset> { ["dark"] = at, ["Light"] = at.AddDays(-1) },
+            DismissedTransparentNotes = new Dictionary<string, int> { ["DARK"] = 3 },
+        };
+
+        var renamed = settings.WithPackRenamed("Dark", "Night");
+
+        Assert.Equal(["Night", "Light"], renamed.HiddenPacks);
+        Assert.Equal(at, renamed.LastApplied["Night"]);
+        Assert.Equal(at.AddDays(-1), renamed.LastApplied["Light"]);
+        Assert.False(renamed.LastApplied.ContainsKey("Dark"));
+        Assert.True(renamed.IsTransparentNoteDismissed("Night", 3));
+        Assert.False(renamed.IsTransparentNoteDismissed("Dark", 3));
+        Assert.Equal(["Dark", "Light"], settings.HiddenPacks);
+    }
+
+    [Fact]
+    public void WithPackRenamed_LeavesAbsentSettingsAbsent()
+    {
+        var settings = new AppSettings(@"D:\game\mapArt", @"D:\lib", true);
+
+        var renamed = settings.WithPackRenamed("Dark", "Night");
+
+        Assert.Null(renamed.HiddenPackNames);
+        Assert.Null(renamed.PackLastApplied);
+        Assert.Null(renamed.DismissedTransparentNotes);
+    }
+
+    [Fact]
     public void Load_ReturnsDefaultsWhenFileMissing()
     {
         using var tmp = new TempDir();

@@ -1,0 +1,619 @@
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - generic [ref=e4]: BhMaps 3.3 review
+    - generic [ref=e5]: 0 of 5 answered
+    - link "Questions ↗" [ref=e6] [cursor=pointer]:
+      - /url: "#s-q"
+  - banner [ref=e7]:
+    - paragraph [ref=e8]: Review before build, 2026-10-08
+    - heading "Shortcuts at first run, pack rename, Add as new, a working New pack, colour sliders, and rows that update in place" [level=1] [ref=e9]
+    - paragraph [ref=e10]: Seven things from your note, grouped by screen. Two are bugs reproduced in the app on the dev tree; the rest are small additions drawn over the app's own screenshots. Nothing is built yet.
+    - paragraph [ref=e12]:
+      - text: The short read. New pack does not work because its name box lands below the panel edge with an empty name, so Save greys out with no visible reason (
+      - link "E3 ↗" [ref=e13] [cursor=pointer]:
+        - /url: "#e3"
+      - text: ). Add as new is a one-click save into a fresh numbered pack, and the same naming becomes the platform editor's default (
+      - link "E1 ↗" [ref=e14] [cursor=pointer]:
+        - /url: "#e1"
+      - text: ","
+      - link "E2 ↗" [ref=e15] [cursor=pointer]:
+        - /url: "#e2"
+      - text: ). Rename goes in the pack menu, and a pack folder that wraps a mapArt folder is read as the pack (
+      - link "packs ↗" [ref=e16] [cursor=pointer]:
+        - /url: "#s-packs"
+      - text: ). The background editor gets Hue, Saturation and Contrast in two columns so the panel keeps its height (
+      - link "E4 ↗" [ref=e17] [cursor=pointer]:
+        - /url: "#e4"
+      - text: ). After a save, only the written rows refresh (
+      - link "L1 ↗" [ref=e18] [cursor=pointer]:
+        - /url: "#l1"
+      - text: ). The welcome window offers Start menu and desktop shortcuts (
+      - link "O1 ↗" [ref=e19] [cursor=pointer]:
+        - /url: "#o1"
+      - text: ).
+    - generic [ref=e20]:
+      - generic [ref=e21]:
+        - heading "What this is" [level=3] [ref=e22]
+        - paragraph [ref=e23]: Real screenshots of 3.2.0 on the dev tree, and mocks drawn over them at the same size, in the app's own type and colours.
+      - generic [ref=e24]:
+        - heading "How to review" [level=3] [ref=e25]
+        - paragraph [ref=e26]: Flip Current / Proposed on each frame. Answer the five questions. Type an objection only if something is wrong; silence means yes.
+      - generic [ref=e27]:
+        - heading "What stays" [level=3] [ref=e28]
+        - paragraph [ref=e29]: "Everything not named here. No release: this is a build plan. Say \"I answered\" in chat and I start."
+    - generic [ref=e30]: Answers cannot be saved in this view. Type them in chat instead.
+  - 'heading "Editors: Add as new, a working New pack, colour sliders" [level=2] [ref=e31]'
+  - paragraph [ref=e32]: Both editors save into one pack chosen at the bottom of the panel. Four changes there, two of them bugs found while capturing the shots.
+  - generic [ref=e33]:
+    - generic [ref=e34]:
+      - generic [ref=e35]: Platform editor, 1040 x 720
+      - button "Current" [ref=e36] [cursor=pointer]
+      - button "Current, New pack chosen" [ref=e37] [cursor=pointer]
+      - button "Proposed" [ref=e38] [cursor=pointer]
+      - button "Proposed, New pack chosen" [ref=e39] [cursor=pointer]
+      - button "Open at full size" [ref=e40] [cursor=pointer]
+    - generic [ref=e41]:
+      - img "Current" [ref=e42]
+      - generic [ref=e43]: Target pack defaults to My Backgrounds. Two save buttons.
+  - generic [ref=e44]:
+    - generic [ref=e45]:
+      - generic [ref=e46]: Background editor, 1040 x 720
+      - button "Current" [ref=e47] [cursor=pointer]
+      - button "Proposed" [ref=e48] [cursor=pointer]
+      - button "Open at full size" [ref=e49] [cursor=pointer]
+    - generic [ref=e50]:
+      - img "Current" [ref=e51]
+      - generic [ref=e52]: Pan X, Pan Y, Darken.
+  - generic [ref=e53]:
+    - generic [ref=e54]:
+      - generic [ref=e55]: Add as new
+      - text: "Status line: \"Saved to New Pack 2\" with the pack name as a link to its page, and Undo."
+    - generic [ref=e56]:
+      - generic [ref=e57]: Add as new, apply
+      - text: Holding Shift while clicking also applies, the way Save and apply does. Mentioned in the tooltip only.
+    - generic [ref=e58]:
+      - generic [ref=e59]: Name taken
+      - text: Typing a name that exists turns the box's border to the error colour and the hint under it says "A pack named X exists; Save will add to it." Save stays enabled.
+    - generic [ref=e60]:
+      - generic [ref=e61]: Empty name
+      - text: Clearing the box greys Save with the hint "Type a pack name" right under the box, never below the fold.
+    - generic [ref=e62]:
+      - generic [ref=e63]: Slider reset
+      - text: Each new slider has its own Reset, like Pan X. Double-click on the knob also resets.
+    - generic [ref=e64]:
+      - generic [ref=e65]: Reopen
+      - text: Reopening a saved background restores Hue, Saturation and Contrast from the record, like Pan does today.
+  - generic [ref=e66]:
+    - generic [ref=e67]: E1
+    - heading "Add as new, in both editors" [level=3] [ref=e68]
+    - paragraph [ref=e69]: "Basis. Save writes into the chosen pack and asks \"Replace?\" when that pack already has art for the map, because a pack holds one art per map. So a second version of the same map has nowhere to go without first making a pack by hand. Add as new makes that one click: a fresh pack, auto-named, holding only this edit. It is the editor's Save a copy, and it is also what the owner's note \"it auto goes into My Backgrounds, but still\" was pointing at: a new home, not the shared one."
+    - list [ref=e70]:
+      - listitem [ref=e71]: A third footer button, Add as new, left of Save only. Enabled whenever Save only is.
+      - listitem [ref=e72]:
+        - text: "Click: pick the next free name New Pack, New Pack 2, ... ("
+        - code [ref=e73]: PackNames.NextFree
+        - text: ),
+        - code [ref=e74]: PackCreator.TryCreate
+        - text: ", write the files there, close. No Replace prompt, no name prompt. See"
+        - link "Q1 ↗" [ref=e75] [cursor=pointer]:
+          - /url: "#q1"
+        - text: .
+      - listitem [ref=e76]:
+        - text: The row updates in place (
+        - link "L1 ↗" [ref=e77] [cursor=pointer]:
+          - /url: "#l1"
+        - text: ) and the status line links to the new pack, so Rename (
+        - link "P1 ↗" [ref=e78] [cursor=pointer]:
+          - /url: "#p1"
+        - text: ) is one click away.
+      - listitem [ref=e79]: "Backgrounds: the same button and the same naming."
+    - generic [ref=e80]: Save a copy in image editors keeps the original untouched and names the copy for you; the pack is BhMaps's document.
+    - generic [ref=e81]: PlatformEditorWindow.xaml, PlatformEditorViewModel.cs (AddAsNewCommand), BackgroundEditorWindow.xaml, BackgroundEditorViewModel.cs, new Core/Operations/PackNames.cs, tests
+    - generic [ref=e82]:
+      - generic [ref=e83]: Objection (optional)
+      - textbox "Objection (optional)" [ref=e84]:
+        - /placeholder: Only if something here is wrong
+  - generic [ref=e86]:
+    - generic [ref=e87]: E2
+    - heading "Platforms default into a fresh New Pack, numbered" [level=3] [ref=e88]
+    - paragraph [ref=e89]: Basis. My Backgrounds is the picture library for backgrounds; its name promises backgrounds. Platforms landing there is a leftover from when the platform editor borrowed the background editor's code. A platform edit with no pack of its own should start in a pack of its own, named so the owner never has to think of a name before seeing the result.
+    - list [ref=e90]:
+      - listitem [ref=e91]: "Platform editor opened from a card that is not in a pack: target = next free New Pack N, shown in the box as a real name (not \"New pack...\")."
+      - listitem [ref=e92]: "Opened from a pack's tile or from a card whose art is in a pack: target = that pack, as today."
+      - listitem [ref=e93]:
+        - text: Background editor keeps My Backgrounds as its default; see
+        - link "Q2 ↗" [ref=e94] [cursor=pointer]:
+          - /url: "#q2"
+        - text: if that should change too.
+      - listitem [ref=e95]: Add pictures (the Backgrounds page's Add image) is unchanged.
+    - generic [ref=e96]: PlatformEditorViewModel.cs (constructor, lines around 172-185), PackNames.cs
+    - generic [ref=e97]:
+      - generic [ref=e98]: Objection (optional)
+      - textbox "Objection (optional)" [ref=e99]:
+        - /placeholder: Only if something here is wrong
+  - generic [ref=e101]:
+    - generic [ref=e102]: E3
+    - heading "New pack... works again" [level=3] [ref=e103]
+    - paragraph [ref=e104]: "Basis. Reproduced in the app on the dev tree: with My Backgrounds present, choosing New pack... sets the name to an empty string, both Save buttons disable, and the name box plus its error line render below the panel's bottom edge. The owner reads that as \"the button does nothing\", which is exactly what it looks like. Two fixes: the name is never empty, and the box never leaves the screen."
+    - list [ref=e105]:
+      - listitem [ref=e106]: Picking New pack... turns the combo into an editable box in the same spot, prefilled with the next free New Pack N and selected, with the chevron still opening the list. No second row.
+      - listitem [ref=e107]: The error line, when there is one, sits directly under the box in the panel, not at the end of a scroll.
+      - listitem [ref=e108]: Save only / Save and apply stay enabled with the prefilled name; they disable only when the box is cleared.
+      - listitem [ref=e109]: Same change in the background editor, which has the same combo.
+    - generic [ref=e110]: PlatformEditorWindow.xaml (lines around 522-530), PlatformEditorViewModel.cs (NewPackName default, line 175), BackgroundEditorWindow.xaml, BackgroundEditorViewModel.cs (line 80-82)
+    - generic [ref=e111]:
+      - generic [ref=e112]: Objection (optional)
+      - textbox "Objection (optional)" [ref=e113]:
+        - /placeholder: Only if something here is wrong
+  - generic [ref=e115]:
+    - generic [ref=e116]: E4
+    - heading "Hue, Saturation and Contrast in the background editor" [level=3] [ref=e117]
+    - paragraph [ref=e118]: "Basis. The platform editor can shift hue; the background editor can only darken. A background is the biggest surface on the map and the one most often retinted to match a platform set. Three sliders cover what people reach for: Hue to match, Saturation to calm a busy picture, Contrast to push it back. They run in Core on the fitted JPEG, the same way Darken does, so the game gets a flat file and the record remembers the numbers."
+    - list [ref=e119]:
+      - listitem [ref=e120]: "Three sliders: Hue (-180..180, 0), Saturation (-100..100, 0), Contrast (-100..100, 0). Darken stays. Pan X and Pan Y keep the full width; the four colour sliders go in two columns of 172 px."
+      - listitem [ref=e121]:
+        - text: "Core:"
+        - code [ref=e122]: BackgroundAdjust.Apply(hue, saturation, contrast, darken)
+        - text: after
+        - code [ref=e123]: BackgroundFitter.Fit
+        - text: ", reusing the hue rotation from"
+        - code [ref=e124]: PlatformRecolor
+        - text: .
+      - listitem [ref=e125]:
+        - code [ref=e126]: BackgroundEditRecord
+        - text: gains Hue, Saturation, Contrast; old records read as 0.
+      - listitem [ref=e127]: Live preview on the 640 x 360 preview, debounced like Darken.
+      - listitem [ref=e128]:
+        - text: "Which sliders:"
+        - link "Q3 ↗" [ref=e129] [cursor=pointer]:
+          - /url: "#q3"
+        - text: .
+    - generic [ref=e130]:
+      - link "Recraft" [ref=e131] [cursor=pointer]:
+        - /url: https://mobbin.com/screens/4832652a-0e4a-4336-97d2-8d856381677b
+      - text: and
+      - link "Telegram" [ref=e132] [cursor=pointer]:
+        - /url: https://mobbin.com/screens/13087df5-e5d4-45cc-8d93-018664fa19d5
+      - text: "on Mobbin: Hue, Saturation, Brightness, Contrast as a short stack of labelled sliders with the value at the right."
+    - generic [ref=e133]: BackgroundEditorWindow.xaml, BackgroundEditorViewModel.cs, Core/Imaging/BackgroundAdjust.cs (new), PlatformRecolor.cs (shared hue math), BackgroundEditRecord, tests
+    - generic [ref=e134]:
+      - generic [ref=e135]: Objection (optional)
+      - textbox "Objection (optional)" [ref=e136]:
+        - /placeholder: Only if something here is wrong
+  - 'heading "Packs: rename, and a pack folder that wraps mapArt" [level=2] [ref=e138]'
+  - paragraph [ref=e139]:
+    - text: Two things about pack names. One is a missing action in the row menu. The other is how a folder that was made for the game, with its own
+    - code [ref=e140]: mapArt
+    - text: inside, is read as a pack.
+  - generic [ref=e141]:
+    - generic [ref=e142]:
+      - generic [ref=e143]: Pack row menu, true size
+      - button "Current" [ref=e144] [cursor=pointer]
+      - button "Proposed" [ref=e145] [cursor=pointer]
+      - button "Open at full size" [ref=e146] [cursor=pointer]
+    - generic [ref=e147]:
+      - img "Current"
+      - generic [ref=e148]: Duplicate, Import, Export, Open folder, Hide, Delete. The only way to rename is Explorer.
+  - generic [ref=e149]:
+    - generic [ref=e150]:
+      - generic [ref=e151]: Rename prompt, 460 wide
+      - button "Proposed" [ref=e152] [cursor=pointer]
+      - button "Open at full size" [ref=e153] [cursor=pointer]
+    - generic [ref=e154]:
+      - img "Proposed"
+      - generic [ref=e155]: The same text prompt New pack uses, titled Rename pack, with the current name preselected so typing replaces it. OK renames the folder.
+  - generic [ref=e156]:
+    - generic [ref=e157]:
+      - generic [ref=e158]: Default pack
+      - text: "No Rename line on the Default pack: its name is what Reset and Capture look for."
+    - generic [ref=e159]:
+      - generic [ref=e160]: Name taken
+      - text: "OK is refused with the prompt's existing error line: \"A pack named X already exists.\""
+    - generic [ref=e161]:
+      - generic [ref=e162]: Bad characters
+      - text: The same PackNameValidator rule as New pack; the error names the character.
+    - generic [ref=e163]:
+      - generic [ref=e164]: In game
+      - text: A pack whose art is in the game stays In game after the rename; the applied record is updated with the new name.
+    - generic [ref=e165]:
+      - generic [ref=e166]: Hidden
+      - text: A hidden pack keeps its hidden flag; the hidden list is rewritten with the new name.
+    - generic [ref=e167]:
+      - generic [ref=e168]: Undo
+      - text: The status line says "Renamed X to Y" with Undo for six seconds; Undo renames back.
+  - generic [ref=e169]:
+    - generic [ref=e170]: P1
+    - heading "Rename in the row menu" [level=3] [ref=e171]
+    - paragraph [ref=e172]: Basis. Every list that owns named things puts Rename beside Duplicate and Delete in the item's menu, because the name is the item's identity and people expect to fix it where they see it. Today the owner has to open the folder, rename it in Explorer, then Refresh, and anything that remembered the old name (hidden list, applied record) silently forgets the pack.
+    - list [ref=e173]:
+      - listitem [ref=e174]:
+        - text: A Rename line after Duplicate in
+        - code [ref=e175]: PacksViewModel.BuildMenu
+        - text: ", not shown for the Default pack."
+      - listitem [ref=e176]:
+        - code [ref=e177]: Dialogs.PromptText("Rename pack", "Name", row.Name)
+        - text: with the value preselected, then
+        - code [ref=e178]: PackNameValidator
+        - text: ", then a folder rename under"
+        - code [ref=e179]: packs\
+        - text: .
+      - listitem [ref=e180]:
+        - text: "After the rename:"
+        - code [ref=e181]: AppSettings.HiddenPacks
+        - text: and the applied record swap the old name for the new one, then a rescan.
+      - listitem [ref=e182]: F2 on a focused pack row opens the same prompt.
+    - generic [ref=e183]:
+      - text: Rename sits between Duplicate and Delete in the item menus of
+      - link "MagicPath" [ref=e184] [cursor=pointer]:
+        - /url: https://mobbin.com/screens/6fba30a0-6d21-4f55-945f-177a2daf03c5
+      - text: and
+      - link "Zoho CRM" [ref=e185] [cursor=pointer]:
+        - /url: https://mobbin.com/screens/2b41d79b-ae20-483f-a40d-79246f353d6b
+      - text: on Mobbin.
+    - generic [ref=e186]: PacksViewModel.cs (BuildMenu, RenameCommand), MainViewModel.cs (RenamePackAsync), new Core/Operations/PackRenamer.cs, AppSettings.cs, AppliedRecord, tests
+    - generic [ref=e187]:
+      - generic [ref=e188]: Objection (optional)
+      - textbox "Objection (optional)" [ref=e189]:
+        - /placeholder: Only if something here is wrong
+  - generic [ref=e191]:
+    - generic [ref=e192]: P2
+    - heading "A pack folder that holds a mapArt folder is read as that pack" [level=3] [ref=e193]
+    - paragraph [ref=e194]:
+      - text: Basis. A map pack made for the game is a folder with
+      - code [ref=e195]: mapArt
+      - text: inside, because that is what gets dropped into the Brawlhalla folder. Today
+      - code [ref=e196]: PackScanner
+      - text: only reads the map folders directly under
+      - code [ref=e197]: packs\<name>
+      - text: ", so a pack laid out the game's way shows as empty, and a"
+      - code [ref=e198]: mapArt
+      - text: folder copied into
+      - code [ref=e199]: packs\
+      - text: shows as a pack named mapArt. The folder the owner named is the pack; mapArt is packaging.
+    - list [ref=e200]:
+      - listitem [ref=e201]:
+        - code [ref=e202]: PackScanner.ScanPack
+        - text: ": if the pack folder has a child named"
+        - code [ref=e203]: mapArt
+        - text: (any case) and no map folders of its own, the child is the pack root. The pack keeps the outer folder's name.
+      - listitem [ref=e204]:
+        - text: The same rule in Import folder and in Import from another pack, so pointing at
+        - code [ref=e205]: anything\
+        - text: finds
+        - code [ref=e206]: anything\mapArt\
+        - text: .
+      - listitem [ref=e207]:
+        - text: Writes into such a pack (editors, Duplicate, Import) go under its
+        - code [ref=e208]: mapArt
+        - text: ", so the folder stays droppable into the game."
+      - listitem [ref=e209]:
+        - text: A folder named mapArt placed directly under
+        - code [ref=e210]: packs\
+        - text: "is shown as a pack called mapArt with a status line hint: \"Rename it to what the maps are\", linking to Rename."
+    - generic [ref=e211]: packs\ anything\ pack "anything" mapArt\ read as the pack root BloodMoon\ Backgrounds\ b&w maps\ unchanged BloodMoon\
+    - generic [ref=e212]: Core/Scanning/PackScanner.cs, PackLayout (new, one PackRoot(dir) helper used by scanner, PackCopier, ImportRouter, editors), tests
+    - generic [ref=e213]:
+      - generic [ref=e214]: Objection (optional)
+      - textbox "Objection (optional)" [ref=e215]:
+        - /placeholder: Only if something here is wrong
+  - 'heading "Lists: only the edited row refreshes" [level=2] [ref=e217]'
+  - paragraph [ref=e218]: After an editor saves, the app rescans everything and rebuilds every row on the Platforms, Backgrounds and Maps pages. The owner sees the whole page blink and the scroll jump. Only the rows for the maps that were written need to change.
+  - generic [ref=e219]:
+    - generic [ref=e220]:
+      - generic [ref=e221]: Platforms page, 1280 x 800
+      - button "Current" [ref=e222] [cursor=pointer]
+      - button "Proposed" [ref=e223] [cursor=pointer]
+      - button "Open at full size" [ref=e224] [cursor=pointer]
+    - generic [ref=e225]:
+      - img "Current"
+      - generic [ref=e226]: "After a save: every row is removed and re-added, previews reload, scroll returns to the top."
+  - generic [ref=e227]:
+    - generic [ref=e228]:
+      - generic [ref=e229]: One row
+      - text: The row for the written map updates in place; its tiles swap when ready.
+    - generic [ref=e230]:
+      - generic [ref=e231]: Several
+      - text: Add as new or a multi-map save updates each written row the same way; the status line still says what was saved.
+    - generic [ref=e232]:
+      - generic [ref=e233]: Row gone
+      - text: If a save removes the last art for a row (Delete platform set), the row collapses with a short fade instead of the list resetting.
+    - generic [ref=e234]:
+      - generic [ref=e235]: New pack
+      - text: A save into a new pack also updates the Packs page's row list (one new row), not the whole list.
+    - generic [ref=e236]:
+      - generic [ref=e237]: Full refresh
+      - text: The top bar Refresh and F5 still do the full rescan; they are the escape hatch.
+    - generic [ref=e238]:
+      - generic [ref=e239]: Failure
+      - text: If the in-place update cannot find the row (renamed folder), it falls back to the full rebuild silently.
+  - generic [ref=e240]:
+    - generic [ref=e241]: L1
+    - heading "In-place row update after a save" [level=3] [ref=e242]
+    - paragraph [ref=e243]: Basis. A full rebuild resets scroll and selection and repaints every preview; that is the right thing after Refresh, and the wrong thing after one edit. The rows already have a stable key (the card key on Platforms, the folder name on Backgrounds), so the one row that changed can be replaced where it sits. The 3.2 Show pictures toggle already updates in place for the same reason.
+    - list [ref=e244]:
+      - listitem [ref=e245]:
+        - code [ref=e246]: RowsPageViewModel.UpdateFolders(snapshot, folders)
+        - text: ": rebuild only rows whose key is in"
+        - code [ref=e247]: folders
+        - text: and assign
+        - code [ref=e248]: Rows[i] = newRow
+        - text: ; no Clear, no cancel of the other rows' loads.
+      - listitem [ref=e249]:
+        - code [ref=e250]: MainViewModel.RescanAsync(writtenFolders)
+        - text: calls
+        - code [ref=e251]: UpdateFolders
+        - text: on every page when
+        - code [ref=e252]: writtenFolders
+        - text: is given, and
+        - code [ref=e253]: Refresh
+        - text: (full) when it is not.
+      - listitem [ref=e254]:
+        - code [ref=e255]: ThumbnailCache
+        - text: evicts only the written files' paths instead of
+        - code [ref=e256]: Clear()
+        - text: .
+      - listitem [ref=e257]: The scan itself stays a full scan for now (it is fast; the flash is the collection reset, not the scan). A per-folder scan is a later step if the full one ever shows.
+      - listitem [ref=e258]: "Row visual while recomposing: a 2 px progress line at the top edge of the row card and the tiles at 45% until the new image arrives."
+    - generic [ref=e259]: ViewModels/Pages/RowsPageViewModel.cs (142-175, 279-286), MainViewModel.cs (1334-1352, 1187, 1760), Services/ThumbnailCache.cs, PlatformsViewModel.cs, BackgroundsViewModel.cs, MapsViewModel.cs, tests
+    - generic [ref=e260]:
+      - generic [ref=e261]: Objection (optional)
+      - textbox "Objection (optional)" [ref=e262]:
+        - /placeholder: Only if something here is wrong
+  - 'heading "Onboarding: two shortcut boxes" [level=2] [ref=e264]'
+  - paragraph [ref=e265]: BhMaps ships as one exe with no installer, so Windows never learns it exists. The welcome window gets a fourth step that offers the two places people look for an app.
+  - generic [ref=e266]:
+    - generic [ref=e267]:
+      - generic [ref=e268]: Welcome window, 620 wide
+      - button "Current" [ref=e269] [cursor=pointer]
+      - button "Proposed" [ref=e270] [cursor=pointer]
+      - button "Open at full size" [ref=e271] [cursor=pointer]
+    - generic [ref=e272]:
+      - img "Current"
+      - generic [ref=e273]: Three steps and Finish. Nothing about where the app lives.
+  - generic [ref=e274]:
+    - generic [ref=e275]:
+      - generic [ref=e276]: Default
+      - text: Start menu ticked, desktop not. See
+      - link "Q4 ↗" [ref=e277] [cursor=pointer]:
+        - /url: "#q4"
+      - text: .
+    - generic [ref=e278]:
+      - generic [ref=e279]: Already there
+      - text: A shortcut that already points at this exe is left alone; the box shows ticked.
+    - generic [ref=e280]:
+      - generic [ref=e281]: Exe moved
+      - text: On every start the app re-points a shortcut that targets a path that no longer exists, so a moved exe keeps working from Start.
+    - generic [ref=e282]:
+      - generic [ref=e283]: Cannot write
+      - text: If the Start menu or desktop folder refuses the write, Finish still finishes; the status line says which shortcut was not made, with a Retry link.
+    - generic [ref=e284]:
+      - generic [ref=e285]: Later
+      - text: Settings gets a Shortcuts row with the same two boxes, so the welcome text "can be changed later in Settings" stays true.
+    - generic [ref=e286]:
+      - generic [ref=e287]: Focus
+      - text: Tab order runs the two boxes between step 3 and Cancel; Space toggles.
+  - generic [ref=e288]:
+    - generic [ref=e289]: O1
+    - 'heading "Step 4: Shortcuts, two checkboxes" [level=3] [ref=e290]'
+    - paragraph [ref=e291]: Basis. The exe runs from wherever it was downloaded, so after the first run there is no way to find BhMaps again except the Downloads folder. Installers put this exact choice (Start menu entry, desktop icon) on the last setup page because it is the one thing the user has an opinion about and the app cannot guess. Keeping it on the welcome window, in the same numbered style, costs one step and no new window.
+    - list [ref=e292]:
+      - listitem [ref=e293]: "A step 4 block under step 3: title \"Shortcuts\", one line of explanation, two checkboxes with a one-line caption each."
+      - listitem [ref=e294]:
+        - text: Finish creates the ticked shortcuts after the paths are saved and before the Default pack capture starts. A
+        - code [ref=e295]: .lnk
+        - text: is written with the Windows Shell link API, target = the running exe, icon = the exe, working folder = the exe's folder.
+      - listitem [ref=e296]:
+        - text: "Start menu:"
+        - code [ref=e297]: "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\BhMaps.lnk"
+        - text: ". Desktop: the user's Desktop folder (read from the shell, not assumed),"
+        - code [ref=e298]: BhMaps.lnk
+        - text: .
+      - listitem [ref=e299]: "Settings: a Shortcuts row under Folders with the same two boxes; unticking removes the file the app made, never a shortcut it did not make (checked by target path)."
+      - listitem [ref=e300]:
+        - text: Settings store the two choices as
+        - code [ref=e301]: startMenuShortcut
+        - text: and
+        - code [ref=e302]: desktopShortcut
+        - text: so the Settings row and the start-time re-point know what the owner wanted.
+      - listitem [ref=e303]:
+        - text: A dev run (
+        - code [ref=e304]: "--appdata"
+        - text: set) never writes shortcuts.
+    - generic [ref=e305]: "Pattern: the Additional tasks page of Inno Setup installers, and the Windows app model where Start menu entries are what Windows search indexes."
+    - generic [ref=e306]: WelcomeWindow.xaml, WelcomeViewModel.cs, new Services/ShellShortcuts.cs, AppSettings.cs, SettingsPage.xaml, SettingsPageViewModel.cs
+    - generic [ref=e307]:
+      - generic [ref=e308]: Objection (optional)
+      - textbox "Objection (optional)" [ref=e309]:
+        - /placeholder: Only if something here is wrong
+  - heading "Open questions" [level=2] [ref=e311]
+  - paragraph [ref=e312]: Five things the design cannot settle alone. Pick an option, type, or both. "I answered" in chat is the go.
+  - generic [ref=e313]:
+    - generic [ref=e314]: Q1
+    - heading "What does Add as new make?" [level=3] [ref=e315]
+    - paragraph [ref=e316]:
+      - text: Both editors get the button (
+      - link "E1 ↗" [ref=e317] [cursor=pointer]:
+        - /url: "#e1"
+      - text: ). The question is where the copy goes.
+    - generic [ref=e318]:
+      - generic [ref=e319] [cursor=pointer]:
+        - radio "A fresh pack named New Pack, New Pack 2, ... One click, no prompt. Rename later from the Packs menu. My pick" [ref=e320]
+        - generic [ref=e321]:
+          - text: A fresh pack named New Pack, New Pack 2, ...
+          - generic [ref=e322]: One click, no prompt. Rename later from the Packs menu.
+        - generic [ref=e323]: My pick
+      - generic [ref=e324] [cursor=pointer]:
+        - radio "A fresh pack, but ask for the name first The Rename prompt appears with New Pack N prefilled; OK saves." [ref=e325]
+        - generic [ref=e326]:
+          - text: A fresh pack, but ask for the name first
+          - generic [ref=e327]: The Rename prompt appears with New Pack N prefilled; OK saves.
+      - generic [ref=e328] [cursor=pointer]:
+        - 'radio "A second picture in My Backgrounds Backgrounds only: the file gets a numbered name in the picture library. Platforms would still need a pack." [ref=e329]'
+        - generic [ref=e330]:
+          - text: A second picture in My Backgrounds
+          - generic [ref=e331]: "Backgrounds only: the file gets a numbered name in the picture library. Platforms would still need a pack."
+    - textbox "Anything to add" [ref=e332]
+  - generic [ref=e334]:
+    - generic [ref=e335]: Q2
+    - heading "Which editors default to a fresh New Pack?" [level=3] [ref=e336]
+    - paragraph [ref=e337]:
+      - text: Today both default to My Backgrounds (
+      - link "E2 ↗" [ref=e338] [cursor=pointer]:
+        - /url: "#e2"
+      - text: ).
+    - generic [ref=e339]:
+      - generic [ref=e340] [cursor=pointer]:
+        - radio "Platforms only Backgrounds keep My Backgrounds, which is the picture library. My pick" [ref=e341]
+        - generic [ref=e342]:
+          - text: Platforms only
+          - generic [ref=e343]: Backgrounds keep My Backgrounds, which is the picture library.
+        - generic [ref=e344]: My pick
+      - generic [ref=e345] [cursor=pointer]:
+        - radio "Both editors Every edit starts its own pack unless it came from one." [ref=e346]
+        - generic [ref=e347]:
+          - text: Both editors
+          - generic [ref=e348]: Every edit starts its own pack unless it came from one.
+      - generic [ref=e349] [cursor=pointer]:
+        - radio "Platforms only, and remember the last target Reopening the editor starts in the pack you last saved to." [ref=e350]
+        - generic [ref=e351]:
+          - text: Platforms only, and remember the last target
+          - generic [ref=e352]: Reopening the editor starts in the pack you last saved to.
+    - textbox "Anything to add" [ref=e353]
+  - generic [ref=e355]:
+    - generic [ref=e356]: Q3
+    - heading "Which sliders go in the background editor?" [level=3] [ref=e357]
+    - paragraph [ref=e358]:
+      - text: The mock shows Hue, Saturation, Contrast beside Darken (
+      - link "E4 ↗" [ref=e359] [cursor=pointer]:
+        - /url: "#e4"
+      - text: ).
+    - generic [ref=e360]:
+      - generic [ref=e361] [cursor=pointer]:
+        - radio "Hue, Saturation, Contrast Three new; Darken stays as it is. My pick" [ref=e362]
+        - generic [ref=e363]:
+          - text: Hue, Saturation, Contrast
+          - generic [ref=e364]: Three new; Darken stays as it is.
+        - generic [ref=e365]: My pick
+      - generic [ref=e366] [cursor=pointer]:
+        - radio "Hue, Saturation, Contrast, Brightness Brightness replaces Darken, running both ways (-100..100)." [ref=e367]
+        - generic [ref=e368]:
+          - text: Hue, Saturation, Contrast, Brightness
+          - generic [ref=e369]: Brightness replaces Darken, running both ways (-100..100).
+      - generic [ref=e370] [cursor=pointer]:
+        - radio "Hue and Saturation only Smallest change; the panel keeps one column." [ref=e371]
+        - generic [ref=e372]:
+          - text: Hue and Saturation only
+          - generic [ref=e373]: Smallest change; the panel keeps one column.
+      - generic [ref=e374] [cursor=pointer]:
+        - radio "The three, plus Blur A soft background behind platforms. Costs one more row." [ref=e375]
+        - generic [ref=e376]:
+          - text: The three, plus Blur
+          - generic [ref=e377]: A soft background behind platforms. Costs one more row.
+    - textbox "Anything to add" [ref=e378]
+  - generic [ref=e380]:
+    - generic [ref=e381]: Q4
+    - heading "Welcome defaults for the two shortcut boxes" [level=3] [ref=e382]
+    - paragraph [ref=e383]:
+      - text: See
+      - link "O1 ↗" [ref=e384] [cursor=pointer]:
+        - /url: "#o1"
+      - text: .
+    - generic [ref=e385]:
+      - generic [ref=e386] [cursor=pointer]:
+        - radio "Start menu on, desktop off Windows search finds it; the desktop stays clean. My pick" [ref=e387]
+        - generic [ref=e388]:
+          - text: Start menu on, desktop off
+          - generic [ref=e389]: Windows search finds it; the desktop stays clean.
+        - generic [ref=e390]: My pick
+      - generic [ref=e391] [cursor=pointer]:
+        - radio "Both on Like most installers." [ref=e392]
+        - generic [ref=e393]:
+          - text: Both on
+          - generic [ref=e394]: Like most installers.
+      - generic [ref=e395] [cursor=pointer]:
+        - radio "Both off Nothing is written unless asked." [ref=e396]
+        - generic [ref=e397]:
+          - text: Both off
+          - generic [ref=e398]: Nothing is written unless asked.
+    - textbox "Anything to add" [ref=e399]
+  - generic [ref=e401]:
+    - generic [ref=e402]: Q5
+    - heading "Where should the mapArt wrapper be understood?" [level=3] [ref=e403]
+    - paragraph [ref=e404]:
+      - text: The rule in
+      - link "P2 ↗" [ref=e405] [cursor=pointer]:
+        - /url: "#p2"
+      - text: .
+    - generic [ref=e406]:
+      - generic [ref=e407] [cursor=pointer]:
+        - radio "Library packs, Import folder, and Import from another pack One PackRoot rule, used by everything that reads a pack. My pick" [ref=e408]
+        - generic [ref=e409]:
+          - text: Library packs, Import folder, and Import from another pack
+          - generic [ref=e410]: One PackRoot rule, used by everything that reads a pack.
+        - generic [ref=e411]: My pick
+      - generic [ref=e412] [cursor=pointer]:
+        - radio "Library packs only Import keeps asking for the folder with the maps in it." [ref=e413]
+        - generic [ref=e414]:
+          - text: Library packs only
+          - generic [ref=e415]: Import keeps asking for the folder with the maps in it.
+    - textbox "Anything to add" [ref=e416]
+  - heading "Build order" [level=2] [ref=e418]
+  - list [ref=e419]:
+    - listitem [ref=e420]:
+      - generic [ref=e421]:
+        - link "E3 ↗" [ref=e422] [cursor=pointer]:
+          - /url: "#e3"
+        - text: New pack works.
+      - generic [ref=e423]: "Editor shots with My Backgrounds present: pick New pack..., both Save buttons enabled, name visible, save lands in the typed pack."
+    - listitem [ref=e424]:
+      - generic [ref=e425]:
+        - link "E2 ↗" [ref=e426] [cursor=pointer]:
+          - /url: "#e2"
+        - text: Platform default target.
+      - generic [ref=e427]: "Open the editor from a card not in a pack: box reads New Pack N; from a pack tile: that pack."
+    - listitem [ref=e428]:
+      - generic [ref=e429]:
+        - link "E1 ↗" [ref=e430] [cursor=pointer]:
+          - /url: "#e1"
+        - text: Add as new, both editors.
+      - generic [ref=e431]: Core test for PackNames.NextFree; click it twice on the same map and get New Pack and New Pack 2 with the right files and records.
+    - listitem [ref=e432]:
+      - generic [ref=e433]:
+        - link "P1 ↗" [ref=e434] [cursor=pointer]:
+          - /url: "#p1"
+        - text: Rename.
+      - generic [ref=e435]: Rename a hidden, in-game pack; it stays hidden and In game under the new name; Undo puts the name back.
+    - listitem [ref=e436]:
+      - generic [ref=e437]:
+        - link "P2 ↗" [ref=e438] [cursor=pointer]:
+          - /url: "#p2"
+        - text: mapArt wrapper.
+      - generic [ref=e439]: Core tests with a packs\anything\mapArt tree; the Packs page shows anything with its maps; an edit saved into it lands under mapArt.
+    - listitem [ref=e440]:
+      - generic [ref=e441]:
+        - link "L1 ↗" [ref=e442] [cursor=pointer]:
+          - /url: "#l1"
+        - text: In-place row update.
+      - generic [ref=e443]: Save from the Platforms page scrolled to the middle; the scroll offset and the other rows' previews are unchanged (UIA bounding boxes before and after).
+    - listitem [ref=e444]:
+      - generic [ref=e445]:
+        - link "E4 ↗" [ref=e446] [cursor=pointer]:
+          - /url: "#e4"
+        - text: Background sliders.
+      - generic [ref=e447]: Core render tests per slider at 0 and at the ends; editor shot against the mock; reopen restores the values.
+    - listitem [ref=e448]:
+      - generic [ref=e449]:
+        - link "O1 ↗" [ref=e450] [cursor=pointer]:
+          - /url: "#o1"
+        - text: Shortcuts.
+      - generic [ref=e451]: Welcome shot against the mock; on a throwaway appdata with a temp Start menu path, Finish writes the .lnk and its target is the exe; Settings untick removes it.
+    - listitem [ref=e452]:
+      - text: Rebuild the run folder.
+      - generic [ref=e453]: After your app is closed, as always. No release unless you say so.
+  - heading "What I would not change" [level=2] [ref=e454]
+  - list [ref=e455]:
+    - listitem [ref=e456]: Save only and Save and apply keep their names and places. Add as new goes to their left.
+    - listitem [ref=e457]: My Backgrounds stays the backgrounds library and the background editor's default.
+    - listitem [ref=e458]: The top bar Refresh stays a full rescan.
+    - listitem [ref=e459]: A pack's name stays its folder name on disk; Rename renames the folder, nothing is stored twice.
+    - listitem [ref=e460]: No installer. Shortcuts point at the exe wherever it is.

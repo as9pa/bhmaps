@@ -153,6 +153,84 @@ public class BackgroundFitterTests
         Assert.InRange(p.B, 118, 138);
     }
 
+    [Fact]
+    public void Hue180_TurnsRedCyan()
+    {
+        using var tmp = new TempDir();
+        var src = SyntheticImage.SavePng(tmp.Sub("red.png"), 64, 64, (_, _) => SyntheticImage.Rgb(230, 20, 20));
+
+        var p = SyntheticImage.PixelAt(BackgroundFitter.Render(src, new FitOptions(FitMode.Stretch, Hue: 180), 128, 72), 64, 36);
+
+        Assert.True(p.R < 60 && p.G > 200 && p.B > 200, $"expected cyan, got {p}");
+    }
+
+    [Fact]
+    public void SaturationMinusOne_GreysTheColour()
+    {
+        using var tmp = new TempDir();
+        var src = SyntheticImage.SavePng(tmp.Sub("red.png"), 64, 64, (_, _) => SyntheticImage.Rgb(230, 20, 20));
+
+        var p = SyntheticImage.PixelAt(BackgroundFitter.Render(src, new FitOptions(FitMode.Stretch, Saturation: -1), 128, 72), 64, 36);
+
+        Assert.InRange(Math.Abs(p.R - p.G), 0, 2);
+        Assert.InRange(Math.Abs(p.G - p.B), 0, 2);
+        Assert.InRange(p.R, 115, 135);
+    }
+
+    [Fact]
+    public void Contrast_ZeroIsIdentityAndPositiveSpreadsFromMidGrey()
+    {
+        using var tmp = new TempDir();
+        var src = SyntheticImage.SaveQuadrants(tmp.Sub("src.png"), 800, 200);
+        var grey = SyntheticImage.SavePng(tmp.Sub("grey.png"), 64, 64, (_, _) => SyntheticImage.Rgb(100, 100, 100));
+
+        var plain = BackgroundFitter.Render(src, new FitOptions(FitMode.Stretch), 256, 144);
+        var zero = BackgroundFitter.Render(src, new FitOptions(FitMode.Stretch, Contrast: 0), 256, 144);
+        var p = SyntheticImage.PixelAt(BackgroundFitter.Render(grey, new FitOptions(FitMode.Stretch, Contrast: 0.5), 128, 72), 64, 36);
+
+        Assert.Equal(0, MeanAbsoluteDifference(plain, zero));
+
+        // Slope 1 + 0.5 * 2 = 2 around 128: (100 - 128) * 2 + 128 = 72.
+        Assert.InRange(p.R, 71, 73);
+        Assert.InRange(p.G, 71, 73);
+        Assert.InRange(p.B, 71, 73);
+    }
+
+    [Fact]
+    public void BlurZero_IsIdentity()
+    {
+        using var tmp = new TempDir();
+        var src = SyntheticImage.SaveQuadrants(tmp.Sub("src.png"), 800, 200);
+
+        var plain = BackgroundFitter.Render(src, new FitOptions(FitMode.Stretch), 256, 144);
+        var zero = BackgroundFitter.Render(src, new FitOptions(FitMode.Stretch, Blur: 0), 256, 144);
+
+        Assert.Equal(0, MeanAbsoluteDifference(plain, zero));
+    }
+
+    [Fact]
+    public void Blur_SoftensAnEdgeAndKeepsTheCanvasEdge()
+    {
+        using var tmp = new TempDir();
+        var src = SyntheticImage.SavePng(
+            tmp.Sub("halves.png"),
+            200,
+            100,
+            (x, _) => x < 100 ? SyntheticImage.Rgb(255, 0, 0) : SyntheticImage.Rgb(0, 0, 255));
+
+        var sharp = BackgroundFitter.Render(src, new FitOptions(FitMode.Stretch), 200, 100);
+        var soft = BackgroundFitter.Render(src, new FitOptions(FitMode.Stretch, Blur: 0.5), 200, 100);
+
+        AssertRed(SyntheticImage.PixelAt(sharp, 98, 50));
+        var edge = SyntheticImage.PixelAt(soft, 98, 50);
+        Assert.True(edge.B > 60 && edge.R < 230, $"expected red and blue mixed at the edge, got {edge}");
+        Assert.True(soft.IsFrozen);
+
+        // Mirrored padding: the blur does not fade the outer rim toward black.
+        AssertRed(SyntheticImage.PixelAt(soft, 1, 1));
+        AssertBlue(SyntheticImage.PixelAt(soft, 198, 98));
+    }
+
     private static double MeanAbsoluteDifference(BitmapSource a, BitmapSource b)
     {
         Assert.Equal(a.PixelWidth, b.PixelWidth);

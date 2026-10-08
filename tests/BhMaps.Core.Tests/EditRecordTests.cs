@@ -169,6 +169,56 @@ public class EditRecordTests
         Assert.Equal(35, slot.Darken);
         Assert.Equal("cc33", slot.Hash);
         Assert.Contains("\"mode\": \"contain\"", File.ReadAllText(BackgroundEditRecord.PathFor(tmp.Path)));
+        Assert.Null(slot.Hue);
+        Assert.DoesNotContain("\"hue\"", File.ReadAllText(BackgroundEditRecord.PathFor(tmp.Path)));
+    }
+
+    [Fact]
+    public void Background_colour_and_blur_round_trip()
+    {
+        using var tmp = new TempDir();
+        var record = new BackgroundEditRecord();
+        record.Set("Backgrounds\\BG_Sewer.jpg", new BackgroundSlotEntry
+        {
+            SavedAt = SavedAt,
+            Picture = "Pictures\\sewer.jpg",
+            Hue = -30,
+            Saturation = 0.25,
+            Contrast = -0.5,
+            Blur = 0.4,
+        });
+
+        record.Save(tmp.Path);
+        var loaded = BackgroundEditRecord.Load(tmp.Path);
+
+        var slot = loaded.Entry("Backgrounds\\BG_Sewer.jpg");
+        Assert.NotNull(slot);
+        Assert.Equal(-30, slot.Hue);
+        Assert.Equal(0.25, slot.Saturation);
+        Assert.Equal(-0.5, slot.Contrast);
+        Assert.Equal(0.4, slot.Blur);
+        var json = File.ReadAllText(BackgroundEditRecord.PathFor(tmp.Path));
+        Assert.Contains("\"saturation\": 0.25", json);
+        Assert.Contains("\"blur\": 0.4", json);
+    }
+
+    [Fact]
+    public void Background_record_from_before_3_3_reads_colour_and_blur_as_absent()
+    {
+        using var tmp = new TempDir();
+        File.WriteAllText(
+            BackgroundEditRecord.PathFor(tmp.Path),
+            """{ "version": 1, "slots": { "Backgrounds\\BG_Sewer.jpg": { "picture": "a.jpg", "mode": "cover", "panX": 0.5, "panY": 0.5, "darken": 0.1, "hash": "aa" } } }""");
+
+        var slot = BackgroundEditRecord.Load(tmp.Path).Entry("Backgrounds\\BG_Sewer.jpg");
+
+        Assert.NotNull(slot);
+        Assert.Equal(0.1, slot.Darken);
+        Assert.Null(slot.Hue);
+        Assert.Null(slot.Saturation);
+        Assert.Null(slot.Contrast);
+        Assert.Null(slot.Blur);
+        Assert.Null(slot.Extra);
     }
 
     [Fact]
