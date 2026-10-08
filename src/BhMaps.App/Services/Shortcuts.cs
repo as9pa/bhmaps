@@ -3,7 +3,7 @@ using BhMaps.Core.Settings;
 
 namespace BhMaps.App.Services;
 
-/// <summary>3.3 O1: the Start menu and desktop shortcuts. The files on disk are the state; nothing is saved in
+/// <summary>3.6 O1: the Start menu and desktop shortcuts. The files on disk are the state; nothing is saved in
 /// settings. Written through the Windows Script Host's WScript.Shell, which every Windows has, so no package is
 /// needed. Every call returns an error message, or null when it worked, and never throws to the caller.</summary>
 public static class Shortcuts

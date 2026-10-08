@@ -519,7 +519,7 @@
           </Grid>
 
           <TextBlock Style="{StaticResource FieldLabel}" Text="Save into pack" />
-          <!-- 3.3 E3: one editable box. The list picks a pack, typing names a new one, and the hint or the
+          <!-- 3.6 E3: one editable box. The list picks a pack, typing names a new one, and the hint or the
                error sits right under it so neither can fall below the window. -->
           <ComboBox AutomationProperties.Name="Save into pack"
                     IsEditable="True"
@@ -568,7 +568,7 @@
         <!-- 3.0 E: the two saves in place of one Save and an "Apply to game" tick, in the order every dialog
              uses: Cancel, then the quieter save, then the primary at the end. Enter takes the primary, which is
              the one that puts the platforms in the game. -->
-        <!-- 3.3 E1: asks for its own pack name, so a bad name in the box does not hold it. -->
+        <!-- 3.6 E1: asks for its own pack name, so a bad name in the box does not hold it. -->
         <Button Margin="0,0,8,0"
                 Command="{Binding AddAsNewCommand}"
                 Content="Add as new"

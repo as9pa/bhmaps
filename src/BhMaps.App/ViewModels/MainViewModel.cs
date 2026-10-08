@@ -330,7 +330,7 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
-        var vm = new ImportViewModel(Snapshot.Tree, Snapshot.Packs.Select(p => p.Name).ToList(), Dialogs);
+        var vm = new ImportViewModel(Snapshot.Tree, Snapshot.Packs.Where(p => !p.IsDiscovered).Select(p => p.Name).ToList(), Dialogs);
         var window = new ImportWindow { DataContext = vm, Owner = Application.Current.MainWindow };
         if (window.ShowDialog() != true)
         {
@@ -516,7 +516,7 @@ public partial class MainViewModel : ObservableObject
         var mapName = target.Map?.DisplayName;
         var vm = new AddPicturesViewModel(
             Dialogs,
-            snapshot.Packs.Select(p => p.Name).ToList(),
+            snapshot.Packs.Where(p => !p.IsDiscovered).Select(p => p.Name).ToList(),
             target.Kind,
             mapName,
             snapshot.Catalog.Maps.Count);
@@ -847,7 +847,7 @@ public partial class MainViewModel : ObservableObject
             Services,
             Dialogs,
             MapSlotChoices(snapshot),
-            snapshot.Packs.Select(p => p.Name).ToList(),
+            snapshot.Packs.Where(p => !p.IsDiscovered).Select(p => p.Name).ToList(),
             request with { SourcePack = BackgroundSourcePack(request, snapshot) });
         var window = new BackgroundEditorWindow { DataContext = vm, Owner = Application.Current.MainWindow, ShowActivated = !App.Quiet };
         if (window.ShowDialog() != true)
@@ -858,7 +858,7 @@ public partial class MainViewModel : ObservableObject
         if (vm.Saved is not { ApplyToGame: true } saved)
         {
             // Saved into the pack and no further, so nothing in the game folder moved and there is nothing to undo.
-            // 3.3 L1: a slot's picture changes only the rows of the maps on that slot, so only those are rebuilt.
+            // 3.6 L1: a slot's picture changes only the rows of the maps on that slot, so only those are rebuilt.
             // An all-maps picture reaches every row, which is the full refresh.
             if (vm.Saved is { AllMaps: false } packOnly)
             {
@@ -1002,7 +1002,7 @@ public partial class MainViewModel : ObservableObject
 
         var rows = new List<ChooserRow>();
         foreach (var pack in snapshot.Packs.Where(
-                     p => !p.Name.Equals(exclude.Name, StringComparison.OrdinalIgnoreCase)))
+                     p => !p.IsDiscovered && !p.Name.Equals(exclude.Name, StringComparison.OrdinalIgnoreCase)))
         {
             var maps = snapshot.Catalog.Maps.Count(m => pack.FindFolder(m.FolderName) is { Files.Count: > 0 });
             var backgrounds = pack.FindFolder(PackCopier.BackgroundsFolder)?.Files.Count ?? 0;
@@ -1052,7 +1052,7 @@ public partial class MainViewModel : ObservableObject
         return FindPack(name.Trim());
     }
 
-    /// <summary>3.3 P1: the outer pack folder moves to the new name, and every place that names the pack follows
+    /// <summary>3.6 P1: the outer pack folder moves to the new name, and every place that names the pack follows
     /// it: the hidden list, the last-applied stamps, the dismissed transparent notes and the applied record. No
     /// Undo on the line: renaming back is the same two clicks.</summary>
     public async Task RenamePackAsync(Pack pack)
@@ -1391,7 +1391,7 @@ public partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowFirstRunBanner));
 
         // A file may be a different picture now, so the rows pages' decodes are forgotten before they rebuild.
-        // 3.3 L1: a save that names its folders forgets only theirs, and the rows pages rebuild only their rows.
+        // 3.6 L1: a save that names its folders forgets only theirs, and the rows pages rebuild only their rows.
         var inPlace = writtenFolders is { Count: > 0 };
         if (inPlace)
         {

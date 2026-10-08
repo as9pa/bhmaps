@@ -73,6 +73,11 @@ public abstract partial class PictureTileViewModel : ObservableObject
     [ObservableProperty]
     public partial IReadOnlyList<TileMenuCommand> MenuItems { get; set; }
 
+    /// <summary>True while the map panel's big image is showing this picture as a preview rather than what the
+    /// game has. Only the map panel sets it, so on every other page it stays false and the ring never draws.</summary>
+    [ObservableProperty]
+    public partial bool IsPreviewing { get; set; }
+
     /// <summary>Fills <see cref="MenuItems" />, which the tile does once, when it is built.</summary>
     public abstract void RebuildMenu();
 

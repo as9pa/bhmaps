@@ -2,14 +2,14 @@
 
 BhMaps is a Windows desktop app for managing Brawlhalla map art. It is map-first: every map is
 listed under the name the game gives it, above a preview composed the way the game composes it, from
-the game's own level data. It keeps a library of *packs*, folders of images that mirror the game's
+the game's own level data. It keeps a library of _packs_, folders of images that mirror the game's
 `mapArt` tree, and copies them into the game folder on demand. The only files it changes are `.png`
 and `.jpg` files inside the `mapArt` folder and inside its own library, plus its own files in
 `%APPDATA%\BhMaps`. It also writes over the `.jpg` files already in the game's `images\thumbnails`
 folder, and it keeps a copy of every original so it can put it back. The game's data files are read and never written, and
 nothing else in the game install is touched.
 
-## What is new in 3.3
+## What is new in 3.6
 
 The welcome window has a fourth step, Shortcuts: a tick to put BhMaps in the Start menu (on by default)
 and one for a desktop shortcut (off). The exe stays where it is; a shortcut only points at it, and the app
@@ -33,6 +33,33 @@ values are written into the saved picture and remembered, so a saved background 
 
 After a save, only the rows for the maps that were written are rebuilt; the list keeps its scroll and
 the rest of the rows stay as they were. The top bar Refresh and F5 still rebuild everything.
+
+## What is new in 3.5
+
+A map's panel previews before it applies. Click any background or platform set in the panel and the
+big picture at the top redraws the whole map with it, without changing anything in the game. Click a
+background and then a platform set to see both together. A previewed tile wears a ring, the picture
+carries a "Preview" tag, and a line under it names what is shown, with Apply (or Apply both) and Show
+current. Escape clears the preview first and closes the panel on the next press. The tile the game is
+showing keeps its check and no longer has a border, so the ring is the only outline in the panel.
+The release files are now named `bhmaps.exe` and `bhmaps-dotnet.zip`, with no version in the name,
+since the app updates itself.
+
+## What is new in 3.4
+
+Updating happens in place. When a newer release is out, Settings shows one Update button. It downloads
+the new version, checks it against the release's checksums, puts it in place of the running copy and
+restarts BhMaps, all in one step. This works for both the `.exe` and the `-dotnet.zip` build, so there
+is nothing to download by hand. BhMaps must run from a folder it can write to; if it cannot, the update
+is undone and an error says so. The What changed button is now called Changelog and still opens the
+release notes on GitHub.
+
+## What is new in 3.3
+
+The library can hold packs in your own folder layout. A folder one or two levels under the library that
+holds a `mapArt` folder is read as a pack, named after that folder, next to the packs in `packs`. These
+packs are read-only: BhMaps shows and applies them but never deletes, renames or changes them. A found
+pack whose name is taken shows as "Name (1)".
 
 ## What is new in 3.2
 
@@ -381,25 +408,35 @@ describes things by where they are and what they do. Nothing on disk changes sha
 
 ## Where things live
 
-| What | Where |
-| --- | --- |
-| Game map art, read and written | `C:\Program Files (x86)\Steam\steamapps\common\Brawlhalla\mapArt` |
-| Game data files, read only | `BrawlhallaAir.swf`, `Dynamic.swz`, `Init.swz` and `Game.swz`, in the folder above `mapArt` |
-| Game map-select thumbnails, written with the map art | `C:\Program Files (x86)\Steam\steamapps\common\Brawlhalla\images\thumbnails` |
-| Pack library | `Documents\BhMaps` by default, changeable in Settings |
-| Packs inside the library | `<library>\packs\<pack name>\<GameFolder>\<file>` |
-| Settings | `%APPDATA%\BhMaps\settings.json` |
-| Applied record | `%APPDATA%\BhMaps\applied.json` |
-| Hash cache | `%APPDATA%\BhMaps\hashcache.json` |
-| Level data cache | `%APPDATA%\BhMaps\leveldata.json` |
-| Composed previews | `%APPDATA%\BhMaps\previews\` |
-| Undo of the last game write | `%APPDATA%\BhMaps\undo\` |
-| Downloaded updates | `%APPDATA%\BhMaps\updates\` |
-| Kept map-select thumbnails | `%APPDATA%\BhMaps\thumbnails-original\` |
+| What                                                 | Where                                                                                                         |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Game map art, read and written                       | `C:\Program Files (x86)\Steam\steamapps\common\Brawlhalla\mapArt`                                             |
+| Game data files, read only                           | `BrawlhallaAir.swf`, `Dynamic.swz`, `Init.swz` and `Game.swz`, in the folder above `mapArt`                   |
+| Game map-select thumbnails, written with the map art | `C:\Program Files (x86)\Steam\steamapps\common\Brawlhalla\images\thumbnails`                                  |
+| Pack library                                         | `Documents\BhMaps` by default, changeable in Settings                                                         |
+| Packs inside the library                             | `<library>\packs\<pack name>\<GameFolder>\<file>`                                                             |
+| Discovered packs, read only                          | `<library>\...\<pack name>\mapArt\<GameFolder>\<file>`, with `mapArt` at most three folders below the library |
+| Settings                                             | `%APPDATA%\BhMaps\settings.json`                                                                              |
+| Applied record                                       | `%APPDATA%\BhMaps\applied.json`                                                                               |
+| Hash cache                                           | `%APPDATA%\BhMaps\hashcache.json`                                                                             |
+| Level data cache                                     | `%APPDATA%\BhMaps\leveldata.json`                                                                             |
+| Composed previews                                    | `%APPDATA%\BhMaps\previews\`                                                                                  |
+| Undo of the last game write                          | `%APPDATA%\BhMaps\undo\`                                                                                      |
+| Downloaded updates                                   | `%APPDATA%\BhMaps\updates\`                                                                                   |
+| Kept map-select thumbnails                           | `%APPDATA%\BhMaps\thumbnails-original\`                                                                       |
 
 The map art folder and the library are chosen in the welcome window and editable in Settings; the
-data files are wherever the game folder is. Only `<library>\packs` is read and written, so anything
-else kept in the library folder is left alone. The settings file holds the two paths, the tile size
+data files are wherever the game folder is. Only `<library>\packs` is written, so anything
+else kept in the library folder is left alone. BhMaps also reads packs kept elsewhere in the library: any
+folder with a `mapArt` folder inside it is a pack named after that folder, with its game folders read from
+the `mapArt` folder, for example `<library>\Summer\mapArt\BloodMoon\<file>`. The search looks at most
+three folders deep, counting the library's own subfolders as the first, so `mapArt` itself has to sit
+within those three. It does not look inside a pack it has found, skips `packs`, and skips junctions,
+links and folders it cannot open. These discovered packs are read only: they can be viewed, applied,
+exported and duplicated into `packs`, but not deleted, edited, imported into, or used as a copy or move
+target. When a discovered pack has the same name as another pack, ignoring case, the pack in `packs`
+keeps its name and the discovered one gets a number, such as "Summer (1)", then "Summer (2)", in the
+order of their folder paths. The settings file holds the two paths, the tile size
 each page remembers, when each pack was last applied, whether the Backgrounds page is showing your own
 pictures, the names of the packs hidden from the lists, whether the welcome window has been
 finished, whether BhMaps checks for updates when it starts, when it last checked, and any update
@@ -411,11 +448,12 @@ write into the game folder was about to overwrite or delete. The game folder can
 Once a day at most, a few seconds after the first scan, BhMaps asks GitHub whether there is a newer
 release. It is one request to `github.com`; nothing about you, your machine or your library is sent,
 and no account or token is involved. A newer release shows as one line in the top bar and on the
-Settings Version row, and nothing is downloaded until you press the button. Turn the whole thing off
-with the Updates row in Settings. An update you download is verified against the release's published
-SHA-256 checksum, kept in `%APPDATA%\BhMaps\updates\`, and swapped in when you close BhMaps. Only the
-self-contained exe can update itself; the framework-dependent zip build shows the release page
-instead.
+Settings Version row, and nothing is downloaded until you press **Update**. Turn the whole thing off
+with the Updates row in Settings. Update downloads the release's copy of the build you are running,
+the `.exe` for the self-contained build and the `-dotnet.zip` for the framework-dependent one, into
+`%APPDATA%\BhMaps\updates\`, verifies it against the release's published SHA-256 checksum, puts it
+in place of the running `BhMaps.exe` and restarts BhMaps on it. Both builds update this way; the
+folder BhMaps runs from has to be one it can write to.
 
 ## Pages
 
@@ -474,6 +512,14 @@ stops a long operation.
   maps, then Edit and Show in folder for a picture, or Edit, apply to
   this map, Show files and Open folder for a platform set. Reset all to default is in the page
   header.
+- **Clicking a choice in the map panel previews it** in the larger preview without applying anything;
+  Enter or Space does the same on a focused choice. A background and a platform set preview together,
+  so picking one of each shows the whole map as it would look. The previewed choice wears a ring, the
+  preview carries a "Preview" tag, and a line under it names what is shown with **Apply** (or **Apply
+  both**) and **Show current**. Clicking the previewed choice again, or the one the game is showing,
+  takes that half back out. Escape clears the preview first and closes the panel on the next press,
+  and opening another map drops it. The Show chip applies here too, so with Backgrounds only a
+  background preview is the picture alone.
 - **Backgrounds** is one row per map: the map's name and its tag on the left, then a strip of every
   background that map could have. The picture the game is showing comes first, with a check and a
   border; then Default, then one thumbnail for each pack that has a picture for that map in the Packs
@@ -551,7 +597,7 @@ stops a long operation.
   16 September 2026." with the version the game's files name, or "From the game's files, read ..."
   when they name none, and Refresh now beside it; and the Default pack, with **Capture**. **Updates**
   is the version, whose line reads "Latest. Last checked ..." or "Update available: <version>." with
-  **Get** and **What changed** beside it; and a checkbox reading **Check for updates when BhMaps
+  **Changelog** and **Update** beside it; and a checkbox reading **Check for updates when BhMaps
   starts** with a **Check now** button. There is no OK button, so every row saves as it is changed.
 
 These windows open on top of the pages:
@@ -648,13 +694,13 @@ the exception and use a message box: an error the app did not expect, and a deve
 
 The words the menus use mean the same thing everywhere:
 
-| Word | Meaning |
-|---|---|
-| Picture | A file you imported into a pack: an Add Image result, an editor save, or a copied file. Files the game owns are never pictures. |
-| Owned picture | A picture in a map's own slot, so it belongs to that map; "Apply to <map>" names it. |
-| Any-map picture | A picture in a slot no map owns; it can go on every map. |
-| Target | The map a card menu acts on: the card under the pointer. |
-| Chooser | The search-and-pick window behind "Apply to a map..." and "More pictures...". |
+| Word            | Meaning                                                                                                                         |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Picture         | A file you imported into a pack: an Add Image result, an editor save, or a copied file. Files the game owns are never pictures. |
+| Owned picture   | A picture in a map's own slot, so it belongs to that map; "Apply to <map>" names it.                                            |
+| Any-map picture | A picture in a slot no map owns; it can go on every map.                                                                        |
+| Target          | The map a card menu acts on: the card under the pointer.                                                                        |
+| Chooser         | The search-and-pick window behind "Apply to a map..." and "More pictures...".                                                   |
 
 There is no universal setting for a picture. "Apply to all maps" writes the picture onto every map
 now, and a later apply to one map replaces it there.
@@ -664,16 +710,16 @@ now, and a later apply to one map replaces it there.
 One action, one verb, wherever it appears. The label tells you what is about to happen; the confirm
 repeats it with the number of maps in it.
 
-| Action | The label | Where it appears |
-|---|---|---|
-| Apply | "Apply all", "Apply to a map...", "Apply to all maps", "Apply to N maps" | The row button on a pack, the tile and card menus, and the confirm button |
-| Reset | "Reset map", "Reset this map", "Reset all maps", "Reset N maps" | The card menu, the open map's panel, the Maps page menu, and the confirm |
-| Capture | "Capture the Default pack" | The Packs page menu and the third step of the welcome window |
-| Refresh | "Refresh", as the tooltip of an icon | The top bar. Re-copies the app's own files over what the game holds now |
-| Rescan | "Rescan", F5 | The top bar. Re-reads the game folder and the library without writing anything |
-| Import | "Import folder", "Import from pack" | The Packs page and a pack's own page |
-| New | "New pack", "Add image" | The Packs page and a pack's own page |
-| Undo | "Undo", Ctrl+Z | The line a write leaves in the top bar, and the dot it leaves behind |
+| Action  | The label                                                                | Where it appears                                                               |
+| ------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| Apply   | "Apply all", "Apply to a map...", "Apply to all maps", "Apply to N maps" | The row button on a pack, the tile and card menus, and the confirm button      |
+| Reset   | "Reset map", "Reset this map", "Reset all maps", "Reset N maps"          | The card menu, the open map's panel, the Maps page menu, and the confirm       |
+| Capture | "Capture the Default pack"                                               | The Packs page menu and the third step of the welcome window                   |
+| Refresh | "Refresh", as the tooltip of an icon                                     | The top bar. Re-copies the app's own files over what the game holds now        |
+| Rescan  | "Rescan", F5                                                             | The top bar. Re-reads the game folder and the library without writing anything |
+| Import  | "Import folder", "Import from pack"                                      | The Packs page and a pack's own page                                           |
+| New     | "New pack", "Add image"                                                  | The Packs page and a pack's own page                                           |
+| Undo    | "Undo", Ctrl+Z                                                           | The line a write leaves in the top bar, and the dot it leaves behind           |
 
 Reset and Capture are the two that talk about the Default pack: Capture makes it out of the game's
 own art, and Reset puts that art back.
@@ -764,11 +810,16 @@ own art, and Reset puts that art back.
 - **Updates** are read from the GitHub releases page of the project, once a day at most, when BhMaps
   starts and only when the check is on. The request carries nothing but the app's version; no account,
   no token and nothing about your library. When the newest release is newer than the running version,
-  Settings offers to download its `.exe` into `%APPDATA%\BhMaps\updates`, checks it against the
-  release's `SHA256SUMS.txt` and refuses it on a mismatch. Installing it is a small script that waits
-  for BhMaps to close, swaps the new exe over the old one and starts it again, so nothing is replaced
-  while the app is running. If the install folder cannot be written to, the button opens the release
-  page instead.
+  Settings shows **Update** and **Changelog**. Changelog opens the release page. Update downloads
+  the asset for the running build into `%APPDATA%\BhMaps\updates`, the `.exe` for the self-contained
+  build or the `-dotnet.zip` for the framework-dependent one, checks it against the release's
+  `SHA256SUMS.txt` and refuses it on a mismatch; from the zip only its `BhMaps.exe` is taken. It then
+  renames the running exe to `BhMaps.exe.old`, which Windows allows while it runs, moves the new exe
+  into its place, starts it and closes. The new BhMaps waits for the old one to exit and deletes the
+  `.old` file, as every start does. If any step fails, both files are put back as they were and a
+  dialog says why, with the release page as the way to update by hand. A development run, from
+  `dotnet run` or a plain build, never updates itself and shows only Changelog. Update waits while
+  BhMaps is busy writing, rather than closing in the middle of it.
 
 A write goes into the game folder whether Brawlhalla is running or not; the app never closes or
 starts the game to make a change. A change made while the game is up shows on the next match load,
@@ -791,11 +842,14 @@ window instead.
 pwsh -File scripts\publish.ps1
 ```
 
-That writes three files into `dist\`: a self-contained `bhmaps-v<version>-win-x64.exe` that carries
-its own runtime, `bhmaps-v<version>-win-x64-dotnet.zip`, a framework-dependent build that needs the
-.NET 10 Desktop Runtime on whatever machine runs it, and `SHA256SUMS.txt`, which the app's update
-check verifies a download against, so all three go on the release. The repository has to be public
-for the update check to reach the release at all.
+That writes three files into `dist\`: a self-contained `bhmaps.exe` that carries its own runtime,
+`bhmaps-dotnet.zip`, a framework-dependent build that needs the .NET 10 Desktop Runtime on whatever
+machine runs it, and `SHA256SUMS.txt`, which the app's update check verifies a download against, so
+all three go on the release. Each build updates from its own asset, so the zip must keep holding a
+single `BhMaps.exe`. Add `-Compat` to also write copies under the old versioned names
+(`bhmaps-v<version>-win-x64.exe` and `bhmaps-v<version>-win-x64-dotnet.zip`), which installs older
+than 3.5 look for, and upload all five. The repository has to be public for the update check to
+reach the release at all.
 
 Never point a development run at the real game folder. Build a throwaway copy instead:
 
@@ -879,7 +933,6 @@ Formatting and layout:
   Windows Open with dialog; the program you pick must save PNG in place.
 - A map-select picture that two different maps' mapArt folders both name is left alone, because
   writing it would change the other map's thumbnail too. The map panel says so.
-- The update swap needs the folder BhMaps runs from to be writable and the build to be the
-  self-contained `.exe`. The `-dotnet.zip` build, and an install under `Program Files`, get the
-  release page instead of a download.
+- The update swap needs the folder BhMaps runs from to be writable. From a folder such as
+  `Program Files` the swap fails, BhMaps is left as it was, and the dialog offers the release page.
 - Copying a map into another pack is not undoable; moving, importing, removing and duplicating are.

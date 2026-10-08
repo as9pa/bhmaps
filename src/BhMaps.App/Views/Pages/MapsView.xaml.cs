@@ -202,4 +202,32 @@ public partial class MapsView : UserControl
     /// <summary>The three-dot button on a panel tile. The button carries no menu of its own, so TileMenus walks
     /// up to the tile that does.</summary>
     private void OnTileMenuButton(object sender, RoutedEventArgs e) => TileMenus.OpenFor(sender);
+
+    /// <summary>A left click on a panel tile's body previews it in the panel's big image. The Apply and dots
+    /// buttons handle their own press, so it never bubbles up to here from them. The second press of a double
+    /// click is ignored, or a double click would preview the tile and take it straight back out.</summary>
+    private void OnPanelTileMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ClickCount == 1 && sender is FrameworkElement { DataContext: { } tile } && DataContext is MapsViewModel { Panel: { } panel })
+        {
+            panel.TogglePreview(tile);
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>Enter or Space on a focused panel tile is its click. Only on the tile itself: with focus on its
+    /// Apply or dots button the key is that button's. The menu key and Shift+F10 never reach here as either
+    /// key, so TileMenus keeps them.</summary>
+    private void OnPanelTileKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key is Key.Enter or Key.Space
+            && Keyboard.Modifiers == ModifierKeys.None
+            && ReferenceEquals(e.OriginalSource, sender)
+            && sender is FrameworkElement { DataContext: { } tile }
+            && DataContext is MapsViewModel { Panel: { } panel })
+        {
+            panel.TogglePreview(tile);
+            e.Handled = true;
+        }
+    }
 }

@@ -9,13 +9,15 @@ namespace BhMaps.Core.Operations;
 /// no map's background slot uses, or a background in the game that no pack accounts for. The Default pack is a
 /// capture of the game's own folder, so a file of its own is the game's and never a picture of the user's. One
 /// picture is one entry however many copies of it exist,
-/// because the user thinks in pictures and the app should not show the same one four times (spec 4).</summary>
+/// because the user thinks in pictures and the app should not show the same one four times (spec 4). ReadOnlyPaths
+/// are the LibraryPaths that sit in a discovered pack (outside packs\), which a rename refuses to touch.</summary>
 public sealed record CustomPicture(
     string Hash,
     string DisplayName,
     IReadOnlyList<string> LibraryPaths,
     IReadOnlyList<string> InGameSlots,
-    string? PackName)
+    string? PackName,
+    IReadOnlyList<string>? ReadOnlyPaths = null)
 {
     /// <summary>3.0: the picture's name, which is its file name without the extension. Every line that names
     /// the picture to the user (tile, chooser title, done line, menu row) says this; DisplayName is the file.</summary>
@@ -62,6 +64,10 @@ public static class CustomPictureLibrary
                 if (!isDefault && !slotNames.Contains(file.Name))
                 {
                     Of(byHash, hash).Library.Add((pack.Name, file.FullPath));
+                    if (pack.IsDiscovered)
+                    {
+                        Of(byHash, hash).ReadOnly.Add(file.FullPath);
+                    }
                 }
             }
         }
@@ -126,6 +132,13 @@ public static class CustomPictureLibrary
                 continue;
             }
 
+            // A copy in a discovered pack is read-only: it keeps its name and says why.
+            if (picture.ReadOnlyPaths?.Contains(path, StringComparer.OrdinalIgnoreCase) == true)
+            {
+                failures.Add(new FileFailure(path, "The pack this copy is in is outside the packs folder, so it is read-only."));
+                continue;
+            }
+
             try
             {
                 // The file's own name is not a name it has to dodge, so a picture renamed only in its casing
@@ -182,7 +195,8 @@ public static class CustomPictureLibrary
             displayName,
             entry.Library.Select(l => l.Path).ToList(),
             entry.GameNames.Where(slotNames.Contains).Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
-            entry.Library.Count > 0 ? entry.Library[0].Pack : null);
+            entry.Library.Count > 0 ? entry.Library[0].Pack : null,
+            entry.ReadOnly.Count > 0 ? [.. entry.ReadOnly] : null);
     }
 
     private static Entry Of(Dictionary<string, Entry> byHash, string hash)
@@ -219,5 +233,7 @@ public static class CustomPictureLibrary
         public List<(string Pack, string Path)> Library { get; } = [];
 
         public List<string> GameNames { get; } = [];
+
+        public HashSet<string> ReadOnly { get; } = new(StringComparer.OrdinalIgnoreCase);
     }
 }

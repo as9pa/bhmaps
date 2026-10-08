@@ -13,7 +13,7 @@ public partial class PacksView : UserControl
         InitializeComponent();
     }
 
-    /// <summary>3.3 P1: F2 on a focused pack row renames its pack, the same command as the dots menu's line. The
+    /// <summary>3.6 P1: F2 on a focused pack row renames its pack, the same command as the dots menu's line. The
     /// Default pack has no such line, and the command refuses it as well.</summary>
     private void OnRowKeyDown(object sender, KeyEventArgs e)
     {

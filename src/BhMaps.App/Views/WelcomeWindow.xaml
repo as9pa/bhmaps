@@ -138,7 +138,7 @@
         </StackPanel>
       </Grid>
 
-      <!-- 3.3 O1. A dev run shows the boxes too; Finish is what skips the writes there. -->
+      <!-- 3.6 O1. A dev run shows the boxes too; Finish is what skips the writes there. -->
       <Grid Style="{StaticResource StepGrid}">
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="28" />

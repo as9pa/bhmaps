@@ -32,7 +32,7 @@ public partial class PacksViewModel : PageViewModel
     /// PackDetailViewModel does, because those loads still hold the token.</summary>
     private CancellationTokenSource? _cts;
 
-    /// <summary>3.3 P2: the mapArt-as-a-pack note is said once a run, not after every scan.</summary>
+    /// <summary>3.6 P2: the mapArt-as-a-pack note is said once a run, not after every scan.</summary>
     private bool _mapArtNoted;
 
     public PacksViewModel(MainViewModel shell)
@@ -97,7 +97,7 @@ public partial class PacksViewModel : PageViewModel
         // Default pack, which is no answer to a filter.
         IsEmpty = snapshot.Packs.Count == 0;
 
-        // 3.3 P2: a mapArt folder dropped straight into packs\ is a pack called mapArt, which names nothing the
+        // 3.6 P2: a mapArt folder dropped straight into packs\ is a pack called mapArt, which names nothing the
         // owner would recognise. Said once a run and quietly; the pack works as it is.
         if (!_mapArtNoted
             && snapshot.Packs.Any(p => p.Name.Equals(PackScanner.MapArtFolder, StringComparison.OrdinalIgnoreCase)))
@@ -225,8 +225,9 @@ public partial class PacksViewModel : PageViewModel
             new("Duplicate", new RelayCommand(() => DuplicateCommand.Execute(row))),
         };
 
-        // 3.3 P1: the Default pack keeps its name, because every Reset to default restores from it by that name.
-        if (!row.IsDefault)
+        // 3.6 P1: the Default pack keeps its name, because every Reset to default restores from it by that name.
+        // A discovered pack (outside packs\) is read-only, so it has no Rename either.
+        if (!row.IsDefault && !row.Pack.IsDiscovered)
         {
             items.Add(new TileMenuCommand("Rename...", new RelayCommand(() => RenameCommand.Execute(row))));
         }
@@ -378,7 +379,7 @@ public partial class PacksViewModel : PageViewModel
         string? error = null;
         var ok = await Shell.RunBusyAsync(
             $"Deleting {pack.Name}",
-            (_, _) => Task.Run(() => { error = PackDeleter.Delete(libraryPath, pack.Name); }));
+            (_, _) => Task.Run(() => { error = PackDeleter.Delete(libraryPath, pack); }));
         if (error is not null)
         {
             Shell.Dialogs.Error("Could not remove pack", error);
@@ -441,7 +442,7 @@ public partial class PacksViewModel : PageViewModel
         var pack = row.Pack;
         var libraryPath = Shell.Services.LibraryPath;
         var copyName = PackCopier.FreeCopyName(libraryPath, pack.Name);
-        var undoPaths = PackCopier.DuplicatePaths(libraryPath, pack.Name, copyName);
+        var undoPaths = PackCopier.DuplicatePaths(pack, copyName);
         string? error = null;
         await Shell.RunLibraryWriteAsync(
             $"Duplicating {pack.Name}",
@@ -451,7 +452,7 @@ public partial class PacksViewModel : PageViewModel
                 {
                     try
                     {
-                        PackCopier.DuplicatePack(libraryPath, pack.Name, copyName);
+                        PackCopier.DuplicatePack(libraryPath, pack, copyName);
                     }
                     catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                     {
@@ -474,13 +475,13 @@ public partial class PacksViewModel : PageViewModel
     private Task ImportIntoAsync(PackRowViewModel? row) =>
         row is null ? Task.CompletedTask : Shell.ImportFromPackAsync(row.Pack);
 
-    /// <summary>3.3 P1: the dots menu's Rename... and F2 on a focused row. The Default pack is refused here too,
+    /// <summary>3.6 P1: the dots menu's Rename... and F2 on a focused row. The Default pack is refused here too,
     /// so the key cannot reach what the menu leaves out.</summary>
     [RelayCommand]
     private Task RenameAsync(PackRowViewModel? row) =>
-        row is null || row.IsDefault ? Task.CompletedTask : Shell.RenamePackAsync(row.Pack);
+        row is null || row.IsDefault || row.Pack.IsDiscovered ? Task.CompletedTask : Shell.RenamePackAsync(row.Pack);
 
-    /// <summary>3.3 P2: the outer folder, not the mapArt inside a wrapped pack, because the outer folder is what
+    /// <summary>3.6 P2: the outer folder, not the mapArt inside a wrapped pack, because the outer folder is what
     /// the owner named and what they would drag.</summary>
     [RelayCommand]
     private void OpenFolder(PackRowViewModel? row)

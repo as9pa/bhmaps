@@ -92,7 +92,7 @@ public sealed partial class MapRowViewModel : ObservableObject
 
     public bool ShowMore => Overflow > 0 && !IsUnfolded;
 
-    /// <summary>3.3 L1: true for a row rebuilt in place after a save, until its first picture arrives. The
+    /// <summary>3.6 L1: true for a row rebuilt in place after a save, until its first picture arrives. The
     /// template dims the strip on it.</summary>
     [ObservableProperty]
     public partial bool IsRefreshing { get; set; }

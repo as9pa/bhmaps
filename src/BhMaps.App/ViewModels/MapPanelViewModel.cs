@@ -100,6 +100,18 @@ public partial class MapPanelViewModel : ObservableObject
 
     private readonly CancellationTokenSource _loads = new();
 
+    /// <summary>The two preview layers a click on a tile sets: the background the big image draws in place of the
+    /// game's, and the pack whose platforms it draws in place of the game's. Independent of each other, so a
+    /// background and a set previewed together draw as one map. Null is the game's own for that layer.</summary>
+    private PictureTileViewModel? _previewBackground;
+    private PlatformSetTileViewModel? _previewSet;
+
+    /// <summary>The render behind the preview on screen. A new click cancels it, so a slow composite for a tile
+    /// clicked earlier never lands over the one clicked last. Linked to <see cref="_loads"/>, so replacing the
+    /// panel stops it too. Not disposed on replacement: the render it was handed may still hold its token, and
+    /// the registration it leaves on the panel's source dies with the panel.</summary>
+    private CancellationTokenSource? _previewLoads;
+
     public MapPanelViewModel(MainViewModel shell, MapEntry map, MapStatus? status, ScanSnapshot snapshot)
     {
         _shell = shell;
@@ -179,9 +191,49 @@ public partial class MapPanelViewModel : ObservableObject
 
     public IReadOnlyList<PlatformFileViewModel> Files => _platformFiles;
 
-    /// <summary>Null until the composite is ready, and then a 1280x720 source (spec 7.2).</summary>
+    /// <summary>Null until the composite is ready, and then a 1280x720 source (spec 7.2). What the game is showing,
+    /// kept while a preview is up, so Show current puts it back with no second render.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShownPreview))]
     public partial ImageSource? Preview { get; set; }
+
+    /// <summary>The picture a click on a tile put in the big image: the tile's own picture at once, and then the
+    /// full composite of both layers when it arrives. Null while nothing is previewed.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShownPreview))]
+    public partial ImageSource? PreviewImage { get; set; }
+
+    /// <summary>What the big image draws: the preview while one is up, and the game's composite otherwise. A
+    /// preview whose first picture has not arrived yet leaves the game's composite up rather than a blank.</summary>
+    public ImageSource? ShownPreview => IsPreviewing ? PreviewImage ?? Preview : Preview;
+
+    /// <summary>True while either layer is previewed. Drives the Preview tag, the line under the big image, and
+    /// which of the two Escape does first.</summary>
+    public bool IsPreviewing => _previewBackground is not null || _previewSet is not null;
+
+    /// <summary>The line under the big image, naming what is previewed by the tile's own name: "v1", "Default", or
+    /// "v1, Default" when both are. The rings on the tiles say which is the background and which the platforms.</summary>
+    public string PreviewTitle =>
+        (_previewBackground, _previewSet) switch
+        {
+            ({ } background, { } set) => $"{background.Title}, {set.PackName}",
+            ({ } background, null) => background.Title,
+            (null, { } set) => set.PackName,
+            _ => "",
+        };
+
+    /// <summary>With both layers previewed the one button applies both, so it says so.</summary>
+    public string ApplyPreviewText => _previewBackground is not null && _previewSet is not null ? "Apply both" : "Apply";
+
+    /// <summary>Why the big image is the tile's own picture rather than the whole map, or empty. A preview is never
+    /// worth an error dialog, so a composite that could not be drawn is a quiet line instead.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasPreviewNote))]
+    public partial string PreviewNote { get; set; } = "";
+
+    public bool HasPreviewNote => PreviewNote.Length > 0;
+
+    public const string PreviewFailedText = "Could not draw the full preview. Showing the tile's picture.";
 
     /// <summary>False hides the headers altogether, so a library with no any-map picture shows nothing but the
     /// Add Image button.</summary>
@@ -242,6 +294,172 @@ public partial class MapPanelViewModel : ObservableObject
 
     /// <summary>Stops the loads still in flight. Maps calls it when the panel is replaced or closed.</summary>
     public void Cancel() => _loads.Cancel();
+
+    /// <summary>A click on a tile's body, or Enter or Space on a focused one: that tile's layer goes into the big
+    /// image. The tile already previewed, or the one the game is showing, takes its layer back out instead, since
+    /// the game's own is what a layer with no preview draws. A placeholder with no art is not a choice, so it
+    /// previews nothing. The big image takes the tile's own picture at once and the whole map when the composite
+    /// arrives, so a click never waits on a render.</summary>
+    public void TogglePreview(object tile)
+    {
+        ImageSource? instant = null;
+        switch (tile)
+        {
+            case PictureTileViewModel background:
+                var clearBackground = background.IsInGame || ReferenceEquals(background, _previewBackground);
+                SetPreviewBackground(clearBackground ? null : background);
+                instant = clearBackground ? null : background.Thumbnail;
+                break;
+            case PlatformSetTileViewModel { HasNoArt: false } set:
+                var clearSet = set.InGame || ReferenceEquals(set, _previewSet);
+                SetPreviewSet(clearSet ? null : set);
+                instant = clearSet ? null : set.Preview;
+                break;
+            default:
+                return;
+        }
+
+        PreviewChanged();
+        _ = RenderPreviewAsync(instant);
+    }
+
+    /// <summary>Spec 3.2's Escape, one step at a time: the first one takes a preview down and stops there, and the
+    /// next closes the panel. False when there was no preview, so the caller carries on to the close.</summary>
+    public bool ClearPreview()
+    {
+        if (!IsPreviewing)
+        {
+            return false;
+        }
+
+        ShowCurrent();
+        return true;
+    }
+
+    /// <summary>Both layers back to the game's own. The game's composite is still held in <see cref="Preview"/>, so
+    /// putting it back is a property change and not a render.</summary>
+    [RelayCommand]
+    private void ShowCurrent()
+    {
+        _previewLoads?.Cancel();
+        SetPreviewBackground(null);
+        SetPreviewSet(null);
+        PreviewImage = null;
+        PreviewNote = "";
+        PreviewChanged();
+    }
+
+    /// <summary>Runs the previewed tiles' own Apply, so a preview applies exactly what the tile's hover button
+    /// would. Background first and then platforms: each is a whole write of its own, and the rescan after the
+    /// first builds a new panel, which drops this preview; the second still runs, from the tile it was captured
+    /// from.</summary>
+    [RelayCommand]
+    private async Task ApplyPreviewAsync()
+    {
+        var background = _previewBackground?.ApplyCommand;
+        var set = _previewSet?.ApplyToMapCommand;
+        if (background is IAsyncRelayCommand asyncBackground)
+        {
+            await asyncBackground.ExecuteAsync(null);
+        }
+        else if (background?.CanExecute(null) == true)
+        {
+            background.Execute(null);
+        }
+
+        if (set is not null)
+        {
+            await set.ExecuteAsync(null);
+        }
+    }
+
+    private void SetPreviewBackground(PictureTileViewModel? tile)
+    {
+        _previewBackground?.IsPreviewing = false;
+        _previewBackground = tile;
+        _previewBackground?.IsPreviewing = true;
+    }
+
+    private void SetPreviewSet(PlatformSetTileViewModel? tile)
+    {
+        _previewSet?.IsPreviewing = false;
+        _previewSet = tile;
+        _previewSet?.IsPreviewing = true;
+    }
+
+    /// <summary>The members worked out from the two layers, which are fields rather than observable properties.</summary>
+    private void PreviewChanged()
+    {
+        OnPropertyChanged(nameof(IsPreviewing));
+        OnPropertyChanged(nameof(PreviewTitle));
+        OnPropertyChanged(nameof(ApplyPreviewText));
+        OnPropertyChanged(nameof(ShownPreview));
+    }
+
+    /// <summary>The whole map with both layers in: the previewed background or the game's, under the previewed
+    /// pack's platforms or the game's, through the same cache and at the same size as the game's own composite,
+    /// and in the page's Show mode, so Backgrounds only previews a background alone. A composite that could not
+    /// be drawn leaves the tile's picture up and says so.</summary>
+    private async Task RenderPreviewAsync(ImageSource? instant)
+    {
+        _previewLoads?.Cancel();
+        PreviewNote = "";
+        if (!IsPreviewing)
+        {
+            PreviewImage = null;
+            return;
+        }
+
+        // Only a click that brought a new picture replaces the one on screen. Taking a layer out while the other
+        // stays keeps what is drawn until the composite of the one left arrives.
+        if (instant is not null)
+        {
+            PreviewImage = instant;
+        }
+
+        var loads = CancellationTokenSource.CreateLinkedTokenSource(_loads.Token);
+        _previewLoads = loads;
+        var ct = loads.Token;
+
+        // The game's background, named outright rather than left to the pack: with a pack root in, a background
+        // the pack holds would win, and a set preview is the pack's platforms and nothing else.
+        var background = _previewBackground?.FullPath ?? CurrentBackgroundPath();
+        var packRoot = _previewSet?.Pack.FullPath;
+        ImageSource? image;
+        try
+        {
+            image = _snapshot.Catalog.HasLevelData
+                ? await ComposeAsync(
+                    _map.BaseLevel, MapCompositor.PanelWidth, MapCompositor.PanelHeight, packRoot, background, ct,
+                    _shell.PreviewMode)
+                : null;
+        }
+        catch (OperationCanceledException)
+        {
+            // Another click, or the panel was replaced: what this render was for is not on screen any more.
+            return;
+        }
+
+        if (ct.IsCancellationRequested)
+        {
+            return;
+        }
+
+        if (image is not null)
+        {
+            PreviewImage = image;
+        }
+        else
+        {
+            PreviewNote = PreviewFailedText;
+        }
+    }
+
+    /// <summary>The game's copy of the map's first background slot, or null for a map with none.</summary>
+    private string? CurrentBackgroundPath() =>
+        _map.BaseLevel.Backgrounds.Count == 0
+            ? null
+            : Path.Combine(_shell.Services.GamePath, AssetPath.Background(_map.BaseLevel.Backgrounds[0].AssetName));
 
     /// <summary>Spec 6.1, for this map alone: the Default pack's files for the folder and its copies of the map's
     /// background slots.</summary>
@@ -406,10 +624,7 @@ public partial class MapPanelViewModel : ObservableObject
     /// <summary>The pack's platform art over the map's current background, so the tile shows what would change.</summary>
     private async Task LoadPlatformPreviewsAsync(CancellationToken ct)
     {
-        var gamePath = _shell.Services.GamePath;
-        var background = _map.BaseLevel.Backgrounds.Count == 0
-            ? null
-            : Path.Combine(gamePath, AssetPath.Background(_map.BaseLevel.Backgrounds[0].AssetName));
+        var background = CurrentBackgroundPath();
         foreach (var tile in _platformTiles)
         {
             ct.ThrowIfCancellationRequested();

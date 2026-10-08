@@ -269,7 +269,7 @@ public partial class ImportViewModel : ObservableObject
                 var source = entry.SourcePath;
                 try
                 {
-                    // 3.3 P2: a folder that wraps a mapArt folder is planned from the mapArt inside it, while the
+                    // 3.6 P2: a folder that wraps a mapArt folder is planned from the mapArt inside it, while the
                     // pack keeps the picked folder's name (filled in when it was added).
                     entry.Plan = await Task.Run(() => ImportRouter.Plan(PackScanner.ContentRoot(source), _tree));
                 }

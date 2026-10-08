@@ -14,7 +14,7 @@ public enum FitMode
 }
 
 /// <summary>PanX/PanY are 0..1 and only matter for Cover (0.5 = centered). Darken is 0..1 and multiplies every channel by (1 - Darken). NoUpscale only matters for Contain: a source smaller than the canvas stays at 1:1 instead of growing.
-/// Hue is a rotation in degrees; Saturation and Contrast are -1..1 with 0 leaving the picture alone; Blur is 0..1 (3.3 E4).</summary>
+/// Hue is a rotation in degrees; Saturation and Contrast are -1..1 with 0 leaving the picture alone; Blur is 0..1 (3.6 E4).</summary>
 public sealed record FitOptions(
     FitMode Mode = FitMode.Cover,
     double PanX = 0.5,
@@ -166,7 +166,7 @@ public static class BackgroundFitter
         var blur = Math.Clamp(options.Blur, 0, 1);
         var adjust = ColorMath.Wrap(options.Hue) != 0 || options.Saturation != 0 || options.Contrast != 0;
 
-        // With no blur and no colour pass the shade goes in the same draw as the picture, exactly as before 3.3.
+        // With no blur and no colour pass the shade goes in the same draw as the picture, exactly as before 3.6.
         var shadeInDraw = blur == 0 && !adjust;
         var visual = new DrawingVisual();
         RenderOptions.SetBitmapScalingMode(visual, BitmapScalingMode.HighQuality);

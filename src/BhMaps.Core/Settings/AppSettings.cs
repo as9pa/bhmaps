@@ -77,7 +77,7 @@ public sealed record AppSettings(
     public bool IsTransparentNoteDismissed(string packName, int count) =>
         DismissedTransparent.TryGetValue(packName, out var dismissed) && dismissed == count;
 
-    /// <summary>3.3 P1: a copy with every per-pack setting of <paramref name="oldName"/> moved to
+    /// <summary>3.6 P1: a copy with every per-pack setting of <paramref name="oldName"/> moved to
     /// <paramref name="newName"/>: the hidden list, the last-applied stamp and the dismissed transparent note.
     /// Names are matched ignoring case; a setting the file never carried stays absent.</summary>
     public AppSettings WithPackRenamed(string oldName, string newName) =>

@@ -1,4 +1,4 @@
-# BhMaps 3.3 design
+# BhMaps 3.6 design
 
 Review page: https://claude.ai/artifact/79PSLRX64uD3gL7fdoDAXR (db collections answers33, objections33).
 Go given in chat on 2026-10-08 ("answeered"). No objections.

@@ -203,7 +203,7 @@ public sealed class AppliedRecord
         }
     }
 
-    /// <summary>3.3 P1: points every entry that names pack <paramref name="oldName"/> (compared ignoring case) at
+    /// <summary>3.6 P1: points every entry that names pack <paramref name="oldName"/> (compared ignoring case) at
     /// <paramref name="newName"/>, for a pack folder that has been renamed. A source stored under the old folder,
     /// packs\&lt;old&gt;\..., moves with it, since that is where the file now lives.</summary>
     public static void PackRenamed(string recordPath, string oldName, string newName)

@@ -55,7 +55,7 @@ public sealed class ThumbnailCache
         }
     }
 
-    /// <summary>3.3 L1: forgets only the decodes under the folders a save wrote, so the rows left as they were
+    /// <summary>3.6 L1: forgets only the decodes under the folders a save wrote, so the rows left as they were
     /// keep theirs. "Backgrounds" in the list reaches every background picture.</summary>
     public void Evict(IReadOnlyList<string> folders)
     {

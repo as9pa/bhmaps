@@ -1,7 +1,7 @@
 namespace BhMaps.Core.Imaging;
 
 /// <summary>The colour sums the platform recolour and the background editor share: RGB to HSL and back, and the
-/// saturation and contrast curves the background sliders use (3.3 E4).</summary>
+/// saturation and contrast curves the background sliders use (3.6 E4).</summary>
 internal static class ColorMath
 {
     /// <summary>RGB bytes to a hue in degrees (0..360) with saturation and lightness in 0..1.</summary>

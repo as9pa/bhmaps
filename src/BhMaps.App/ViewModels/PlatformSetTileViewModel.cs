@@ -94,6 +94,11 @@ public sealed partial class PlatformSetTileViewModel : ObservableObject
     [ObservableProperty]
     public partial IReadOnlyList<TileMenuCommand> MenuItems { get; set; }
 
+    /// <summary>True while the map panel's big image is showing this set as a preview rather than what the game
+    /// has. The picture tiles' member of the same name, so the two panel templates bind one word.</summary>
+    [ObservableProperty]
+    public partial bool IsPreviewing { get; set; }
+
     /// <summary>Fills <see cref="MenuItems" />, which the tile does once, when it is built.</summary>
     public void RebuildMenu()
     {

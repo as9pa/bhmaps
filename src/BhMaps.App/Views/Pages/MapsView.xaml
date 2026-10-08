@@ -154,68 +154,93 @@
     </Style>
 
     <!-- One background on offer for this map. The whole tile carries the menu, so a right click anywhere on it and
-         the menu button open the same five lines, and Shift+F10 finds it through TileMenus. -->
+         the menu button open the same five lines, and Shift+F10 finds it through TileMenus. A left click on the
+         body, or Enter or Space on the focused tile, previews it in the big image; the buttons keep their own. -->
     <DataTemplate x:Key="PanelPictureTile">
-      <Border x:Name="Tile"
-              ContextMenu="{StaticResource TileMenu}"
-              Focusable="True"
-              FocusVisualStyle="{x:Null}"
-              Style="{StaticResource PanelTile}">
-        <StackPanel>
-          <Grid>
-            <Border Height="80" Style="{StaticResource PictureTile}">
-              <Border CornerRadius="{StaticResource Radius}" RenderOptions.BitmapScalingMode="HighQuality">
-                <Border.Background>
-                  <ImageBrush ImageSource="{Binding Thumbnail}" Stretch="UniformToFill" />
-                </Border.Background>
+      <Grid>
+        <Border x:Name="Tile"
+                ContextMenu="{StaticResource TileMenu}"
+                Cursor="Hand"
+                Focusable="True"
+                FocusVisualStyle="{x:Null}"
+                KeyDown="OnPanelTileKeyDown"
+                MouseLeftButtonDown="OnPanelTileMouseDown"
+                Style="{StaticResource PanelTile}">
+          <StackPanel>
+            <Grid>
+              <Border Height="80" Style="{StaticResource PictureTile}">
+                <Border CornerRadius="{StaticResource Radius}" RenderOptions.BitmapScalingMode="HighQuality">
+                  <Border.Background>
+                    <ImageBrush ImageSource="{Binding Thumbnail}" Stretch="UniformToFill" />
+                  </Border.Background>
+                </Border>
               </Border>
-            </Border>
 
-            <Border x:Name="InGameTick"
-                    Margin="0,4,4,0"
-                    HorizontalAlignment="Right"
-                    VerticalAlignment="Top"
-                    Background="{StaticResource BgBrush}"
-                    CornerRadius="4"
-                    Padding="4,3"
-                    Visibility="Collapsed">
-              <Path Data="M0,3.4 L2.8,6.2 L8,0.6"
-                    Stroke="{StaticResource TextBrush}"
-                    StrokeEndLineCap="Round"
-                    StrokeLineJoin="Round"
-                    StrokeStartLineCap="Round"
-                    StrokeThickness="1.6" />
-            </Border>
+              <Border x:Name="InGameTick"
+                      Margin="0,4,4,0"
+                      HorizontalAlignment="Right"
+                      VerticalAlignment="Top"
+                      Background="{StaticResource BgBrush}"
+                      CornerRadius="4"
+                      Padding="4,3"
+                      Visibility="Collapsed">
+                <Path Data="M0,3.4 L2.8,6.2 L8,0.6"
+                      Stroke="{StaticResource TextBrush}"
+                      StrokeEndLineCap="Round"
+                      StrokeLineJoin="Round"
+                      StrokeStartLineCap="Round"
+                      StrokeThickness="1.6" />
+              </Border>
 
-            <!-- CanWrite, not IsNotBusy: an apply writes into the game folder, so it is also off while that folder
-                 is missing (spec 7.8). Revealed by opacity rather than Visibility: a collapsed button cannot be
-                 tabbed to, so it would be mouse-only. -->
-            <StackPanel x:Name="Actions"
-                        HorizontalAlignment="Center"
-                        VerticalAlignment="Center"
-                        Orientation="Horizontal"
-                        Opacity="0">
-              <Button AutomationProperties.Name="{Binding ApplyText}"
-                      Command="{Binding ApplyCommand}"
-                      Content="{Binding ApplyText}"
-                      IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}"
-                      Style="{StaticResource TileAction}" />
-              <Button Margin="4,0,0,0"
-                      AutomationProperties.Name="More actions"
-                      Click="OnTileMenuButton"
-                      Style="{StaticResource TileAction}">
-                <controls:Icon Geometry="{StaticResource Icon.Dots}" Size="14" />
-              </Button>
-            </StackPanel>
-          </Grid>
+              <!-- CanWrite, not IsNotBusy: an apply writes into the game folder, so it is also off while that folder
+                   is missing (spec 7.8). Revealed by opacity rather than Visibility: a collapsed button cannot be
+                   tabbed to, so it would be mouse-only. -->
+              <StackPanel x:Name="Actions"
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Center"
+                          Orientation="Horizontal"
+                          Opacity="0">
+                <Button AutomationProperties.Name="{Binding ApplyText}"
+                        Command="{Binding ApplyCommand}"
+                        Content="{Binding ApplyText}"
+                        IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}"
+                        Style="{StaticResource TileAction}" />
+                <Button Margin="4,0,0,0"
+                        AutomationProperties.Name="More actions"
+                        Click="OnTileMenuButton"
+                        Style="{StaticResource TileAction}">
+                  <controls:Icon Geometry="{StaticResource Icon.Dots}" Size="14" />
+                </Button>
+              </StackPanel>
+            </Grid>
 
-          <TextBlock Margin="0,6,0,0" Style="{StaticResource TileCaption}" Text="{Binding Title}" />
-        </StackPanel>
-      </Border>
+            <TextBlock Margin="0,6,0,0" Style="{StaticResource TileCaption}" Text="{Binding Title}" />
+          </StackPanel>
+        </Border>
+
+        <!-- The preview ring: 2 px of Text standing 2 px off the tile, so it reads apart from the in-game 1 px
+             accent border and tick, and a tile can wear both. Drawn by negative margins into the gutter PanelTile
+             leaves on the right and below, so it takes no layout of its own and the two-across wrap is the same
+             with it on or off. The panel's scroll content starts 4 px in from its clip for the left column's
+             ring (see the ScrollViewer). -->
+        <Border x:Name="PreviewRing"
+                Margin="-4,-4,4,4"
+                BorderBrush="{StaticResource TextBrush}"
+                BorderThickness="2"
+                CornerRadius="10"
+                IsHitTestVisible="False"
+                Visibility="Collapsed" />
+      </Grid>
       <DataTemplate.Triggers>
+        <!-- The tick alone marks what the game shows: no border, so the ring is the only outline in the panel and
+             reads as "this one is previewed" without a second look. -->
         <DataTrigger Binding="{Binding IsInGame}" Value="True">
-          <Setter TargetName="Tile" Property="BorderBrush" Value="{StaticResource AccentBrush}" />
           <Setter TargetName="InGameTick" Property="Visibility" Value="Visible" />
+        </DataTrigger>
+        <!-- Its own trigger, not the in-game one's: a tile can be both what the game shows and what the big
+             image previews, and then it wears the tick and the ring together. -->
+        <DataTrigger Binding="{Binding IsPreviewing}" Value="True">
+          <Setter TargetName="PreviewRing" Property="Visibility" Value="Visible" />
         </DataTrigger>
         <Trigger SourceName="Tile" Property="IsMouseOver" Value="True">
           <Setter TargetName="Actions" Property="Opacity" Value="1" />
@@ -235,78 +260,102 @@
     </DataTemplate>
 
     <!-- One platform set on offer for this map. The same tile as a picture's, over the map's current background,
-         and the pack's name under it. Its menu is the set's three lines rather than a picture's five. -->
+         and the pack's name under it. Its menu is the set's three lines rather than a picture's five, and a click
+         on its body previews it the way a picture tile's does. -->
     <DataTemplate x:Key="PanelSetTile">
-      <Border x:Name="Tile"
-              ContextMenu="{StaticResource TileMenu}"
-              Focusable="True"
-              FocusVisualStyle="{x:Null}"
-              Style="{StaticResource PanelTile}">
-        <StackPanel>
-          <Grid>
-            <Border Height="88" Style="{StaticResource PictureTile}">
-              <Border CornerRadius="{StaticResource Radius}" RenderOptions.BitmapScalingMode="HighQuality">
-                <Border.Background>
-                  <ImageBrush ImageSource="{Binding Preview}" Stretch="UniformToFill" />
-                </Border.Background>
+      <Grid>
+        <Border x:Name="Tile"
+                ContextMenu="{StaticResource TileMenu}"
+                Cursor="Hand"
+                Focusable="True"
+                FocusVisualStyle="{x:Null}"
+                KeyDown="OnPanelTileKeyDown"
+                MouseLeftButtonDown="OnPanelTileMouseDown"
+                Style="{StaticResource PanelTile}">
+          <StackPanel>
+            <Grid>
+              <Border Height="88" Style="{StaticResource PictureTile}">
+                <Border CornerRadius="{StaticResource Radius}" RenderOptions.BitmapScalingMode="HighQuality">
+                  <Border.Background>
+                    <ImageBrush ImageSource="{Binding Preview}" Stretch="UniformToFill" />
+                  </Border.Background>
+                </Border>
               </Border>
-            </Border>
 
-            <Border x:Name="InGameTick"
-                    Margin="0,4,4,0"
-                    HorizontalAlignment="Right"
-                    VerticalAlignment="Top"
-                    Background="{StaticResource BgBrush}"
-                    CornerRadius="4"
-                    Padding="4,3"
-                    Visibility="Collapsed">
-              <Path Data="M0,3.4 L2.8,6.2 L8,0.6"
-                    Stroke="{StaticResource TextBrush}"
-                    StrokeEndLineCap="Round"
-                    StrokeLineJoin="Round"
-                    StrokeStartLineCap="Round"
-                    StrokeThickness="1.6" />
-            </Border>
+              <Border x:Name="InGameTick"
+                      Margin="0,4,4,0"
+                      HorizontalAlignment="Right"
+                      VerticalAlignment="Top"
+                      Background="{StaticResource BgBrush}"
+                      CornerRadius="4"
+                      Padding="4,3"
+                      Visibility="Collapsed">
+                <Path Data="M0,3.4 L2.8,6.2 L8,0.6"
+                      Stroke="{StaticResource TextBrush}"
+                      StrokeEndLineCap="Round"
+                      StrokeLineJoin="Round"
+                      StrokeStartLineCap="Round"
+                      StrokeThickness="1.6" />
+              </Border>
 
-            <!-- 3.0: a map whose level places no platforms has nothing a set could change, so the tile keeps its
-                 size and says that in words instead of showing an empty picture with an Apply over it. -->
-            <TextBlock x:Name="NoArt"
-                       Margin="8,0"
-                       HorizontalAlignment="Center"
-                       VerticalAlignment="Center"
-                       FontSize="{StaticResource FontCaption}"
-                       Foreground="{StaticResource Text3Brush}"
-                       Text="{Binding NoArt}"
-                       TextAlignment="Center"
-                       TextWrapping="Wrap"
-                       Visibility="Collapsed" />
+              <!-- 3.0: a map whose level places no platforms has nothing a set could change, so the tile keeps its
+                   size and says that in words instead of showing an empty picture with an Apply over it. -->
+              <TextBlock x:Name="NoArt"
+                         Margin="8,0"
+                         HorizontalAlignment="Center"
+                         VerticalAlignment="Center"
+                         FontSize="{StaticResource FontCaption}"
+                         Foreground="{StaticResource Text3Brush}"
+                         Text="{Binding NoArt}"
+                         TextAlignment="Center"
+                         TextWrapping="Wrap"
+                         Visibility="Collapsed" />
 
-            <StackPanel x:Name="Actions"
-                        HorizontalAlignment="Center"
-                        VerticalAlignment="Center"
-                        Orientation="Horizontal"
-                        Opacity="0">
-              <Button AutomationProperties.Name="Apply"
-                      Command="{Binding ApplyToMapCommand}"
-                      Content="Apply"
-                      IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}"
-                      Style="{StaticResource TileAction}" />
-              <Button Margin="4,0,0,0"
-                      AutomationProperties.Name="More actions"
-                      Click="OnTileMenuButton"
-                      Style="{StaticResource TileAction}">
-                <controls:Icon Geometry="{StaticResource Icon.Dots}" Size="14" />
-              </Button>
-            </StackPanel>
-          </Grid>
+              <StackPanel x:Name="Actions"
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Center"
+                          Orientation="Horizontal"
+                          Opacity="0">
+                <Button AutomationProperties.Name="Apply"
+                        Command="{Binding ApplyToMapCommand}"
+                        Content="Apply"
+                        IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}"
+                        Style="{StaticResource TileAction}" />
+                <Button Margin="4,0,0,0"
+                        AutomationProperties.Name="More actions"
+                        Click="OnTileMenuButton"
+                        Style="{StaticResource TileAction}">
+                  <controls:Icon Geometry="{StaticResource Icon.Dots}" Size="14" />
+                </Button>
+              </StackPanel>
+            </Grid>
 
-          <TextBlock Margin="0,6,0,0" Style="{StaticResource TileCaption}" Text="{Binding Title}" />
-        </StackPanel>
-      </Border>
+            <TextBlock Margin="0,6,0,0" Style="{StaticResource TileCaption}" Text="{Binding Title}" />
+          </StackPanel>
+        </Border>
+
+        <!-- The preview ring: 2 px of Text standing 2 px off the tile, so it reads apart from the in-game 1 px
+             accent border and tick, and a tile can wear both. Drawn by negative margins into the gutter PanelTile
+             leaves on the right and below, so it takes no layout of its own and the two-across wrap is the same
+             with it on or off. The panel's scroll content starts 4 px in from its clip for the left column's
+             ring (see the ScrollViewer). -->
+        <Border x:Name="PreviewRing"
+                Margin="-4,-4,4,4"
+                BorderBrush="{StaticResource TextBrush}"
+                BorderThickness="2"
+                CornerRadius="10"
+                IsHitTestVisible="False"
+                Visibility="Collapsed" />
+      </Grid>
       <DataTemplate.Triggers>
+        <!-- The tick alone marks what the game shows; see PanelPictureTile. -->
         <DataTrigger Binding="{Binding InGame}" Value="True">
-          <Setter TargetName="Tile" Property="BorderBrush" Value="{StaticResource AccentBrush}" />
           <Setter TargetName="InGameTick" Property="Visibility" Value="Visible" />
+        </DataTrigger>
+        <!-- Its own trigger, not the in-game one's: a tile can be both what the game shows and what the big
+             image previews, and then it wears the tick and the ring together. -->
+        <DataTrigger Binding="{Binding IsPreviewing}" Value="True">
+          <Setter TargetName="PreviewRing" Property="Visibility" Value="Visible" />
         </DataTrigger>
         <Trigger SourceName="Tile" Property="IsMouseOver" Value="True">
           <Setter TargetName="Actions" Property="Opacity" Value="1" />
@@ -330,6 +379,7 @@
           <Setter TargetName="Actions" Property="Visibility" Value="Collapsed" />
           <Setter TargetName="Tile" Property="ContextMenu" Value="{x:Null}" />
           <Setter TargetName="Tile" Property="AutomationProperties.Name" Value="No platform art" />
+          <Setter TargetName="Tile" Property="Cursor" Value="Arrow" />
         </DataTrigger>
       </DataTemplate.Triggers>
     </DataTemplate>
@@ -688,20 +738,96 @@
 
             <!-- 3.0: the panel's 16 px inset is the Border's padding, so nothing in here repeats it. The content
                  keeps a right margin of its own, so the overlay scrollbar rides in a gutter instead of sitting on
-                 top of the tiles. -->
+                 top of the tiles. The viewer reaches 4 px into that padding on the left and the content gives the
+                 4 px straight back, so nothing moves and the content is exactly as wide as before, but a
+                 left-column tile's preview ring, which stands 4 px off the tile, lands inside the viewer's clip
+                 rather than being cut off by it. -->
             <ScrollViewer Grid.Row="1"
+                          Margin="-4,0,0,0"
                           HorizontalScrollBarVisibility="Disabled"
                           behaviors:SmoothScroll.IsEnabled="True"
                           VerticalScrollBarVisibility="Auto">
-              <StackPanel Margin="0,0,8,0">
-                <!-- The panel preview's source is 1280x720 (spec 7.2); 16:9 at the panel's own width is 185 px tall. -->
-                <Border Height="185" Style="{StaticResource PictureTile}">
-                  <Border CornerRadius="{StaticResource Radius}" RenderOptions.BitmapScalingMode="HighQuality">
-                    <Border.Background>
-                      <ImageBrush ImageSource="{Binding Preview}" Stretch="UniformToFill" />
-                    </Border.Background>
+              <StackPanel Margin="4,0,8,0">
+                <!-- The panel preview's source is 1280x720 (spec 7.2); 16:9 at the panel's own width is 185 px tall.
+                     It draws ShownPreview: a clicked tile's layer while one is previewed, and the game's composite
+                     otherwise. -->
+                <Grid>
+                  <Border Height="185" Style="{StaticResource PictureTile}">
+                    <Border CornerRadius="{StaticResource Radius}" RenderOptions.BitmapScalingMode="HighQuality">
+                      <Border.Background>
+                        <ImageBrush ImageSource="{Binding ShownPreview}" Stretch="UniformToFill" />
+                      </Border.Background>
+                    </Border>
                   </Border>
+
+                  <!-- The tag that says the big image is not what the game has. The in-game tick's look, on the
+                       other corner, so the two read as the same family of mark. -->
+                  <Border Margin="8,8,0,0"
+                          HorizontalAlignment="Left"
+                          VerticalAlignment="Top"
+                          Background="{StaticResource BgBrush}"
+                          CornerRadius="4"
+                          Padding="8,3"
+                          Visibility="{Binding IsPreviewing, Converter={StaticResource BoolToVis}}">
+                    <StackPanel Orientation="Horizontal">
+                      <controls:Icon VerticalAlignment="Center"
+                                     Foreground="{StaticResource TextBrush}"
+                                     Geometry="{StaticResource Icon.Eye}"
+                                     Size="12" />
+                      <TextBlock Margin="4,0,0,0"
+                                 VerticalAlignment="Center"
+                                 FontSize="12"
+                                 Foreground="{StaticResource TextBrush}"
+                                 Text="Preview" />
+                    </StackPanel>
+                  </Border>
+                </Grid>
+
+                <!-- The preview line: what is in the big image, that it is not applied, and the two ways out of it.
+                     Apply runs the previewed tiles' own Apply, so it is off by the same CanWrite rule theirs is. -->
+                <Border Margin="0,8,0,0"
+                        Background="{StaticResource Surface2Brush}"
+                        CornerRadius="{StaticResource Radius}"
+                        Padding="12,8"
+                        Visibility="{Binding IsPreviewing, Converter={StaticResource BoolToVis}}">
+                  <Grid>
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel VerticalAlignment="Center">
+                      <TextBlock FontWeight="SemiBold"
+                                 Text="{Binding PreviewTitle}"
+                                 TextTrimming="CharacterEllipsis"
+                                 ToolTip="{Binding PreviewTitle}" />
+                      <TextBlock Margin="0,2,0,0" Style="{StaticResource QuietNote}" Text="Preview, not applied" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1"
+                                Margin="8,0,0,0"
+                                VerticalAlignment="Center"
+                                Orientation="Horizontal">
+                      <Button Command="{Binding ApplyPreviewCommand}"
+                              Content="{Binding ApplyPreviewText}"
+                              IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}"
+                              Style="{StaticResource PrimaryButton}" />
+                      <Button Margin="4,0,0,0"
+                              Command="{Binding ShowCurrentCommand}"
+                              Content="Show current"
+                              Style="{StaticResource PlainButton}" />
+                    </StackPanel>
+                  </Grid>
                 </Border>
+
+                <!-- A composite that could not be drawn leaves the tile's own picture up, and says so here rather
+                     than in a dialog: a preview is never worth one. -->
+                <TextBlock Margin="0,6,0,0"
+                           Foreground="{StaticResource WarnBrush}"
+                           Style="{StaticResource QuietNote}"
+                           Text="{Binding PreviewNote}"
+                           TextWrapping="Wrap"
+                           Visibility="{Binding HasPreviewNote, Converter={StaticResource BoolToVis}}" />
 
                 <!-- Spec 3.2: what the game is showing for this map, in words rather than file names. -->
                 <TextBlock Margin="0,12,0,0"

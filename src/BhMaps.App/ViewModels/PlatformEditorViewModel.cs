@@ -159,7 +159,8 @@ public partial class PlatformEditorViewModel : ObservableObject
             row.PropertyChanged += OnRowPropertyChanged;
         }
 
-        PackChoices = packs.Select(p => p.Name).ToList();
+        // A discovered pack (outside packs\) is read-only, so it is never a save target.
+        PackChoices = packs.Where(p => !p.IsDiscovered).Select(p => p.Name).ToList();
         Error = "";
 
         // Spec 3.4: a panel row's Edit names one file, and that editor opens on it. Spec 3.5: every other way in
@@ -168,7 +169,7 @@ public partial class PlatformEditorViewModel : ObservableObject
         IsolatePreview = request.OnlyFile is not null || services.Settings.PlatformPreviewIsolate;
         _restoringMode = false;
 
-        // 3.3 E2: custom platforms go into a pack of their own, so the default is a fresh New Pack N. Opened on
+        // 3.6 E2: custom platforms go into a pack of their own, so the default is a fresh New Pack N. Opened on
         // a pack's own tile, the edit is of that pack and goes back into it; the Default pack is the one
         // exception, because it is the game's own art and Reset reads from it.
         PackName = PackNames.NextFree(TakenPackNames());
@@ -291,7 +292,7 @@ public partial class PlatformEditorViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsolateHint))]
     public partial bool IsolatePreview { get; set; }
 
-    /// <summary>3.3 E3: the editable box's text. An existing pack's name saves into it; anything else is a new
+    /// <summary>3.6 E3: the editable box's text. An existing pack's name saves into it; anything else is a new
     /// pack.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsNewPack), nameof(PackNameError), nameof(PackNameHint), nameof(CanSave), nameof(CanEditOutside))]
@@ -487,7 +488,7 @@ public partial class PlatformEditorViewModel : ObservableObject
     /// Save needs is a map in the set that has something to write.</summary>
     public bool CanSave => CanAddAsNew && PackNameError.Length == 0;
 
-    /// <summary>3.3 E1: the Save rule without the pack name, because Add as new asks for its own.</summary>
+    /// <summary>3.6 E1: the Save rule without the pack name, because Add as new asks for its own.</summary>
     public bool CanAddAsNew => _sets.Any(s => s.Rows.Count > 0) && !IsSaving;
 
     /// <summary>The map the strip is on: the one the file list lists and the preview draws (spec 9).</summary>
@@ -1664,7 +1665,7 @@ public partial class PlatformEditorViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanSave))]
     private Task SaveOnlyAsync() => SaveAsync(apply: false);
 
-    /// <summary>3.3 E1: "Add as new" asks for a fresh pack's name, then runs Save only into it. The pack is new,
+    /// <summary>3.6 E1: "Add as new" asks for a fresh pack's name, then runs Save only into it. The pack is new,
     /// so no Replace question can come up.</summary>
     [RelayCommand(CanExecute = nameof(CanAddAsNew))]
     private Task AddAsNewAsync()

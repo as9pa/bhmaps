@@ -17,7 +17,7 @@
       <Setter Property="Margin" Value="0,18,0,6" />
     </Style>
 
-    <!-- 3.3 E4: the picture sliders sit closer together than the fields above them, so the pack box stays on
+    <!-- 3.6 E4: the picture sliders sit closer together than the fields above them, so the pack box stays on
          screen at the window's 720 px height without scrolling. -->
     <Style x:Key="SliderLabel" TargetType="TextBlock" BasedOn="{StaticResource FieldLabel}">
       <Setter Property="Margin" Value="0,10,0,4" />
@@ -216,7 +216,7 @@
                          IsChecked="{Binding FitStretch}" />
           </StackPanel>
 
-          <!-- 3.3 E4: two 172 px columns with a gap, which is the panel's width once its padding is taken off. -->
+          <!-- 3.6 E4: two 172 px columns with a gap, which is the panel's width once its padding is taken off. -->
           <Grid>
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="172" />
@@ -464,7 +464,7 @@
           </Grid>
 
           <TextBlock Style="{StaticResource FieldLabel}" Text="Save into pack" />
-          <!-- 3.3 E3: one editable box. The list picks a pack, typing names a new one, and the hint or the
+          <!-- 3.6 E3: one editable box. The list picks a pack, typing names a new one, and the hint or the
                error sits right under it so neither can fall below the window. -->
           <ComboBox AutomationProperties.Name="Save into pack"
                     IsEditable="True"
@@ -494,7 +494,7 @@
                 FocusVisualStyle="{StaticResource DialogFocusRing}"
                 IsCancel="True"
                 Style="{StaticResource PlainButton}" />
-        <!-- 3.3 E1: asks for its own pack name, so a bad name in the box does not hold it. -->
+        <!-- 3.6 E1: asks for its own pack name, so a bad name in the box does not hold it. -->
         <Button Margin="0,0,8,0"
                 Command="{Binding AddAsNewCommand}"
                 Content="Add as new"

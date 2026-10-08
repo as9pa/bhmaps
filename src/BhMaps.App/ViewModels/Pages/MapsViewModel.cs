@@ -162,9 +162,18 @@ public partial class MapsViewModel : PageViewModel, ITileSized
 
     /// <summary>Spec 3.2: Escape closes the panel. The search box takes Escape before it does, in
     /// MapsView.OnPageKeyDown. With no panel open it says no rather than doing nothing, so the keystroke carries
-    /// on to the window's own Escape, which is the status strip's Cancel (3.0).</summary>
+    /// on to the window's own Escape, which is the status strip's Cancel (3.0). A preview in the panel's big image
+    /// comes down first and the panel stays: the search text, then the preview, then the panel.</summary>
     [RelayCommand(CanExecute = nameof(HasPanel))]
-    private void Escape() => Selected = null;
+    private void Escape()
+    {
+        if (Panel?.ClearPreview() == true)
+        {
+            return;
+        }
+
+        Selected = null;
+    }
 
     private bool HasPanel => Selected is not null;
 

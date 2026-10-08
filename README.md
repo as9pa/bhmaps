@@ -8,17 +8,19 @@ the game with one click, with an Undo for the last write.
 
 Requires Windows 10 or 11, 64-bit, and Brawlhalla installed through Steam.
 
-| [Releases](https://github.com/as9pa/bhmaps/releases) | Size | Needs .NET? |
-|---|---|---|
-| `bhmaps-v3.2.0-win-x64.exe` | ~135 MB | No, the runtime is inside |
-| `bhmaps-v3.2.0-win-x64-dotnet.zip` | ~0.8 MB | Yes, [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) |
+| [Releases](https://github.com/as9pa/bhmaps/releases) | Size    | Needs .NET?                                                                       |
+| ---------------------------------------------------- | ------- | --------------------------------------------------------------------------------- |
+| `bhmaps.exe`                                         | ~135 MB | No, the runtime is inside                                                         |
+| `bhmaps-dotnet.zip`                                  | ~0.8 MB | Yes, [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) |
 
 Take the `.exe` unless you already have .NET 10 installed. Windows may warn on first run because the
 exe is unsigned: choose "More info", then "Run anyway".
 
 From 2.6 the app checks this page for a newer release once a day and offers to update itself. It is
 one small request to github.com, nothing about you or your library is sent, and the check can be
-turned off in Settings under Updates.
+turned off in Settings under Updates. Both builds update in place: press **Update** in Settings and
+BhMaps downloads the new version, checks it, replaces itself and restarts, with nothing to download
+by hand. Keep BhMaps in a folder it can write to, such as Documents or Desktop, for that to work.
 
 ## First run
 
@@ -69,8 +71,11 @@ Brawlhalla open or closed, and show on the next match load.
 ## Files
 
 Game art lives in `<Steam>\steamapps\common\Brawlhalla\mapArt`. The pack library is
-`Documents\BhMaps` by default, holding packs at `packs\<name>\<GameFolder>\<file>`. Settings and
-caches are in `%APPDATA%\BhMaps`.
+`Documents\BhMaps` by default, holding packs at `packs\<name>\<GameFolder>\<file>`. A folder elsewhere
+in the library with a `mapArt` folder inside it, such as `<name>\mapArt\<GameFolder>\<file>`, is found
+as a pack too, as long as `mapArt` is at most three folders below the library. Those packs are read
+only: they can be viewed and applied but not deleted or changed. Settings and caches are in
+`%APPDATA%\BhMaps`.
 
 ## Build
 

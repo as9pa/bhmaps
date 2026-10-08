@@ -9,12 +9,24 @@ public static class ReleaseChecker
 {
     public const string ChecksumsName = "SHA256SUMS.txt";
 
-    /// <summary>The self-contained exe publish.ps1 writes and the release carries, for the version given.</summary>
-    public static string ExeName(Version version) =>
-        $"bhmaps-v{version.Major}.{version.Minor}.{version.Build}-win-x64.exe";
+    /// <summary>The self-contained exe publish.ps1 writes and every release carries. The tag says which version it
+    /// is, so the name does not.</summary>
+    public const string ExeName = "bhmaps.exe";
+
+    /// <summary>The framework-dependent zip the release carries beside the exe. It holds one BhMaps.exe.</summary>
+    public const string ZipName = "bhmaps-dotnet.zip";
+
+    /// <summary>The asset the given build updates from. Empty for a development run, which has none.</summary>
+    public static string AssetName(UpdateBuild build) =>
+        build switch
+        {
+            UpdateBuild.SelfContained => ExeName,
+            UpdateBuild.FrameworkDependent => ZipName,
+            _ => "",
+        };
 
     /// <summary>Null for a draft, a prerelease, a tag that is not vX.Y.Z, or anything that is not this JSON. A
-    /// release missing the exe asset still parses: the UI falls back to the release page rather than to nothing.</summary>
+    /// release missing an asset still parses: the UI falls back to the release page rather than to nothing.</summary>
     public static ReleaseInfo? Parse(string json)
     {
         JsonElement root;
@@ -36,21 +48,25 @@ public static class ReleaseChecker
             return null;
         }
 
-        var exeName = ExeName(version);
         string? exeUrl = null;
+        string? zipUrl = null;
         string? checksumsUrl = null;
         long exeSize = 0;
+        long zipSize = 0;
         if (root.TryGetProperty("assets", out var assets) && assets.ValueKind == JsonValueKind.Array)
         {
             foreach (var asset in assets.EnumerateArray())
             {
                 var name = Str(asset, "name");
-                if (name.Equals(exeName, StringComparison.OrdinalIgnoreCase))
+                if (name.Equals(ExeName, StringComparison.OrdinalIgnoreCase))
                 {
                     exeUrl = Str(asset, "browser_download_url");
-                    exeSize = asset.TryGetProperty("size", out var size) && size.TryGetInt64(out var bytes)
-                        ? bytes
-                        : 0;
+                    exeSize = Size(asset);
+                }
+                else if (name.Equals(ZipName, StringComparison.OrdinalIgnoreCase))
+                {
+                    zipUrl = Str(asset, "browser_download_url");
+                    zipSize = Size(asset);
                 }
                 else if (name.Equals(ChecksumsName, StringComparison.OrdinalIgnoreCase))
                 {
@@ -67,7 +83,9 @@ public static class ReleaseChecker
             exeUrl is { Length: > 0 } ? exeUrl : null,
             exeSize,
             checksumsUrl is { Length: > 0 } ? checksumsUrl : null,
-            Str(root, "body"));
+            Str(root, "body"),
+            zipUrl is { Length: > 0 } ? zipUrl : null,
+            zipSize);
     }
 
     /// <summary>Three-part compare. The running assembly version carries a fourth part that is always 0, so it is
@@ -111,6 +129,9 @@ public static class ReleaseChecker
         && value.ValueKind == JsonValueKind.String
             ? value.GetString() ?? ""
             : "";
+
+    private static long Size(JsonElement asset) =>
+        asset.TryGetProperty("size", out var size) && size.TryGetInt64(out var bytes) ? bytes : 0;
 
     private static bool Bool(JsonElement element, string name) =>
         element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.True;

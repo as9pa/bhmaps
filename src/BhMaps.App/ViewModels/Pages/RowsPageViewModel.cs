@@ -161,7 +161,7 @@ public abstract partial class RowsPageViewModel : PageViewModel, ITileSized
         CountHiddenPacks(snapshot);
     }
 
-    /// <summary>3.3 L1: after a save, only the rows of the folders it wrote are built again, each in its own
+    /// <summary>3.6 L1: after a save, only the rows of the folders it wrote are built again, each in its own
     /// place in the list, so the list keeps its scroll and the other rows keep their pictures and their loads. A
     /// list whose shape changed (a map gained or lost its row) takes the full refresh instead.</summary>
     public override void UpdateFolders(ScanSnapshot snapshot, IReadOnlyList<string> folders)

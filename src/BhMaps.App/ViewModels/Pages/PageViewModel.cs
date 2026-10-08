@@ -41,7 +41,7 @@ public abstract partial class PageViewModel : ObservableObject
     /// page that shows those maps has anything to do with them, so every other page falls through.</summary>
     public virtual void Refresh(ScanSnapshot snapshot, IReadOnlyList<string>? writtenFolders) => Refresh(snapshot);
 
-    /// <summary>3.3 L1: the refresh after a save that names the map folders it wrote. A page that can rebuild just
+    /// <summary>3.6 L1: the refresh after a save that names the map folders it wrote. A page that can rebuild just
     /// those rows in place overrides it, so the list keeps its scroll; every other page refreshes as before.</summary>
     public virtual void UpdateFolders(ScanSnapshot snapshot, IReadOnlyList<string> folders) => Refresh(snapshot, folders);
 

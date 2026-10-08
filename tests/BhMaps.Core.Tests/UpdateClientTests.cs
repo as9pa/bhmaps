@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
@@ -9,7 +10,7 @@ namespace BhMaps.Core.Tests;
 public class UpdateClientTests
 {
     private const string ExeUrl =
-        "https://github.com/as9pa/bhmaps/releases/download/v2.6.0/bhmaps-v2.6.0-win-x64.exe";
+        "https://github.com/as9pa/bhmaps/releases/download/v2.6.0/bhmaps.exe";
 
     private const string SumsUrl =
         "https://github.com/as9pa/bhmaps/releases/download/v2.6.0/SHA256SUMS.txt";
@@ -19,8 +20,30 @@ public class UpdateClientTests
     private static string Hex(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
 
     private static string Sums(string exeHex) =>
-        $"{exeHex}  bhmaps-v2.6.0-win-x64.exe\n"
-        + "0000000000000000000000000000000000000000000000000000000000000000  bhmaps-v2.6.0-win-x64-dotnet.zip\n";
+        $"{exeHex}  bhmaps.exe\n"
+        + "0000000000000000000000000000000000000000000000000000000000000000  bhmaps-dotnet.zip\n";
+
+    private const string ZipUrl =
+        "https://github.com/as9pa/bhmaps/releases/download/v2.6.0/bhmaps-dotnet.zip";
+
+    private static string ZipSums(string zipHex) =>
+        "0000000000000000000000000000000000000000000000000000000000000000  bhmaps.exe\n"
+        + $"{zipHex}  bhmaps-dotnet.zip\n";
+
+    private static byte[] Zip(params (string Name, byte[] Body)[] entries)
+    {
+        using var memory = new MemoryStream();
+        using (var archive = new ZipArchive(memory, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var (name, body) in entries)
+            {
+                using var stream = archive.CreateEntry(name).Open();
+                stream.Write(body);
+            }
+        }
+
+        return memory.ToArray();
+    }
 
     private static ReleaseInfo Release() => ReleaseChecker.Parse(UpdateSamples.LatestJson)!;
 
@@ -82,9 +105,9 @@ public class UpdateClientTests
         var seen = new List<(long Done, long Total)>();
 
         var path = await new UpdateClient(http).DownloadAsync(
-            Release(), tmp.Path, new Progress<(long, long)>(seen.Add), CancellationToken.None);
+            Release(), UpdateBuild.SelfContained, tmp.Path, new Progress<(long, long)>(seen.Add), CancellationToken.None);
 
-        Assert.Equal(Path.Combine(tmp.Path, "bhmaps-v2.6.0-win-x64.exe"), path);
+        Assert.Equal(Path.Combine(tmp.Path, "bhmaps.exe"), path);
         Assert.Equal(Exe, await File.ReadAllBytesAsync(path));
         Assert.Empty(Directory.GetFiles(tmp.Path, "*.partial"));
         Assert.Contains(SumsUrl, fake.Requested);
@@ -98,7 +121,7 @@ public class UpdateClientTests
         using var http = new HttpClient(new FakeHttp().Bytes(ExeUrl, Exe).Text(SumsUrl, Sums(wrong)));
 
         await Assert.ThrowsAsync<InvalidDataException>(
-            () => new UpdateClient(http).DownloadAsync(Release(), tmp.Path, null, CancellationToken.None));
+            () => new UpdateClient(http).DownloadAsync(Release(), UpdateBuild.SelfContained, tmp.Path, null, CancellationToken.None));
 
         Assert.Empty(Directory.GetFiles(tmp.Path));
     }
@@ -111,7 +134,7 @@ public class UpdateClientTests
         using var http = new HttpClient(new FakeHttp().Bytes(ExeUrl, Exe).Text(SumsUrl, sums));
 
         await Assert.ThrowsAsync<InvalidDataException>(
-            () => new UpdateClient(http).DownloadAsync(Release(), tmp.Path, null, CancellationToken.None));
+            () => new UpdateClient(http).DownloadAsync(Release(), UpdateBuild.SelfContained, tmp.Path, null, CancellationToken.None));
 
         Assert.Empty(Directory.GetFiles(tmp.Path));
     }
@@ -125,21 +148,78 @@ public class UpdateClientTests
         await cts.CancelAsync();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => new UpdateClient(http).DownloadAsync(Release(), tmp.Path, null, cts.Token));
+            () => new UpdateClient(http).DownloadAsync(Release(), UpdateBuild.SelfContained, tmp.Path, null, cts.Token));
 
         Assert.Empty(Directory.GetFiles(tmp.Path));
     }
 
+    [Fact]
+    public async Task DownloadAsync_VerifiesTheZipAndExtractsTheExeForTheFrameworkDependentBuild()
+    {
+        using var tmp = new TempDir();
+        var zip = Zip(("BhMaps.exe", Exe), ("readme.txt", Encoding.ASCII.GetBytes("hi")));
+        var fake = new FakeHttp().Bytes(ZipUrl, zip).Text(SumsUrl, ZipSums(Hex(zip)));
+        using var http = new HttpClient(fake);
+
+        var path = await new UpdateClient(http).DownloadAsync(
+            Release(), UpdateBuild.FrameworkDependent, tmp.Path, null, CancellationToken.None);
+
+        Assert.Equal(Path.Combine(tmp.Path, "bhmaps-dotnet.exe"), path);
+        Assert.Equal(Exe, await File.ReadAllBytesAsync(path));
+        Assert.Equal(["bhmaps-dotnet.exe"], Directory.GetFiles(tmp.Path).Select(Path.GetFileName));
+        Assert.DoesNotContain(ExeUrl, fake.Requested);
+    }
+
+    [Fact]
+    public async Task DownloadAsync_ThrowsWhenTheZipHasNoExe()
+    {
+        using var tmp = new TempDir();
+        var zip = Zip(("readme.txt", Encoding.ASCII.GetBytes("hi")));
+        using var http = new HttpClient(new FakeHttp().Bytes(ZipUrl, zip).Text(SumsUrl, ZipSums(Hex(zip))));
+
+        await Assert.ThrowsAsync<InvalidDataException>(
+            () => new UpdateClient(http).DownloadAsync(
+                Release(), UpdateBuild.FrameworkDependent, tmp.Path, null, CancellationToken.None));
+
+        Assert.Empty(Directory.GetFiles(tmp.Path));
+    }
+
+    [Fact]
+    public async Task DownloadAsync_ThrowsAndExtractsNothingWhenTheZipDoesNotMatch()
+    {
+        using var tmp = new TempDir();
+        var zip = Zip(("BhMaps.exe", Exe));
+        var wrong = Hex(Encoding.ASCII.GetBytes("a different zip"));
+        using var http = new HttpClient(new FakeHttp().Bytes(ZipUrl, zip).Text(SumsUrl, ZipSums(wrong)));
+
+        await Assert.ThrowsAsync<InvalidDataException>(
+            () => new UpdateClient(http).DownloadAsync(
+                Release(), UpdateBuild.FrameworkDependent, tmp.Path, null, CancellationToken.None));
+
+        Assert.Empty(Directory.GetFiles(tmp.Path));
+    }
+
+    [Fact]
+    public async Task DownloadAsync_RefusesADevelopmentBuild()
+    {
+        using var tmp = new TempDir();
+        using var http = new HttpClient(new FakeHttp());
+
+        await Assert.ThrowsAsync<InvalidDataException>(
+            () => new UpdateClient(http).DownloadAsync(
+                Release(), UpdateBuild.Development, tmp.Path, null, CancellationToken.None));
+    }
+
     [Theory]
-    [InlineData("abc123  bhmaps-v2.6.0-win-x64.exe", "abc123")]
-    [InlineData("abc123 *bhmaps-v2.6.0-win-x64.exe", "abc123")]
-    [InlineData("ABC123  BHMAPS-V2.6.0-WIN-X64.EXE", "abc123")]
+    [InlineData("abc123  bhmaps.exe", "abc123")]
+    [InlineData("abc123 *bhmaps.exe", "abc123")]
+    [InlineData("ABC123  BHMAPS.EXE", "abc123")]
     public void ChecksumFor_ReadsSha256sumStyleLines(string line, string expected) =>
-        Assert.Equal(expected, UpdateClient.ChecksumFor(line, "bhmaps-v2.6.0-win-x64.exe"));
+        Assert.Equal(expected, UpdateClient.ChecksumFor(line, "bhmaps.exe"));
 
     [Fact]
     public void ChecksumFor_ReturnsNullWhenNoLineNamesTheFile() =>
-        Assert.Null(UpdateClient.ChecksumFor("abc123  other.exe\n", "bhmaps-v2.6.0-win-x64.exe"));
+        Assert.Null(UpdateClient.ChecksumFor("abc123  other.exe\n", "bhmaps.exe"));
 }
 
 /// <summary>The one copy of the releases/latest sample, shared by every test of the update classes.</summary>
@@ -159,14 +239,14 @@ internal static class UpdateSamples
       "body": "Pack tile menus, copy and move, auto-update.",
       "assets": [
         {
-          "name": "bhmaps-v2.6.0-win-x64.exe",
+          "name": "bhmaps.exe",
           "size": 141557760,
-          "browser_download_url": "https://github.com/as9pa/bhmaps/releases/download/v2.6.0/bhmaps-v2.6.0-win-x64.exe"
+          "browser_download_url": "https://github.com/as9pa/bhmaps/releases/download/v2.6.0/bhmaps.exe"
         },
         {
-          "name": "bhmaps-v2.6.0-win-x64-dotnet.zip",
+          "name": "bhmaps-dotnet.zip",
           "size": 3145728,
-          "browser_download_url": "https://github.com/as9pa/bhmaps/releases/download/v2.6.0/bhmaps-v2.6.0-win-x64-dotnet.zip"
+          "browser_download_url": "https://github.com/as9pa/bhmaps/releases/download/v2.6.0/bhmaps-dotnet.zip"
         },
         {
           "name": "SHA256SUMS.txt",

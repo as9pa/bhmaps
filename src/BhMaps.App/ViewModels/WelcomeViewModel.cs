@@ -7,7 +7,7 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace BhMaps.App.ViewModels;
 
-/// <summary>Spec 7.7: the numbered steps the app asks for before the shell exists (four since 3.3). Replaces the v1
+/// <summary>Spec 7.7: the numbered steps the app asks for before the shell exists (four since 3.6). Replaces the v1
 /// first-run backup prompt; firstRunDone stays in settings for compatibility and is not read here.</summary>
 public partial class WelcomeViewModel : ObservableObject
 {
@@ -66,7 +66,7 @@ public partial class WelcomeViewModel : ObservableObject
     [ObservableProperty]
     public partial bool CaptureNow { get; set; }
 
-    /// <summary>Step 4 (3.3 O1). On by default: Start and Windows search are where an app is looked for.</summary>
+    /// <summary>Step 4 (3.6 O1). On by default: Start and Windows search are where an app is looked for.</summary>
     [ObservableProperty]
     public partial bool AddStartMenu { get; set; }
 

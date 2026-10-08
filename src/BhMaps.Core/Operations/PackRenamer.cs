@@ -2,7 +2,7 @@ using BhMaps.Core.Scanning;
 
 namespace BhMaps.Core.Operations;
 
-/// <summary>3.3 P1: renames one pack by moving its folder under packs\. The new name goes through the same validator
+/// <summary>3.6 P1: renames one pack by moving its folder under packs\. The new name goes through the same validator
 /// and taken-name check as PackCreator; a pack that wraps a mapArt folder moves whole, wrapper and all.</summary>
 public static class PackRenamer
 {

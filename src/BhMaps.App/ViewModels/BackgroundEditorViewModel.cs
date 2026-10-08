@@ -35,7 +35,7 @@ public partial class BackgroundEditorViewModel : ObservableObject
     public const int PreviewHeight = 360;
     public const string NewPackChoice = "New pack...";
 
-    /// <summary>3.3 E3: under the editable pack box while its name is a new pack that can be made.</summary>
+    /// <summary>3.6 E3: under the editable pack box while its name is a new pack that can be made.</summary>
     public const string NewPackHint = "Type a name, or open the list to pick a pack.";
     public const string DefaultPackName = "My Backgrounds";
     public const string NoSourceText = "No picture yet. Drop one here or browse.";
@@ -79,7 +79,7 @@ public partial class BackgroundEditorViewModel : ObservableObject
         PanY = 0.5;
 
         // The tile's own pack, so Save replaces the picture the user was looking at. Opened from anywhere else
-        // it is a fresh New Pack N (3.3 E2): custom backgrounds are a pack of their own, not My Backgrounds.
+        // it is a fresh New Pack N (3.6 E2): custom backgrounds are a pack of their own, not My Backgrounds.
         var requested = packNames.FirstOrDefault(p => p.Equals(request.PackName, StringComparison.OrdinalIgnoreCase));
         PackName = requested ?? PackNames.NextFree(TakenPackNames());
         ValuesFromText = "";
@@ -134,28 +134,28 @@ public partial class BackgroundEditorViewModel : ObservableObject
     [ObservableProperty]
     public partial double DarkenPercent { get; set; }
 
-    /// <summary>3.3 E4: hue rotation in degrees, -180..180.</summary>
+    /// <summary>3.6 E4: hue rotation in degrees, -180..180.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HueText))]
     public partial int Hue { get; set; }
 
-    /// <summary>3.3 E4: -100..100, where 0 leaves the picture as it is.</summary>
+    /// <summary>3.6 E4: -100..100, where 0 leaves the picture as it is.</summary>
     [ObservableProperty]
     public partial double SaturationPercent { get; set; }
 
-    /// <summary>3.3 E4: -100..100, where 0 leaves the picture as it is.</summary>
+    /// <summary>3.6 E4: -100..100, where 0 leaves the picture as it is.</summary>
     [ObservableProperty]
     public partial double ContrastPercent { get; set; }
 
-    /// <summary>3.3 E4: 0..100.</summary>
+    /// <summary>3.6 E4: 0..100.</summary>
     [ObservableProperty]
     public partial double BlurPercent { get; set; }
 
-    /// <summary>3.3 E4: the sign is part of the reading, as on the platform editor: "+12" one way, "-30" the
+    /// <summary>3.6 E4: the sign is part of the reading, as on the platform editor: "+12" one way, "-30" the
     /// other, and "0" neither.</summary>
     public string HueText => Hue > 0 ? $"+{Hue}" : Hue.ToString();
 
-    /// <summary>3.3 E3: the editable box's text. An existing pack's name saves into it; anything else is a new
+    /// <summary>3.6 E3: the editable box's text. An existing pack's name saves into it; anything else is a new
     /// pack.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsNewPack), nameof(PackNameError), nameof(PackNameHint), nameof(CanSave), nameof(OverwriteHint))]
@@ -244,7 +244,7 @@ public partial class BackgroundEditorViewModel : ObservableObject
 
     public bool CanSave => CanAddAsNew && PackNameError.Length == 0;
 
-    /// <summary>3.3 E1: the Save rule without the pack name, because Add as new asks for its own.</summary>
+    /// <summary>3.6 E1: the Save rule without the pack name, because Add as new asks for its own.</summary>
     public bool CanAddAsNew => HasSource && SelectedMap is not null;
 
     private FitOptions Options => PictureFits.Options(
@@ -358,7 +358,7 @@ public partial class BackgroundEditorViewModel : ObservableObject
         PanY = entry.PanY;
         DarkenPercent = entry.Darken;
 
-        // 3.3 E4: records written before 3.3 have no adjustments, which reads as none.
+        // 3.6 E4: records written before 3.6 have no adjustments, which reads as none.
         Hue = (int)Math.Round(entry.Hue ?? 0);
         SaturationPercent = (entry.Saturation ?? 0) * 100;
         ContrastPercent = (entry.Contrast ?? 0) * 100;
@@ -443,7 +443,7 @@ public partial class BackgroundEditorViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanSave))]
     private Task SaveOnlyAsync() => SaveAsync(apply: false);
 
-    /// <summary>3.3 E1: "Add as new" asks for a fresh pack's name, then runs Save only into it. The pack is new,
+    /// <summary>3.6 E1: "Add as new" asks for a fresh pack's name, then runs Save only into it. The pack is new,
     /// so no Replace question can come up.</summary>
     [RelayCommand(CanExecute = nameof(CanAddAsNew))]
     private Task AddAsNewAsync()
