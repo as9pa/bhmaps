@@ -366,9 +366,16 @@ public partial class PacksViewModel : PageViewModel
         }
 
         var pack = row.Pack;
+        var body = $"Its {PackRowViewModel.Plural(pack.FileCount, "file")} will be deleted. This cannot be undone.";
+        if (pack.IsDiscovered)
+        {
+            // A discovered pack's folder sits elsewhere in the library, so name it.
+            body += $" This removes the folder {pack.FolderPath}.";
+        }
+
         if (!Shell.Dialogs.Confirm(
             $"Delete {pack.Name}?",
-            $"Its {PackRowViewModel.Plural(pack.FileCount, "file")} will be deleted. This cannot be undone.",
+            body,
             MainViewModel.Verb("Delete", pack.Name),
             destructive: true))
         {

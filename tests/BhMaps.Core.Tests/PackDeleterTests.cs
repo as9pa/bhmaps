@@ -1,3 +1,4 @@
+using BhMaps.Core.Model;
 using BhMaps.Core.Operations;
 using BhMaps.Core.Packs;
 using BhMaps.Core.Scanning;
@@ -95,18 +96,55 @@ public class PackDeleterTests
     }
 
     [Fact]
-    public void RefusesToDeleteADiscoveredPack()
+    public void DeletesADiscoveredPackFolder()
     {
         using var tmp = new TempDir();
         var lib = Path.Combine(tmp.Path, "lib");
-        var content = Path.Combine(lib, "Summer", "mapArt");
+        new FakeGameTree(Path.Combine(lib, "Summer", "mapArt")).File("BloodMoon", "A.png", "x");
+        new FakeGameTree(Path.Combine(lib, "packs", "keep")).File("BloodMoon", "B.png", "x");
+        var pack = Assert.Single(PackScanner.ScanAll(lib), p => p.IsDiscovered);
+
+        var error = PackDeleter.Delete(lib, pack);
+
+        Assert.Null(error);
+        Assert.False(Directory.Exists(Path.Combine(lib, "Summer")));
+        Assert.True(Directory.Exists(lib));
+        Assert.True(File.Exists(Path.Combine(lib, "packs", "keep", "BloodMoon", "B.png")));
+    }
+
+    [Fact]
+    public void RefusesADiscoveredPackOutsideTheLibrary()
+    {
+        using var tmp = new TempDir();
+        var lib = Path.Combine(tmp.Path, "lib");
+        Directory.CreateDirectory(lib);
+        var folder = Path.Combine(tmp.Path, "elsewhere", "Summer");
+        var content = Path.Combine(folder, "mapArt");
         new FakeGameTree(content).File("BloodMoon", "A.png", "x");
-        var pack = Assert.Single(PackScanner.ScanAll(lib));
+        var pack = new Pack("Summer", content, Array.Empty<GameFolder>(), IsDiscovered: true) { FolderPath = folder };
 
         var error = PackDeleter.Delete(lib, pack);
 
         Assert.NotNull(error);
         Assert.True(File.Exists(Path.Combine(content, "BloodMoon", "A.png")));
+    }
+
+    [Fact]
+    public void RefusesADiscoveredPackThatIsTheLibraryRoot()
+    {
+        using var tmp = new TempDir();
+        var lib = Path.Combine(tmp.Path, "lib");
+        new FakeGameTree(Path.Combine(lib, "mapArt")).File("BloodMoon", "A.png", "x");
+        var pack = new Pack("lib", Path.Combine(lib, "mapArt"), Array.Empty<GameFolder>(), IsDiscovered: true)
+        {
+            FolderPath = lib,
+        };
+
+        var error = PackDeleter.Delete(lib, pack);
+
+        Assert.NotNull(error);
+        Assert.True(Directory.Exists(lib));
+        Assert.True(File.Exists(Path.Combine(lib, "mapArt", "BloodMoon", "A.png")));
     }
 
     [Fact]
