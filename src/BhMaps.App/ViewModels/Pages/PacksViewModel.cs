@@ -226,8 +226,8 @@ public partial class PacksViewModel : PageViewModel
         };
 
         // 3.6 P1: the Default pack keeps its name, because every Reset to default restores from it by that name.
-        // A discovered pack (outside packs\) is read-only, so it has no Rename either.
-        if (!row.IsDefault && !row.Pack.IsDiscovered)
+        // A discovered pack (outside packs\) can be renamed: its own folder takes the new name where it is.
+        if (!row.IsDefault)
         {
             items.Add(new TileMenuCommand("Rename...", new RelayCommand(() => RenameCommand.Execute(row))));
         }
@@ -486,7 +486,7 @@ public partial class PacksViewModel : PageViewModel
     /// so the key cannot reach what the menu leaves out.</summary>
     [RelayCommand]
     private Task RenameAsync(PackRowViewModel? row) =>
-        row is null || row.IsDefault || row.Pack.IsDiscovered ? Task.CompletedTask : Shell.RenamePackAsync(row.Pack);
+        row is null || row.IsDefault ? Task.CompletedTask : Shell.RenamePackAsync(row.Pack);
 
     /// <summary>3.6 P2: the outer folder, not the mapArt inside a wrapped pack, because the outer folder is what
     /// the owner named and what they would drag.</summary>

@@ -11,9 +11,10 @@ nothing else in the game install is touched.
 
 ## What is new in 3.6.2
 
-A discovered pack, one found outside `packs` by its `mapArt` folder, can be deleted from its row menu. The
-confirm names the folder that goes, since the row shows the pack under a name that may carry a number,
-such as "b&w maps (1)". Everything else about a discovered pack stays read only.
+A discovered pack, one found outside `packs` by its `mapArt` folder, can be deleted and renamed from its
+row menu (F2 renames too). Delete removes the folder that holds the `mapArt`, and the confirm names it, since
+the row may show the pack under a numbered name such as "b&w maps (1)". Rename starts from the folder's own
+name and renames that folder in place. Everything else about a discovered pack stays read only.
 
 ## What is new in 3.6.1
 
@@ -70,7 +71,7 @@ release notes on GitHub.
 
 The library can hold packs in your own folder layout. A folder one or two levels under the library that
 holds a `mapArt` folder is read as a pack, named after that folder, next to the packs in `packs`. These
-packs are read-only: BhMaps shows and applies them but never renames or changes them (since 3.6.2 it can delete one). A found
+packs are read-only: BhMaps shows and applies them but never changes them (since 3.6.2 it can delete or rename one). A found
 pack whose name is taken shows as "Name (1)".
 
 ## What is new in 3.2
@@ -445,8 +446,8 @@ the `mapArt` folder, for example `<library>\Summer\mapArt\BloodMoon\<file>`. The
 three folders deep, counting the library's own subfolders as the first, so `mapArt` itself has to sit
 within those three. It does not look inside a pack it has found, skips `packs`, and skips junctions,
 links and folders it cannot open. These discovered packs are read only: they can be viewed, applied,
-exported, duplicated into `packs` and deleted (the whole folder that holds the `mapArt` goes), but not
-edited, imported into, or used as a copy or move target. When a discovered pack has the same name as another pack, ignoring case, the pack in `packs`
+exported, duplicated into `packs`, renamed and deleted (the whole folder that holds the `mapArt` goes),
+but not edited, imported into, or used as a copy or move target. When a discovered pack has the same name as another pack, ignoring case, the pack in `packs`
 keeps its name and the discovered one gets a number, such as "Summer (1)", then "Summer (2)", in the
 order of their folder paths. The settings file holds the two paths, the tile size
 each page remembers, when each pack was last applied, whether the Backgrounds page is showing your own

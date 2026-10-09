@@ -6,13 +6,13 @@ namespace BhMaps.Core.Model;
 /// under packs\, its mapArt folder for a discovered pack or for a pack under packs\ that wraps one (3.6 P2).
 /// Every read of a pack's files goes through FullPath.
 /// IsDiscovered marks a pack outside packs\, which is read-only: it can be viewed and applied, never changed,
-/// except that Delete removes its whole folder (FolderPath).</summary>
+/// except by Delete, which removes its whole folder (FolderPath), and Rename, which renames that folder in place.</summary>
 public sealed record Pack(string Name, string FullPath, IReadOnlyList<GameFolder> Folders, bool IsDiscovered = false)
 {
     /// <summary>The pack's own folder, which is what Delete, Export's name, Open folder, Rename and Duplicate act
     /// on: the folder under packs\, or the folder holding the mapArt of a discovered pack. The same as FullPath
-    /// for a pack that does not wrap a mapArt folder. For a discovered pack, Delete is the one operation that
-    /// changes this folder: it removes it along with everything in it.</summary>
+    /// for a pack that does not wrap a mapArt folder. For a discovered pack, Delete and Rename are the two operations
+    /// that change this folder: Delete removes it along with everything in it, Rename renames it where it is.</summary>
     public string FolderPath { get; init; } = FullPath;
 
     public GameFolder? FindFolder(string name) =>
@@ -24,7 +24,7 @@ public sealed record Pack(string Name, string FullPath, IReadOnlyList<GameFolder
     public IReadOnlyList<string> RelativePaths =>
         Folders.SelectMany(f => f.Files.Select(x => Path.Combine(f.Name, x.Name))).ToList();
 
-    /// <summary>The refusal every operation other than Delete that would change a discovered pack's folder returns.</summary>
+    /// <summary>The refusal every operation other than Delete and Rename that would change a discovered pack's folder returns.</summary>
     public static string ReadOnlyMessage(Pack pack) =>
         $"'{pack.Name}' is outside the packs folder, so it is read-only. It can be viewed and applied, not changed.";
 }

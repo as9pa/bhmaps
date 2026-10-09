@@ -1057,14 +1057,17 @@ public partial class MainViewModel : ObservableObject
     /// Undo on the line: renaming back is the same two clicks.</summary>
     public async Task RenamePackAsync(Pack pack)
     {
-        var name = Dialogs.PromptText("Rename pack", "Name", pack.Name)?.Trim();
-        if (string.IsNullOrEmpty(name) || name.Equals(pack.Name, StringComparison.Ordinal))
+        // A discovered pack's row can carry the scanner's " (1)" suffix, so its prompt starts from the folder's
+        // own name, which is what the rename changes.
+        var current = pack.IsDiscovered ? Path.GetFileName(pack.FolderPath) : pack.Name;
+        var name = Dialogs.PromptText("Rename pack", "Name", current)?.Trim();
+        if (string.IsNullOrEmpty(name) || name.Equals(current, StringComparison.Ordinal))
         {
             return;
         }
 
         var oldName = pack.Name;
-        if (!PackRenamer.TryRename(Services.LibraryPath, oldName, name, out var error))
+        if (!PackRenamer.TryRename(Services.LibraryPath, pack, name, out var error))
         {
             Dialogs.Error("Could not rename the pack", error);
             return;
