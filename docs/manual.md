@@ -13,6 +13,7 @@ nothing else in the game install is touched.
 
 Picking a category chip clears the search box, so an old search never leaves the new chip showing nothing.
 The search box also has an X on its right while it holds text; click it to clear the search.
+The search boxes now say Search maps, Search platforms and Search backgrounds.
 
 ## What is new in 3.7.5
 

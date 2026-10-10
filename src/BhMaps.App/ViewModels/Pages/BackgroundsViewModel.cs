@@ -24,7 +24,7 @@ public partial class BackgroundsViewModel : RowsPageViewModel
 
     public override string Title => "Backgrounds";
 
-    public override string SearchPlaceholder => "Search maps and pictures";
+    public override string SearchPlaceholder => "Search backgrounds";
 
     /// <summary>Spec 4: the page's one switch. Off, a row shows its pack pictures only; on, the any-map pictures
     /// follow them on every row. Saved when it is toggled, so the page opens the way it was left.</summary>

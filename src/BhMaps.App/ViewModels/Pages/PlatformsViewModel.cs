@@ -27,7 +27,7 @@ public partial class PlatformsViewModel : RowsPageViewModel
 
     public override string Title => "Platforms";
 
-    public override string SearchPlaceholder => "Search maps and packs";
+    public override string SearchPlaceholder => "Search platforms";
 
     protected override string NoResultsText => $"No map or pack matches '{SearchText}'.";
 
