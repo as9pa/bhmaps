@@ -286,7 +286,8 @@ public partial class MapsViewModel : PageViewModel, ITileSized
             $"{pack.Name} applied to {MainViewModel.Count(maps.Count, "map")}.",
             pack.Name,
             artMaps: maps,
-            sources: AppliedSources.FromPack(pack, targetPaths));
+            sources: AppliedSources.FromPack(pack, targetPaths),
+            picturePack: pack);
 
         if (result is not null)
         {

@@ -9,7 +9,7 @@
     <BooleanToVisibilityConverter x:Key="BoolToVis" />
   </UserControl.Resources>
 
-  <DockPanel Margin="24,16,24,24">
+  <DockPanel Margin="24,8,24,24">
     <!-- Addendum C: title, search and size. No primary button: nothing is added to the library from here. -->
     <controls:PageHeader DockPanel.Dock="Top" Title="Platforms">
       <controls:PageHeader.Actions>

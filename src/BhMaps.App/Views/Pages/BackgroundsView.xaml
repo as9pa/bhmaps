@@ -9,7 +9,7 @@
     <BooleanToVisibilityConverter x:Key="BoolToVis" />
   </UserControl.Resources>
 
-  <DockPanel Margin="24,16,24,24">
+  <DockPanel Margin="24,8,24,24">
     <!-- Addendum B: title, search, size and Add Image all on the header's one line. -->
     <controls:PageHeader DockPanel.Dock="Top" Title="Backgrounds">
       <controls:PageHeader.Actions>

@@ -60,7 +60,7 @@
     </Style>
   </UserControl.Resources>
 
-  <DockPanel Margin="24,16,24,24">
+  <DockPanel Margin="24,8,24,24">
     <controls:PageHeader DockPanel.Dock="Top" Title="Settings" />
     <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
       <!-- Every row here writes something, so none of them is offered while a long operation is running. The

@@ -60,7 +60,7 @@ public static class PackScanner
         {
             // FolderPath is the folder that holds the mapArt: the one the user named and would open or drag.
             packs.Add(
-                new Pack(names[i]!, discovered[i].ContentRoot, ImageFiles.ScanOneLevel(discovered[i].ContentRoot), true)
+                new Pack(names[i]!, discovered[i].ContentRoot, ScanContent(discovered[i].ContentRoot), true)
                 {
                     FolderPath = Path.GetDirectoryName(discovered[i].ContentRoot) ?? discovered[i].ContentRoot,
                 });
@@ -103,8 +103,18 @@ public static class PackScanner
     {
         var info = new DirectoryInfo(packPath);
         var contentRoot = ContentRoot(info.FullName);
-        return new Pack(info.Name, contentRoot, ImageFiles.ScanOneLevel(contentRoot)) { FolderPath = info.FullName };
+        return new Pack(info.Name, contentRoot, ScanContent(contentRoot)) { FolderPath = info.FullName };
     }
+
+    /// <summary>3.7: the folder a pack keeps its map-select pictures under, images\thumbnails. It is never one of
+    /// the pack's map folders.</summary>
+    public const string ImagesFolderName = "images";
+
+    /// <summary>The game folders under a content root, leaving out the images folder, which holds the pack's
+    /// map-select pictures rather than a map's art.</summary>
+    private static IReadOnlyList<GameFolder> ScanContent(string contentRoot) =>
+        [.. ImageFiles.ScanOneLevel(contentRoot)
+            .Where(f => !f.Name.Equals(ImagesFolderName, StringComparison.OrdinalIgnoreCase))];
 
     /// <summary>Folders outside packs\ that hold a mapArt child (any case), within MaxDiscoveryDepth of the
     /// library. The walk does not go below a pack it found, skips the top-level packs folder (ScanAll reads that

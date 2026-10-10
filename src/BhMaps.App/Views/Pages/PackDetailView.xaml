@@ -19,7 +19,7 @@
     <KeyBinding Key="V" Modifiers="Control" Command="{Binding PasteCommand}" />
   </UserControl.InputBindings>
 
-  <DockPanel Margin="24,16,24,24">
+  <DockPanel Margin="24,8,24,24">
     <!-- 3.0: the backdrop band. The pack's first card, blown up behind the header and faded into the page, so the
          page opens with the pack's own art rather than a title on empty background. The header and the subtitle
          sit over it; a pack with no cards draws the gradient alone. -->

@@ -1,5 +1,6 @@
 using BhMaps.Core.Maps;
 using BhMaps.Core.Model;
+using BhMaps.Core.Operations;
 
 namespace BhMaps.Core.Packs;
 
@@ -135,6 +136,8 @@ public static class PackCopier
             CopyInto(source.FullPath, target.FullPath, relativePath, written, failures);
         }
 
+        // 3.7: the map's own map-select picture travels with its art.
+        failures.AddRange(PackPictures.CopyIntoPack(source, target, map, catalog.Maps));
         MergeRecords(source, target, map, files, written);
         return new PackCopyResult(
             [.. written.Select(r => LibraryRelative(target, r))], removed, false, failures);
