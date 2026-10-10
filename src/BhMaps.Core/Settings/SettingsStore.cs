@@ -28,6 +28,7 @@ public static class SettingsStore
         // more; it stays known so an old file's copy of it is dropped rather than carried back.
         "writeGameThumbnails",
         "checkForUpdates", "lastUpdateCheck", "dismissedUpdate", "hiddenPacks",
+        "myBackgroundsMigrated",
     ];
 
     public static string DefaultAppDataDir =>
@@ -107,7 +108,8 @@ public static class SettingsStore
             Str(obj, "dismissedUpdate") is { Length: > 0 } tag ? tag : null,
             Hidden(obj),
             Dismissed(obj),
-            Mode(obj))
+            Mode(obj),
+            Bool(obj, "myBackgroundsMigrated"))
         {
             Unknown = unknown.Count == 0 ? null : unknown,
         };
@@ -132,6 +134,7 @@ public static class SettingsStore
             ["lastUpdateCheck"] = settings.LastUpdateCheck?.ToString("o", CultureInfo.InvariantCulture),
             ["dismissedUpdate"] = settings.DismissedUpdate,
             ["previewMode"] = settings.PreviewMode.ToString().ToLowerInvariant(),
+            ["myBackgroundsMigrated"] = settings.MyBackgroundsMigrated,
         };
 
         // Spec 8: a library nobody has applied from writes no key at all, rather than an empty object nobody reads.

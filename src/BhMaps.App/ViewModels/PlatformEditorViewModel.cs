@@ -169,7 +169,7 @@ public partial class PlatformEditorViewModel : ObservableObject
         IsolatePreview = request.OnlyFile is not null || services.Settings.PlatformPreviewIsolate;
         _restoringMode = false;
 
-        // 3.6 E2: custom platforms go into a pack of their own, so the default is a fresh New Pack N. Opened on
+        // 3.6 E2: custom platforms go into a pack of their own, so the default is a fresh Custom Pack N. Opened on
         // a pack's own tile, the edit is of that pack and goes back into it; the Default pack is the one
         // exception, because it is the game's own art and Reset reads from it.
         PackName = PackNames.NextFree(TakenPackNames());

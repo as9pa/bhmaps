@@ -37,7 +37,7 @@ public partial class BackgroundEditorViewModel : ObservableObject
 
     /// <summary>3.6 E3: under the editable pack box while its name is a new pack that can be made.</summary>
     public const string NewPackHint = "Type a name, or open the list to pick a pack.";
-    public const string DefaultPackName = "My Backgrounds";
+    public const string DefaultPackName = PackNames.DefaultStem;
     public const string NoSourceText = "No picture yet. Drop one here or browse.";
     public const string NoMapsText = "No maps yet. Refresh the game data in Settings.";
     public const string PreviewSizeText = "preview 640 x 360";
@@ -82,7 +82,7 @@ public partial class BackgroundEditorViewModel : ObservableObject
         PanY = 0.5;
 
         // The tile's own pack, so Save replaces the picture the user was looking at. Opened from anywhere else
-        // it is a fresh New Pack N (3.6 E2): custom backgrounds are a pack of their own, not My Backgrounds.
+        // it is a fresh Custom Pack N (3.6 E2, 3.9.3): custom backgrounds are a pack of their own.
         var requested = packNames.FirstOrDefault(p => p.Equals(request.PackName, StringComparison.OrdinalIgnoreCase));
         PackName = requested ?? PackNames.NextFree(TakenPackNames());
         ValuesFromText = "";

@@ -77,7 +77,7 @@ public static class MapChoices
     /// picture, in the Packs page order, then one last group for the pictures only the game has (spec 3). A pack
     /// with nothing of the kind is not a group at all. The last group holds only the game-only pictures the game
     /// is showing on this map: one the game has somewhere else is that map's business, and it is offered on that
-    /// map's row and panel, where its menu still has Save to My Backgrounds.</summary>
+    /// map's row and panel, where its menu still has Save to Custom Pack.</summary>
     public static IReadOnlyList<PictureGroup> PictureGroups(
         MainViewModel shell, MapEntry map, ScanSnapshot snapshot)
     {

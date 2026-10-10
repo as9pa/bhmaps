@@ -34,7 +34,11 @@ public sealed record AppSettings(
 
     /// <summary>3.2 P1 and P2: the Both / Platforms / Backgrounds switch. One setting shared by Packs, a pack's page
     /// and Maps, so flipping it on one page flips it on all three.</summary>
-    PreviewMode PreviewMode = PreviewMode.Both)
+    PreviewMode PreviewMode = PreviewMode.Both,
+
+    /// <summary>3.9.3: the one-time rename of an old "My Backgrounds" pack to Custom Pack has run (or found nothing
+    /// to rename), so a pack the user names My Backgrounds later is left alone.</summary>
+    bool MyBackgroundsMigrated = false)
 {
     public const string DefaultGamePath = @"C:\Program Files (x86)\Steam\steamapps\common\Brawlhalla\mapArt";
 
