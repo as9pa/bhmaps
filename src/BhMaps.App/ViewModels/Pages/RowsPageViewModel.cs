@@ -361,8 +361,7 @@ public abstract partial class RowsPageViewModel : PageViewModel, ITileSized
 
         return SelectedChip switch
         {
-            // 3.0: under All a search still reaches a minigame map that the All chip alone leaves out.
-            AllChip => search.Length > 0 || !MapCatalog.IsMinigame(row.Map),
+            AllChip => !MapCatalog.IsMinigame(row.Map),
             null or "" => true,
             _ => _uiSets.FirstOrDefault(s => s.Label == SelectedChip) is { } set
                 && (set.Name == MapCatalog.MinigameSetName
