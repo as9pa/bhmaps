@@ -9,6 +9,13 @@ and `.jpg` files inside the `mapArt` folder and inside its own library, plus its
 folder, and it keeps a copy of every original so it can put it back. The game's data files are read and never written, and
 nothing else in the game install is touched.
 
+## What is new in 3.7.1
+
+A pack's map-select picture now stays only while that pack's art is on the map. Applying a pack without a
+picture of its own for the map, or any other change to the map's art (Add custom image, a platform editor
+save, an import), renders the thumbnail from the new art again, so the map select always shows the art the
+map runs. Refresh keeps the pack's picture. Reset to default and Undo work as before.
+
 ## What is new in 3.7
 
 A pack can carry its own map-select pictures: `.jpg` files in an `images\thumbnails` folder at the pack's
@@ -17,7 +24,7 @@ root, or beside its `mapArt` folder when it wraps one, named the way the game na
 into the game as it is, in place of the picture BhMaps would render, and the done line counts them, for
 example "Summer applied to 3 maps, 2 pictures." A picture for a map the pack has no art for, one the game
 shares between two maps, and one whose name no map uses are left out. The pack's picture stays on the game
-through later saves until the map is reset to default; Undo of the apply puts the previous picture back.
+while the pack's art is on the map (see 3.7.1); Undo of the apply puts the previous picture back.
 Import from a pack brings a map's picture along with its art. The pack row says "Active on 3 maps." where it
 said "On 3 maps.".
 
@@ -322,8 +329,9 @@ can do. Nothing about the files it writes changed.
 - Every save that changes a map's art also writes that map's map-select picture over its own
   thumbnail in `<game>\images\thumbnails`, so the map select screen shows the art you put on. When
   the pack being applied has its own picture for the map in its `images\thumbnails` folder, that jpg is
-  copied as it is; otherwise BhMaps renders its composite at 290 by 164. A pack's picture stays until
-  the map is reset to default. The original thumbnail is kept in `%APPDATA%\BhMaps\thumbnails-original`,
+  copied as it is; otherwise BhMaps renders its composite at 290 by 164. A pack's picture stays only
+  while that pack's art is on the map, and Refresh keeps it. The original thumbnail is kept in
+  `%APPDATA%\BhMaps\thumbnails-original`,
   and Reset to default and Undo put it back. A map whose thumbnail is shared with another map, one that
   names no thumbnail, and one whose file is not there are left alone, and the map panel says which of
   those it is.
@@ -450,7 +458,7 @@ describes things by where they are and what they do. Nothing on disk changes sha
 | Undo of the last game write                          | `%APPDATA%\BhMaps\undo\`                                                                                      |
 | Downloaded updates                                   | `%APPDATA%\BhMaps\updates\`                                                                                   |
 | Kept map-select thumbnails                           | `%APPDATA%\BhMaps\thumbnails-original\`                                                                       |
-| Pack pictures on the game, kept until reset          | `%APPDATA%\BhMaps\thumbnails.bhmaps.json`                                                                    |
+| Pack pictures on the game, while their art is on     | `%APPDATA%\BhMaps\thumbnails.bhmaps.json`                                                                    |
 
 The map art folder and the library are chosen in the welcome window and editable in Settings; the
 data files are wherever the game folder is. Only `<library>\packs` is written, so anything
