@@ -80,6 +80,7 @@ public partial class BackgroundEditorViewModel : ObservableObject
         SourceDetail = "";
         PanX = 0.5;
         PanY = 0.5;
+        Zoom = PanZoom.MinZoom;
 
         // The tile's own pack, so Save replaces the picture the user was looking at. Opened from anywhere else
         // it is a fresh Custom Pack N (3.6 E2, 3.9.3): custom backgrounds are a pack of their own.
@@ -125,14 +126,24 @@ public partial class BackgroundEditorViewModel : ObservableObject
     public partial string SourceDetail { get; set; }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsFill), nameof(FitFill), nameof(FitFit), nameof(FitCenter), nameof(FitStretch))]
+    [NotifyPropertyChangedFor(
+        nameof(IsFill), nameof(CanPanX), nameof(CanPanY), nameof(FitFill), nameof(FitFit), nameof(FitCenter), nameof(FitStretch))]
     public partial PictureFit Fit { get; set; }
 
+    /// <summary>Where the picture sits along what hangs over the stage, 0..1. The sliders, the drag and the wheel on
+    /// the preview all move it (3.10).</summary>
     [ObservableProperty]
     public partial double PanX { get; set; }
 
     [ObservableProperty]
     public partial double PanY { get; set; }
+
+    /// <summary>3.10: 1..4 over the Fill's cover fit, shown as 100%..400%. Fill only, as the pan is.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ZoomText), nameof(CanPanX), nameof(CanPanY))]
+    public partial double Zoom { get; set; }
+
+    public string ZoomText => $"{Math.Round(Zoom * 100)}%";
 
     [ObservableProperty]
     public partial double DarkenPercent { get; set; }
@@ -197,6 +208,12 @@ public partial class BackgroundEditorViewModel : ObservableObject
 
     public bool IsFill => Fit == PictureFit.Fill;
 
+    /// <summary>Whether the picture hangs over the stage along X: always once it is zoomed in, and at 100% only
+    /// when the picture is a different shape from the stage (3.10).</summary>
+    public bool CanPanX => IsFill && (Zoom > PanZoom.MinZoom || PanOverflow().X > 0);
+
+    public bool CanPanY => IsFill && (Zoom > PanZoom.MinZoom || PanOverflow().Y > 0);
+
     public bool IsNewPack =>
         !PackChoices.Any(p => p.Equals(EffectivePackName, StringComparison.OrdinalIgnoreCase));
 
@@ -251,7 +268,7 @@ public partial class BackgroundEditorViewModel : ObservableObject
     public bool CanAddAsNew => HasSource && SelectedMap is not null;
 
     private FitOptions Options => PictureFits.Options(
-        Fit, PanX, PanY, DarkenPercent / 100.0, Hue, SaturationPercent / 100.0, ContrastPercent / 100.0, BlurPercent / 100.0);
+        Fit, PanX, PanY, DarkenPercent / 100.0, Hue, SaturationPercent / 100.0, ContrastPercent / 100.0, BlurPercent / 100.0, Zoom);
 
     public void AcceptDroppedFile(string path) => SourcePath = path;
 
@@ -276,6 +293,8 @@ public partial class BackgroundEditorViewModel : ObservableObject
     partial void OnPanXChanged(double value) => SchedulePreview();
 
     partial void OnPanYChanged(double value) => SchedulePreview();
+
+    partial void OnZoomChanged(double value) => SchedulePreview();
 
     partial void OnDarkenPercentChanged(double value) => SchedulePreview();
 
@@ -303,6 +322,86 @@ public partial class BackgroundEditorViewModel : ObservableObject
     private void ResetPanY() => PanY = 0.5;
 
     [RelayCommand]
+    private void ResetZoom() => Zoom = PanZoom.MinZoom;
+
+    /// <summary>3.10: a double-click on the preview puts the picture back in the middle and leaves the zoom.</summary>
+    public void CentrePan()
+    {
+        if (!IsFill)
+        {
+            return;
+        }
+
+        PanX = 0.5;
+        PanY = 0.5;
+    }
+
+    /// <summary>3.10: dragging the preview moves the picture. The delta arrives in the preview's own 640 by 360
+    /// pixels, which is the box the preview is fitted to, and <see cref="PanZoom.Drag"/> turns it into pan units by
+    /// the overflow there. A picture with no overflow one way does not move that way.</summary>
+    public void DragPan(double dxPreviewPixels, double dyPreviewPixels)
+    {
+        if (!IsFill || _working is not { } source)
+        {
+            return;
+        }
+
+        var (panX, panY) = PanZoom.Drag(
+            source.NaturalWidth,
+            source.NaturalHeight,
+            PreviewWidth,
+            PreviewHeight,
+            Zoom,
+            PanX,
+            PanY,
+            dxPreviewPixels,
+            dyPreviewPixels);
+        PanX = panX;
+        PanY = panY;
+    }
+
+    /// <summary>3.10: the wheel over the preview zooms 10% a notch about the preview point under the cursor, so the
+    /// part of the picture under it stays there, and the pan follows. The zoom holds to 100%..400%.</summary>
+    public void WheelZoom(double previewX, double previewY, double notches)
+    {
+        if (!IsFill || notches == 0 || _working is not { } source)
+        {
+            return;
+        }
+
+        (Zoom, PanX, PanY) = Wheeled(source.NaturalWidth, source.NaturalHeight, Zoom, PanX, PanY, previewX, previewY, notches);
+    }
+
+    /// <summary>The zoom and pan after that many wheel notches about a point of the 640 by 360 preview.</summary>
+    public static (double Zoom, double PanX, double PanY) Wheeled(
+        double sourceWidth,
+        double sourceHeight,
+        double zoom,
+        double panX,
+        double panY,
+        double previewX,
+        double previewY,
+        double notches) =>
+        PanZoom.ZoomAbout(
+            sourceWidth,
+            sourceHeight,
+            PreviewWidth,
+            PreviewHeight,
+            zoom,
+            panX,
+            panY,
+            zoom * Math.Pow(PanZoom.WheelStep, notches),
+            previewX,
+            previewY);
+
+    /// <summary>How far the source hangs over the stage at 100%, which is what the pan sliders can move along
+    /// before any zoom. Nothing until the source has decoded.</summary>
+    private (double X, double Y) PanOverflow() =>
+        _working is { } source
+            ? PanZoom.Overflow(source.NaturalWidth, source.NaturalHeight, PreviewWidth, PreviewHeight, PanZoom.MinZoom)
+            : (0, 0);
+
+    [RelayCommand]
     private void ResetDarken() => DarkenPercent = 0;
 
     [RelayCommand]
@@ -326,6 +425,7 @@ public partial class BackgroundEditorViewModel : ObservableObject
         Fit = PictureFit.Fill;
         PanX = 0.5;
         PanY = 0.5;
+        Zoom = PanZoom.MinZoom;
         DarkenPercent = 0;
         Hue = 0;
         SaturationPercent = 0;
@@ -359,6 +459,9 @@ public partial class BackgroundEditorViewModel : ObservableObject
         Fit = FromRecord(entry.Mode);
         PanX = entry.PanX;
         PanY = entry.PanY;
+
+        // 3.10: records written before 3.10 have no zoom, which reads as 100%.
+        Zoom = PanZoom.ClampZoom(entry.Zoom ?? PanZoom.MinZoom);
         DarkenPercent = entry.Darken;
 
         // 3.6 E4: records written before 3.6 have no adjustments, which reads as none.
@@ -538,6 +641,7 @@ public partial class BackgroundEditorViewModel : ObservableObject
                         Mode = ToRecord(fit),
                         PanX = options.PanX,
                         PanY = options.PanY,
+                        Zoom = options.Zoom,
                         Darken = darken,
                         Hue = options.Hue,
                         Saturation = options.Saturation,
@@ -666,6 +770,10 @@ public partial class BackgroundEditorViewModel : ObservableObject
 
                 _working = loaded;
                 _workingPath = path;
+
+                // The pan sliders open on whichever axis this picture hangs over the stage (3.10).
+                OnPropertyChanged(nameof(CanPanX));
+                OnPropertyChanged(nameof(CanPanY));
             }
 
             var source = _working;

@@ -42,10 +42,12 @@ Brawlhalla open or closed, and show on the next match load.
   written into a pack, ready to apply.
 - **Platform art.** Put a custom image on platforms as well, per piece or laid across the whole set
   and dragged into place.
-- **Background editor.** Crop and pan, with Hue, Saturation, Contrast, Blur and Darken sliders over a
-  live preview, for one map or for all of them.
-- **Platform editor.** Opacity and Hue per piece, over a live preview that can show only the selected
-  pieces.
+- **Background editor.** Pan and zoom, with Hue, Saturation, Contrast, Blur and Darken sliders over a
+  live preview, for one map or for all of them. Drag the preview to move the picture and scroll to
+  zoom; the sliders follow.
+- **Platform editor.** A picture on the platforms gets the same Pan X, Pan Y and Zoom, dragged and
+  scrolled right on the preview, plus Opacity, Hue, Saturation, Contrast, Darken and Blur per piece.
+  The preview can show only the selected pieces.
 - **Map-select thumbnails.** Each map's art also replaces its thumbnail on the game's map select
   screen, keeping the original for a reset.
 - **Undo.** Puts back whatever the last write into the game folder overwrote or deleted.
@@ -56,7 +58,7 @@ Brawlhalla open or closed, and show on the next match load.
 
 | Background editor | Platform editor |
 | --- | --- |
-| ![Background editor with fit, pan, hue, saturation, contrast, darken and blur](docs/images/editor-background.png) | ![Platform editor with per-piece opacity and hue over a live preview](docs/images/editor-platform.png) |
+| ![Background editor with fit, pan, zoom, hue, saturation, contrast, darken and blur](docs/images/editor-background.png) | ![Platform editor with pan, zoom and per-piece tone sliders over a live preview](docs/images/editor-platform.png) |
 
 ### More
 
@@ -67,7 +69,7 @@ Brawlhalla open or closed, and show on the next match load.
   it. The My Backgrounds switch shows your own pictures on every row at once, or hides them while you
   compare packs.
 - Both editors remember what was saved into a pack. Reopen one on the same map and pack and its fit,
-  pan, opacity and hue come back, with a Start fresh link to drop them.
+  pan, zoom and tone sliders come back, with a Start fresh link to drop them.
 - Copy to pack, Move to pack, Ctrl+C, Ctrl+X and Ctrl+V move a map or a picture between packs.
   Import from pack copies all of another pack's maps, or the ones you pick, into the one you are
   looking at. Duplicate copies a

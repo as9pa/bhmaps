@@ -40,8 +40,9 @@ public static class PictureFits
         double hue = 0.0,
         double saturation = 0.0,
         double contrast = 0.0,
-        double blur = 0.0) =>
-        new(ToFitMode(fit), panX, panY, darken, Hue: hue, Saturation: saturation, Contrast: contrast, Blur: blur);
+        double blur = 0.0,
+        double zoom = 1.0) =>
+        new(ToFitMode(fit), panX, panY, darken, Hue: hue, Saturation: saturation, Contrast: contrast, Blur: blur, Zoom: zoom);
 
     public static FitMode ToFitMode(PictureFit fit) => fit switch
     {

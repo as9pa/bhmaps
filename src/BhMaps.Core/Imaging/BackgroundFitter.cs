@@ -14,7 +14,8 @@ public enum FitMode
 }
 
 /// <summary>PanX/PanY are 0..1 and only matter for Cover (0.5 = centered). Darken is 0..1 and multiplies every channel by (1 - Darken). NoUpscale only matters for Contain: a source smaller than the canvas stays at 1:1 instead of growing.
-/// Hue is a rotation in degrees; Saturation and Contrast are -1..1 with 0 leaving the picture alone; Blur is 0..1 (3.6 E4).</summary>
+/// Hue is a rotation in degrees; Saturation and Contrast are -1..1 with 0 leaving the picture alone; Blur is 0..1 (3.6 E4).
+/// Zoom is 1..4 and, like the pan, only matters for Cover: it multiplies the cover fit (see <see cref="PanZoom"/>).</summary>
 public sealed record FitOptions(
     FitMode Mode = FitMode.Cover,
     double PanX = 0.5,
@@ -24,7 +25,8 @@ public sealed record FitOptions(
     double Hue = 0.0,
     double Saturation = 0.0,
     double Contrast = 0.0,
-    double Blur = 0.0);
+    double Blur = 0.0,
+    double Zoom = 1.0);
 
 /// <summary>A picture ready to draw, plus the pixel size the picture really is. A preview's working copy is
 /// downsampled to about the preview canvas, so its bitmap is no longer that size, and Center is the one mode that
@@ -128,12 +130,7 @@ public static class BackgroundFitter
 
             default:
                 {
-                    var scale = Math.Max((double)width / srcW, (double)height / srcH);
-                    var w = srcW * scale;
-                    var h = srcH * scale;
-                    var x = -(w - width) * Math.Clamp(options.PanX, 0, 1);
-                    var y = -(h - height) * Math.Clamp(options.PanY, 0, 1);
-                    return new Rect(x, y, w, h);
+                    return PanZoom.Cover(srcW, srcH, width, height, options.Zoom, options.PanX, options.PanY);
                 }
         }
     }
@@ -210,7 +207,7 @@ public static class BackgroundFitter
     /// <summary>The fitted frame under a Gaussian BlurEffect. The frame is drawn with mirrored copies around it, out
     /// to a little past the radius, so the blur near the canvas edge mixes in picture rather than fading to
     /// transparent (which the Bgr24 output would turn into a dark rim).</summary>
-    private static BitmapSource Blurred(BitmapSource frame, double radius, int width, int height)
+    internal static BitmapSource Blurred(BitmapSource frame, double radius, int width, int height)
     {
         var pad = Math.Ceiling(radius) + 2;
         var visual = new DrawingVisual { Effect = new BlurEffect { Radius = radius, KernelType = KernelType.Gaussian } };
@@ -248,12 +245,25 @@ public static class BackgroundFitter
         var pixels = new byte[stride * height];
         source.CopyPixels(pixels, stride, 0);
 
-        var shift = ColorMath.Wrap(options.Hue);
-        var saturation = Math.Clamp(options.Saturation, -1, 1);
+        AdjustPixels(pixels, options.Hue, options.Saturation, options.Contrast, darken);
+
+        var target = new WriteableBitmap(width, height, 96, 96, PixelFormats.Bgra32, null);
+        target.WritePixels(new Int32Rect(0, 0, width, height), pixels, stride, 0);
+        target.Freeze();
+        return target;
+    }
+
+    /// <summary>The colour pass over a Bgra32 buffer of straight colour: hue and saturation in HSL, then contrast,
+    /// then the Darken shade. Alpha is left as it is, so the platform editor runs the same pass over shaped pieces
+    /// that the background editor runs over its opaque frame.</summary>
+    internal static void AdjustPixels(byte[] pixels, double hueDegrees, double saturation, double contrast, double darken)
+    {
+        var shift = ColorMath.Wrap(hueDegrees);
+        saturation = Math.Clamp(saturation, -1, 1);
         var hsl = shift != 0 || saturation != 0;
-        var contrast = Math.Clamp(options.Contrast, -1, 1);
+        contrast = Math.Clamp(contrast, -1, 1);
         var slope = ColorMath.ContrastSlope(contrast);
-        var keep = 255 - ShadeAlpha(darken);
+        var keep = 255 - ShadeAlpha(Math.Clamp(darken, 0, 1));
         for (var i = 0; i < pixels.Length; i += 4)
         {
             var b = pixels[i];
@@ -282,13 +292,7 @@ public static class BackgroundFitter
             pixels[i] = b;
             pixels[i + 1] = g;
             pixels[i + 2] = r;
-            pixels[i + 3] = 255;
         }
-
-        var target = new WriteableBitmap(width, height, 96, 96, PixelFormats.Bgra32, null);
-        target.WritePixels(new Int32Rect(0, 0, width, height), pixels, stride, 0);
-        target.Freeze();
-        return target;
     }
 
     /// <summary>Full-size render encoded as JPEG bytes at quality 90.</summary>
