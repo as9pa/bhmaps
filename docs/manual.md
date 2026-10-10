@@ -9,6 +9,12 @@ and `.jpg` files inside the `mapArt` folder and inside its own library, plus its
 folder, and it keeps a copy of every original so it can put it back. The game's data files are read and never written, and
 nothing else in the game install is touched.
 
+## What is new in 3.9.3
+
+- Packs the app makes on its own are called Custom Pack, then Custom Pack 2, Custom Pack 3 and so on. The editors, New pack and the Add as new popups suggest these names.
+- Save to Custom Pack replaces Save to My Backgrounds on a picture the game is showing that no pack holds.
+- An existing My Backgrounds pack is renamed to Custom Pack once, on the first start of 3.9.3, the same way Rename pack does it. A pack you name My Backgrounds later is left alone.
+
 ## What is new in 3.9.2
 
 - Add as new in Edit platforms now opens the same popup as Edit background: pick a pack or make a new one. A pack that already has platforms for those maps is refused, so nothing is overwritten.
@@ -119,11 +125,11 @@ be renamed. A pack folder that wraps a `mapArt` folder, the way a pack is laid o
 game, is read as that pack under the outer folder's name, and everything written into it goes under its
 `mapArt`. Import folder understands the same layout.
 
-Both editors have a third button, Add as new: it asks for a pack name, offers the next free New Pack,
-New Pack 2 and so on, and saves into that fresh pack. The Save into pack box is one editable box now:
+Both editors have a third button, Add as new: it asks for a pack name, offers the next free Custom Pack,
+Custom Pack 2 and so on, and saves into that fresh pack. The Save into pack box is one editable box now:
 open the list to pick a pack or type a name for a new one; the hint and any error sit right under it.
-Opened on a map that is in no pack, both editors start on a fresh New Pack N rather than My Backgrounds;
-opened from a pack's own tile they save back into that pack. My Backgrounds stays the picture library.
+Opened on a map that is in no pack, both editors start on a fresh Custom Pack N;
+opened from a pack's own tile they save back into that pack.
 
 The background editor has Hue, Saturation, Contrast and Blur beside Darken, each with its own Reset. The
 values are written into the saved picture and remembered, so a saved background reopens where it was left.
@@ -246,7 +252,7 @@ can do. Nothing about the files it writes changed.
 - **The Welcome window shows its progress.** Capturing the Default pack on first run reads as a
   progress line inside Welcome, and the main window opens with the done line on its status strip.
   Paths in Welcome and in Settings are shortened in the middle so they fit on one line.
-- **Pictures have names.** A picture added to My Backgrounds is named when it is added, from its
+- **Pictures have names.** A picture added to Custom Pack is named when it is added, from its
   file name with the underscores and hyphens turned into spaces, and can be renamed from its tile's
   menu. The name is what every list, chooser and status line calls it; the file name is never shown
   as a name again.
@@ -287,7 +293,7 @@ can do. Nothing about the files it writes changed.
   pack.
 - **Refresh, next to Launch.** One button makes the game match what the app says is on. It applies
   again every game file whose source changed since the app put it there (a pack picture edited on
-  disk, a picture in My Backgrounds replaced), restores a file missing from a map folder from the
+  disk, a picture in Custom Pack replaced), restores a file missing from a map folder from the
   pack the folder matches or from Default, and rewrites the map-select thumbnails for every map with
   custom art. It is one write with one Undo, and its line reads "Refreshed 12
   maps. Shows on the next match load." A game file the app wrote that has since been changed by
@@ -322,7 +328,7 @@ can do. Nothing about the files it writes changed.
   background**, a Platforms page tile has **Delete platform set**, a pack's map tile has **Delete from
   <pack>**, and the Packs row's Remove is now **Delete pack**. They sit last in the menu, in red, and
   none of them appears on the Default pack. The confirm reads **Delete <name>?** and says what will
-  happen: "It will be removed from My Backgrounds and Brawlhaven will reset to default." A delete
+  happen: "It will be removed from Custom Pack and Brawlhaven will reset to default." A delete
   removes the pack's files and, where the game is showing that art, puts only that part of the map
   back to default, the background or the platforms, in one write, so one Undo brings back the files
   and the game folder together. Without a Default pack the files still go and the game is left as it
@@ -641,7 +647,7 @@ stops a long operation.
   Apply and a dots button, and the menu offers to apply the picture to all maps, then Edit and Show
   in folder, and for a picture in a pack **Rename**, which renames its file in the library and leaves
   the maps it is on showing it, and **Delete background**, which also puts the default back on
-  any map showing it, or Save to My Backgrounds for a picture the game is showing that no pack
+  any map showing it, or Save to Custom Pack for a picture the game is showing that no pack
   holds. Search matches map names, pack names and file names. The chips are the ones Maps has, and
   they are the one filter: the chip picked here is the chip Maps and Platforms show.
   The thumbnail size is the size control (Large, Medium, Small) in the page header, or Ctrl and

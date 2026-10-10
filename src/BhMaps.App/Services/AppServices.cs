@@ -118,6 +118,7 @@ public sealed class AppServices : IDisposable
         var tree = GameTreeScanner.Scan(GamePath);
         ct.ThrowIfCancellationRequested();
         progress?.Report("packs");
+        MigrateMyBackgrounds();
         // Spec 8: the shell sorts the packs once, here, and every list downstream keeps the order it is given.
         var packs = PackOrder.Sort(PackScanner.ScanAll(LibraryPath), Settings.LastApplied);
         DropStaleStamps(packs);
@@ -142,6 +143,25 @@ public sealed class AppServices : IDisposable
             // Built here, inside the scan, because it hashes: every page reads the list rather than computing one.
             CustomPictureLibrary.Build(packs, tree, catalog, HashCache));
     }
+
+    /// <summary>3.9.3: renames an old My Backgrounds pack to Custom Pack, once per run and before the scan reads the
+    /// pack names. A failed rename saves nothing, so the next start tries again; a done one sets the flag for
+    /// good.</summary>
+    private void MigrateMyBackgrounds()
+    {
+        if (_migrationTried)
+        {
+            return;
+        }
+
+        _migrationTried = true;
+        if (CustomPackMigration.Run(LibraryPath, AppliedRecord.PathFor(AppDataDir), Settings) is { } migrated)
+        {
+            UpdateSettings(migrated);
+        }
+    }
+
+    private bool _migrationTried;
 
     /// <summary>Spec 8: a stamp naming a pack the library no longer holds would sit in settings.json for good,
     /// so the scan that cannot find it drops it.</summary>

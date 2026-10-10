@@ -7,37 +7,37 @@ public class PackNamesTests
     [Fact]
     public void NoPacksGivesTheStem()
     {
-        Assert.Equal("New Pack", PackNames.NextFree([]));
+        Assert.Equal("Custom Pack", PackNames.NextFree([]));
     }
 
     [Fact]
     public void OtherNamesDoNotTakeTheStem()
     {
-        Assert.Equal("New Pack", PackNames.NextFree(["My Backgrounds", "New Pack 2"]));
+        Assert.Equal("Custom Pack", PackNames.NextFree(["My Backgrounds", "Custom Pack 2"]));
     }
 
     [Fact]
     public void TakenStemGivesTwo()
     {
-        Assert.Equal("New Pack 2", PackNames.NextFree(["New Pack"]));
+        Assert.Equal("Custom Pack 2", PackNames.NextFree(["Custom Pack"]));
     }
 
     [Fact]
     public void SkipsTakenNumbers()
     {
-        Assert.Equal("New Pack 4", PackNames.NextFree(["New Pack", "New Pack 2", "New Pack 3", "New Pack 5"]));
+        Assert.Equal("Custom Pack 4", PackNames.NextFree(["Custom Pack", "Custom Pack 2", "Custom Pack 3", "Custom Pack 5"]));
     }
 
     [Fact]
     public void MatchesCaseInsensitively()
     {
-        Assert.Equal("New Pack 3", PackNames.NextFree(["new pack", "NEW PACK 2"]));
+        Assert.Equal("Custom Pack 3", PackNames.NextFree(["custom pack", "CUSTOM PACK 2"]));
     }
 
     [Fact]
     public void ToleratesDuplicates()
     {
-        Assert.Equal("New Pack 2", PackNames.NextFree(["New Pack", "new pack"]));
+        Assert.Equal("Custom Pack 2", PackNames.NextFree(["Custom Pack", "custom pack"]));
     }
 
     [Fact]

@@ -28,7 +28,7 @@ public static class MapArtText
         };
     }
 
-    /// <summary>3.2: the pack the map's background comes from, bare ("flowermap", "My Backgrounds", "Default"),
+    /// <summary>3.2: the pack the map's background comes from, bare ("flowermap", "Custom Pack", "Default"),
     /// for the line under Edit background. A custom picture names the pack it lives in, or says it is in the game
     /// only when no pack holds it. Null when the scan knows nothing about the background.</summary>
     public static string? BackgroundPack(MapEntry map, MapStatus? status, ScanSnapshot snapshot)

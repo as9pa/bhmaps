@@ -66,7 +66,7 @@ public sealed partial class CustomPictureTileViewModel : PictureTileViewModel
 
     public override ICommand? ApplyCommand => Map is null ? null : ApplyToMapCommand;
 
-    /// <summary>False for a picture that is only in the game folder, which is offered Save to My Backgrounds
+    /// <summary>False for a picture that is only in the game folder, which is offered Save to Custom Pack
     /// instead of Delete background.</summary>
     private bool InLibrary => _picture.LibraryPaths.Count > 0;
 
@@ -92,7 +92,7 @@ public sealed partial class CustomPictureTileViewModel : PictureTileViewModel
         }
         else
         {
-            items.Add(new TileMenuCommand("Save to My Backgrounds", SaveToLibraryCommand));
+            items.Add(new TileMenuCommand("Save to Custom Pack", SaveToLibraryCommand));
         }
 
         MenuItems = items;
@@ -218,7 +218,7 @@ public sealed partial class CustomPictureTileViewModel : PictureTileViewModel
 
         return Shell.DeleteFromLibraryAsync(
             Title,
-            PackName ?? "My Backgrounds",
+            PackName ?? BackgroundEditorViewModel.DefaultPackName,
             undoPaths,
             () => Delete(copies),
             resets);
