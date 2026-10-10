@@ -16,6 +16,9 @@ picture of its own for the map, or any other change to the map's art (Add custom
 save, an import), renders the thumbnail from the new art again, so the map select always shows the art the
 map runs. Refresh keeps the pack's picture. Reset to default and Undo work as before.
 
+- The Packs rows and a pack's page say "Active on N maps." only when the pack's art is on maps; "Not in
+  game." and Default's "What Reset puts back." are gone.
+
 ## What is new in 3.7
 
 A pack can carry its own map-select pictures: `.jpg` files in an `images\thumbnails` folder at the pack's
@@ -188,9 +191,9 @@ can do. Nothing about the files it writes changed.
 - **Words, not codes.** A map's level sets read as words in a fixed order, "Ranked 1v1, Ranked 2v2,
   Tournament, Standard, Experimental, Minigames", and everything the panel says ends in a full stop.
   A map whose Reset needs the Default pack says "Needs the Default pack." on the button.
-- **Packs rows say where a pack is.** Each row says "On N maps." when the pack is on the game, "Not
-  in game." when it is not, "What Reset puts back." for Default and "Hidden from lists." for a pack
-  stepped out, and a "+N more" link opens the pack's page, which has a picture band across its top.
+- **Packs rows say where a pack is.** Each row says "On N maps." when the pack is on the game and
+  "Hidden from lists." for a pack stepped out (since 3.7.1 a pack on no map, and Default, says nothing
+  there), and a "+N more" link opens the pack's page, which has a picture band across its top.
 - **Settings is three sections.** Folders, Game and Updates, each row a label, a value and one
   button. The Map-select thumbnails switch is gone: thumbnails are always written with the art. The
   Version row says "Latest. Last checked yesterday, 20:44." or "Update available: 3.1.0." with a Get
@@ -597,8 +600,9 @@ stops a long operation.
 - **Packs** is one row per pack: a composed thumbnail of the pack's first map, the pack's name and
   what it holds and where it is, as in "3 maps, 12 backgrounds. On 12 maps.", and a strip of previews
   of the maps it touches, as many as the width allows, with a "+56 more" link to the pack's own page
-  for the rest. A pack with nothing of its in the game says "Not in game."; `Default` says "What Reset
-  puts back.", because it is the art every reset lands on rather than a pack you apply. `Default` comes first,
+  for the rest. The second line says only "Active on N maps." when the pack's art is on maps, and
+  "Hidden from lists." when the eye is off; otherwise it is left out, and `Default` never has one, since it
+  is the art every reset lands on rather than a pack you apply. `Default` comes first,
   then the packs that have been applied, the most recent first, then the ones never applied, by
   name; every list of packs in the app follows that order. Apply all is a button on the row; a dots
   button beside it holds **Duplicate**, **Import from another pack...**, Export, Open folder and

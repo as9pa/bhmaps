@@ -39,12 +39,6 @@ public sealed partial class PackRowViewModel : ObservableObject
     /// <summary>The folder a pack keeps its background images in. Every other folder is a map.</summary>
     private const string BackgroundsFolder = "Backgrounds";
 
-    /// <summary>The second sentence for a pack whose bytes are in no map.</summary>
-    private const string NotInGameText = "Not in game.";
-
-    /// <summary>The second sentence for the Default pack, which is the floor every Reset to default lands on.</summary>
-    private const string DefaultWhereText = "What Reset puts back.";
-
     /// <summary>The last sentence while the eye is off (2.8).</summary>
     private const string HiddenText = "Hidden from lists.";
 
@@ -106,13 +100,14 @@ public sealed partial class PackRowViewModel : ObservableObject
 
     /// <summary>The second line under the name (3.0): where the pack's art actually is, then "Hidden from lists."
     /// when the eye is off (2.8). The time of the last Apply all is gone from it; where the art sits answers the
-    /// same question and keeps answering it after a reset.</summary>
+    /// same question and keeps answering it after a reset. Empty for a pack whose art is on no map and whose eye
+    /// is on (3.7.1); the row then collapses the line.</summary>
     public string StateLine
     {
         get
         {
             var text = WhereText(Name, _appliedMaps);
-            return IsHidden ? $"{text} {HiddenText}" : text;
+            return IsHidden ? $"{text} {HiddenText}".Trim() : text;
         }
     }
 
@@ -185,9 +180,15 @@ public sealed partial class PackRowViewModel : ObservableObject
         pack.FindFolder(BackgroundsFolder)?.Files.Count ?? 0);
 
     /// <summary>The two sentences joined, for the pack's own page, whose subtitle has the width for one line.
-    /// The row shows the same two as <see cref="CountsLine" /> and <see cref="StateLine" /> (3.0).</summary>
+    /// The row shows the same two as <see cref="CountsLine" /> and <see cref="StateLine" /> (3.0). Only the
+    /// first when the second is empty (3.7.1).</summary>
     public static string Describe(string packName, int mapCount, int backgroundCount, int appliedMaps) =>
-        $"{HoldsText(mapCount, backgroundCount)} {WhereText(packName, appliedMaps)}";
+        string.Join(
+            " ",
+            new[] { HoldsText(mapCount, backgroundCount), WhereText(packName, appliedMaps) }.Where(s =>
+                s.Length > 0
+            )
+        );
 
     /// <summary>"1 map" but "0 maps" and "3 maps". Shared with the page's confirm text, which counts files.</summary>
     public static string Plural(int count, string noun) => count == 1 ? $"{count} {noun}" : $"{count} {noun}s";
@@ -196,10 +197,10 @@ public sealed partial class PackRowViewModel : ObservableObject
     private static string HoldsText(int mapCount, int backgroundCount) =>
         $"{Plural(mapCount, "map")}, {Plural(backgroundCount, "background")}.";
 
-    /// <summary>The second sentence: where the pack's art is. The Default pack is never applied as such, so
-    /// instead of a count it says what it is for.</summary>
+    /// <summary>The second sentence: where the pack's art is, as in "Active on 3 maps.". Empty when the art is
+    /// on no map, and always for the Default pack, which is never applied as such (3.7.1).</summary>
     private static string WhereText(string packName, int appliedMaps) =>
-        packName.Equals(DefaultPack.Name, StringComparison.OrdinalIgnoreCase)
-            ? DefaultWhereText
-            : appliedMaps == 0 ? NotInGameText : $"Active on {Plural(appliedMaps, "map")}.";
+        appliedMaps > 0 && !packName.Equals(DefaultPack.Name, StringComparison.OrdinalIgnoreCase)
+            ? $"Active on {Plural(appliedMaps, "map")}."
+            : string.Empty;
 }
