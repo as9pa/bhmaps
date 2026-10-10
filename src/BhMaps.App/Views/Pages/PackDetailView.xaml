@@ -29,16 +29,22 @@
          pack's own art rather than a title on empty background. Since 3.7.2 it is the whole page, edge to edge
          and down to the bottom, behind the header and the cards, and it stays put while the cards scroll over
          it. A pack with no cards draws the page colour alone. -->
-    <Grid IsHitTestVisible="False">
-      <Border RenderOptions.BitmapScalingMode="HighQuality">
+    <Grid IsHitTestVisible="False" ClipToBounds="True">
+      <!-- 3.7.2: the picture is blurred, so at full page size it reads as the pack's colours rather than as a
+           stretched card whose platforms turn into big dark shapes. The negative margin pushes the blur's soft
+           edge outside the clip, so the window edges stay as bright as the middle. -->
+      <Border Margin="-80" RenderOptions.BitmapScalingMode="HighQuality">
         <Border.Background>
           <ImageBrush ImageSource="{Binding BackdropTile.Preview}" Opacity="0.35" Stretch="UniformToFill" />
         </Border.Background>
-
-        <!-- 3.1 C11: a flat wash of the page's own colour over the picture, under the gradient, so the title and
-             the subtitle read against it whatever the pack's first card happens to be. -->
-        <Border Background="{StaticResource BgBrush}" Opacity="0.55" />
+        <Border.Effect>
+          <BlurEffect Radius="48" KernelType="Gaussian" RenderingBias="Performance" />
+        </Border.Effect>
       </Border>
+
+      <!-- 3.1 C11: a flat wash of the page's own colour over the picture, under the gradient, so the title and
+           the subtitle read against it whatever the pack's first card happens to be. -->
+      <Border Background="{StaticResource BgBrush}" Opacity="0.55" />
 
       <Border>
         <Border.Background>
