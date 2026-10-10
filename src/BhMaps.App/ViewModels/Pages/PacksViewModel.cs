@@ -320,7 +320,8 @@ public partial class PacksViewModel : PageViewModel
             $"{pack.Name} applied to {MainViewModel.Count(maps.Count, "map")}.",
             packName: pack.Name,
             artMaps: artMaps,
-            sources: AppliedSources.FromPack(pack, pack.RelativePaths));
+            sources: AppliedSources.FromPack(pack, pack.RelativePaths),
+            picturePack: pack);
         if (result is not null)
         {
             Shell.Dialogs.ShowFailures("Some files could not be copied", result.Failures);

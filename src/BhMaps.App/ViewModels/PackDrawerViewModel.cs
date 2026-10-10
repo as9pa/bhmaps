@@ -146,7 +146,8 @@ public partial class PackDrawerViewModel : ObservableObject
             $"{pack.Name} applied to {map.DisplayName}",
             packName: pack.Name,
             artMaps: [map],
-            sources: AppliedSources.FromPack(pack, targetPaths));
+            sources: AppliedSources.FromPack(pack, targetPaths),
+            picturePack: pack);
 
         if (result is not null)
         {

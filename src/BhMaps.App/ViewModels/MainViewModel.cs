@@ -481,6 +481,11 @@ public partial class MainViewModel : ObservableObject
                         libraryPath,
                         ThumbnailWriter.ThumbnailsDir(Services.GameRoot),
                         AppliedRecord.PathFor(Services.AppDataDir));
+
+                    // 3.7: a pack picture the undo put the old jpg back over is no longer on the game to keep.
+                    ThumbnailRecord.Prune(
+                        ThumbnailRecord.PathFor(Services.AppDataDir),
+                        ThumbnailWriter.ThumbnailsDir(Services.GameRoot));
                 },
                 ct),
             UndoDoneText,
@@ -2099,7 +2104,8 @@ public partial class MainViewModel : ObservableObject
     /// makes that step put the game's own thumbnail back instead, for a write that resets the art.
     /// <paramref name="sources"/> names the library file behind every game path the write lays down, so the applied
     /// record can remember what the app itself wrote; left null nothing is recorded, which is what a write of
-    /// thumbnails alone wants.</summary>
+    /// thumbnails alone wants. <paramref name="picturePack"/> is the pack an apply writes, so its own map-select
+    /// pictures are copied for the maps it applied art to in place of the rendered ones (3.7).</summary>
     public Task<bool> RunGameWriteAsync(
         string label,
         IReadOnlyList<string> undoPaths,
@@ -2110,7 +2116,8 @@ public partial class MainViewModel : ObservableObject
         IReadOnlyList<string>? writtenFolders = null,
         IReadOnlyList<MapEntry>? artMaps = null,
         bool resetThumbnails = false,
-        IReadOnlyList<AppliedSource>? sources = null) =>
+        IReadOnlyList<AppliedSource>? sources = null,
+        Pack? picturePack = null) =>
         RunWriteCoreAsync(
             label,
             undoPaths,
@@ -2122,7 +2129,8 @@ public partial class MainViewModel : ObservableObject
             writtenFolders,
             artMaps,
             resetThumbnails,
-            sources: sources);
+            sources: sources,
+            picturePack: picturePack);
 
     /// <summary>The one path every game write takes. <paramref name="undoPaths"/> null means take no snapshot,
     /// which is Undo's case and only Undo's: the snapshot it is restoring is the only one there is, and Begin
@@ -2138,7 +2146,8 @@ public partial class MainViewModel : ObservableObject
         IReadOnlyList<string>? writtenFolders = null,
         IReadOnlyList<MapEntry>? artMaps = null,
         bool resetThumbnails = false,
-        IReadOnlyList<AppliedSource>? sources = null)
+        IReadOnlyList<AppliedSource>? sources = null,
+        Pack? picturePack = null)
     {
         if (GameFolderMissing || IsBusy)
         {
@@ -2152,7 +2161,9 @@ public partial class MainViewModel : ObservableObject
         var thumbnailsDir = ThumbnailWriter.ThumbnailsDir(Services.GameRoot);
         var recordPath = AppliedRecord.PathFor(Services.AppDataDir);
         var thumbnailPlans = ThumbnailPlans(artMaps);
+        var pictures = PicturesFor(picturePack, artMaps);
         var thumbnailWrites = 0;
+        var pictureWrites = 0;
         var ok = await RunBusyAsync(
             label,
             async (progress, ct) =>
@@ -2216,8 +2227,10 @@ public partial class MainViewModel : ObservableObject
                         {
                             // After the art it is a picture of, and inside the same boundary: a thumbnail written
                             // from art the write failed to lay down would show something the game never loads.
-                            thumbnailWrites = await Task.Run(
-                                () => WriteThumbnails(thumbnailPlans, resetThumbnails, gamePath, progress), ct);
+                            (thumbnailWrites, pictureWrites) = await Task.Run(
+                                () => WriteThumbnails(
+                                    thumbnailPlans, resetThumbnails, gamePath, progress, pictures, picturePack?.Name),
+                                ct);
                         }
                     });
             },
@@ -2232,14 +2245,15 @@ public partial class MainViewModel : ObservableObject
                 writtenFolders,
                 artMaps,
                 resetThumbnails,
-                sources));
+                sources,
+                picturePack));
 
         // A restore that fully succeeds discards its snapshot, so whether there is anything to undo is read back
         // from the store rather than remembered.
         if (ok)
         {
             Status.Done(
-                DoneLine(WithThumbnailsDone(doneText, thumbnailWrites), GameRunning),
+                DoneLine(WithThumbnailsDone(WithPicturesDone(doneText, pictureWrites), thumbnailWrites), GameRunning),
                 undoable && Services.Undo.Latest is not null);
         }
         else if (Status.Kind is StatusKind.Cancelled && undoPaths is not null && Services.Undo.Latest is not null)
@@ -2278,22 +2292,42 @@ public partial class MainViewModel : ObservableObject
                 (map, ThumbnailWriter.Plan(map, snapshot.Catalog.Maps, Services.GameRoot, Services.AppDataDir)))]
             : [];
 
+    /// <summary>3.7: the pack's own pictures for the maps an apply of it lays art in, or none when the write is not
+    /// an apply or there is no scan to read the catalog out of.</summary>
+    private IReadOnlyList<PackPicture> PicturesFor(Pack? pack, IReadOnlyList<MapEntry>? artMaps) =>
+        pack is not null && artMaps is { Count: > 0 } && Snapshot is { } snapshot
+            ? PackPictures.ForApply(pack, artMaps, snapshot.Catalog.Maps)
+            : [];
+
     /// <summary>Spec section 8 and 10.4: the thumbnail step, run after the caller's work succeeded. A map is
     /// rendered once and the same picture is written over every file it owns, so a folder whose levels name two
     /// or three pictures gets all of them. Each map stands on its own, so a keep or a write that fails for one
     /// becomes that map's panel note rather than a failure of a write that is already done. Returns how many
-    /// files it wrote. Off the UI thread: the render is the composite the map page builds, and the rest is file
-    /// copying.</summary>
-    private int WriteThumbnails(
+    /// files it rendered or restored, and apart from them how many pack pictures it copied (3.7). A file the
+    /// thumbnails record names whose jpg still has the recorded hash is a pack picture the user kept, so it is
+    /// left alone; a reset puts the game's own back and forgets the record. Off the UI thread: the render is the
+    /// composite the map page builds, and the rest is file copying.</summary>
+    private (int Written, int Pictures) WriteThumbnails(
         IReadOnlyList<(MapEntry Map, ThumbnailPlan Plan)> plans,
         bool reset,
         string gamePath,
-        IProgress<string> progress)
+        IProgress<string> progress,
+        IReadOnlyList<PackPicture> pictures,
+        string? packName)
     {
         var written = 0;
+        var copied = 0;
+        var recordPath = ThumbnailRecord.PathFor(Services.AppDataDir);
+        var record = ThumbnailRecord.Load(recordPath);
         foreach (var (map, plan) in plans)
         {
             var note = SkipNote(map, plan);
+            if (reset)
+            {
+                // A reset map is the game's own again, so no pack picture of it is kept past this write.
+                ThumbnailRecord.Drop(recordPath, map.FolderName);
+            }
+
             if (plan.Targets.Count == 0)
             {
                 _thumbnailNotes[map.FolderName] = note;
@@ -2323,6 +2357,25 @@ public partial class MainViewModel : ObservableObject
                         continue;
                     }
 
+                    if (packName is not null
+                        && pictures.FirstOrDefault(p =>
+                            p.MapFolder.Equals(map.FolderName, StringComparison.OrdinalIgnoreCase)
+                            && p.FileName.Equals(target.FileName, StringComparison.OrdinalIgnoreCase)) is { } picture)
+                    {
+                        // The pack's own picture, copied as-is in place of the render.
+                        PackPictures.Copy(picture, target, packName, recordPath);
+                        copied++;
+                        continue;
+                    }
+
+                    if (ThumbnailRecord.Keeps(record, map.FolderName, target.FileName, target.TargetPath))
+                    {
+                        // A pack picture stays on the game until the map is reset.
+                        continue;
+                    }
+
+                    // The jpg is no longer the pack's (the user or the game changed it), so the record of it goes.
+                    ThumbnailRecord.Drop(recordPath, map.FolderName, target.FileName);
                     if (!composites.TryGetValue(target.Level.LevelName, out var composite))
                     {
                         composite = ThumbnailWriter.Render(target.Level, gamePath);
@@ -2348,7 +2401,7 @@ public partial class MainViewModel : ObservableObject
             }
         }
 
-        return written;
+        return (written, copied);
     }
 
     /// <summary>The panel note for a map the write could not aim every picture of, or "" when it wrote them all.
@@ -2414,6 +2467,11 @@ public partial class MainViewModel : ObservableObject
     /// <summary>The caller's done fragment with the thumbnail step's own on the end, or the fragment untouched
     /// when the step wrote nothing. The period between them is settled here for the reason DoneLine settles the
     /// last one: the page does not decide it.</summary>
+    /// <summary>3.7: "{pack} applied to 3 maps, 2 pictures." when an apply copied pack pictures; the line as it
+    /// was when it copied none.</summary>
+    private static string WithPicturesDone(string doneText, int pictures) =>
+        pictures == 0 ? doneText : $"{doneText.TrimEnd('.')}, {Count(pictures, "picture")}.";
+
     private static string WithThumbnailsDone(string doneText, int thumbnailWrites)
     {
         if (thumbnailWrites == 0)
