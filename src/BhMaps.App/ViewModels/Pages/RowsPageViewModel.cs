@@ -348,21 +348,21 @@ public abstract partial class RowsPageViewModel : PageViewModel, ITileSized
         OnPropertyChanged(nameof(EmptyText));
     }
 
-    /// <summary>The chip filter, then the search box on top of it. The search reads the row's haystack, which is
-    /// the map's name and every choice's caption and file name (addendum B).</summary>
+    /// <summary>The chip filter and the search box together: a row shows only when it answers both. The search
+    /// reads the row's haystack, which is the map's name and every choice's caption and file name (addendum B).
+    /// </summary>
     private bool Matches(MapRowViewModel row)
     {
         var search = SearchText;
-        if (search.Length > 0)
+        if (search.Length > 0 && !row.Haystack.Contains(search, StringComparison.OrdinalIgnoreCase))
         {
-            // 3.0: a search reads every map, whatever the chip says, so a typed name still reaches a minigame
-            // map that the All chip leaves out.
-            return row.Haystack.Contains(search, StringComparison.OrdinalIgnoreCase);
+            return false;
         }
 
         return SelectedChip switch
         {
-            AllChip => !MapCatalog.IsMinigame(row.Map),
+            // 3.0: under All a search still reaches a minigame map that the All chip alone leaves out.
+            AllChip => search.Length > 0 || !MapCatalog.IsMinigame(row.Map),
             null or "" => true,
             _ => _uiSets.FirstOrDefault(s => s.Label == SelectedChip) is { } set
                 && (set.Name == MapCatalog.MinigameSetName

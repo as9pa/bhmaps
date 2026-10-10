@@ -9,6 +9,11 @@ and `.jpg` files inside the `mapArt` folder and inside its own library, plus its
 folder, and it keeps a copy of every original so it can put it back. The game's data files are read and never written, and
 nothing else in the game install is touched.
 
+## What is new in 3.7.4
+
+The search box and the category chips now filter together, so a search term no longer hides
+the chip choice.
+
 ## What is new in 3.7.3
 
 A pack you made has an Add image card at the end of its page, after its last picture. A click on it, or
