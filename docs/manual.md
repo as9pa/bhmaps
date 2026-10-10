@@ -9,6 +9,16 @@ and `.jpg` files inside the `mapArt` folder and inside its own library, plus its
 folder, and it keeps a copy of every original so it can put it back. The game's data files are read and never written, and
 nothing else in the game install is touched.
 
+## What is new in 3.7.1
+
+A pack's map-select picture now stays only while that pack's art is on the map. Applying a pack without a
+picture of its own for the map, or any other change to the map's art (Add custom image, a platform editor
+save, an import), renders the thumbnail from the new art again, so the map select always shows the art the
+map runs. Refresh keeps the pack's picture. Reset to default and Undo work as before.
+
+- The Packs rows and a pack's page say "Active on N maps." only when the pack's art is on maps; "Not in
+  game." and Default's "What Reset puts back." are gone.
+
 ## What is new in 3.7
 
 A pack can carry its own map-select pictures: `.jpg` files in an `images\thumbnails` folder at the pack's
@@ -17,7 +27,7 @@ root, or beside its `mapArt` folder when it wraps one, named the way the game na
 into the game as it is, in place of the picture BhMaps would render, and the done line counts them, for
 example "Summer applied to 3 maps, 2 pictures." A picture for a map the pack has no art for, one the game
 shares between two maps, and one whose name no map uses are left out. The pack's picture stays on the game
-through later saves until the map is reset to default; Undo of the apply puts the previous picture back.
+while the pack's art is on the map (see 3.7.1); Undo of the apply puts the previous picture back.
 Import from a pack brings a map's picture along with its art. The pack row says "Active on 3 maps." where it
 said "On 3 maps.".
 
@@ -181,9 +191,9 @@ can do. Nothing about the files it writes changed.
 - **Words, not codes.** A map's level sets read as words in a fixed order, "Ranked 1v1, Ranked 2v2,
   Tournament, Standard, Experimental, Minigames", and everything the panel says ends in a full stop.
   A map whose Reset needs the Default pack says "Needs the Default pack." on the button.
-- **Packs rows say where a pack is.** Each row says "On N maps." when the pack is on the game, "Not
-  in game." when it is not, "What Reset puts back." for Default and "Hidden from lists." for a pack
-  stepped out, and a "+N more" link opens the pack's page, which has a picture band across its top.
+- **Packs rows say where a pack is.** Each row says "On N maps." when the pack is on the game and
+  "Hidden from lists." for a pack stepped out (since 3.7.1 a pack on no map, and Default, says nothing
+  there), and a "+N more" link opens the pack's page, which has a picture band across its top.
 - **Settings is three sections.** Folders, Game and Updates, each row a label, a value and one
   button. The Map-select thumbnails switch is gone: thumbnails are always written with the art. The
   Version row says "Latest. Last checked yesterday, 20:44." or "Update available: 3.1.0." with a Get
@@ -322,8 +332,9 @@ can do. Nothing about the files it writes changed.
 - Every save that changes a map's art also writes that map's map-select picture over its own
   thumbnail in `<game>\images\thumbnails`, so the map select screen shows the art you put on. When
   the pack being applied has its own picture for the map in its `images\thumbnails` folder, that jpg is
-  copied as it is; otherwise BhMaps renders its composite at 290 by 164. A pack's picture stays until
-  the map is reset to default. The original thumbnail is kept in `%APPDATA%\BhMaps\thumbnails-original`,
+  copied as it is; otherwise BhMaps renders its composite at 290 by 164. A pack's picture stays only
+  while that pack's art is on the map, and Refresh keeps it. The original thumbnail is kept in
+  `%APPDATA%\BhMaps\thumbnails-original`,
   and Reset to default and Undo put it back. A map whose thumbnail is shared with another map, one that
   names no thumbnail, and one whose file is not there are left alone, and the map panel says which of
   those it is.
@@ -450,7 +461,7 @@ describes things by where they are and what they do. Nothing on disk changes sha
 | Undo of the last game write                          | `%APPDATA%\BhMaps\undo\`                                                                                      |
 | Downloaded updates                                   | `%APPDATA%\BhMaps\updates\`                                                                                   |
 | Kept map-select thumbnails                           | `%APPDATA%\BhMaps\thumbnails-original\`                                                                       |
-| Pack pictures on the game, kept until reset          | `%APPDATA%\BhMaps\thumbnails.bhmaps.json`                                                                    |
+| Pack pictures on the game, while their art is on     | `%APPDATA%\BhMaps\thumbnails.bhmaps.json`                                                                    |
 
 The map art folder and the library are chosen in the welcome window and editable in Settings; the
 data files are wherever the game folder is. Only `<library>\packs` is written, so anything
@@ -589,8 +600,9 @@ stops a long operation.
 - **Packs** is one row per pack: a composed thumbnail of the pack's first map, the pack's name and
   what it holds and where it is, as in "3 maps, 12 backgrounds. On 12 maps.", and a strip of previews
   of the maps it touches, as many as the width allows, with a "+56 more" link to the pack's own page
-  for the rest. A pack with nothing of its in the game says "Not in game."; `Default` says "What Reset
-  puts back.", because it is the art every reset lands on rather than a pack you apply. `Default` comes first,
+  for the rest. The second line says only "Active on N maps." when the pack's art is on maps, and
+  "Hidden from lists." when the eye is off; otherwise it is left out, and `Default` never has one, since it
+  is the art every reset lands on rather than a pack you apply. `Default` comes first,
   then the packs that have been applied, the most recent first, then the ones never applied, by
   name; every list of packs in the app follows that order. Apply all is a button on the row; a dots
   button beside it holds **Duplicate**, **Import from another pack...**, Export, Open folder and

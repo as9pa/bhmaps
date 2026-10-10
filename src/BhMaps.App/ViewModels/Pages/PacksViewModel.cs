@@ -68,7 +68,7 @@ public partial class PacksViewModel : PageViewModel
 
         // 3.0: where each pack's art actually is, read once for the whole list rather than once a row. The record
         // names the pack behind every game file the app wrote, so a pack the owner has since reset away from
-        // drops back to "Not in game." without anything having to tell this page so.
+        // loses its "Active on" line without anything having to tell this page so.
         var appliedMaps = AppliedRecord.Load(AppliedRecord.PathFor(Shell.Services.AppDataDir))
             .MapsPerPack(MapFolders.Of(snapshot.Catalog.Maps));
         var mode = Shell.PreviewMode;

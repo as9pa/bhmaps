@@ -172,8 +172,20 @@
                              narrow column, as in "0 maps, 1 background. Not" over "in game.". -->
                         <TextBlock Margin="0,3,0,0" Foreground="{StaticResource Text2Brush}" Text="{Binding CountsLine}"
                                    TextTrimming="CharacterEllipsis" />
+                        <!-- 3.7.1: empty when the pack's art is on no map and the eye is on; collapsed then so
+                             the name and the counts stay centred as two lines. -->
                         <TextBlock Foreground="{StaticResource Text2Brush}" Text="{Binding StateLine}"
-                                   TextTrimming="CharacterEllipsis" />
+                                   TextTrimming="CharacterEllipsis">
+                          <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                              <Style.Triggers>
+                                <DataTrigger Binding="{Binding StateLine}" Value="">
+                                  <Setter Property="Visibility" Value="Collapsed" />
+                                </DataTrigger>
+                              </Style.Triggers>
+                            </Style>
+                          </TextBlock.Style>
+                        </TextBlock>
                       </StackPanel>
 
                       <!-- The strip and its count share one star column: a count in an Auto column of its own
