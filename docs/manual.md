@@ -899,10 +899,9 @@ That writes three files into `dist\`: a self-contained `bhmaps.exe` that carries
 `bhmaps-dotnet.zip`, a framework-dependent build that needs the .NET 10 Desktop Runtime on whatever
 machine runs it, and `SHA256SUMS.txt`, which the app's update check verifies a download against, so
 all three go on the release. Each build updates from its own asset, so the zip must keep holding a
-single `BhMaps.exe`. Add `-Compat` to also write copies under the old versioned names
-(`bhmaps-v<version>-win-x64.exe` and `bhmaps-v<version>-win-x64-dotnet.zip`), which installs older
-than 3.5 look for, and upload all five. The repository has to be public for the update check to
-reach the release at all.
+single `BhMaps.exe`. The names carry no version; the release tag does. Installs older than 3.5 look
+for versioned names, so they no longer update themselves and need one manual download. The
+repository has to be public for the update check to reach the release at all.
 
 Never point a development run at the real game folder. Build a throwaway copy instead:
 
