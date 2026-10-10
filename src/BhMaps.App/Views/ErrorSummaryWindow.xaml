@@ -14,7 +14,7 @@
     </Grid.RowDefinitions>
 
     <TextBlock Grid.Row="0"
-               Margin="0,0,0,14"
+               Margin="0,0,0,16"
                Foreground="{StaticResource Text2Brush}"
                Text="{Binding Message}"
                TextWrapping="Wrap" />
@@ -22,7 +22,7 @@
       <!-- A list of two-line rows rather than a grid of columns: a failure is a path and a sentence, and the
            sentence has to wrap. The rows stay selectable so the keyboard can walk them and the tile ring shows
            where it is; the path is Geist Mono because it is a value, not copy. -->
-      <ListBox Margin="6"
+      <ListBox Margin="8"
                AutomationProperties.Name="Files that failed"
                ItemsSource="{Binding Failures}"
                Style="{StaticResource TileListBox}">
@@ -34,13 +34,13 @@
         </ListBox.ItemContainerStyle>
         <ListBox.ItemTemplate>
           <DataTemplate>
-            <StackPanel Margin="8,6">
+            <StackPanel Margin="8,8">
               <TextBlock Foreground="{StaticResource TextBrush}"
                          Style="{StaticResource MonoText}"
                          Text="{Binding Path}"
                          TextTrimming="CharacterEllipsis"
                          ToolTip="{Binding Path}" />
-              <TextBlock Margin="0,3,0,0"
+              <TextBlock Margin="0,4,0,0"
                          FontSize="{StaticResource FontCaption}"
                          Foreground="{StaticResource MissingFgBrush}"
                          Text="{Binding Error}"

@@ -144,10 +144,10 @@
 
     <!-- One entry per picked folder, each with the pack it becomes: the name lives here rather than in a field of
          its own above, because with several folders there is no single pack name to put there. -->
-    <Border Grid.Row="1" Margin="0,18,0,0" Style="{StaticResource CardBorder}">
+    <Border Grid.Row="1" Margin="0,16,0,0" Style="{StaticResource CardBorder}">
       <DockPanel>
         <TextBlock DockPanel.Dock="Top"
-                   Margin="14,10,14,8"
+                   Margin="16,8,16,8"
                    Style="{StaticResource SectionHeaderText}"
                    Text="{Binding Folders.Count, StringFormat='Folders, {0}'}" />
         <Border DockPanel.Dock="Top" Height="1" Background="{StaticResource LineBrush}" />
@@ -157,7 +157,7 @@
                three rows and an error line under one of them, which is what the window is 60 px taller for; past
                that the list scrolls instead of taking the table's room. -->
           <ListBox MaxHeight="208"
-                   Margin="6"
+                   Margin="8"
                    AutomationProperties.Name="Folders to import"
                    Focusable="False"
                    ItemContainerStyle="{StaticResource FolderRowItem}"
@@ -205,13 +205,13 @@
                   <TextBlock Grid.Row="1"
                              Grid.Column="1"
                              Grid.ColumnSpan="2"
-                             Margin="0,6,0,0"
+                             Margin="0,8,0,0"
                              Style="{StaticResource ErrorText}"
                              Text="{Binding NameError}" />
                   <TextBlock Grid.Row="1"
                              Grid.Column="1"
                              Grid.ColumnSpan="2"
-                             Margin="0,6,0,0"
+                             Margin="0,8,0,0"
                              Style="{StaticResource NoteText}"
                              Text="{Binding NameNote}" />
                 </Grid>
@@ -220,7 +220,7 @@
           </ListBox>
 
           <!-- Empty is its own state (spec 7.8); the list has no other way to say nothing has been picked yet. -->
-          <TextBlock Margin="14,14,14,0"
+          <TextBlock Margin="16,16,16,0"
                      VerticalAlignment="Top"
                      Foreground="{StaticResource Text3Brush}"
                      Text="No folders yet. Browse for them or drop them anywhere on this window."
@@ -240,9 +240,9 @@
       </DockPanel>
     </Border>
 
-    <Border Grid.Row="2" Margin="0,18,0,0" Style="{StaticResource CardBorder}">
+    <Border Grid.Row="2" Margin="0,16,0,0" Style="{StaticResource CardBorder}">
       <DockPanel>
-        <Grid DockPanel.Dock="Top" Margin="14,10,14,8">
+        <Grid DockPanel.Dock="Top" Margin="16,8,16,8">
           <Grid.ColumnDefinitions>
             <ColumnDefinition Width="{StaticResource IncludeColumn}" />
             <ColumnDefinition Width="{StaticResource FileColumn}" />
@@ -264,7 +264,7 @@
         <Grid>
           <!-- Focusable="False" plus Continue: the list itself is never an invisible tab stop, and Tab walks
                straight through the controls inside the realized rows. -->
-          <ListBox Margin="6"
+          <ListBox Margin="8"
                    AutomationProperties.Name="Images found"
                    Focusable="False"
                    ItemContainerStyle="{StaticResource ImportRowItem}"
@@ -299,7 +299,7 @@
                     <Border Style="{StaticResource StateTagBorder}">
                       <TextBlock Text="{Binding RouteText}" />
                     </Border>
-                    <Border Margin="6,0,0,0"
+                    <Border Margin="8,0,0,0"
                             Style="{StaticResource MissingTagBorder}"
                             Visibility="{Binding Conflict, Converter={StaticResource BoolToVis}}">
                       <TextBlock Text="Conflict" />
@@ -330,7 +330,7 @@
 
           <!-- Empty, and empty after a scan that found nothing, are the same sentence: there is nothing to
                include either way, and the summary line above already says which of the two it is. -->
-          <TextBlock Margin="14,14,14,0" VerticalAlignment="Top" Foreground="{StaticResource Text3Brush}" TextWrapping="Wrap">
+          <TextBlock Margin="16,16,16,0" VerticalAlignment="Top" Foreground="{StaticResource Text3Brush}" TextWrapping="Wrap">
             <TextBlock.Style>
               <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
                 <Setter Property="Text" Value="No images here yet. Choose a source folder and scan it." />
@@ -347,7 +347,7 @@
       </DockPanel>
     </Border>
 
-    <StackPanel Grid.Row="3" Margin="0,18,0,0" HorizontalAlignment="Right" Orientation="Horizontal">
+    <StackPanel Grid.Row="3" Margin="0,16,0,0" HorizontalAlignment="Right" Orientation="Horizontal">
       <!-- No command: IsCancel closes with false, and the caller drops the plan. Escape does the same. -->
       <Button Margin="0,0,8,0"
               Content="Cancel"

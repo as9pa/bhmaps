@@ -36,6 +36,19 @@
   <SolidColorBrush x:Key="AccentPressedBrush" Color="#D9D6D0" />
   <SolidColorBrush x:Key="FocusRingBrush" Color="#F1EFEA" />
 
+  <!-- Prototype: the same hexes as Colors, because a ColorAnimation's To takes a Color, not a brush. -->
+  <Color x:Key="SurfaceColor">#1C1B1A</Color>
+  <Color x:Key="Surface2Color">#242220</Color>
+  <Color x:Key="LineColor">#2A2827</Color>
+  <Color x:Key="Line2Color">#3A3734</Color>
+  <Color x:Key="TextColor">#F1EFEA</Color>
+  <Color x:Key="Text3Color">#6B675F</Color>
+
+  <!-- Prototype: every hover and press change fades over this; a thumbnail fades in over the second. -->
+  <Duration x:Key="FadeDuration">0:0:0.14</Duration>
+  <Duration x:Key="ImageFadeDuration">0:0:0.18</Duration>
+  <sys:Double x:Key="TileHoverScale">1.02</sys:Double>
+
   <CornerRadius x:Key="Radius">6</CornerRadius>
   <!-- The chip's radius. WPF distorts a Border whose CornerRadius is more than half its height, so this is half
        of the 28 px a chip measures rather than some large number; only controls that short may take it. -->

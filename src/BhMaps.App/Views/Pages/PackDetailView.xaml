@@ -210,6 +210,12 @@
                                      Stretch="UniformToFill" />
                             </Grid>
                           </Viewbox>
+                          <!-- Prototype: the picture's hairline, Line to Line2 on hover. -->
+                          <Border BorderThickness="1" CornerRadius="{StaticResource Radius}" IsHitTestVisible="False">
+                            <Border.BorderBrush>
+                              <SolidColorBrush x:Name="EdgeBrush" Color="{StaticResource LineColor}" />
+                            </Border.BorderBrush>
+                          </Border>
                           <Button x:Name="MenuButton"
                                   Margin="0,6,6,0"
                                   HorizontalAlignment="Right"
@@ -241,6 +247,20 @@
                     <DataTemplate.Triggers>
                       <Trigger SourceName="Tile" Property="IsMouseOver" Value="True">
                         <Setter TargetName="MenuButton" Property="Opacity" Value="1" />
+                        <Trigger.EnterActions>
+                          <BeginStoryboard>
+                            <Storyboard>
+                              <ColorAnimation Storyboard.TargetName="EdgeBrush" Storyboard.TargetProperty="Color" To="{StaticResource Line2Color}" Duration="{StaticResource FadeDuration}" />
+                            </Storyboard>
+                          </BeginStoryboard>
+                        </Trigger.EnterActions>
+                        <Trigger.ExitActions>
+                          <BeginStoryboard>
+                            <Storyboard>
+                              <ColorAnimation Storyboard.TargetName="EdgeBrush" Storyboard.TargetProperty="Color" Duration="{StaticResource FadeDuration}" />
+                            </Storyboard>
+                          </BeginStoryboard>
+                        </Trigger.ExitActions>
                       </Trigger>
                       <Trigger SourceName="Tile" Property="IsKeyboardFocusWithin" Value="True">
                         <Setter TargetName="MenuButton" Property="Opacity" Value="1" />
@@ -266,11 +286,15 @@
                                 <Rectangle Width="{Binding Source={x:Static imaging:MapCompositor.CardWidth}, Mode=OneTime}"
                                            Height="{Binding Source={x:Static imaging:MapCompositor.CardHeight}, Mode=OneTime}" />
                               </Viewbox>
-                              <Border x:Name="Box"
-                                      Background="Transparent"
-                                      BorderBrush="{StaticResource LineBrush}"
-                                      BorderThickness="1"
-                                      CornerRadius="{StaticResource Radius}" />
+                              <!-- Prototype: template brushes, so hover fades the fill and the hairline. -->
+                              <Border x:Name="Box" BorderThickness="1" CornerRadius="{StaticResource Radius}">
+                                <Border.Background>
+                                  <SolidColorBrush x:Name="BoxFill" Color="#00242220" />
+                                </Border.Background>
+                                <Border.BorderBrush>
+                                  <SolidColorBrush x:Name="BoxEdge" Color="{StaticResource LineColor}" />
+                                </Border.BorderBrush>
+                              </Border>
                               <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                                 <controls:Icon HorizontalAlignment="Center" Geometry="{StaticResource Icon.Plus}" Size="20" />
                                 <TextBlock Margin="0,8,0,0" HorizontalAlignment="Center" Text="Add image" />
@@ -278,8 +302,23 @@
                             </Grid>
                             <ControlTemplate.Triggers>
                               <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Box" Property="Background" Value="{StaticResource Surface2Brush}" />
                                 <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+                                <Trigger.EnterActions>
+                                  <BeginStoryboard>
+                                    <Storyboard>
+                                      <ColorAnimation Storyboard.TargetName="BoxFill" Storyboard.TargetProperty="Color" To="{StaticResource Surface2Color}" Duration="{StaticResource FadeDuration}" />
+                                      <ColorAnimation Storyboard.TargetName="BoxEdge" Storyboard.TargetProperty="Color" To="{StaticResource Line2Color}" Duration="{StaticResource FadeDuration}" />
+                                    </Storyboard>
+                                  </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                  <BeginStoryboard>
+                                    <Storyboard>
+                                      <ColorAnimation Storyboard.TargetName="BoxFill" Storyboard.TargetProperty="Color" Duration="{StaticResource FadeDuration}" />
+                                      <ColorAnimation Storyboard.TargetName="BoxEdge" Storyboard.TargetProperty="Color" Duration="{StaticResource FadeDuration}" />
+                                    </Storyboard>
+                                  </BeginStoryboard>
+                                </Trigger.ExitActions>
                               </Trigger>
                             </ControlTemplate.Triggers>
                           </ControlTemplate>
@@ -293,7 +332,9 @@
                 <ListBox.ItemContainerStyle>
                   <!-- The theme's ring, plus one click to open: a plain click selects and opens the drawer, and the
                        keyboard opens with Enter, which the code-behind handles (spec 5). -->
-                  <Style TargetType="ListBoxItem" BasedOn="{StaticResource TileListBoxItem}">
+                  <Style TargetType="ListBoxItem" BasedOn="{StaticResource HoverTileListBoxItem}">
+                    <!-- Prototype: the edge is on the picture inside the tile, not round picture and caption. -->
+                    <Setter Property="BorderThickness" Value="0" />
                     <Setter Property="AutomationProperties.Name" Value="{Binding Caption}" />
                     <!-- 3.0: no margin here, because the justified panel owns the gutter. -->
                     <Setter Property="Margin" Value="0" />
@@ -389,8 +430,8 @@
                           <TextBlock Style="{StaticResource MonoText}" Text="{Binding Name}"
                                      TextTrimming="CharacterEllipsis" />
                           <StackPanel Grid.Column="1" Margin="10,0,0,0" Orientation="Horizontal">
-                            <TextBlock FontSize="{StaticResource FontCaption}" Foreground="{StaticResource Text3Brush}" Text="{Binding SizeText}" />
-                            <TextBlock Margin="8,0,0,0" FontSize="{StaticResource FontCaption}" Foreground="{StaticResource Text3Brush}"
+                            <TextBlock FontFamily="{StaticResource Mono}" FontSize="{StaticResource FontCaption}" Foreground="{StaticResource Text3Brush}" Text="{Binding SizeText}" />
+                            <TextBlock Margin="8,0,0,0" FontFamily="{StaticResource Mono}" FontSize="{StaticResource FontCaption}" Foreground="{StaticResource Text3Brush}"
                                        Text="{Binding Dimensions}" />
                           </StackPanel>
                         </Grid>

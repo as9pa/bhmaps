@@ -51,7 +51,7 @@
             </TextBlock>
 
             <!-- 3.7.6: the box's X, there only while it has text. -->
-            <Button Margin="0,0,3,0"
+            <Button Margin="0,0,4,0"
                     Command="{Binding ClearSearchCommand}"
                     Style="{StaticResource SearchClearButton}"
                     Visibility="{Binding ShowClearSearch, Converter={StaticResource BoolToVis}}" />

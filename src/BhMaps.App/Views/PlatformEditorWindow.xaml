@@ -23,12 +23,12 @@
 
     <!-- One label style carries the whole panel's vertical rhythm, so a block is a label and its control. -->
     <Style x:Key="FieldLabel" TargetType="TextBlock" BasedOn="{StaticResource SectionHeaderText}">
-      <Setter Property="Margin" Value="0,18,0,6" />
+      <Setter Property="Margin" Value="0,16,0,8" />
     </Style>
 
     <!-- Its own Text drives the visibility, so a valid name takes the line back rather than leaving a gap. -->
     <Style x:Key="ErrorText" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
-      <Setter Property="Margin" Value="0,6,0,0" />
+      <Setter Property="Margin" Value="0,8,0,0" />
       <Setter Property="FontSize" Value="12" />
       <Setter Property="Foreground" Value="{StaticResource MissingFgBrush}" />
       <Setter Property="TextWrapping" Value="Wrap" />
@@ -40,7 +40,7 @@
     </Style>
 
     <Style x:Key="HintText" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
-      <Setter Property="Margin" Value="0,6,0,0" />
+      <Setter Property="Margin" Value="0,8,0,0" />
       <Setter Property="FontSize" Value="12" />
       <Setter Property="Foreground" Value="{StaticResource Text3Brush}" />
       <Setter Property="TextWrapping" Value="Wrap" />
@@ -214,7 +214,7 @@
             <TextBlock VerticalAlignment="Center"
                        Style="{StaticResource HintText}"
                        Text="{Binding ValuesFromText}" />
-            <Button Margin="6,6,0,0"
+            <Button Margin="8,8,0,0"
                     VerticalAlignment="Center"
                     AutomationProperties.Name="Start fresh"
                     Command="{Binding StartFreshCommand}"
@@ -230,12 +230,12 @@
               <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <TextBlock Style="{StaticResource FieldLabel}" Text="{Binding FilesHeader}" />
-            <StackPanel Grid.Column="1" Margin="0,18,0,6" Orientation="Horizontal">
+            <StackPanel Grid.Column="1" Margin="0,16,0,8" Orientation="Horizontal">
               <Button Command="{Binding AllCommand}"
                       Content="All"
                       FocusVisualStyle="{StaticResource DialogFocusRing}"
                       Style="{StaticResource ResetLink}" />
-              <Button Margin="10,0,0,0"
+              <Button Margin="8,0,0,0"
                       Command="{Binding NoneCommand}"
                       Content="None"
                       FocusVisualStyle="{StaticResource DialogFocusRing}"
@@ -256,7 +256,7 @@
                     <ColumnDefinition Width="Auto" />
                   </Grid.ColumnDefinitions>
 
-                  <CheckBox Margin="0,0,10,0"
+                  <CheckBox Margin="0,0,8,0"
                             VerticalAlignment="Center"
                             AutomationProperties.Name="{Binding RowName}"
                             FocusVisualStyle="{StaticResource DialogFocusRing}"
@@ -353,7 +353,7 @@
                       </StackPanel>
 
                       <TextBlock Grid.Column="2"
-                                 Margin="10,0,0,0"
+                                 Margin="8,0,0,0"
                                  Style="{StaticResource Readout}"
                                  Text="{Binding Readout}" />
 
@@ -368,7 +368,7 @@
             </ItemsControl.ItemTemplate>
           </ItemsControl>
 
-          <StackPanel Margin="0,18,0,6" Orientation="Horizontal">
+          <StackPanel Margin="0,16,0,8" Orientation="Horizontal">
             <TextBlock Margin="0" Style="{StaticResource FieldLabel}" Text="Image" />
             <Button AutomationProperties.Name="Reset image"
                     Command="{Binding ResetImageCommand}"
@@ -459,7 +459,7 @@
             </Grid.RowDefinitions>
             <StackPanel Orientation="Horizontal">
               <TextBlock Style="{StaticResource FieldLabel}" Text="Opacity" />
-              <Button Margin="0,18,0,6"
+              <Button Margin="0,16,0,8"
                       Command="{Binding ResetOpacityCommand}"
                       Content="Reset"
                       IsEnabled="{Binding CanAdjust}"
@@ -478,7 +478,7 @@
                     Value="{Binding Opacity}" />
             <TextBlock Grid.Row="1"
                        Grid.Column="1"
-                       Margin="10,0,0,0"
+                       Margin="8,0,0,0"
                        Style="{StaticResource Readout}"
                        Text="{Binding OpacityText}" />
           </Grid>
@@ -494,7 +494,7 @@
             </Grid.RowDefinitions>
             <StackPanel Orientation="Horizontal">
               <TextBlock Style="{StaticResource FieldLabel}" Text="Hue" />
-              <Button Margin="0,18,0,6"
+              <Button Margin="0,16,0,8"
                       Command="{Binding ResetHueCommand}"
                       Content="Reset"
                       IsEnabled="{Binding CanAdjust}"
@@ -513,7 +513,7 @@
                     Value="{Binding Hue}" />
             <TextBlock Grid.Row="1"
                        Grid.Column="1"
-                       Margin="10,0,0,0"
+                       Margin="8,0,0,0"
                        Style="{StaticResource Readout}"
                        Text="{Binding HueText}" />
           </Grid>
@@ -526,18 +526,18 @@
                     IsTextSearchEnabled="False"
                     ItemsSource="{Binding PackChoices}"
                     Text="{Binding PackName, UpdateSourceTrigger=PropertyChanged}" />
-          <TextBlock Margin="0,6,0,0"
+          <TextBlock Margin="0,8,0,0"
                      Style="{StaticResource HintText}"
                      Text="{Binding PackNameHint}"
                      Visibility="{Binding PackNameHint, Converter={StaticResource NullToVis}}" />
           <TextBlock Style="{StaticResource ErrorText}" Text="{Binding PackNameError}" />
 
-          <TextBlock Margin="0,18,0,0" Style="{StaticResource ErrorText}" Text="{Binding Error}" />
+          <TextBlock Margin="0,16,0,0" Style="{StaticResource ErrorText}" Text="{Binding Error}" />
         </StackPanel>
       </ScrollViewer>
     </Border>
 
-    <Grid Grid.Row="1" Grid.ColumnSpan="2" Margin="0,18,0,0">
+    <Grid Grid.Row="1" Grid.ColumnSpan="2" Margin="0,16,0,0">
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="*" />
         <ColumnDefinition Width="Auto" />

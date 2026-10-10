@@ -58,7 +58,7 @@
           CornerRadius="{StaticResource Radius}">
     <StackPanel Margin="24">
       <TextBlock Style="{StaticResource DialogTitle}" Text="{Binding Title}" />
-      <TextBox Margin="0,10,0,0"
+      <TextBox Margin="0,8,0,0"
                Style="{StaticResource DialogMessage}"
                Text="{Binding Message, Mode=OneWay}" />
       <TextBlock Style="{StaticResource DialogDetail}" Text="{Binding Detail}" />

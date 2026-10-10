@@ -23,7 +23,7 @@
          so the light border is the control's own selection and the page keeps it on the open card. 3.0: no margin
          here, because the justified panel owns the gutter; the open card's 2 px ring is drawn inside the
          container, so it needs no room of its own either. -->
-    <Style x:Key="MapCardItem" TargetType="ListBoxItem" BasedOn="{StaticResource TileListBoxItem}">
+    <Style x:Key="MapCardItem" TargetType="ListBoxItem" BasedOn="{StaticResource HoverTileListBoxItem}">
       <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
       <Setter Property="Margin" Value="0" />
       <Setter Property="Cursor" Value="Hand" />
@@ -181,7 +181,7 @@
                       HorizontalAlignment="Right"
                       VerticalAlignment="Top"
                       Background="{StaticResource BgBrush}"
-                      CornerRadius="4"
+                      CornerRadius="{StaticResource Radius}"
                       Padding="4,3"
                       Visibility="Collapsed">
                 <Path Data="M0,3.4 L2.8,6.2 L8,0.6"
@@ -214,7 +214,7 @@
               </StackPanel>
             </Grid>
 
-            <TextBlock Margin="0,6,0,0" Style="{StaticResource TileCaption}" Text="{Binding Title}" />
+            <TextBlock Margin="0,8,0,0" Style="{StaticResource TileCaption}" Text="{Binding Title}" />
           </StackPanel>
         </Border>
 
@@ -287,7 +287,7 @@
                       HorizontalAlignment="Right"
                       VerticalAlignment="Top"
                       Background="{StaticResource BgBrush}"
-                      CornerRadius="4"
+                      CornerRadius="{StaticResource Radius}"
                       Padding="4,3"
                       Visibility="Collapsed">
                 <Path Data="M0,3.4 L2.8,6.2 L8,0.6"
@@ -330,7 +330,7 @@
               </StackPanel>
             </Grid>
 
-            <TextBlock Margin="0,6,0,0" Style="{StaticResource TileCaption}" Text="{Binding Title}" />
+            <TextBlock Margin="0,8,0,0" Style="{StaticResource TileCaption}" Text="{Binding Title}" />
           </StackPanel>
         </Border>
 
@@ -413,20 +413,20 @@
                      TextTrimming="CharacterEllipsis"
                      ToolTip="{Binding RelativePath}" />
 
-          <StackPanel Margin="0,3,0,0" Orientation="Horizontal">
+          <StackPanel Margin="0,4,0,0" Orientation="Horizontal">
             <Border Style="{StaticResource StateTagBorder}" Visibility="{Binding ShowSource, Converter={StaticResource BoolToVis}}">
               <TextBlock Text="{Binding SourceText}" />
             </Border>
 
             <!-- A transparent file is a note, never an error (spec 6.4). -->
-            <TextBlock Margin="6,0,0,0"
+            <TextBlock Margin="8,0,0,0"
                        VerticalAlignment="Center"
                        Style="{StaticResource QuietNote}"
                        Text="changes nothing"
                        Visibility="{Binding ChangesNothing, Converter={StaticResource BoolToVis}}" />
 
             <!-- 3.2: a file another layout of the folder also draws, said quietly. -->
-            <TextBlock Margin="6,0,0,0"
+            <TextBlock Margin="8,0,0,0"
                        VerticalAlignment="Center"
                        Style="{StaticResource QuietNote}"
                        Text="{Binding AlsoIn}"
@@ -505,7 +505,7 @@
             </TextBlock>
 
             <!-- 3.7.6: the box's X, there only while it has text. -->
-            <Button Margin="0,0,3,0"
+            <Button Margin="0,0,4,0"
                     Command="{Binding ClearSearchCommand}"
                     Style="{StaticResource SearchClearButton}"
                     Visibility="{Binding ShowClearSearch, Converter={StaticResource BoolToVis}}" />
@@ -773,7 +773,7 @@
                           HorizontalAlignment="Left"
                           VerticalAlignment="Top"
                           Background="{StaticResource BgBrush}"
-                          CornerRadius="4"
+                          CornerRadius="{StaticResource Radius}"
                           Padding="8,3"
                           Visibility="{Binding IsPreviewing, Converter={StaticResource BoolToVis}}">
                     <StackPanel Orientation="Horizontal">
@@ -829,7 +829,7 @@
 
                 <!-- A composite that could not be drawn leaves the tile's own picture up, and says so here rather
                      than in a dialog: a preview is never worth one. -->
-                <TextBlock Margin="0,6,0,0"
+                <TextBlock Margin="0,8,0,0"
                            Foreground="{StaticResource WarnBrush}"
                            Style="{StaticResource QuietNote}"
                            Text="{Binding PreviewNote}"

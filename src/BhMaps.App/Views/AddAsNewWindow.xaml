@@ -9,12 +9,12 @@
     <BooleanToVisibilityConverter x:Key="BoolToVis" />
 
     <Style x:Key="FieldLabel" TargetType="TextBlock" BasedOn="{StaticResource SectionHeaderText}">
-      <Setter Property="Margin" Value="0,18,0,6" />
+      <Setter Property="Margin" Value="0,16,0,8" />
     </Style>
 
     <!-- Its own Text drives the visibility, so a valid name takes the line back rather than leaving a gap. -->
     <Style x:Key="ErrorText" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
-      <Setter Property="Margin" Value="0,6,0,0" />
+      <Setter Property="Margin" Value="0,8,0,0" />
       <Setter Property="FontSize" Value="12" />
       <Setter Property="Foreground" Value="{StaticResource MissingFgBrush}" />
       <Setter Property="TextWrapping" Value="Wrap" />
@@ -26,7 +26,7 @@
     </Style>
   </Window.Resources>
 
-  <StackPanel Margin="24,6,24,24">
+  <StackPanel Margin="24,8,24,24">
     <TextBlock Style="{StaticResource FieldLabel}" Text="Picture name" />
     <TextBox x:Name="NameBox"
              AutomationProperties.Name="Picture name"

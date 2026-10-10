@@ -20,6 +20,7 @@
     <Setter Property="FontFamily" Value="{StaticResource Sans}" />
     <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
     <Setter Property="FontSize" Value="{StaticResource FontBody}" />
+    <Setter Property="FontWeight" Value="Regular" />
   </Style>
 
   <!-- The button styles below replace the theme's own, so they lose its focus visual with it, and the stock
@@ -146,29 +147,67 @@
                   Background="{TemplateBinding Background}"
                   BorderBrush="{TemplateBinding BorderBrush}"
                   BorderThickness="{TemplateBinding BorderThickness}"
-                  CornerRadius="{StaticResource Radius}"
-                  Padding="{TemplateBinding Padding}">
-            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Orientation="Horizontal">
-              <controls:Icon x:Name="Glyph"
-                             Margin="0,0,7,0"
-                             VerticalAlignment="Center"
-                             Geometry="{Binding Path=(controls:Icon.Glyph), RelativeSource={RelativeSource TemplatedParent}}"
-                             Size="15" />
-              <ContentPresenter VerticalAlignment="Center" />
-            </StackPanel>
+                  CornerRadius="{StaticResource Radius}">
+            <!-- Prototype: hover and press are two fills over the background, faded by opacity, so the
+                 background the style sets (TileAction's Surface) stays a TemplateBinding. -->
+            <Grid>
+              <Border x:Name="HoverFill"
+                      Background="{StaticResource Surface2Brush}"
+                      CornerRadius="{StaticResource Radius}"
+                      Opacity="0" />
+              <Border x:Name="PressFill"
+                      Background="{StaticResource SurfaceBrush}"
+                      CornerRadius="{StaticResource Radius}"
+                      Opacity="0" />
+              <StackPanel Margin="{TemplateBinding Padding}"
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Center"
+                          Orientation="Horizontal">
+                <controls:Icon x:Name="Glyph"
+                               Margin="0,0,7,0"
+                               VerticalAlignment="Center"
+                               Geometry="{Binding Path=(controls:Icon.Glyph), RelativeSource={RelativeSource TemplatedParent}}"
+                               Size="15" />
+                <ContentPresenter VerticalAlignment="Center" />
+              </StackPanel>
+            </Grid>
           </Border>
           <ControlTemplate.Triggers>
             <Trigger Property="controls:Icon.Glyph" Value="{x:Null}">
               <Setter TargetName="Glyph" Property="Visibility" Value="Collapsed" />
             </Trigger>
             <Trigger Property="IsMouseOver" Value="True">
-              <Setter TargetName="Chrome" Property="Background" Value="{StaticResource Surface2Brush}" />
+              <Trigger.EnterActions>
+                <BeginStoryboard>
+                  <Storyboard>
+                    <DoubleAnimation Storyboard.TargetName="HoverFill" Storyboard.TargetProperty="Opacity" To="1" Duration="{StaticResource FadeDuration}" />
+                  </Storyboard>
+                </BeginStoryboard>
+              </Trigger.EnterActions>
+              <Trigger.ExitActions>
+                <BeginStoryboard>
+                  <Storyboard>
+                    <DoubleAnimation Storyboard.TargetName="HoverFill" Storyboard.TargetProperty="Opacity" To="0" Duration="{StaticResource FadeDuration}" />
+                  </Storyboard>
+                </BeginStoryboard>
+              </Trigger.ExitActions>
             </Trigger>
-            <!-- After hover, so pressing replaces it: a step back down to Surface, darker than the hover lift.
-                 TileAction rides this template too, and it is only ever seen hovered, so hover to pressed is
-                 the change that has to read there. -->
+            <!-- Pressing lays Surface over the hover lift: a step back down, darker than the hover. -->
             <Trigger Property="IsPressed" Value="True">
-              <Setter TargetName="Chrome" Property="Background" Value="{StaticResource SurfaceBrush}" />
+              <Trigger.EnterActions>
+                <BeginStoryboard>
+                  <Storyboard>
+                    <DoubleAnimation Storyboard.TargetName="PressFill" Storyboard.TargetProperty="Opacity" To="1" Duration="{StaticResource FadeDuration}" />
+                  </Storyboard>
+                </BeginStoryboard>
+              </Trigger.EnterActions>
+              <Trigger.ExitActions>
+                <BeginStoryboard>
+                  <Storyboard>
+                    <DoubleAnimation Storyboard.TargetName="PressFill" Storyboard.TargetProperty="Opacity" To="0" Duration="{StaticResource FadeDuration}" />
+                  </Storyboard>
+                </BeginStoryboard>
+              </Trigger.ExitActions>
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
               <Setter TargetName="Chrome" Property="Opacity" Value="0.4" />
@@ -199,35 +238,74 @@
               <TextBlock Text="{Binding}"
                          FontFamily="{Binding FontFamily, RelativeSource={RelativeSource AncestorType={x:Type ButtonBase}}}"
                          FontSize="{Binding FontSize, RelativeSource={RelativeSource AncestorType={x:Type ButtonBase}}}"
-                         Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type ButtonBase}}}" />
+                         Foreground="{Binding (TextElement.Foreground), RelativeSource={RelativeSource AncestorType={x:Type ContentPresenter}}}" />
             </DataTemplate>
           </ControlTemplate.Resources>
           <!-- The icon slot PrimaryButton explains. Hover here lifts the Foreground rather than the fill, and the
                icon follows it, because Stroke is bound to the Foreground this button hands down. -->
+          <!-- Prototype: the ink is a brush of the template's own, its colour bound to the button's Foreground,
+               so hover can fade it to Text and let go back to whatever the button states. The string's
+               TextBlock reads it from Chrome rather than from the button. -->
           <Border x:Name="Chrome"
                   Background="{TemplateBinding Background}"
-                  CornerRadius="{StaticResource Radius}"
-                  Padding="{TemplateBinding Padding}">
-            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Orientation="Horizontal">
-              <controls:Icon x:Name="Glyph"
-                             Margin="0,0,7,0"
-                             VerticalAlignment="Center"
-                             Geometry="{Binding Path=(controls:Icon.Glyph), RelativeSource={RelativeSource TemplatedParent}}"
-                             Size="15" />
-              <ContentPresenter VerticalAlignment="Center" />
-            </StackPanel>
+                  CornerRadius="{StaticResource Radius}">
+            <TextElement.Foreground>
+              <SolidColorBrush x:Name="Ink" Color="{Binding Foreground.Color, RelativeSource={RelativeSource TemplatedParent}, FallbackValue=#9C9891}" />
+            </TextElement.Foreground>
+            <Grid>
+              <Border x:Name="PressFill"
+                      Background="{StaticResource Surface2Brush}"
+                      CornerRadius="{StaticResource Radius}"
+                      Opacity="0" />
+              <StackPanel Margin="{TemplateBinding Padding}"
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Center"
+                          Orientation="Horizontal">
+                <controls:Icon x:Name="Glyph"
+                               Margin="0,0,7,0"
+                               VerticalAlignment="Center"
+                               Geometry="{Binding Path=(controls:Icon.Glyph), RelativeSource={RelativeSource TemplatedParent}}"
+                               Size="15" />
+                <ContentPresenter VerticalAlignment="Center" />
+              </StackPanel>
+            </Grid>
           </Border>
           <ControlTemplate.Triggers>
             <Trigger Property="controls:Icon.Glyph" Value="{x:Null}">
               <Setter TargetName="Glyph" Property="Visibility" Value="Collapsed" />
             </Trigger>
             <Trigger Property="IsMouseOver" Value="True">
-              <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+              <Trigger.EnterActions>
+                <BeginStoryboard>
+                  <Storyboard>
+                    <ColorAnimation Storyboard.TargetName="Ink" Storyboard.TargetProperty="Color" To="{StaticResource TextColor}" Duration="{StaticResource FadeDuration}" />
+                  </Storyboard>
+                </BeginStoryboard>
+              </Trigger.EnterActions>
+              <Trigger.ExitActions>
+                <BeginStoryboard>
+                  <Storyboard>
+                    <ColorAnimation Storyboard.TargetName="Ink" Storyboard.TargetProperty="Color" Duration="{StaticResource FadeDuration}" />
+                  </Storyboard>
+                </BeginStoryboard>
+              </Trigger.ExitActions>
             </Trigger>
-            <!-- After hover, so pressing replaces it. Plain lifts nothing on hover, so the fill is the press. -->
+            <!-- Plain lifts nothing on hover, so the fill is the press. -->
             <Trigger Property="IsPressed" Value="True">
-              <Setter TargetName="Chrome" Property="Background" Value="{StaticResource Surface2Brush}" />
-              <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+              <Trigger.EnterActions>
+                <BeginStoryboard>
+                  <Storyboard>
+                    <DoubleAnimation Storyboard.TargetName="PressFill" Storyboard.TargetProperty="Opacity" To="1" Duration="{StaticResource FadeDuration}" />
+                  </Storyboard>
+                </BeginStoryboard>
+              </Trigger.EnterActions>
+              <Trigger.ExitActions>
+                <BeginStoryboard>
+                  <Storyboard>
+                    <DoubleAnimation Storyboard.TargetName="PressFill" Storyboard.TargetProperty="Opacity" To="0" Duration="{StaticResource FadeDuration}" />
+                  </Storyboard>
+                </BeginStoryboard>
+              </Trigger.ExitActions>
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
               <Setter TargetName="Chrome" Property="Opacity" Value="0.4" />
@@ -330,15 +408,58 @@
                   Background="{TemplateBinding Background}"
                   BorderBrush="{TemplateBinding BorderBrush}"
                   BorderThickness="{TemplateBinding BorderThickness}"
-                  CornerRadius="{StaticResource RadiusPill}"
-                  Padding="{TemplateBinding Padding}">
-            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                  CornerRadius="{StaticResource RadiusPill}">
+            <!-- Prototype: hover is a Surface2 fill over the chip's own, faded by opacity, so the DynamicResource
+                 fill a pack's page clears stays untouched. A chip in a ChipRow is not hit-testable, so the
+                 row's hover drives the same fade through the second trigger. -->
+            <Grid>
+              <Border x:Name="HoverFill"
+                      Background="{StaticResource Surface2Brush}"
+                      CornerRadius="{StaticResource RadiusPill}"
+                      Opacity="0" />
+              <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Grid>
           </Border>
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
-              <Setter TargetName="Chrome" Property="Background" Value="{StaticResource Surface2Brush}" />
+              <Trigger.EnterActions>
+                <BeginStoryboard>
+                  <Storyboard>
+                    <DoubleAnimation Storyboard.TargetName="HoverFill" Storyboard.TargetProperty="Opacity" To="1" Duration="{StaticResource FadeDuration}" />
+                  </Storyboard>
+                </BeginStoryboard>
+              </Trigger.EnterActions>
+              <Trigger.ExitActions>
+                <BeginStoryboard>
+                  <Storyboard>
+                    <DoubleAnimation Storyboard.TargetName="HoverFill" Storyboard.TargetProperty="Opacity" To="0" Duration="{StaticResource FadeDuration}" />
+                  </Storyboard>
+                </BeginStoryboard>
+              </Trigger.ExitActions>
             </Trigger>
+            <MultiDataTrigger>
+              <MultiDataTrigger.Conditions>
+                <Condition Binding="{Binding IsHitTestVisible, RelativeSource={RelativeSource Self}}" Value="False" />
+                <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}}" Value="True" />
+              </MultiDataTrigger.Conditions>
+              <MultiDataTrigger.EnterActions>
+                <BeginStoryboard>
+                  <Storyboard>
+                    <DoubleAnimation Storyboard.TargetName="HoverFill" Storyboard.TargetProperty="Opacity" To="1" Duration="{StaticResource FadeDuration}" />
+                  </Storyboard>
+                </BeginStoryboard>
+              </MultiDataTrigger.EnterActions>
+              <MultiDataTrigger.ExitActions>
+                <BeginStoryboard>
+                  <Storyboard>
+                    <DoubleAnimation Storyboard.TargetName="HoverFill" Storyboard.TargetProperty="Opacity" To="0" Duration="{StaticResource FadeDuration}" />
+                  </Storyboard>
+                </BeginStoryboard>
+              </MultiDataTrigger.ExitActions>
+            </MultiDataTrigger>
+            <!-- Selected is a state, not a hover: an instant swap, and the hover fill is hidden under it. -->
             <Trigger Property="IsChecked" Value="True">
+              <Setter TargetName="HoverFill" Property="Visibility" Value="Collapsed" />
               <Setter TargetName="Chrome" Property="Background" Value="{StaticResource TextBrush}" />
               <Setter TargetName="Chrome" Property="BorderBrush" Value="{StaticResource TextBrush}" />
               <Setter Property="Foreground" Value="{StaticResource BgBrush}" />
@@ -367,7 +488,7 @@
                   Background="{StaticResource BgBrush}"
                   BorderBrush="{StaticResource Line2Brush}"
                   BorderThickness="1"
-                  CornerRadius="4"
+                  CornerRadius="{StaticResource Radius}"
                   Opacity="0.95">
             <Path x:Name="Tick"
                   Width="10"
@@ -421,14 +542,24 @@
               <TextBlock Text="{Binding}"
                          FontFamily="{Binding FontFamily, RelativeSource={RelativeSource AncestorType={x:Type ButtonBase}}}"
                          FontSize="{Binding FontSize, RelativeSource={RelativeSource AncestorType={x:Type ButtonBase}}}"
-                         Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type ButtonBase}}}" />
+                         Foreground="{Binding (TextElement.Foreground), RelativeSource={RelativeSource AncestorType={x:Type ContentPresenter}}}" />
             </DataTemplate>
           </ControlTemplate.Resources>
+          <!-- Prototype: hover is a Surface2 fill under Chrome, faded by opacity, so the current page's Tile
+               fill (a style setter on Background) still covers it; the ink is a template brush bound to the
+               Foreground the style states, faded to Text on hover. -->
           <Grid>
+            <Border x:Name="HoverFill"
+                    Background="{StaticResource Surface2Brush}"
+                    CornerRadius="{StaticResource Radius}"
+                    Opacity="0" />
             <Border x:Name="Chrome"
                     Background="{TemplateBinding Background}"
                     CornerRadius="{StaticResource Radius}"
                     Padding="{TemplateBinding Padding}">
+              <TextElement.Foreground>
+                <SolidColorBrush x:Name="Ink" Color="{Binding Foreground.Color, RelativeSource={RelativeSource TemplatedParent}, FallbackValue=#9C9891}" />
+              </TextElement.Foreground>
               <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
             </Border>
             <Border x:Name="Ring"
@@ -439,6 +570,24 @@
                     Opacity="0" />
           </Grid>
           <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Trigger.EnterActions>
+                <BeginStoryboard>
+                  <Storyboard>
+                    <DoubleAnimation Storyboard.TargetName="HoverFill" Storyboard.TargetProperty="Opacity" To="1" Duration="{StaticResource FadeDuration}" />
+                    <ColorAnimation Storyboard.TargetName="Ink" Storyboard.TargetProperty="Color" To="{StaticResource TextColor}" Duration="{StaticResource FadeDuration}" />
+                  </Storyboard>
+                </BeginStoryboard>
+              </Trigger.EnterActions>
+              <Trigger.ExitActions>
+                <BeginStoryboard>
+                  <Storyboard>
+                    <DoubleAnimation Storyboard.TargetName="HoverFill" Storyboard.TargetProperty="Opacity" To="0" Duration="{StaticResource FadeDuration}" />
+                    <ColorAnimation Storyboard.TargetName="Ink" Storyboard.TargetProperty="Color" Duration="{StaticResource FadeDuration}" />
+                  </Storyboard>
+                </BeginStoryboard>
+              </Trigger.ExitActions>
+            </Trigger>
             <Trigger Property="IsKeyboardFocused" Value="True">
               <Setter TargetName="Ring" Property="Opacity" Value="0.6" />
             </Trigger>
@@ -449,10 +598,6 @@
     <!-- Hover first, the open page second, so the open tab keeps its fill while the pointer is over it. A
          trigger's binding cannot reach its TemplatedParent, which is why both live out here. -->
     <Style.Triggers>
-      <Trigger Property="IsMouseOver" Value="True">
-        <Setter Property="Background" Value="{StaticResource Surface2Brush}" />
-        <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
-      </Trigger>
       <DataTrigger Value="True">
         <DataTrigger.Binding>
           <MultiBinding Converter="{StaticResource IsCurrentPage}">
@@ -483,7 +628,7 @@
       </Style>
     </Style.Resources>
     <Setter Property="Background" Value="{StaticResource Surface2Brush}" />
-    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="CornerRadius" Value="{StaticResource Radius}" />
     <Setter Property="Padding" Value="6,2" />
   </Style>
 
@@ -497,7 +642,7 @@
       </Style>
     </Style.Resources>
     <Setter Property="Background" Value="{StaticResource MissingBgBrush}" />
-    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="CornerRadius" Value="{StaticResource Radius}" />
     <Setter Property="Padding" Value="6,2" />
   </Style>
 
@@ -566,6 +711,71 @@
                     Opacity="0" />
           </Grid>
           <ControlTemplate.Triggers>
+            <Trigger Property="IsKeyboardFocused" Value="True">
+              <Setter TargetName="Ring" Property="Opacity" Value="0.6" />
+            </Trigger>
+            <Trigger Property="IsSelected" Value="True">
+              <Setter TargetName="Ring" Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+              <Setter TargetName="Ring" Property="BorderThickness" Value="2" />
+              <Setter TargetName="Ring" Property="Opacity" Value="1" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- Prototype: TileListBoxItem for the picture cards (the Maps page cards, a pack's page tiles and its Add image
+       card). Hover fades a 1 px edge over the card's own hairline from Line to Line2 and scales the card from its
+       centre, raised above its neighbours while it does. Opt-in, because the dialogs' row lists ride
+       TileListBoxItem too. -->
+  <Style x:Key="HoverTileListBoxItem" TargetType="ListBoxItem" BasedOn="{StaticResource TileListBoxItem}">
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="RenderTransformOrigin" Value="0.5,0.5" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ListBoxItem">
+          <Grid Background="{TemplateBinding Background}" RenderTransformOrigin="0.5,0.5">
+            <Grid.RenderTransform>
+              <ScaleTransform x:Name="Lift" ScaleX="1" ScaleY="1" />
+            </Grid.RenderTransform>
+            <ContentPresenter Margin="{TemplateBinding Padding}"
+                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+            <Border BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="{StaticResource Radius}" IsHitTestVisible="False">
+              <Border.BorderBrush>
+                <SolidColorBrush x:Name="Edge" Color="#002A2827" />
+              </Border.BorderBrush>
+            </Border>
+            <Border x:Name="Ring"
+                    BorderBrush="{StaticResource FocusRingBrush}"
+                    BorderThickness="1"
+                    CornerRadius="{StaticResource Radius}"
+                    IsHitTestVisible="False"
+                    Opacity="0" />
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter Property="Panel.ZIndex" Value="1" />
+              <Trigger.EnterActions>
+                <BeginStoryboard>
+                  <Storyboard>
+                    <ColorAnimation Storyboard.TargetName="Edge" Storyboard.TargetProperty="Color" To="{StaticResource Line2Color}" Duration="{StaticResource FadeDuration}" />
+                    <DoubleAnimation Storyboard.TargetName="Lift" Storyboard.TargetProperty="ScaleX" To="{StaticResource TileHoverScale}" Duration="{StaticResource FadeDuration}" />
+                    <DoubleAnimation Storyboard.TargetName="Lift" Storyboard.TargetProperty="ScaleY" To="{StaticResource TileHoverScale}" Duration="{StaticResource FadeDuration}" />
+                  </Storyboard>
+                </BeginStoryboard>
+              </Trigger.EnterActions>
+              <Trigger.ExitActions>
+                <BeginStoryboard>
+                  <Storyboard>
+                    <ColorAnimation Storyboard.TargetName="Edge" Storyboard.TargetProperty="Color" Duration="{StaticResource FadeDuration}" />
+                    <DoubleAnimation Storyboard.TargetName="Lift" Storyboard.TargetProperty="ScaleX" Duration="{StaticResource FadeDuration}" />
+                    <DoubleAnimation Storyboard.TargetName="Lift" Storyboard.TargetProperty="ScaleY" Duration="{StaticResource FadeDuration}" />
+                  </Storyboard>
+                </BeginStoryboard>
+              </Trigger.ExitActions>
+            </Trigger>
             <Trigger Property="IsKeyboardFocused" Value="True">
               <Setter TargetName="Ring" Property="Opacity" Value="0.6" />
             </Trigger>
@@ -687,7 +897,7 @@
   <Style x:Key="SectionHeaderText" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
     <Setter Property="FontSize" Value="{StaticResource FontCaption}" />
     <Setter Property="FontWeight" Value="Medium" />
-    <Setter Property="Foreground" Value="{StaticResource Text3Brush}" />
+    <Setter Property="Foreground" Value="{StaticResource Text2Brush}" />
   </Style>
 
   <Style x:Key="MonoText" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
@@ -851,6 +1061,36 @@
     <Setter Property="Width" Value="156" />
     <Setter Property="Margin" Value="0,0,8,8" />
     <Setter Property="Padding" Value="6" />
+    <!-- Prototype: hover fades the hairline Line to Line2 and scales the tile from its centre. The brush and the
+         transform are the style's own, which a Storyboard clones on first use since a style's values are frozen. -->
+    <Setter Property="RenderTransformOrigin" Value="0.5,0.5" />
+    <Setter Property="RenderTransform">
+      <Setter.Value>
+        <ScaleTransform ScaleX="1" ScaleY="1" />
+      </Setter.Value>
+    </Setter>
+    <Style.Triggers>
+      <Trigger Property="IsMouseOver" Value="True">
+        <Trigger.EnterActions>
+          <BeginStoryboard>
+            <Storyboard>
+              <ColorAnimation Storyboard.TargetProperty="(Border.BorderBrush).(SolidColorBrush.Color)" To="{StaticResource Line2Color}" Duration="{StaticResource FadeDuration}" />
+              <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)" To="{StaticResource TileHoverScale}" Duration="{StaticResource FadeDuration}" />
+              <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)" To="{StaticResource TileHoverScale}" Duration="{StaticResource FadeDuration}" />
+            </Storyboard>
+          </BeginStoryboard>
+        </Trigger.EnterActions>
+        <Trigger.ExitActions>
+          <BeginStoryboard>
+            <Storyboard>
+              <ColorAnimation Storyboard.TargetProperty="(Border.BorderBrush).(SolidColorBrush.Color)" To="{StaticResource LineColor}" Duration="{StaticResource FadeDuration}" />
+              <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)" To="1" Duration="{StaticResource FadeDuration}" />
+              <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)" To="1" Duration="{StaticResource FadeDuration}" />
+            </Storyboard>
+          </BeginStoryboard>
+        </Trigger.ExitActions>
+      </Trigger>
+    </Style.Triggers>
   </Style>
 
   <!-- The two tile actions sit over the picture, so they carry the surface behind them rather than the outline
@@ -919,9 +1159,12 @@
       <Setter.Value>
         <ControlTemplate TargetType="ToggleButton">
           <Border x:Name="Chrome"
-                  Background="Transparent"
                   CornerRadius="{StaticResource Radius}"
                   Padding="8,7">
+            <!-- Prototype: a template brush, so the hover can fade it. -->
+            <Border.Background>
+              <SolidColorBrush x:Name="Fill" Color="#00242220" />
+            </Border.Background>
             <StackPanel Orientation="Horizontal">
               <controls:Icon Style="{StaticResource FoldChevron}" />
               <TextBlock FontFamily="{StaticResource Sans}"
@@ -932,7 +1175,20 @@
           </Border>
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
-              <Setter TargetName="Chrome" Property="Background" Value="{StaticResource Surface2Brush}" />
+              <Trigger.EnterActions>
+                <BeginStoryboard>
+                  <Storyboard>
+                    <ColorAnimation Storyboard.TargetName="Fill" Storyboard.TargetProperty="Color" To="{StaticResource Surface2Color}" Duration="{StaticResource FadeDuration}" />
+                  </Storyboard>
+                </BeginStoryboard>
+              </Trigger.EnterActions>
+              <Trigger.ExitActions>
+                <BeginStoryboard>
+                  <Storyboard>
+                    <ColorAnimation Storyboard.TargetName="Fill" Storyboard.TargetProperty="Color" Duration="{StaticResource FadeDuration}" />
+                  </Storyboard>
+                </BeginStoryboard>
+              </Trigger.ExitActions>
             </Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
@@ -964,14 +1220,12 @@
             <Border x:Name="Ring"
                     BorderBrush="{StaticResource FocusRingBrush}"
                     BorderThickness="1"
-                    CornerRadius="14"
+                    CornerRadius="{StaticResource RadiusPill}"
                     IsHitTestVisible="False"
                     Opacity="0" />
           </Grid>
           <ControlTemplate.Triggers>
-            <Trigger Property="IsMouseOver" Value="True">
-              <Setter TargetName="Chip" Property="Background" Value="{StaticResource Surface2Brush}" />
-            </Trigger>
+            <!-- Prototype: the row's hover is faded by ChipToggle itself, which watches this row's IsMouseOver. -->
             <Trigger Property="IsKeyboardFocused" Value="True">
               <Setter TargetName="Ring" Property="Opacity" Value="0.6" />
             </Trigger>
@@ -1006,9 +1260,31 @@
         <ControlTemplate TargetType="Button">
           <StackPanel>
             <Grid Width="{Binding DataContext.ThumbWidth, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                  Height="{Binding DataContext.ThumbHeight, RelativeSource={RelativeSource AncestorType=UserControl}}">
+                  Height="{Binding DataContext.ThumbHeight, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                  RenderTransformOrigin="0.5,0.5">
+              <!-- Prototype: hover scales the picture from its centre; the edge below goes Line to Line2. -->
+              <Grid.RenderTransform>
+                <ScaleTransform x:Name="Lift" ScaleX="1" ScaleY="1" />
+              </Grid.RenderTransform>
               <Border Background="{StaticResource TileBrush}" ClipToBounds="True" CornerRadius="{StaticResource Radius}">
-                <Image RenderOptions.BitmapScalingMode="HighQuality" Source="{Binding Thumbnail}" Stretch="UniformToFill" />
+                <!-- Prototype: the thumbnail fades in when its binding delivers it. From 0 rather than a resting
+                     Opacity of 0, so a picture whose update never fires is still drawn. -->
+                <Image RenderOptions.BitmapScalingMode="HighQuality" Source="{Binding Thumbnail, NotifyOnTargetUpdated=True}" Stretch="UniformToFill">
+                  <Image.Triggers>
+                    <EventTrigger RoutedEvent="Binding.TargetUpdated">
+                      <BeginStoryboard>
+                        <Storyboard>
+                          <DoubleAnimation Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="{StaticResource ImageFadeDuration}" />
+                        </Storyboard>
+                      </BeginStoryboard>
+                    </EventTrigger>
+                  </Image.Triggers>
+                </Image>
+              </Border>
+              <Border BorderThickness="1" CornerRadius="{StaticResource Radius}" IsHitTestVisible="False">
+                <Border.BorderBrush>
+                  <SolidColorBrush x:Name="Edge" Color="{StaticResource LineColor}" />
+                </Border.BorderBrush>
               </Border>
 
               <!-- The in-game ring, 2 px in Text, over the picture rather than around the tile, so a strip of
@@ -1026,7 +1302,7 @@
                       HorizontalAlignment="Right"
                       VerticalAlignment="Top"
                       Background="{StaticResource BgBrush}"
-                      CornerRadius="4"
+                      CornerRadius="{StaticResource Radius}"
                       Padding="4,3"
                       ToolTip="In game"
                       Visibility="Collapsed">
@@ -1106,6 +1382,24 @@
             </DataTrigger>
             <Trigger Property="IsMouseOver" Value="True">
               <Setter TargetName="Actions" Property="Opacity" Value="1" />
+              <Trigger.EnterActions>
+                <BeginStoryboard>
+                  <Storyboard>
+                    <ColorAnimation Storyboard.TargetName="Edge" Storyboard.TargetProperty="Color" To="{StaticResource Line2Color}" Duration="{StaticResource FadeDuration}" />
+                    <DoubleAnimation Storyboard.TargetName="Lift" Storyboard.TargetProperty="ScaleX" To="{StaticResource TileHoverScale}" Duration="{StaticResource FadeDuration}" />
+                    <DoubleAnimation Storyboard.TargetName="Lift" Storyboard.TargetProperty="ScaleY" To="{StaticResource TileHoverScale}" Duration="{StaticResource FadeDuration}" />
+                  </Storyboard>
+                </BeginStoryboard>
+              </Trigger.EnterActions>
+              <Trigger.ExitActions>
+                <BeginStoryboard>
+                  <Storyboard>
+                    <ColorAnimation Storyboard.TargetName="Edge" Storyboard.TargetProperty="Color" Duration="{StaticResource FadeDuration}" />
+                    <DoubleAnimation Storyboard.TargetName="Lift" Storyboard.TargetProperty="ScaleX" Duration="{StaticResource FadeDuration}" />
+                    <DoubleAnimation Storyboard.TargetName="Lift" Storyboard.TargetProperty="ScaleY" Duration="{StaticResource FadeDuration}" />
+                  </Storyboard>
+                </BeginStoryboard>
+              </Trigger.ExitActions>
             </Trigger>
             <Trigger Property="IsKeyboardFocusWithin" Value="True">
               <Setter TargetName="Actions" Property="Opacity" Value="1" />
@@ -1244,4 +1538,157 @@
       </Grid>
     </Border>
   </DataTemplate>
+
+  <!-- Prototype: one thin scrollbar for the whole app: no arrows, no track, a thumb described below. -->
+  <Style x:Key="ScrollPageButton" TargetType="RepeatButton">
+    <Setter Property="Focusable" Value="False" />
+    <Setter Property="IsTabStop" Value="False" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="RepeatButton">
+          <Border Background="Transparent" />
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- Prototype: at rest the thumb is main's 2 px Line2 hairline at the far edge; with the pointer anywhere on the
+       scrollbar it grows to 6 px and fades to Text3 over FadeDuration, and holds Text3 while dragged. The
+       scrollbar is drawn over the content by the theme's ScrollViewer, so its 8 px takes no layout. -->
+  <Style x:Key="ScrollThumb" TargetType="Thumb">
+    <Setter Property="Focusable" Value="False" />
+    <Setter Property="IsTabStop" Value="False" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Thumb">
+          <Grid Background="Transparent">
+            <Border x:Name="Bar" Width="2" Margin="0,1,1,1" HorizontalAlignment="Right" CornerRadius="3">
+              <Border.Background>
+                <SolidColorBrush x:Name="BarFill" Color="{StaticResource Line2Color}" />
+              </Border.Background>
+            </Border>
+          </Grid>
+          <ControlTemplate.Triggers>
+            <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type ScrollBar}}}" Value="True">
+              <DataTrigger.EnterActions>
+                <BeginStoryboard>
+                  <Storyboard>
+                    <ColorAnimation Storyboard.TargetName="BarFill" Storyboard.TargetProperty="Color" To="{StaticResource Text3Color}" Duration="{StaticResource FadeDuration}" />
+                    <DoubleAnimation Storyboard.TargetName="Bar" Storyboard.TargetProperty="Width" To="6" Duration="{StaticResource FadeDuration}" />
+                  </Storyboard>
+                </BeginStoryboard>
+              </DataTrigger.EnterActions>
+              <DataTrigger.ExitActions>
+                <BeginStoryboard>
+                  <Storyboard>
+                    <ColorAnimation Storyboard.TargetName="BarFill" Storyboard.TargetProperty="Color" Duration="{StaticResource FadeDuration}" />
+                    <DoubleAnimation Storyboard.TargetName="Bar" Storyboard.TargetProperty="Width" Duration="{StaticResource FadeDuration}" />
+                  </Storyboard>
+                </BeginStoryboard>
+              </DataTrigger.ExitActions>
+            </DataTrigger>
+            <Trigger Property="IsDragging" Value="True">
+              <Setter TargetName="Bar" Property="Background" Value="{StaticResource Text3Brush}" />
+              <Setter TargetName="Bar" Property="Width" Value="6" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <Style x:Key="ScrollThumbHorizontal" TargetType="Thumb">
+    <Setter Property="Focusable" Value="False" />
+    <Setter Property="IsTabStop" Value="False" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Thumb">
+          <Grid Background="Transparent">
+            <Border x:Name="Bar" Height="2" Margin="1,0,1,1" VerticalAlignment="Bottom" CornerRadius="3">
+              <Border.Background>
+                <SolidColorBrush x:Name="BarFill" Color="{StaticResource Line2Color}" />
+              </Border.Background>
+            </Border>
+          </Grid>
+          <ControlTemplate.Triggers>
+            <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type ScrollBar}}}" Value="True">
+              <DataTrigger.EnterActions>
+                <BeginStoryboard>
+                  <Storyboard>
+                    <ColorAnimation Storyboard.TargetName="BarFill" Storyboard.TargetProperty="Color" To="{StaticResource Text3Color}" Duration="{StaticResource FadeDuration}" />
+                    <DoubleAnimation Storyboard.TargetName="Bar" Storyboard.TargetProperty="Height" To="6" Duration="{StaticResource FadeDuration}" />
+                  </Storyboard>
+                </BeginStoryboard>
+              </DataTrigger.EnterActions>
+              <DataTrigger.ExitActions>
+                <BeginStoryboard>
+                  <Storyboard>
+                    <ColorAnimation Storyboard.TargetName="BarFill" Storyboard.TargetProperty="Color" Duration="{StaticResource FadeDuration}" />
+                    <DoubleAnimation Storyboard.TargetName="Bar" Storyboard.TargetProperty="Height" Duration="{StaticResource FadeDuration}" />
+                  </Storyboard>
+                </BeginStoryboard>
+              </DataTrigger.ExitActions>
+            </DataTrigger>
+            <Trigger Property="IsDragging" Value="True">
+              <Setter TargetName="Bar" Property="Background" Value="{StaticResource Text3Brush}" />
+              <Setter TargetName="Bar" Property="Height" Value="6" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <Style TargetType="ScrollBar">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Stylus.IsFlicksEnabled" Value="False" />
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Width" Value="8" />
+    <Setter Property="Height" Value="NaN" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ScrollBar">
+          <Grid Background="Transparent">
+            <Track x:Name="PART_Track" IsDirectionReversed="True">
+              <Track.DecreaseRepeatButton>
+                <RepeatButton Command="ScrollBar.PageUpCommand" Style="{StaticResource ScrollPageButton}" />
+              </Track.DecreaseRepeatButton>
+              <Track.IncreaseRepeatButton>
+                <RepeatButton Command="ScrollBar.PageDownCommand" Style="{StaticResource ScrollPageButton}" />
+              </Track.IncreaseRepeatButton>
+              <Track.Thumb>
+                <Thumb Style="{StaticResource ScrollThumb}" />
+              </Track.Thumb>
+            </Track>
+          </Grid>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+    <Style.Triggers>
+      <Trigger Property="Orientation" Value="Horizontal">
+        <Setter Property="Width" Value="NaN" />
+        <Setter Property="Height" Value="8" />
+        <Setter Property="Template">
+          <Setter.Value>
+            <ControlTemplate TargetType="ScrollBar">
+              <Grid Background="Transparent">
+                <Track x:Name="PART_Track" IsDirectionReversed="False">
+                  <Track.DecreaseRepeatButton>
+                    <RepeatButton Command="ScrollBar.PageLeftCommand" Style="{StaticResource ScrollPageButton}" />
+                  </Track.DecreaseRepeatButton>
+                  <Track.IncreaseRepeatButton>
+                    <RepeatButton Command="ScrollBar.PageRightCommand" Style="{StaticResource ScrollPageButton}" />
+                  </Track.IncreaseRepeatButton>
+                  <Track.Thumb>
+                    <Thumb Style="{StaticResource ScrollThumbHorizontal}" />
+                  </Track.Thumb>
+                </Track>
+              </Grid>
+            </ControlTemplate>
+          </Setter.Value>
+        </Setter>
+      </Trigger>
+    </Style.Triggers>
+  </Style>
 </ResourceDictionary>

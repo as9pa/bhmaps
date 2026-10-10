@@ -166,11 +166,11 @@
                         </Border>
                       </Border>
 
-                      <StackPanel Grid.Column="1" Margin="14,0,12,0" VerticalAlignment="Center">
+                      <StackPanel Grid.Column="1" Margin="16,0,12,0" VerticalAlignment="Center">
                         <TextBlock FontWeight="Medium" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
                         <!-- Two lines, each trimmed rather than wrapped (3.0): one line broke mid-sentence in a
                              narrow column, as in "0 maps, 1 background. Not" over "in game.". -->
-                        <TextBlock Margin="0,3,0,0" Foreground="{StaticResource Text2Brush}" Text="{Binding CountsLine}"
+                        <TextBlock Margin="0,4,0,0" Foreground="{StaticResource Text2Brush}" Text="{Binding CountsLine}"
                                    TextTrimming="CharacterEllipsis" />
                         <!-- 3.7.1: empty when the pack's art is on no map and the eye is on; collapsed then so
                              the name and the counts stay centred as two lines. -->
@@ -238,14 +238,14 @@
                   </Button>
 
                   <StackPanel Grid.Column="1"
-                              Margin="8,0,10,0"
+                              Margin="8,0,8,0"
                               VerticalAlignment="Center"
                               Orientation="Horizontal">
                     <!-- 2.8: the eye, which keeps the pack out of the Backgrounds and Platforms lists. Muted while
                          the pack is shown and lit once it is hidden, the same way the My Backgrounds switch reads.
                          3.1: the Default pack has one too, so the game's own art can leave the lists like any
                          other pack; what it is for, Reset and Capture, reads the folder and not this. -->
-                    <Button Margin="0,0,6,0"
+                    <Button Margin="0,0,8,0"
                             Command="{Binding DataContext.ToggleHiddenCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                             CommandParameter="{Binding}">
                       <Button.Style>
@@ -273,7 +273,7 @@
                             controls:Icon.Glyph="{StaticResource Icon.Download}"
                             IsEnabled="{Binding DataContext.CanWrite, RelativeSource={RelativeSource AncestorType=Window}}"
                             Style="{StaticResource OutlineButton}" />
-                    <Button Margin="6,0,0,0"
+                    <Button Margin="8,0,0,0"
                             AutomationProperties.Name="{Binding Name, StringFormat=More actions for {0}}"
                             controls:Icon.Glyph="{StaticResource Icon.Dots}"
                             controls:TileMenus.OpensMenu="True"
