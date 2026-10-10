@@ -5,7 +5,8 @@
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
         Style="{StaticResource ChromeWindow}"
         Background="{StaticResource BgBrush}">
-  <!-- 3.7.3: the background editor's Add as new. The labels and the error line are AddPicturesWindow's. -->
+  <!-- 3.7.3: the background editor's Add as new. The labels and the error line are AddPicturesWindow's.
+       3.9.2: the platform editor's too, with the Picture name label and box hidden. -->
   <Window.Resources>
     <BooleanToVisibilityConverter x:Key="BoolToVis" />
 
@@ -28,14 +29,17 @@
   </Window.Resources>
 
   <StackPanel Margin="24,8,24,24">
-    <TextBlock Style="{StaticResource FieldLabel}" Text="Picture name" />
-    <TextBox x:Name="NameBox"
-             AutomationProperties.Name="Picture name"
-             Style="{StaticResource FieldTextBox}"
-             Text="{Binding PictureName, UpdateSourceTrigger=PropertyChanged}" />
+    <StackPanel Visibility="{Binding ShowPictureName, Converter={StaticResource BoolToVis}}">
+      <TextBlock Style="{StaticResource FieldLabel}" Text="Picture name" />
+      <TextBox x:Name="NameBox"
+               AutomationProperties.Name="Picture name"
+               Style="{StaticResource FieldTextBox}"
+               Text="{Binding PictureName, UpdateSourceTrigger=PropertyChanged}" />
+    </StackPanel>
 
     <TextBlock Style="{StaticResource FieldLabel}" Text="Pack" />
-    <ComboBox AutomationProperties.Name="Pack"
+    <ComboBox x:Name="PackBox"
+              AutomationProperties.Name="Pack"
               ItemsSource="{Binding PackChoices}"
               SelectedItem="{Binding TargetPack}" />
     <TextBox Margin="0,8,0,0"

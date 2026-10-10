@@ -9,6 +9,10 @@ and `.jpg` files inside the `mapArt` folder and inside its own library, plus its
 folder, and it keeps a copy of every original so it can put it back. The game's data files are read and never written, and
 nothing else in the game install is touched.
 
+## What is new in 3.9.2
+
+- Add as new in Edit platforms now opens the same popup as Edit background: pick a pack or make a new one. A pack that already has platforms for those maps is refused, so nothing is overwritten.
+
 ## What is new in 3.9.1
 
 - Pictures on Maps, Backgrounds, Platforms and a pack's page keep inside their rounded corners. In 3.9.0 the picture's square corners showed past the rounded edge.

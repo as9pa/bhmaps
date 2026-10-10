@@ -1665,32 +1665,37 @@ public partial class PlatformEditorViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanSave))]
     private Task SaveOnlyAsync() => SaveAsync(apply: false);
 
-    /// <summary>3.6 E1: "Add as new" asks for a fresh pack's name, then runs Save only into it. The pack is new,
-    /// so no Replace question can come up.</summary>
+    /// <summary>3.6 E1: "Add as new" asks for a fresh pack's name, then runs Save only into it. 3.9.2: it opens
+    /// the background editor's popup instead, so an existing pack can be picked too; one that already has
+    /// platforms for any of the maps is refused there, so no Replace question can come up.</summary>
     [RelayCommand(CanExecute = nameof(CanAddAsNew))]
-    private Task AddAsNewAsync()
+    private async Task AddAsNewAsync()
     {
-        var taken = TakenPackNames();
-        var name = _dialogs.PromptText("Add as new", "Pack name", PackNames.NextFree(taken))?.Trim();
-        if (name is null)
+        var popup = AddAsNewViewModel.ForPlatforms(
+            PackChoices, EffectivePackName, TakenPackNames(), MapsWithPlatforms);
+        if (!_dialogs.AddAsNew(popup))
         {
-            return Task.CompletedTask;
+            return;
         }
 
-        if (!PackNameValidator.IsValid(name, out var error))
+        var packBefore = PackName;
+        PackName = popup.EffectivePackName;
+        await SaveAsync(apply: false);
+        if (Saved is null)
         {
-            _dialogs.Error("Add as new", error);
-            return Task.CompletedTask;
+            // The save failed and the editor stays open, so it goes back to what its own boxes say.
+            PackName = packBefore;
         }
+    }
 
-        if (taken.Any(p => p.Equals(name, StringComparison.OrdinalIgnoreCase)))
-        {
-            _dialogs.Error("Add as new", $"A pack called {name} already exists.");
-            return Task.CompletedTask;
-        }
-
-        PackName = name;
-        return SaveAsync(apply: false);
+    /// <summary>3.9.2: the maps being saved that a pack already has platforms of its own for, by display name.
+    /// The same check SaveAsync asks the Replace question on.</summary>
+    private IReadOnlyList<string> MapsWithPlatforms(string pack)
+    {
+        var packRoot = PackScanner.PackRootFor(_services.LibraryPath, pack);
+        return _sets.Where(s => HasOwnFiles(Path.Combine(packRoot, s.Map.FolderName)))
+            .Select(s => s.Map.DisplayName)
+            .ToList();
     }
 
     /// <summary>Every pack name a new pack must not reuse: the list's, plus folders on disk the snapshot has not
