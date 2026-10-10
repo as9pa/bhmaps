@@ -55,6 +55,11 @@ public static class PictureNames
         return candidate;
     }
 
+    /// <summary>3.7.3: the name a copy of a picture is offered, "wharf (2).jpg" and up. The picture's own name
+    /// counts as taken even where the pack does not hold it, so a copy never starts out named like its source.</summary>
+    public static string Copy(string fileName, IEnumerable<string> existingNames) =>
+        Unique(fileName, existingNames.Append(fileName));
+
     /// <summary>The names a set of files will take in one pack, in source order: each one cleaned, then made
     /// unique against what the pack already holds and against the names this same import has claimed on the way
     /// through, so importing two folders' worth of "sunset.jpg" keeps both.</summary>

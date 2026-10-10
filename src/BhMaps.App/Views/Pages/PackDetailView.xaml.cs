@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
 using BhMaps.App.ViewModels.Pages;
@@ -13,9 +14,39 @@ public partial class PackDetailView : UserControl
     public PackDetailView()
     {
         InitializeComponent();
+
+        // 3.7.3: the pictures, then the Add image card. Two collections rather than one, so everything on the page
+        // that walks Items (select all, apply, copy, delete) only ever meets pictures.
+        DataContextChanged += (_, _) => Tiles.ItemsSource = Page is { } page
+            ? new CompositeCollection
+            {
+                new CollectionContainer { Collection = page.Items },
+                new CollectionContainer { Collection = page.AddTiles },
+            }
+            : null;
     }
 
     private PackDetailViewModel? Page => DataContext as PackDetailViewModel;
+
+    /// <summary>3.7.3: files can be dropped on a pack the app writes to, and nowhere else.</summary>
+    private void Page_DragOver(object sender, DragEventArgs e)
+    {
+        e.Effects = Page is { CanAddImage: true } && e.Data.GetDataPresent(DataFormats.FileDrop)
+            ? DragDropEffects.Copy
+            : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    /// <summary>3.7.3: the drop opens Add pictures with the files listed; the window keeps the images.</summary>
+    private async void Page_Drop(object sender, DragEventArgs e)
+    {
+        if (Page is { CanAddImage: true } page
+            && e.Data.GetData(DataFormats.FileDrop) is string[] { Length: > 0 } files)
+        {
+            e.Handled = true;
+            await page.AddImagesAsync(files);
+        }
+    }
 
     /// <summary>Spec 5: a click on a tile opens the drawer. Handled on the container rather than through the
     /// ListBox's selection, so arrowing through the grid moves focus without opening anything.</summary>
@@ -79,10 +110,31 @@ public partial class PackDetailView : UserControl
             return;
         }
 
+        // 3.7.3: on the Add image card, Enter and Space open the window the card's click does.
+        if (e.Key is Key.Enter or Key.Space
+            && Keyboard.FocusedElement is FrameworkElement { DataContext: AddImageTile }
+            && Page is { } page)
+        {
+            page.AddImageCommand.Execute(null);
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key == Key.Enter)
         {
             Page?.OpenSelected();
             e.Handled = true;
+        }
+    }
+
+    /// <summary>3.7.3: arrow keys can land on the Add image card, and the ListBox selects what they land on. The
+    /// card is not a picture, so the selection goes back to the page's tile; the converter has already kept the
+    /// card out of SelectedTile.</summary>
+    private void Tiles_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (Tiles.SelectedItem is AddImageTile)
+        {
+            Tiles.SelectedItem = Page?.SelectedTile;
         }
     }
 

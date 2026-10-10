@@ -47,7 +47,7 @@ public partial class AddPicturesViewModel : ObservableObject
 
     public AddPicturesViewModel(
         IDialogs dialogs, IReadOnlyList<string> packNames, AddPicturesTargetKind kind, string? mapName,
-        int allCount)
+        int allCount, string? presetPack = null)
     {
         _dialogs = dialogs;
         _mapName = mapName;
@@ -69,8 +69,11 @@ public partial class AddPicturesViewModel : ObservableObject
 
         // The same default the background editor picks, and the same reason: a pack of one's own rather than
         // Default, which is the baseline Reset puts back (spec 6.1).
+        // A caller opening from one pack's page names that pack, which wins when the library has it.
         var existingDefault = packNames.FirstOrDefault(p =>
-            p.Equals(BackgroundEditorViewModel.DefaultPackName, StringComparison.OrdinalIgnoreCase));
+                p.Equals(presetPack, StringComparison.OrdinalIgnoreCase))
+            ?? packNames.FirstOrDefault(p =>
+                p.Equals(BackgroundEditorViewModel.DefaultPackName, StringComparison.OrdinalIgnoreCase));
         TargetPack = existingDefault ?? NewPackChoice;
         NewPackName = existingDefault is null ? BackgroundEditorViewModel.DefaultPackName : "";
     }

@@ -500,7 +500,7 @@
                 Content="Add as new"
                 FocusVisualStyle="{StaticResource DialogFocusRing}"
                 Style="{StaticResource OutlineButton}"
-                ToolTip="Save into a fresh pack with its own name." />
+                ToolTip="Save a copy under a new name, into any pack." />
         <Button Margin="0,0,8,0"
                 Command="{Binding SaveOnlyCommand}"
                 Content="Save only"

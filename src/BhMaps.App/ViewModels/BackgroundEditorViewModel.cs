@@ -56,6 +56,9 @@ public partial class BackgroundEditorViewModel : ObservableObject
     private WorkingSource? _working;
     private string _workingPath = "";
 
+    /// <summary>3.7.3: the file name Add as new chose, which wins over the slot's for the one save it runs.</summary>
+    private string? _fileNameOverride;
+
     public BackgroundEditorViewModel(
         AppServices services,
         IDialogs dialogs,
@@ -443,32 +446,34 @@ public partial class BackgroundEditorViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanSave))]
     private Task SaveOnlyAsync() => SaveAsync(apply: false);
 
-    /// <summary>3.6 E1: "Add as new" asks for a fresh pack's name, then runs Save only into it. The pack is new,
-    /// so no Replace question can come up.</summary>
+    /// <summary>3.7.3: "Add as new" asks for the new picture's name and its pack, then runs Save only under
+    /// that name. The popup refuses a name the pack already holds, so no Replace question can come up and the
+    /// source is never overwritten.</summary>
     [RelayCommand(CanExecute = nameof(CanAddAsNew))]
-    private Task AddAsNewAsync()
+    private async Task AddAsNewAsync()
     {
-        var taken = TakenPackNames();
-        var name = _dialogs.PromptText("Add as new", "Pack name", PackNames.NextFree(taken))?.Trim();
-        if (name is null)
+        var startPack = _request.PackName ?? _request.SourcePack?.Name;
+        var popup = new AddAsNewViewModel(
+            PackChoices,
+            startPack,
+            Path.GetFileNameWithoutExtension(SourcePath),
+            pack => PictureImporter.ExistingNames(_services.LibraryPath, pack),
+            TakenPackNames());
+        if (!_dialogs.AddAsNew(popup))
         {
-            return Task.CompletedTask;
+            return;
         }
 
-        if (!PackNameValidator.IsValid(name, out var error))
+        var packBefore = PackName;
+        PackName = popup.EffectivePackName;
+        _fileNameOverride = popup.FileName;
+        await SaveAsync(apply: false);
+        if (Saved is null)
         {
-            _dialogs.Error("Add as new", error);
-            return Task.CompletedTask;
+            // The save failed and the editor stays open, so it goes back to what its own boxes say.
+            _fileNameOverride = null;
+            PackName = packBefore;
         }
-
-        if (taken.Any(p => p.Equals(name, StringComparison.OrdinalIgnoreCase)))
-        {
-            _dialogs.Error("Add as new", $"A pack called {name} already exists.");
-            return Task.CompletedTask;
-        }
-
-        PackName = name;
-        return SaveAsync(apply: false);
     }
 
     /// <summary>Every pack name a new pack must not reuse: the list's, plus folders on disk the snapshot has not
@@ -543,7 +548,8 @@ public partial class BackgroundEditorViewModel : ObservableObject
                 record.Save(packRoot);
             });
             Saved = new BackgroundSave(
-                packFile, slot, SelectedMap?.DisplayNames ?? slot, apply, EffectivePackName, allMaps);
+                packFile, slot, SelectedMap?.DisplayNames ?? slot, apply, EffectivePackName,
+                allMaps || _fileNameOverride is not null);
             CloseRequested?.Invoke(true);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or FileFormatException)
@@ -560,6 +566,11 @@ public partial class BackgroundEditorViewModel : ObservableObject
     /// " all maps" so the save cannot become that map's picture by accident.</summary>
     private string PackFileName()
     {
+        if (_fileNameOverride is { } chosen)
+        {
+            return chosen;
+        }
+
         if (SelectedMap is not { IsAllMaps: true })
         {
             return Slot;

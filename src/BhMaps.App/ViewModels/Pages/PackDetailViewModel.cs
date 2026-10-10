@@ -85,6 +85,8 @@ public partial class PackDetailViewModel : PageViewModel, ITileSized
     [NotifyPropertyChangedFor(nameof(Title))]
     [NotifyPropertyChangedFor(nameof(HasPack))]
     [NotifyPropertyChangedFor(nameof(CanImportFromPack))]
+    [NotifyPropertyChangedFor(nameof(CanAddImage))]
+    [NotifyCanExecuteChangedFor(nameof(AddImageCommand))]
     [NotifyCanExecuteChangedFor(nameof(ApplyAllCommand))]
     [NotifyCanExecuteChangedFor(nameof(ImportFromPackCommand))]
     [NotifyCanExecuteChangedFor(nameof(OpenFolderCommand))]
@@ -94,6 +96,16 @@ public partial class PackDetailViewModel : PageViewModel, ITileSized
     public bool CanImportFromPack =>
         Pack is { } pack && _snapshot is { } snapshot
         && snapshot.Packs.Any(p => !p.Name.Equals(pack.Name, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>A picture can only go into a pack the app writes to: not a discovered pack, which is read-only,
+    /// and not Default, which is the game's own files (spec 7.5).</summary>
+    public bool CanAddImage =>
+        Pack is { IsDiscovered: false } pack
+        && !pack.Name.Equals(DefaultPack.Name, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>3.7.3: the Add image card while <see cref="CanAddImage" /> holds, otherwise empty. The view puts it
+    /// after <see cref="Items" />, apart from them, so nothing that walks the pictures ever meets it.</summary>
+    public ObservableCollection<AddImageTile> AddTiles { get; } = [];
 
     public override string Title => Pack?.Name ?? "Pack";
 
@@ -507,6 +519,17 @@ public partial class PackDetailViewModel : PageViewModel, ITileSized
     private Task ImportFromPackAsync() =>
         Pack is { } pack ? Shell.ImportFromPackAsync(pack) : Task.CompletedTask;
 
+    /// <summary>The Add pictures window with this pack already picked. The import's rescan refreshes the page,
+    /// so the new tiles show without anything more here.</summary>
+    [RelayCommand(CanExecute = nameof(CanAddImage))]
+    private Task AddImageAsync() => AddImagesAsync(null);
+
+    /// <summary>The same window, with files dropped on the page already in its list.</summary>
+    public Task AddImagesAsync(IEnumerable<string>? files) =>
+        CanAddImage && Pack is { } pack
+            ? Shell.OpenAddPicturesAsync(new AddPicturesTarget(AddPicturesTargetKind.None, null), pack.Name, files)
+            : Task.CompletedTask;
+
     [RelayCommand]
     private void CopyTile() => CopyTileToClipboard(KeyTarget ?? SelectedTile, cut: false);
 
@@ -736,6 +759,15 @@ public partial class PackDetailViewModel : PageViewModel, ITileSized
 
     partial void OnPackChanged(Pack? value)
     {
+        if (CanAddImage && AddTiles.Count == 0)
+        {
+            AddTiles.Add(AddImageTile.Instance);
+        }
+        else if (!CanAddImage && AddTiles.Count > 0)
+        {
+            AddTiles.Clear();
+        }
+
         if (_rebuildOnPackChange)
         {
             Rebuild();
@@ -1044,4 +1076,17 @@ public partial class PackTileViewModel : ObservableObject
     /// <summary>The map's folder inside the pack, so Show in folder on a map tile has something to open. Null on
     /// a file tile, whose picture is what Show in folder reveals.</summary>
     public string? FolderPath { get; set; }
+}
+
+/// <summary>3.7.3: the card after the pictures that opens the Add pictures window. It is not a picture, so it
+/// is never the selection, the key target or a menu's tile.</summary>
+public sealed class AddImageTile
+{
+    public static readonly AddImageTile Instance = new();
+
+    private AddImageTile()
+    {
+    }
+
+    public string Caption => "Add image";
 }

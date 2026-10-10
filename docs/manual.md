@@ -9,6 +9,18 @@ and `.jpg` files inside the `mapArt` folder and inside its own library, plus its
 folder, and it keeps a copy of every original so it can put it back. The game's data files are read and never written, and
 nothing else in the game install is touched.
 
+## What is new in 3.7.3
+
+A pack you made has an Add image card at the end of its page, after its last picture. A click on it, or
+Enter or Space when the keyboard is on it, opens the Add Image window with that pack already picked.
+Pictures dropped anywhere on the page open the same window with them listed. Default and packs found
+in the library folder are read-only, so their pages have no card and take no drop.
+
+- Add as new in the background editor opens a small window that asks for the picture's name and its
+  pack. The pack starts on the one the picture came from and the name on the picture's own with
+  " (2)" after it, counting up past names the pack already holds. Add saves a new file, next to the
+  original when the pack is left as it is, and the original stays as it was.
+
 ## What is new in 3.7.2
 
 A pack's page shows the pack's first card, softly blurred, behind the whole page, edge to edge and down to
@@ -690,7 +702,9 @@ These windows open on top of the pages:
   pack picture opens on. It saves into a pack, the picture's own to begin with, under a note saying
   which file it replaces and that choosing another pack keeps the original. It ends in two buttons:
   **Save and apply** writes the picture into the pack and on into the game, and **Save only** writes
-  it into the pack and leaves the game as it is. When that pack already holds values saved for this map, the
+  it into the pack and leaves the game as it is. **Add as new** asks for a picture name and a pack,
+  starting on the pack the picture came from, and saves a new file there rather than over the
+  original. When that pack already holds values saved for this map, the
   editor opens on them and a line reads "Values from Neon", with a **Start fresh** link beside it
   that puts the defaults back. Opened from Add Image with no picture, the source row is
   where a picture is dropped or browsed for.
