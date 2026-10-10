@@ -61,12 +61,14 @@
   </UserControl.Resources>
 
   <DockPanel Margin="24,8,24,24">
-    <controls:PageHeader DockPanel.Dock="Top" Title="Settings" />
+    <!-- 3.9: the column is centred in the page at its 760 px, and the title rides the same column. A
+         stretched element clamped by MaxWidth is centred in its slot, so both land on the same edges. -->
+    <controls:PageHeader DockPanel.Dock="Top" MaxWidth="760" Title="Settings" />
     <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
       <!-- Every row here writes something, so none of them is offered while a long operation is running. The
            three grids share one scope so their action columns line up as one column down the whole form. -->
       <StackPanel MaxWidth="760"
-                  HorizontalAlignment="Left"
+                  HorizontalAlignment="Stretch"
                   Grid.IsSharedSizeScope="True"
                   IsEnabled="{Binding DataContext.IsNotBusy, RelativeSource={RelativeSource AncestorType=Window}}">
         <TextBlock Margin="0,0,0,12"

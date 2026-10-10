@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 
 namespace BhMaps.App.Views.Controls;
 
@@ -17,9 +18,29 @@ public partial class EmptyState : UserControl
     public static readonly DependencyProperty ActionCommandProperty = DependencyProperty.Register(
         nameof(ActionCommand), typeof(ICommand), typeof(EmptyState), new PropertyMetadata(null));
 
+    public static readonly DependencyProperty HintProperty = DependencyProperty.Register(
+        nameof(Hint), typeof(string), typeof(EmptyState), new PropertyMetadata(""));
+
+    public static readonly DependencyProperty GlyphProperty = DependencyProperty.Register(
+        nameof(Glyph), typeof(Geometry), typeof(EmptyState), new PropertyMetadata(null));
+
     public EmptyState()
     {
         InitializeComponent();
+    }
+
+    /// <summary>3.9: an optional quieter line under the sentence. Empty, the default, shows none.</summary>
+    public string Hint
+    {
+        get => (string)GetValue(HintProperty);
+        set => SetValue(HintProperty, value);
+    }
+
+    /// <summary>3.9: the icon above the sentence. Null, the default, is the picture glyph.</summary>
+    public Geometry? Glyph
+    {
+        get => (Geometry?)GetValue(GlyphProperty);
+        set => SetValue(GlyphProperty, value);
     }
 
     /// <summary>The one sentence. It wraps, and it is the whole of what the state says.</summary>

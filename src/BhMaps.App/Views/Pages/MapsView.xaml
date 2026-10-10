@@ -20,9 +20,9 @@
     <converters:NullToVisibilityConverter x:Key="NullToVis" />
 
     <!-- 2.8: one map is selected at a time, and it is the map the panel is open on. The card is a ListBoxItem,
-         so the light border is the control's own selection and the page keeps it on the open card. 3.0: no margin
-         here, because the justified panel owns the gutter; the open card's 2 px ring is drawn inside the
-         container, so it needs no room of its own either. -->
+         so selection is the control's own and the page keeps it on the open card. 3.0: no margin here, because
+         the justified panel owns the gutter; the open card's 2 px ring is drawn on the picture, so it needs no
+         room of its own either. -->
     <Style x:Key="MapCardItem" TargetType="ListBoxItem" BasedOn="{StaticResource HoverTileListBoxItem}">
       <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
       <Setter Property="Margin" Value="0" />
@@ -41,10 +41,26 @@
       <EventSetter Event="ContextMenuOpening" Handler="OnCardMenuOpening" />
       <EventSetter Event="PreviewMouseLeftButtonDown" Handler="OnCardMouseDown" />
       <EventSetter Event="PreviewKeyDown" Handler="OnCardKeyDown" />
+      <!-- 3.9: no box. The container draws nothing of its own; the edge, the lift and the ring are the
+           picture's, in the item template, so the name under it stays still and unringed. -->
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ListBoxItem">
+            <Grid Background="Transparent">
+              <ContentPresenter />
+            </Grid>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Panel.ZIndex" Value="1" />
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
     </Style>
 
     <!-- Everything clickable in the panel that is a picture rather than a label: no chrome of its own, the tiles'
-         60% focus ring, and the same Surface2 hover the cards use. -->
+         60% focus ring, and a Surface2 fill on hover. -->
     <Style x:Key="PanelTileButton" TargetType="Button">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="Cursor" Value="Hand" />
@@ -600,7 +616,7 @@
                      can and shares the rest of the row out over them, so the grid always reaches the edge. The
                      gutter is the panel's Gap, so the cards themselves carry no margin. -->
                 <controls:JustifiedPanel VerticalAlignment="Top"
-                                         Gap="12"
+                                         Gap="16"
                                          TargetWidth="{Binding DataContext.TargetCardWidth, RelativeSource={RelativeSource AncestorType=ListBox}}" />
               </ItemsPanelTemplate>
             </ListBox.ItemsPanel>
@@ -608,9 +624,7 @@
               <DataTemplate>
                 <!-- The name and the tag are the container's tooltip, which is the only place they are at the two
                      tightest zoom steps (spec 3.1), and a longer name than the card can draw at any step. -->
-                <Border x:Name="Chrome"
-                        Padding="{Binding DataContext.CardPadding, RelativeSource={RelativeSource AncestorType=ListBox}}"
-                        Style="{StaticResource CardBorder}">
+                <Border x:Name="Chrome" Background="Transparent">
                   <StackPanel>
                     <!-- The Viewbox holds the card source's shape at any card width, so a card that has not
                          drawn its preview yet is the same size as one that has and nothing jumps, and the card's
@@ -618,8 +632,16 @@
                          from the compositor that renders it, so the two cannot drift apart. Through a OneTime
                          Binding rather than a bare x:Static: the constants are pixel counts and so int, and
                          setting a Double property from an int markup extension throws at load. -->
-                    <Grid>
+                    <Grid RenderTransformOrigin="0.5,0.5">
+                      <Grid.RenderTransform>
+                        <ScaleTransform x:Name="Lift" ScaleX="1" ScaleY="1" />
+                      </Grid.RenderTransform>
+                      <!-- 3.9: the picture takes the Radius corners through a mask of the same shape. -->
+                      <Border x:Name="Mask" Background="Black" CornerRadius="{StaticResource Radius}" />
                       <Viewbox Stretch="Uniform">
+                        <Viewbox.OpacityMask>
+                          <VisualBrush Visual="{Binding ElementName=Mask}" />
+                        </Viewbox.OpacityMask>
                         <Grid Width="{Binding Source={x:Static imaging:MapCompositor.CardWidth}, Mode=OneTime}"
                               Height="{Binding Source={x:Static imaging:MapCompositor.CardHeight}, Mode=OneTime}"
                               Background="{StaticResource TileBrush}">
@@ -651,6 +673,18 @@
                         </Border.Style>
                       </Border>
 
+                      <Border BorderThickness="1" CornerRadius="{StaticResource Radius}" IsHitTestVisible="False">
+                        <Border.BorderBrush>
+                          <SolidColorBrush x:Name="Edge" Color="#002A2827" />
+                        </Border.BorderBrush>
+                      </Border>
+                      <!-- The same ring the pack page tiles wear: 2 px accent when open, 1 px at 60% on focus. -->
+                      <Border x:Name="Ring"
+                              BorderBrush="{StaticResource FocusRingBrush}"
+                              BorderThickness="1"
+                              CornerRadius="{StaticResource Radius}"
+                              IsHitTestVisible="False"
+                              Opacity="0" />
                     </Grid>
 
                     <!-- 3.2: the card's one text line is the map's name and nothing else (owner, 2026-09-22); the
@@ -663,17 +697,37 @@
                   </StackPanel>
                 </Border>
                 <DataTemplate.Triggers>
-                  <!-- The hover fill is the one the card wore as a Button (spec 3.1). -->
+                  <!-- 3.9: hover is the 3.8 edge and lift, on the picture alone. -->
                   <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
-                    <Setter TargetName="Chrome" Property="Background" Value="{StaticResource Surface2Brush}" />
+                    <DataTrigger.EnterActions>
+                      <BeginStoryboard>
+                        <Storyboard>
+                          <ColorAnimation Storyboard.TargetName="Edge" Storyboard.TargetProperty="Color" To="{StaticResource Line2Color}" Duration="{StaticResource FadeDuration}" />
+                          <DoubleAnimation Storyboard.TargetName="Lift" Storyboard.TargetProperty="ScaleX" To="{StaticResource TileHoverScale}" Duration="{StaticResource FadeDuration}" />
+                          <DoubleAnimation Storyboard.TargetName="Lift" Storyboard.TargetProperty="ScaleY" To="{StaticResource TileHoverScale}" Duration="{StaticResource FadeDuration}" />
+                        </Storyboard>
+                      </BeginStoryboard>
+                    </DataTrigger.EnterActions>
+                    <DataTrigger.ExitActions>
+                      <BeginStoryboard>
+                        <Storyboard>
+                          <ColorAnimation Storyboard.TargetName="Edge" Storyboard.TargetProperty="Color" Duration="{StaticResource FadeDuration}" />
+                          <DoubleAnimation Storyboard.TargetName="Lift" Storyboard.TargetProperty="ScaleX" Duration="{StaticResource FadeDuration}" />
+                          <DoubleAnimation Storyboard.TargetName="Lift" Storyboard.TargetProperty="ScaleY" Duration="{StaticResource FadeDuration}" />
+                        </Storyboard>
+                      </BeginStoryboard>
+                    </DataTrigger.ExitActions>
+                  </DataTrigger>
+                  <DataTrigger Binding="{Binding IsKeyboardFocused, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
+                    <Setter TargetName="Ring" Property="Opacity" Value="0.6" />
                   </DataTrigger>
 
-                  <!-- 3.0: the open card wears the hover fill for as long as its panel is open, so the accent ring
-                       the container draws is not the only thing saying which card the panel belongs to. A fill
-                       rather than anything sized: the ring is an overlay at the card's edge and the picture sits
-                       inside the card's padding, so neither one covers the picture or moves a card. -->
+                  <!-- The open card's picture wears the accent ring for as long as its panel is open. The ring is
+                       an overlay at the picture's edge, so it neither covers the picture nor moves a card. -->
                   <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
-                    <Setter TargetName="Chrome" Property="Background" Value="{StaticResource Surface2Brush}" />
+                    <Setter TargetName="Ring" Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+                    <Setter TargetName="Ring" Property="BorderThickness" Value="2" />
+                    <Setter TargetName="Ring" Property="Opacity" Value="1" />
                   </DataTrigger>
                 </DataTemplate.Triggers>
               </DataTemplate>

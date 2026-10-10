@@ -6,6 +6,7 @@
         xmlns:vm="clr-namespace:BhMaps.App.ViewModels"
         Title="{Binding Title}" Width="1040" Height="720" MinWidth="860" MinHeight="600"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        Style="{StaticResource ChromeWindow}"
         Background="{StaticResource BgBrush}">
   <!-- Spec 9: the strip's two buttons from the keyboard, so a set of maps is walked without the mouse. -->
   <Window.InputBindings>

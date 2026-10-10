@@ -1,0 +1,54 @@
+<UserControl x:Class="BhMaps.App.Views.Controls.CaptionButtons"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Focusable="False">
+  <!-- 3.9: the caption buttons every window draws itself now that none has the system's title bar. 46 px wide and
+       as tall as the bar they sit in. Plain like the bar's other quiet buttons: no fill until hover, Text2 glyph
+       that lifts to Text. Close fills with the system's red and turns its glyph white. Minimize and maximize show
+       only where the window's ResizeMode has them, which the code-behind reads. -->
+  <UserControl.Resources>
+    <Style x:Key="CaptionButton" TargetType="Button">
+      <Setter Property="Width" Value="46" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{StaticResource Text2Brush}" />
+      <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets" />
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="Focusable" Value="False" />
+      <Setter Property="WindowChrome.IsHitTestVisibleInChrome" Value="True" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border Background="{TemplateBinding Background}">
+              <TextBlock HorizontalAlignment="Center"
+                         VerticalAlignment="Center"
+                         FontFamily="{TemplateBinding FontFamily}"
+                         FontSize="{TemplateBinding FontSize}"
+                         Foreground="{TemplateBinding Foreground}"
+                         Text="{TemplateBinding Content}" />
+            </Border>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+      <Style.Triggers>
+        <Trigger Property="IsMouseOver" Value="True">
+          <Setter Property="Background" Value="{StaticResource Surface2Brush}" />
+          <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+        </Trigger>
+      </Style.Triggers>
+    </Style>
+    <Style x:Key="CaptionCloseButton" BasedOn="{StaticResource CaptionButton}" TargetType="Button">
+      <Style.Triggers>
+        <Trigger Property="IsMouseOver" Value="True">
+          <Setter Property="Background" Value="#C42B1C" />
+          <Setter Property="Foreground" Value="White" />
+        </Trigger>
+      </Style.Triggers>
+    </Style>
+  </UserControl.Resources>
+
+  <StackPanel Orientation="Horizontal">
+    <Button x:Name="MinimizeButton" AutomationProperties.Name="Minimize" Click="OnMinimizeClick" Content="&#xE921;" Style="{StaticResource CaptionButton}" />
+    <Button x:Name="MaxRestoreButton" AutomationProperties.Name="Maximize" Click="OnMaxRestoreClick" Content="&#xE922;" Style="{StaticResource CaptionButton}" />
+    <Button AutomationProperties.Name="Close" Click="OnCloseClick" Content="&#xE8BB;" Style="{StaticResource CaptionCloseButton}" />
+  </StackPanel>
+</UserControl>

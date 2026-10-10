@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Width="760" Height="440" MinWidth="500" MinHeight="300"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        Style="{StaticResource ChromeWindow}"
         Background="{StaticResource BgBrush}">
   <!-- Title and DataContext are set by the code-behind. -->
   <!-- Rows rather than docking, so the order the eye reads is the order Tab walks. -->
