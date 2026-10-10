@@ -67,7 +67,7 @@
     </DataTemplate>
   </UserControl.Resources>
 
-  <DockPanel Margin="24,16,24,24">
+  <DockPanel Margin="24,8,24,24">
     <controls:PageHeader DockPanel.Dock="Top" PageMenu="{Binding PageMenu}" Title="Packs">
       <controls:PageHeader.Actions>
         <!-- Disabled while the shell is busy, the same hop past the page to the window's MainViewModel the header

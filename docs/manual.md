@@ -549,7 +549,8 @@ stops a long operation.
   takes that half back out. Escape clears the preview first and closes the panel on the next press,
   and opening another map drops it. The Show chip applies here too, so with Backgrounds only a
   background preview is the picture alone.
-- **Backgrounds** is one row per map: the map's name and its tag on the left, then a strip of every
+- **Backgrounds** is one row per map: the map's name on the left, in red when its folder is missing
+  from the game, then a strip of every
   background that map could have. The picture the game is showing comes first, with a check and a
   border; then Default, then one thumbnail for each pack that has a picture for that map in the Packs
   order, captioned with the pack's name. At the right end of the chip row is the "My Backgrounds"

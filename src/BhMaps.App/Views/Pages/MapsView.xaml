@@ -459,7 +459,7 @@
     </DataTemplate>
   </UserControl.Resources>
 
-  <DockPanel Margin="24,16,24,24">
+  <DockPanel Margin="24,8,24,24">
     <controls:PageHeader DockPanel.Dock="Top" PageMenu="{Binding PageMenu}" Title="Maps">
       <controls:PageHeader.Actions>
         <StackPanel Orientation="Horizontal">
