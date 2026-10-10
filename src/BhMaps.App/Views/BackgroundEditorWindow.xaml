@@ -89,9 +89,25 @@
              scales what came back, so nothing is resampled twice. -->
         <Viewbox Margin="8" Stretch="Uniform">
           <Border Width="640" Height="360" Background="{StaticResource BgBrush}">
-            <Image RenderOptions.BitmapScalingMode="HighQuality"
+            <!-- 3.10: the preview drags and zooms the picture in Fill. The Image is the preview at its own 640 by
+                 360, so the code behind only has to undo the Viewbox's scale. -->
+            <Image MouseLeftButtonDown="Preview_MouseLeftButtonDown"
+                   MouseLeftButtonUp="Preview_MouseLeftButtonUp"
+                   MouseMove="Preview_MouseMove"
+                   MouseWheel="Preview_MouseWheel"
+                   RenderOptions.BitmapScalingMode="HighQuality"
                    Source="{Binding Preview}"
-                   Stretch="Fill" />
+                   Stretch="Fill">
+              <Image.Style>
+                <Style TargetType="Image">
+                  <Style.Triggers>
+                    <DataTrigger Binding="{Binding IsFill}" Value="True">
+                      <Setter Property="Cursor" Value="SizeAll" />
+                    </DataTrigger>
+                  </Style.Triggers>
+                </Style>
+              </Image.Style>
+            </Image>
           </Border>
         </Viewbox>
 
@@ -116,11 +132,17 @@
 
       </Grid>
     </Border>
-    <TextBlock Margin="0,8,0,0"
-               HorizontalAlignment="Right"
-               FontSize="{StaticResource FontCaption}"
-               Foreground="{StaticResource Text3Brush}"
-               Text="{x:Static vm:BackgroundEditorViewModel.PreviewSizeText}" />
+    <!-- 3.10: what the mouse does on the preview, one quiet line beside the size caption. -->
+    <DockPanel Margin="0,8,0,0">
+      <TextBlock DockPanel.Dock="Right"
+                 FontSize="{StaticResource FontCaption}"
+                 Foreground="{StaticResource Text3Brush}"
+                 Text="{x:Static vm:BackgroundEditorViewModel.PreviewSizeText}" />
+      <TextBlock Margin="0,0,16,0"
+                 Style="{StaticResource HintText}"
+                 Text="Drag to move the picture. Scroll to zoom. Double-click to centre."
+                 Visibility="{Binding Preview, Converter={StaticResource NullToVis}}" />
+    </DockPanel>
     </StackPanel>
 
     <Border Grid.Row="0"
@@ -220,7 +242,8 @@
                          IsChecked="{Binding FitStretch}" />
           </StackPanel>
 
-          <!-- 3.6 E4: two 172 px columns with a gap, which is the panel's width once its padding is taken off. -->
+          <!-- 3.6 E4: two 172 px columns with a gap, which is the panel's width once its padding is taken off.
+               3.10: Zoom sits under the pan it goes with, and Blur beside it, so every row is a pair. -->
           <Grid>
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="172" />
@@ -228,6 +251,7 @@
               <ColumnDefinition Width="172" />
             </Grid.ColumnDefinitions>
             <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
               <RowDefinition Height="Auto" />
               <RowDefinition Height="Auto" />
               <RowDefinition Height="Auto" />
@@ -247,12 +271,13 @@
                 <Button Margin="0,8,0,4"
                         Command="{Binding ResetPanXCommand}"
                         Content="Reset"
+                        IsEnabled="{Binding CanPanX}"
                         Style="{StaticResource ResetLink}" />
               </StackPanel>
               <Slider Grid.Row="1"
                       AutomationProperties.Name="Pan X"
                       FocusVisualStyle="{StaticResource DialogFocusRing}"
-                      IsEnabled="{Binding IsFill}"
+                      IsEnabled="{Binding CanPanX}"
                       LargeChange="0.1"
                       Maximum="1"
                       Minimum="0"
@@ -281,12 +306,13 @@
                 <Button Margin="0,8,0,4"
                         Command="{Binding ResetPanYCommand}"
                         Content="Reset"
+                        IsEnabled="{Binding CanPanY}"
                         Style="{StaticResource ResetLink}" />
               </StackPanel>
               <Slider Grid.Row="1"
                       AutomationProperties.Name="Pan Y"
                       FocusVisualStyle="{StaticResource DialogFocusRing}"
-                      IsEnabled="{Binding IsFill}"
+                      IsEnabled="{Binding CanPanY}"
                       LargeChange="0.1"
                       Maximum="1"
                       Minimum="0"
@@ -301,7 +327,75 @@
                          Text="{Binding PanY, StringFormat=N2}" />
             </Grid>
 
-            <Grid Grid.Row="1">
+            <Grid Grid.Row="1" Style="{StaticResource PanRow}">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+              </Grid.RowDefinitions>
+              <StackPanel Orientation="Horizontal">
+                <TextBlock Style="{StaticResource SliderLabel}" Text="Zoom" />
+                <Button Margin="0,8,0,4"
+                        Command="{Binding ResetZoomCommand}"
+                        Content="Reset"
+                        IsEnabled="{Binding IsFill}"
+                        Style="{StaticResource ResetLink}" />
+              </StackPanel>
+              <Slider Grid.Row="1"
+                      AutomationProperties.Name="Zoom"
+                      FocusVisualStyle="{StaticResource DialogFocusRing}"
+                      IsEnabled="{Binding IsFill}"
+                      LargeChange="0.1"
+                      Maximum="4"
+                      Minimum="1"
+                      SmallChange="0.01"
+                      Style="{StaticResource EditorSlider}"
+                      Thumb.DragCompleted="Slider_DragCompleted"
+                      Value="{Binding Zoom}" />
+              <TextBlock Grid.Row="1"
+                         Grid.Column="1"
+                         Margin="8,0,0,0"
+                         Style="{StaticResource Readout}"
+                         Text="{Binding ZoomText}" />
+            </Grid>
+
+            <Grid Grid.Row="1" Grid.Column="2">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+              </Grid.RowDefinitions>
+              <StackPanel Orientation="Horizontal">
+                <TextBlock Style="{StaticResource SliderLabel}" Text="Blur" />
+                <Button Margin="0,8,0,4"
+                        Command="{Binding ResetBlurCommand}"
+                        Content="Reset"
+                        Style="{StaticResource ResetLink}" />
+              </StackPanel>
+              <Slider Grid.Row="1"
+                      AutomationProperties.Name="Blur"
+                      FocusVisualStyle="{StaticResource DialogFocusRing}"
+                      LargeChange="10"
+                      Maximum="100"
+                      Minimum="0"
+                      SmallChange="1"
+                      Style="{StaticResource EditorSlider}"
+                      Thumb.DragCompleted="Slider_DragCompleted"
+                      Value="{Binding BlurPercent}" />
+              <TextBlock Grid.Row="1"
+                         Grid.Column="1"
+                         Margin="8,0,0,0"
+                         Style="{StaticResource Readout}"
+                         Text="{Binding BlurPercent, StringFormat=F0}" />
+            </Grid>
+
+            <Grid Grid.Row="2">
               <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
@@ -334,7 +428,7 @@
                          Text="{Binding HueText}" />
             </Grid>
 
-            <Grid Grid.Row="1" Grid.Column="2">
+            <Grid Grid.Row="2" Grid.Column="2">
               <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
@@ -367,7 +461,7 @@
                          Text="{Binding SaturationPercent, StringFormat=F0}" />
             </Grid>
 
-            <Grid Grid.Row="2">
+            <Grid Grid.Row="3">
               <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
@@ -400,7 +494,7 @@
                          Text="{Binding ContrastPercent, StringFormat=F0}" />
             </Grid>
 
-            <Grid Grid.Row="2" Grid.Column="2">
+            <Grid Grid.Row="3" Grid.Column="2">
               <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
@@ -432,39 +526,6 @@
                 <TextBlock VerticalAlignment="Center" Style="{StaticResource MonoText}" Text="%" />
               </StackPanel>
             </Grid>
-          </Grid>
-
-          <Grid>
-            <Grid.ColumnDefinitions>
-              <ColumnDefinition Width="*" />
-              <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-            <Grid.RowDefinitions>
-              <RowDefinition Height="Auto" />
-              <RowDefinition Height="Auto" />
-            </Grid.RowDefinitions>
-            <StackPanel Orientation="Horizontal">
-              <TextBlock Style="{StaticResource SliderLabel}" Text="Blur" />
-              <Button Margin="0,8,0,4"
-                      Command="{Binding ResetBlurCommand}"
-                      Content="Reset"
-                      Style="{StaticResource ResetLink}" />
-            </StackPanel>
-            <Slider Grid.Row="1"
-                    AutomationProperties.Name="Blur"
-                    FocusVisualStyle="{StaticResource DialogFocusRing}"
-                    LargeChange="10"
-                    Maximum="100"
-                    Minimum="0"
-                    SmallChange="1"
-                    Style="{StaticResource EditorSlider}"
-                    Thumb.DragCompleted="Slider_DragCompleted"
-                    Value="{Binding BlurPercent}" />
-            <TextBlock Grid.Row="1"
-                       Grid.Column="1"
-                       Margin="8,0,0,0"
-                       Style="{StaticResource Readout}"
-                       Text="{Binding BlurPercent, StringFormat=F0}" />
           </Grid>
 
           <TextBlock Style="{StaticResource FieldLabel}" Text="Save into pack" />

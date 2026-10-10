@@ -1,10 +1,14 @@
 using System.Windows;
+using System.Windows.Input;
 using BhMaps.App.ViewModels;
 
 namespace BhMaps.App.Views;
 
 public partial class BackgroundEditorWindow : Window
 {
+    /// <summary>Where the drag was last seen, in the preview's own coordinates; null when nothing is dragging.</summary>
+    private Point? _panFrom;
+
     public BackgroundEditorWindow()
     {
         InitializeComponent();
@@ -48,5 +52,65 @@ public partial class BackgroundEditorWindow : Window
         {
             vm.RenderFinal();
         }
+    }
+
+    /// <summary>3.10: the preview drags the picture in Fill. The Viewbox draws the 640 by 360 preview at whatever
+    /// size the card leaves it, so a delta in the Image's own coordinates is scaled back to the preview's pixels
+    /// before the view model sees it. A double-click puts the picture back in the middle.</summary>
+    private void Preview_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (DataContext is not BackgroundEditorViewModel { IsFill: true } vm || sender is not UIElement preview)
+        {
+            return;
+        }
+
+        if (e.ClickCount == 2)
+        {
+            vm.CentrePan();
+            return;
+        }
+
+        _panFrom = e.GetPosition(preview);
+        preview.CaptureMouse();
+    }
+
+    private void Preview_MouseMove(object sender, MouseEventArgs e)
+    {
+        if (_panFrom is not { } from
+            || DataContext is not BackgroundEditorViewModel vm
+            || sender is not FrameworkElement preview)
+        {
+            return;
+        }
+
+        var now = e.GetPosition(preview);
+        var scale = preview.ActualWidth > 0 ? BackgroundEditorViewModel.PreviewWidth / preview.ActualWidth : 1.0;
+        vm.DragPan((now.X - from.X) * scale, (now.Y - from.Y) * scale);
+        _panFrom = now;
+    }
+
+    private void Preview_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (_panFrom is null || sender is not UIElement preview)
+        {
+            return;
+        }
+
+        _panFrom = null;
+        preview.ReleaseMouseCapture();
+    }
+
+    /// <summary>3.10: the wheel zooms 10% a notch about the point under the cursor, in the preview's own pixels.</summary>
+    private void Preview_MouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (DataContext is not BackgroundEditorViewModel { IsFill: true } vm || sender is not FrameworkElement preview)
+        {
+            return;
+        }
+
+        var at = e.GetPosition(preview);
+        var scale = preview.ActualWidth > 0 ? BackgroundEditorViewModel.PreviewWidth / preview.ActualWidth : 1.0;
+        vm.WheelZoom(at.X * scale, at.Y * scale, e.Delta / (double)Mouse.MouseWheelDeltaForOneLine);
+        e.Handled = true;
     }
 }

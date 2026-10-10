@@ -59,6 +59,11 @@
     </Style>
 
     <!-- The Reset in a slider's label: a word, not a button, so the label reads as one line. -->
+    <!-- 3.10: the picture sliders sit closer together than the fields above them, as in the background editor. -->
+    <Style x:Key="SliderLabel" TargetType="TextBlock" BasedOn="{StaticResource FieldLabel}">
+      <Setter Property="Margin" Value="0,8,0,4" />
+    </Style>
+
     <Style x:Key="ResetLink" TargetType="Button" BasedOn="{StaticResource PlainButton}">
       <Setter Property="Padding" Value="6,0" />
       <Setter Property="FontSize" Value="11" />
@@ -89,6 +94,7 @@
         <Grid.RowDefinitions>
           <RowDefinition Height="Auto" />
           <RowDefinition Height="*" />
+          <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <!-- Spec 9: which map of the set the editor is on, above the preview it belongs to. One map is every
@@ -131,6 +137,7 @@
             <Image MouseLeftButtonDown="Preview_MouseLeftButtonDown"
                    MouseLeftButtonUp="Preview_MouseLeftButtonUp"
                    MouseMove="Preview_MouseMove"
+                   MouseWheel="Preview_MouseWheel"
                    RenderOptions.BitmapScalingMode="HighQuality"
                    Source="{Binding Preview}"
                    Stretch="Fill">
@@ -146,6 +153,13 @@
             </Image>
           </Border>
         </Viewbox>
+
+        <!-- 3.10: what the mouse does on the preview, one quiet line under it. -->
+        <TextBlock Grid.Row="2"
+                   Margin="16,0,16,12"
+                   Style="{StaticResource HintText}"
+                   Text="Drag to move the picture. Scroll to zoom. Double-click to centre."
+                   Visibility="{Binding Preview, Converter={StaticResource NullToVis}}" />
 
         <!-- Spec 3.1: top left inside the card, on the image's own 16 px margin. A ListBox rather than two
              ToggleButtons, so the list owns which chip is on; ChipRow draws each item with ChipToggle and carries
@@ -449,74 +463,337 @@
           </StackPanel>
           <TextBlock Style="{StaticResource ErrorText}" Text="{Binding ImageError}" />
 
+          <!-- 3.10: the picture sliders in two columns, as the background editor lays them out. Pan and Zoom are the
+               Fill's alone, so they rest in Fit, Center and Stretch; a pan with nothing hanging over the box rests
+               too. Opacity, Hue and the tone controls are the ticked pieces' own. -->
           <Grid>
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="*" />
-              <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="24" />
+              <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
             <Grid.RowDefinitions>
               <RowDefinition Height="Auto" />
               <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
-            <StackPanel Orientation="Horizontal">
-              <TextBlock Style="{StaticResource FieldLabel}" Text="Opacity" />
-              <Button Margin="0,16,0,8"
-                      Command="{Binding ResetOpacityCommand}"
-                      Content="Reset"
-                      IsEnabled="{Binding CanAdjust}"
-                      Style="{StaticResource ResetLink}" />
-            </StackPanel>
-            <Slider Grid.Row="1"
-                    AutomationProperties.Name="Opacity"
-                    FocusVisualStyle="{StaticResource DialogFocusRing}"
-                    IsEnabled="{Binding CanAdjust}"
-                    LargeChange="10"
-                    Maximum="100"
-                    Minimum="0"
-                    SmallChange="1"
-                    Style="{StaticResource EditorSlider}"
-                    Thumb.DragCompleted="Slider_DragCompleted"
-                    Value="{Binding Opacity}" />
-            <TextBlock Grid.Row="1"
-                       Grid.Column="1"
-                       Margin="8,0,0,0"
-                       Style="{StaticResource Readout}"
-                       Text="{Binding OpacityText}" />
-          </Grid>
 
-          <Grid>
-            <Grid.ColumnDefinitions>
-              <ColumnDefinition Width="*" />
-              <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-            <Grid.RowDefinitions>
-              <RowDefinition Height="Auto" />
-              <RowDefinition Height="Auto" />
-            </Grid.RowDefinitions>
-            <StackPanel Orientation="Horizontal">
-              <TextBlock Style="{StaticResource FieldLabel}" Text="Hue" />
-              <Button Margin="0,16,0,8"
-                      Command="{Binding ResetHueCommand}"
-                      Content="Reset"
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+              </Grid.RowDefinitions>
+              <StackPanel Orientation="Horizontal">
+                <TextBlock Style="{StaticResource SliderLabel}" Text="Pan X" />
+                <Button Margin="0,8,0,4"
+                        Command="{Binding ResetPanXCommand}"
+                        Content="Reset"
+                        IsEnabled="{Binding CanPanX}"
+                        Style="{StaticResource ResetLink}" />
+              </StackPanel>
+              <Slider Grid.Row="1"
+                      AutomationProperties.Name="Pan X"
+                      FocusVisualStyle="{StaticResource DialogFocusRing}"
+                      IsEnabled="{Binding CanPanX}"
+                      LargeChange="0.1"
+                      Maximum="1"
+                      Minimum="0"
+                      SmallChange="0.01"
+                      Style="{StaticResource EditorSlider}"
+                      Thumb.DragCompleted="Slider_DragCompleted"
+                      Value="{Binding PanX}" />
+              <TextBlock Grid.Row="1"
+                         Grid.Column="1"
+                         Margin="8,0,0,0"
+                         Style="{StaticResource Readout}"
+                         Text="{Binding PanX, StringFormat=N2}" />
+            </Grid>
+
+            <Grid Grid.Column="2">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+              </Grid.RowDefinitions>
+              <StackPanel Orientation="Horizontal">
+                <TextBlock Style="{StaticResource SliderLabel}" Text="Pan Y" />
+                <Button Margin="0,8,0,4"
+                        Command="{Binding ResetPanYCommand}"
+                        Content="Reset"
+                        IsEnabled="{Binding CanPanY}"
+                        Style="{StaticResource ResetLink}" />
+              </StackPanel>
+              <Slider Grid.Row="1"
+                      AutomationProperties.Name="Pan Y"
+                      FocusVisualStyle="{StaticResource DialogFocusRing}"
+                      IsEnabled="{Binding CanPanY}"
+                      LargeChange="0.1"
+                      Maximum="1"
+                      Minimum="0"
+                      SmallChange="0.01"
+                      Style="{StaticResource EditorSlider}"
+                      Thumb.DragCompleted="Slider_DragCompleted"
+                      Value="{Binding PanY}" />
+              <TextBlock Grid.Row="1"
+                         Grid.Column="1"
+                         Margin="8,0,0,0"
+                         Style="{StaticResource Readout}"
+                         Text="{Binding PanY, StringFormat=N2}" />
+            </Grid>
+
+            <Grid Grid.Row="1">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+              </Grid.RowDefinitions>
+              <StackPanel Orientation="Horizontal">
+                <TextBlock Style="{StaticResource SliderLabel}" Text="Zoom" />
+                <Button Margin="0,8,0,4"
+                        Command="{Binding ResetZoomCommand}"
+                        Content="Reset"
+                        IsEnabled="{Binding CanPan}"
+                        Style="{StaticResource ResetLink}" />
+              </StackPanel>
+              <Slider Grid.Row="1"
+                      AutomationProperties.Name="Zoom"
+                      FocusVisualStyle="{StaticResource DialogFocusRing}"
+                      IsEnabled="{Binding CanPan}"
+                      LargeChange="0.1"
+                      Maximum="4"
+                      Minimum="1"
+                      SmallChange="0.01"
+                      Style="{StaticResource EditorSlider}"
+                      Thumb.DragCompleted="Slider_DragCompleted"
+                      Value="{Binding Zoom}" />
+              <TextBlock Grid.Row="1"
+                         Grid.Column="1"
+                         Margin="8,0,0,0"
+                         Style="{StaticResource Readout}"
+                         Text="{Binding ZoomText}" />
+            </Grid>
+
+            <Grid Grid.Column="2" Grid.Row="1">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+              </Grid.RowDefinitions>
+              <StackPanel Orientation="Horizontal">
+                <TextBlock Style="{StaticResource SliderLabel}" Text="Opacity" />
+                <Button Margin="0,8,0,4"
+                        Command="{Binding ResetOpacityCommand}"
+                        Content="Reset"
+                        IsEnabled="{Binding CanAdjust}"
+                        Style="{StaticResource ResetLink}" />
+              </StackPanel>
+              <Slider Grid.Row="1"
+                      AutomationProperties.Name="Opacity"
+                      FocusVisualStyle="{StaticResource DialogFocusRing}"
                       IsEnabled="{Binding CanAdjust}"
-                      Style="{StaticResource ResetLink}" />
-            </StackPanel>
-            <Slider Grid.Row="1"
-                    AutomationProperties.Name="Hue"
-                    FocusVisualStyle="{StaticResource DialogFocusRing}"
-                    IsEnabled="{Binding CanAdjust}"
-                    LargeChange="15"
-                    Maximum="180"
-                    Minimum="-180"
-                    SmallChange="1"
-                    Style="{StaticResource EditorSlider}"
-                    Thumb.DragCompleted="Slider_DragCompleted"
-                    Value="{Binding Hue}" />
-            <TextBlock Grid.Row="1"
-                       Grid.Column="1"
-                       Margin="8,0,0,0"
-                       Style="{StaticResource Readout}"
-                       Text="{Binding HueText}" />
+                      LargeChange="10"
+                      Maximum="100"
+                      Minimum="0"
+                      SmallChange="1"
+                      Style="{StaticResource EditorSlider}"
+                      Thumb.DragCompleted="Slider_DragCompleted"
+                      Value="{Binding Opacity}" />
+              <TextBlock Grid.Row="1"
+                         Grid.Column="1"
+                         Margin="8,0,0,0"
+                         Style="{StaticResource Readout}"
+                         Text="{Binding OpacityText}" />
+            </Grid>
+
+            <Grid Grid.Row="2">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+              </Grid.RowDefinitions>
+              <StackPanel Orientation="Horizontal">
+                <TextBlock Style="{StaticResource SliderLabel}" Text="Hue" />
+                <Button Margin="0,8,0,4"
+                        Command="{Binding ResetHueCommand}"
+                        Content="Reset"
+                        IsEnabled="{Binding CanAdjust}"
+                        Style="{StaticResource ResetLink}" />
+              </StackPanel>
+              <Slider Grid.Row="1"
+                      AutomationProperties.Name="Hue"
+                      FocusVisualStyle="{StaticResource DialogFocusRing}"
+                      IsEnabled="{Binding CanAdjust}"
+                      LargeChange="15"
+                      Maximum="180"
+                      Minimum="-180"
+                      SmallChange="1"
+                      Style="{StaticResource EditorSlider}"
+                      Thumb.DragCompleted="Slider_DragCompleted"
+                      Value="{Binding Hue}" />
+              <TextBlock Grid.Row="1"
+                         Grid.Column="1"
+                         Margin="8,0,0,0"
+                         Style="{StaticResource Readout}"
+                         Text="{Binding HueText}" />
+            </Grid>
+
+            <Grid Grid.Column="2" Grid.Row="2">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+              </Grid.RowDefinitions>
+              <StackPanel Orientation="Horizontal">
+                <TextBlock Style="{StaticResource SliderLabel}" Text="Saturation" />
+                <Button Margin="0,8,0,4"
+                        Command="{Binding ResetSaturationCommand}"
+                        Content="Reset"
+                        IsEnabled="{Binding CanAdjust}"
+                        Style="{StaticResource ResetLink}" />
+              </StackPanel>
+              <Slider Grid.Row="1"
+                      AutomationProperties.Name="Saturation"
+                      FocusVisualStyle="{StaticResource DialogFocusRing}"
+                      IsEnabled="{Binding CanAdjust}"
+                      LargeChange="10"
+                      Maximum="100"
+                      Minimum="-100"
+                      SmallChange="1"
+                      Style="{StaticResource EditorSlider}"
+                      Thumb.DragCompleted="Slider_DragCompleted"
+                      Value="{Binding Saturation}" />
+              <TextBlock Grid.Row="1"
+                         Grid.Column="1"
+                         Margin="8,0,0,0"
+                         Style="{StaticResource Readout}"
+                         Text="{Binding SaturationText}" />
+            </Grid>
+
+            <Grid Grid.Row="3">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+              </Grid.RowDefinitions>
+              <StackPanel Orientation="Horizontal">
+                <TextBlock Style="{StaticResource SliderLabel}" Text="Contrast" />
+                <Button Margin="0,8,0,4"
+                        Command="{Binding ResetContrastCommand}"
+                        Content="Reset"
+                        IsEnabled="{Binding CanAdjust}"
+                        Style="{StaticResource ResetLink}" />
+              </StackPanel>
+              <Slider Grid.Row="1"
+                      AutomationProperties.Name="Contrast"
+                      FocusVisualStyle="{StaticResource DialogFocusRing}"
+                      IsEnabled="{Binding CanAdjust}"
+                      LargeChange="10"
+                      Maximum="100"
+                      Minimum="-100"
+                      SmallChange="1"
+                      Style="{StaticResource EditorSlider}"
+                      Thumb.DragCompleted="Slider_DragCompleted"
+                      Value="{Binding Contrast}" />
+              <TextBlock Grid.Row="1"
+                         Grid.Column="1"
+                         Margin="8,0,0,0"
+                         Style="{StaticResource Readout}"
+                         Text="{Binding ContrastText}" />
+            </Grid>
+
+            <Grid Grid.Column="2" Grid.Row="3">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+              </Grid.RowDefinitions>
+              <StackPanel Orientation="Horizontal">
+                <TextBlock Style="{StaticResource SliderLabel}" Text="Darken" />
+                <Button Margin="0,8,0,4"
+                        Command="{Binding ResetDarkenCommand}"
+                        Content="Reset"
+                        IsEnabled="{Binding CanAdjust}"
+                        Style="{StaticResource ResetLink}" />
+              </StackPanel>
+              <Slider Grid.Row="1"
+                      AutomationProperties.Name="Darken"
+                      FocusVisualStyle="{StaticResource DialogFocusRing}"
+                      IsEnabled="{Binding CanAdjust}"
+                      LargeChange="10"
+                      Maximum="100"
+                      Minimum="0"
+                      SmallChange="1"
+                      Style="{StaticResource EditorSlider}"
+                      Thumb.DragCompleted="Slider_DragCompleted"
+                      Value="{Binding Darken}" />
+              <TextBlock Grid.Row="1"
+                         Grid.Column="1"
+                         Margin="8,0,0,0"
+                         Style="{StaticResource Readout}"
+                         Text="{Binding DarkenText}" />
+            </Grid>
+
+            <Grid Grid.Row="4">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+              </Grid.RowDefinitions>
+              <StackPanel Orientation="Horizontal">
+                <TextBlock Style="{StaticResource SliderLabel}" Text="Blur" />
+                <Button Margin="0,8,0,4"
+                        Command="{Binding ResetBlurCommand}"
+                        Content="Reset"
+                        IsEnabled="{Binding CanAdjust}"
+                        Style="{StaticResource ResetLink}" />
+              </StackPanel>
+              <Slider Grid.Row="1"
+                      AutomationProperties.Name="Blur"
+                      FocusVisualStyle="{StaticResource DialogFocusRing}"
+                      IsEnabled="{Binding CanAdjust}"
+                      LargeChange="10"
+                      Maximum="100"
+                      Minimum="0"
+                      SmallChange="1"
+                      Style="{StaticResource EditorSlider}"
+                      Thumb.DragCompleted="Slider_DragCompleted"
+                      Value="{Binding Blur}" />
+              <TextBlock Grid.Row="1"
+                         Grid.Column="1"
+                         Margin="8,0,0,0"
+                         Style="{StaticResource Readout}"
+                         Text="{Binding BlurText}" />
+            </Grid>
           </Grid>
 
           <TextBlock Style="{StaticResource FieldLabel}" Text="Save into pack" />

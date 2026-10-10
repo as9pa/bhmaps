@@ -25,6 +25,9 @@ public sealed class BackgroundSlotEntry
 
     public double PanY { get; set; } = 0.5;
 
+    /// <summary>1..4 over the cover fit, Fill only. Null on records written before 3.10; callers read null as 1.</summary>
+    public double? Zoom { get; set; }
+
     public double Darken { get; set; }
 
     /// <summary>Hue rotation in degrees. Null on records written before 3.6; callers read null as 0.</summary>

@@ -28,6 +28,9 @@ public partial class PlatformPieceViewModel : ObservableObject
     public const int DefaultOpacity = 100;
     public const int DefaultHue = 0;
 
+    /// <summary>Saturation, Contrast, Darken and Blur all rest at 0, as the background editor's do.</summary>
+    public const int DefaultTone = 0;
+
     public PlatformPieceViewModel(string relativePath, string originalPath, bool ticked)
     {
         RelativePath = relativePath;
@@ -75,6 +78,26 @@ public partial class PlatformPieceViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(Readout), nameof(IsDefault))]
     public partial int Hue { get; set; } = DefaultHue;
 
+    /// <summary>The background editor's tone controls, per piece: -100..100.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsDefault))]
+    public partial int Saturation { get; set; } = DefaultTone;
+
+    /// <summary>-100..100.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsDefault))]
+    public partial int Contrast { get; set; } = DefaultTone;
+
+    /// <summary>0..100.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsDefault))]
+    public partial int Darken { get; set; } = DefaultTone;
+
+    /// <summary>0..100.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsDefault))]
+    public partial int Blur { get; set; } = DefaultTone;
+
     [ObservableProperty]
     public partial ImageSource? Thumbnail { get; set; }
 
@@ -99,7 +122,21 @@ public partial class PlatformPieceViewModel : ObservableObject
 
     public string? WorkingCopyPack { get; private set; }
 
-    public bool IsDefault => Opacity == DefaultOpacity && Hue == DefaultHue;
+    public bool IsDefault => Opacity == DefaultOpacity && Hue == DefaultHue && Tone.IsNeutral;
+
+    /// <summary>The tone sliders as the recolour reads them.</summary>
+    public PieceTone Tone => new(Saturation / 100.0, Contrast / 100.0, Darken / 100.0, Blur / 100.0);
+
+    /// <summary>Every value back to its default: Opacity, Hue and the tone controls.</summary>
+    public void ResetValues()
+    {
+        Opacity = DefaultOpacity;
+        Hue = DefaultHue;
+        Saturation = DefaultTone;
+        Contrast = DefaultTone;
+        Darken = DefaultTone;
+        Blur = DefaultTone;
+    }
 
     /// <summary>The sign is part of the reading: "+140" is a turn one way and "-30" the other, and "0" is neither.</summary>
     public string HueText => Hue > 0 ? $"+{Hue}" : Hue.ToString();
@@ -149,8 +186,7 @@ public partial class PlatformPieceViewModel : ObservableObject
         Across = false;
         WorkingCopyPath = path;
         WorkingCopyPack = packName;
-        Opacity = DefaultOpacity;
-        Hue = DefaultHue;
+        ResetValues();
         (Width, Height) = Measure(path);
         Art = PieceArt.WorkingCopy;
         Raise();
@@ -193,11 +229,11 @@ public partial class PlatformPieceViewModel : ObservableObject
         var opacity = Opacity / 100.0;
         if (Replacement is { } fitted)
         {
-            PlatformRecolor.Apply(fitted, destPng, opacity, Hue, seamMask);
+            PlatformRecolor.Apply(fitted, destPng, opacity, Hue, seamMask, Tone);
         }
         else
         {
-            PlatformRecolor.Apply(SourcePath, destPng, opacity, Hue, seamMask);
+            PlatformRecolor.Apply(SourcePath, destPng, opacity, Hue, seamMask, Tone);
         }
     }
 

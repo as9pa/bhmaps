@@ -197,6 +197,10 @@ public partial class PlatformEditorViewModel : ObservableObject
         var firstTicked = TickedRows().FirstOrDefault();
         Opacity = firstTicked?.Opacity ?? PlatformPieceViewModel.DefaultOpacity;
         Hue = firstTicked?.Hue ?? PlatformPieceViewModel.DefaultHue;
+        Saturation = firstTicked?.Saturation ?? PlatformPieceViewModel.DefaultTone;
+        Contrast = firstTicked?.Contrast ?? PlatformPieceViewModel.DefaultTone;
+        Darken = firstTicked?.Darken ?? PlatformPieceViewModel.DefaultTone;
+        Blur = firstTicked?.Blur ?? PlatformPieceViewModel.DefaultTone;
         _syncing = false;
 
         // The rows of a pack's set are read from a folder the user can change from outside the app, so it is
@@ -260,6 +264,24 @@ public partial class PlatformEditorViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(HueText))]
     public partial int Hue { get; set; }
 
+    /// <summary>The background editor's tone controls, per piece and fanned out the way Opacity and Hue are:
+    /// Saturation and Contrast -100..100, Darken and Blur 0..100.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SaturationText))]
+    public partial int Saturation { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ContrastText))]
+    public partial int Contrast { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DarkenText))]
+    public partial int Darken { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(BlurText))]
+    public partial int Blur { get; set; }
+
     [ObservableProperty]
     public partial ImageSource? Preview { get; set; }
 
@@ -267,23 +289,30 @@ public partial class PlatformEditorViewModel : ObservableObject
     /// the same picture to each piece on its own, as 2.4 did. Changing it cuts the ticked rows again. It can be
     /// chosen before any picture is loaded, and the next Replace uses it (3.2 F2).</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanPan), nameof(ImageText))]
+    [NotifyPropertyChangedFor(nameof(CanPan), nameof(CanPanX), nameof(CanPanY), nameof(ImageText))]
     public partial bool FitAcross { get; set; } = true;
 
     /// <summary>3.0 E: how the picture fills the piece's box, or the whole stage when it is laid across. The one
     /// fit set every window offers. Changing it cuts the ticked rows again.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(
-        nameof(CanPan), nameof(FitFill), nameof(FitFit), nameof(FitCenter), nameof(FitStretch), nameof(ImageText))]
+        nameof(CanPan), nameof(CanPanX), nameof(CanPanY), nameof(FitFill), nameof(FitFit), nameof(FitCenter), nameof(FitStretch), nameof(ImageText))]
     public partial PictureFit Fit { get; set; } = PictureFit.Fill;
 
-    /// <summary>Where the laid picture sits inside the platform box, 0..1 (spec 6.2). The drag on the preview is
-    /// the only thing that moves it.</summary>
+    /// <summary>Where the picture sits inside the platform box, or inside each piece's own box, 0..1 (spec 6.2).
+    /// The sliders, the drag and the wheel on the preview all move it (3.10).</summary>
     [ObservableProperty]
     public partial double PanX { get; set; } = 0.5;
 
     [ObservableProperty]
     public partial double PanY { get; set; } = 0.5;
+
+    /// <summary>3.10: 1..4 over the Fill's cover fit, shown as 100%..400%. Fill only, as the pan is.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ZoomText), nameof(CanPanX), nameof(CanPanY))]
+    public partial double Zoom { get; set; } = PanZoom.MinZoom;
+
+    public string ZoomText => $"{Math.Round(Zoom * 100)}%";
 
     /// <summary>Spec 3.1: true is Selected only, false is All pieces. Changing it schedules a render and writes the
     /// setting; nothing else is written anywhere.</summary>
@@ -383,6 +412,16 @@ public partial class PlatformEditorViewModel : ObservableObject
     public string HueText =>
         !HasTicked ? "" : IsMixed(p => p.Hue) ? MixedText : Hue > 0 ? $"+{Hue}" : Hue.ToString();
 
+    /// <summary>The tone readings, blank or Mixed the way the opacity reading is, in the background editor's own
+    /// format.</summary>
+    public string SaturationText => !HasTicked ? "" : IsMixed(p => p.Saturation) ? MixedText : Saturation.ToString();
+
+    public string ContrastText => !HasTicked ? "" : IsMixed(p => p.Contrast) ? MixedText : Contrast.ToString();
+
+    public string DarkenText => !HasTicked ? "" : IsMixed(p => p.Darken) ? MixedText : $"{Darken}%";
+
+    public string BlurText => !HasTicked ? "" : IsMixed(p => p.Blur) ? MixedText : Blur.ToString();
+
     /// <summary>The Image value line: one reading for the ticked rows when they agree, "Mixed" when they do not,
     /// and the hint while nothing is ticked (spec 4).</summary>
     public string ImageText
@@ -434,9 +473,15 @@ public partial class PlatformEditorViewModel : ObservableObject
     /// The Across or Each pair is always open (3.2 F2).</summary>
     public bool CanUseFit => LoadedPicture is not null;
 
-    /// <summary>Whether dragging the preview moves anything: a laid picture, not one fitted piece by piece, and
-    /// only a Fill, which is the one fit with anything hanging over the box to move (3.0 E).</summary>
-    public bool CanPan => CanUseFit && FitAcross && Fit == PictureFit.Fill;
+    /// <summary>Whether the pan and zoom do anything: a loaded picture in Fill, which is the one fit with anything
+    /// hanging over the box to move (3.0 E). Laid across the platforms or on each piece alike (3.10).</summary>
+    public bool CanPan => CanUseFit && Fit == PictureFit.Fill;
+
+    /// <summary>Whether the picture hangs over its box along X: always once it is zoomed in, and at 100% only
+    /// when the box is a different shape from the picture.</summary>
+    public bool CanPanX => CanPan && (Zoom > PanZoom.MinZoom || PanOverflow().X > 0);
+
+    public bool CanPanY => CanPan && (Zoom > PanZoom.MinZoom || PanOverflow().Y > 0);
 
     public bool FitFill
     {
@@ -462,7 +507,7 @@ public partial class PlatformEditorViewModel : ObservableObject
         set { if (value) { Fit = PictureFit.Stretch; } }
     }
 
-    public bool CanResetImage => TickedRows().Any(p => p.Art != PieceArt.Original);
+    public bool CanResetImage => TickedRows().Any(p => p.Art != PieceArt.Original || !p.IsDefault);
 
     /// <summary>Editing outside writes a working copy into the pack, so it needs a pack name that is good enough
     /// to save into.</summary>
@@ -630,6 +675,28 @@ public partial class PlatformEditorViewModel : ObservableObject
         SchedulePreview();
     }
 
+    partial void OnSaturationChanged(int value) => FanOutTone(row => row.Saturation = value);
+
+    partial void OnContrastChanged(int value) => FanOutTone(row => row.Contrast = value);
+
+    partial void OnDarkenChanged(int value) => FanOutTone(row => row.Darken = value);
+
+    partial void OnBlurChanged(int value) => FanOutTone(row => row.Blur = value);
+
+    /// <summary>The tone sliders move every ticked row, as Opacity and Hue do, and may make Reset worth pressing.</summary>
+    private void FanOutTone(Action<PlatformPieceViewModel> set)
+    {
+        if (_syncing)
+        {
+            return;
+        }
+
+        FanOut(set);
+        OnPropertyChanged(nameof(CanResetImage));
+        ResetImageCommand.NotifyCanExecuteChanged();
+        SchedulePreview();
+    }
+
     /// <summary>The switch and the pan both mean the same thing: cut the ticked rows out of the loaded picture
     /// again. Nothing is loaded until a Replace or a record, and the record puts all three on at once.</summary>
     partial void OnFitAcrossChanged(bool value) => ScheduleRecut();
@@ -639,6 +706,8 @@ public partial class PlatformEditorViewModel : ObservableObject
     partial void OnPanXChanged(double value) => ScheduleRecut();
 
     partial void OnPanYChanged(double value) => ScheduleRecut();
+
+    partial void OnZoomChanged(double value) => ScheduleRecut();
 
     private void ScheduleRecut()
     {
@@ -749,6 +818,10 @@ public partial class PlatformEditorViewModel : ObservableObject
             LoadedFromRecord = true,
             Opacity = entry.Opacity ?? PlatformPieceViewModel.DefaultOpacity,
             Hue = entry.Hue ?? PlatformPieceViewModel.DefaultHue,
+            Saturation = entry.Saturation ?? PlatformPieceViewModel.DefaultTone,
+            Contrast = entry.Contrast ?? PlatformPieceViewModel.DefaultTone,
+            Darken = entry.Darken ?? PlatformPieceViewModel.DefaultTone,
+            Blur = entry.Blur ?? PlatformPieceViewModel.DefaultTone,
             Note = note,
         };
         set.RecordRows.Add((row, entry));
@@ -830,7 +903,11 @@ public partial class PlatformEditorViewModel : ObservableObject
                         fitted = PieceFitter.Fit(
                             BackgroundFitter.LoadSource(picture),
                             BackgroundFitter.LoadSource(row.OriginalPath),
-                            PictureFits.Options(entry.Fit ?? PictureFit.Fill));
+                            PictureFits.Options(
+                                entry.Fit ?? PictureFit.Fill,
+                                entry.PanX ?? 0.5,
+                                entry.PanY ?? 0.5,
+                                zoom: PanZoom.ClampZoom(entry.Zoom ?? PanZoom.MinZoom)));
                     }
 
                     results.Add((row, fitted, picture ?? "", ChangedOutsideNote(row, entry, packRoot, hasNote)));
@@ -875,11 +952,16 @@ public partial class PlatformEditorViewModel : ObservableObject
         {
             // The Across or Each pair is open with no picture loaded, so a record that saved its pictures piece
             // by piece shows that choice rather than the default (3.2 F2).
-            if (_sets.SelectMany(s => s.RecordRows).Any(r => r.Entry.Art == PlatformArt.EachPiece
-                && r.Entry.Picture is { Length: > 0 }))
+            if (_sets.SelectMany(s => s.RecordRows).FirstOrDefault(r => r.Entry.Art == PlatformArt.EachPiece
+                && r.Entry.Picture is { Length: > 0 }).Entry is { } each)
             {
+                // 3.10: the pan and zoom apply on each piece too, so the sliders open where the record left them.
                 _restoringFit = true;
                 FitAcross = false;
+                Fit = each.Fit ?? PictureFit.Fill;
+                PanX = Math.Clamp(each.PanX ?? 0.5, 0, 1);
+                PanY = Math.Clamp(each.PanY ?? 0.5, 0, 1);
+                Zoom = PanZoom.ClampZoom(each.Zoom ?? PanZoom.MinZoom);
                 _restoringFit = false;
             }
 
@@ -894,6 +976,7 @@ public partial class PlatformEditorViewModel : ObservableObject
         Fit = entry.Fit ?? PictureFit.Fill;
         PanX = Math.Clamp(entry.PanX ?? 0.5, 0, 1);
         PanY = Math.Clamp(entry.PanY ?? 0.5, 0, 1);
+        Zoom = PanZoom.ClampZoom(entry.Zoom ?? PanZoom.MinZoom);
         _restoringFit = false;
 
         if (!await LoadPictureAsync(entry.Picture!))
@@ -964,13 +1047,11 @@ public partial class PlatformEditorViewModel : ObservableObject
             }
 
             row.ResetArt();
-            row.Opacity = PlatformPieceViewModel.DefaultOpacity;
-            row.Hue = PlatformPieceViewModel.DefaultHue;
+            row.ResetValues();
             row.Note = "";
         }
 
-        Opacity = PlatformPieceViewModel.DefaultOpacity;
-        Hue = PlatformPieceViewModel.DefaultHue;
+        SyncValues(null);
         _syncing = false;
 
         // Spec 9: Start fresh is about the map the strip is on, so the line the strip reads back for it goes too.
@@ -979,8 +1060,7 @@ public partial class PlatformEditorViewModel : ObservableObject
         ClearPicture();
         ImageError = "";
         OnImageChanged();
-        OnPropertyChanged(nameof(OpacityText));
-        OnPropertyChanged(nameof(HueText));
+        RaiseValueTexts();
         SchedulePreview();
     }
 
@@ -1027,6 +1107,55 @@ public partial class PlatformEditorViewModel : ObservableObject
         Hue = PlatformPieceViewModel.DefaultHue;
         FanOut(row => row.Hue = PlatformPieceViewModel.DefaultHue);
         SchedulePreview();
+    }
+
+    [RelayCommand]
+    private void ResetSaturation()
+    {
+        Saturation = PlatformPieceViewModel.DefaultTone;
+        FanOutTone(row => row.Saturation = PlatformPieceViewModel.DefaultTone);
+    }
+
+    [RelayCommand]
+    private void ResetContrast()
+    {
+        Contrast = PlatformPieceViewModel.DefaultTone;
+        FanOutTone(row => row.Contrast = PlatformPieceViewModel.DefaultTone);
+    }
+
+    [RelayCommand]
+    private void ResetDarken()
+    {
+        Darken = PlatformPieceViewModel.DefaultTone;
+        FanOutTone(row => row.Darken = PlatformPieceViewModel.DefaultTone);
+    }
+
+    [RelayCommand]
+    private void ResetBlur()
+    {
+        Blur = PlatformPieceViewModel.DefaultTone;
+        FanOutTone(row => row.Blur = PlatformPieceViewModel.DefaultTone);
+    }
+
+    [RelayCommand]
+    private void ResetPanX() => PanX = 0.5;
+
+    [RelayCommand]
+    private void ResetPanY() => PanY = 0.5;
+
+    [RelayCommand]
+    private void ResetZoom() => Zoom = PanZoom.MinZoom;
+
+    /// <summary>3.10: a double-click on the preview puts the picture back in the middle and leaves the zoom.</summary>
+    public void CentrePan()
+    {
+        if (!CanPan)
+        {
+            return;
+        }
+
+        PanX = 0.5;
+        PanY = 0.5;
     }
 
     [RelayCommand(CanExecute = nameof(CanAll))]
@@ -1116,6 +1245,8 @@ public partial class PlatformEditorViewModel : ObservableObject
         LoadedPicturePath = path;
         OnPropertyChanged(nameof(CanUseFit));
         OnPropertyChanged(nameof(CanPan));
+        OnPropertyChanged(nameof(CanPanX));
+        OnPropertyChanged(nameof(CanPanY));
         OnPropertyChanged(nameof(ImageText));
         return true;
     }
@@ -1129,6 +1260,8 @@ public partial class PlatformEditorViewModel : ObservableObject
         _fitNoteRows.Clear();
         OnPropertyChanged(nameof(CanUseFit));
         OnPropertyChanged(nameof(CanPan));
+        OnPropertyChanged(nameof(CanPanX));
+        OnPropertyChanged(nameof(CanPanY));
         OnPropertyChanged(nameof(ImageText));
     }
 
@@ -1172,8 +1305,10 @@ public partial class PlatformEditorViewModel : ObservableObject
         }
 
         var across = FitAcross;
-        var options = PictureFits.Options(Fit);
-        var pan = PictureFits.Options(Fit, PanX, PanY);
+        var pan = PictureFits.Options(Fit, PanX, PanY, zoom: Zoom);
+
+        // 3.10: on each piece the pan and zoom apply inside each piece's own box, as they do across the stage.
+        var options = pan;
         List<(PlatformPieceViewModel Row, BitmapSource Fitted, bool Across, string Note)> cut;
         try
         {
@@ -1257,46 +1392,114 @@ public partial class PlatformEditorViewModel : ObservableObject
         }
     }
 
-    /// <summary>Spec 6.2: dragging the preview moves the laid picture. The delta arrives in the stage's own
-    /// 1280 by 720 pixels, and a cover fit only has room to move where it hangs over the box, so the delta is
-    /// turned into pan units by that overflow and clamped. A picture with no overflow one way does not move
-    /// that way, and the cut that follows is throttled.</summary>
+    /// <summary>Spec 6.2: dragging the preview moves the picture. The delta arrives in the stage's own 1280 by 720
+    /// pixels, is carried into the box the picture is fitted to, and <see cref="PanZoom.Drag"/> turns it into pan
+    /// units by the overflow there. A picture with no overflow one way does not move that way, and the cut that
+    /// follows is throttled. 3.10: on each piece the box is the first ticked piece's own.</summary>
     public void DragPan(double dxStagePixels, double dyStagePixels)
     {
-        var level = CurrentMap.BaseLevel;
-        if (LoadedPicture is not { } picture || !FitAcross || SpanFitter.Box(level) is not { } box)
+        if (!CanPan || LoadedPicture is not { } picture || PanArea() is not { } area)
         {
             return;
         }
 
+        var (panX, panY) = PanZoom.Drag(
+            picture.PixelWidth,
+            picture.PixelHeight,
+            area.FitWidth,
+            area.FitHeight,
+            Zoom,
+            PanX,
+            PanY,
+            dxStagePixels * area.FitPerStageX,
+            dyStagePixels * area.FitPerStageY);
+        PanX = panX;
+        PanY = panY;
+    }
+
+    /// <summary>3.10: the wheel over the preview zooms 10% a notch about the stage point under the cursor, so the
+    /// part of the picture under it stays there, and the pan follows. The zoom holds to 100%..400%.</summary>
+    public void WheelZoom(double stageX, double stageY, double notches)
+    {
+        if (!CanPan || notches == 0 || LoadedPicture is not { } picture || PanArea() is not { } area)
+        {
+            return;
+        }
+
+        var (zoom, panX, panY) = PanZoom.ZoomAbout(
+            picture.PixelWidth,
+            picture.PixelHeight,
+            area.FitWidth,
+            area.FitHeight,
+            Zoom,
+            PanX,
+            PanY,
+            Zoom * Math.Pow(PanZoom.WheelStep, notches),
+            (stageX - area.StageLeft) * area.FitPerStageX,
+            (stageY - area.StageTop) * area.FitPerStageY);
+        Zoom = zoom;
+        PanX = panX;
+        PanY = panY;
+    }
+
+    /// <summary>The box the picture is fitted to and how the preview maps onto it. Across, the platform box in
+    /// level units. On each piece, the first ticked piece's own pixels, placed where the stage draws that piece
+    /// largest; a piece the stage never draws is taken as drawn at one level unit a pixel at the camera's corner.
+    /// The preview draws the camera's part of the level into the panel, so a stage pixel is that many level
+    /// units. Null when there is no box or no camera.</summary>
+    private (double FitWidth, double FitHeight, double StageLeft, double StageTop, double FitPerStageX, double FitPerStageY)? PanArea()
+    {
+        var level = CurrentMap.BaseLevel;
         var (_, viewport) = FocusFor(level);
         if ((viewport ?? level.Camera) is not { W: > 0, H: > 0 } camera)
         {
-            return;
+            return null;
         }
 
-        // The preview draws the camera's part of the level into the panel, so a stage pixel is that many level
-        // units, and the box the picture is laid in is measured in level units.
-        var dest = BackgroundFitter.DestinationRect(
-            picture.PixelWidth,
-            picture.PixelHeight,
-            new FitOptions(PanX: PanX, PanY: PanY),
-            Math.Max(1, (int)Math.Round(box.Width)),
-            Math.Max(1, (int)Math.Round(box.Height)));
-        var scaleX = MapCompositor.PanelWidth / camera.W;
-        var scaleY = MapCompositor.PanelHeight / camera.H;
-        var overflowX = dest.Width - box.Width;
-        var overflowY = dest.Height - box.Height;
-        if (overflowX > 0)
+        Rect box;
+        double fitWidth;
+        double fitHeight;
+        if (FitAcross)
         {
-            PanX = Math.Clamp(PanX - (dxStagePixels / scaleX / overflowX), 0, 1);
+            if (SpanFitter.Box(level) is not { Width: > 0, Height: > 0 } stage)
+            {
+                return null;
+            }
+
+            box = stage;
+            (fitWidth, fitHeight) = (stage.Width, stage.Height);
+        }
+        else
+        {
+            if (TickedRows().FirstOrDefault() is not { Width: > 0, Height: > 0 } row)
+            {
+                return null;
+            }
+
+            (fitWidth, fitHeight) = (row.Width, row.Height);
+            box = SpanFitter.Largest(SpanFitter.Placements(level, row.RelativePath, row.Width, row.Height)) is { } placement
+                && placement.Bounds is { Width: > 0, Height: > 0 } bounds
+                ? bounds
+                : new Rect(camera.X, camera.Y, row.Width, row.Height);
         }
 
-        if (overflowY > 0)
-        {
-            PanY = Math.Clamp(PanY - (dyStagePixels / scaleY / overflowY), 0, 1);
-        }
+        var unitsPerStageX = camera.W / MapCompositor.PanelWidth;
+        var unitsPerStageY = camera.H / MapCompositor.PanelHeight;
+        return (
+            fitWidth,
+            fitHeight,
+            (box.X - camera.X) / unitsPerStageX,
+            (box.Y - camera.Y) / unitsPerStageY,
+            unitsPerStageX * fitWidth / box.Width,
+            unitsPerStageY * fitHeight / box.Height);
     }
+
+    /// <summary>How far the loaded picture hangs over its box at 100%, which is what the pan sliders can move along
+    /// before any zoom.</summary>
+    private (double X, double Y) PanOverflow() =>
+        LoadedPicture is { } picture && PanArea() is { } area
+            ? PanZoom.Overflow(picture.PixelWidth, picture.PixelHeight, area.FitWidth, area.FitHeight, PanZoom.MinZoom)
+            : (0, 0);
 
     /// <summary>Back to the pieces' own art. A ticked row holding a working copy is asked about first, because
     /// the reset writes over a file in the pack that another program may still have open (spec 6).</summary>
@@ -1358,6 +1561,17 @@ public partial class PlatformEditorViewModel : ObservableObject
             ImageError = "";
         }
 
+        // 3.10: Reset puts every slider of the Image section back too: the ticked rows' values and the pan and zoom.
+        FanOut(row => row.ResetValues());
+        _syncing = true;
+        SyncValues(TickedRows().FirstOrDefault());
+        _syncing = false;
+        _restoringFit = true;
+        PanX = 0.5;
+        PanY = 0.5;
+        Zoom = PanZoom.MinZoom;
+        _restoringFit = false;
+        RaiseValueTexts();
         OnImageChanged();
     }
 
@@ -1427,13 +1641,11 @@ public partial class PlatformEditorViewModel : ObservableObject
         _syncing = true;
         if (Pieces.FirstOrDefault(p => p.IsTicked) is { } first)
         {
-            Opacity = first.Opacity;
-            Hue = first.Hue;
+            SyncValues(first);
         }
 
         _syncing = false;
-        OnPropertyChanged(nameof(OpacityText));
-        OnPropertyChanged(nameof(HueText));
+        RaiseValueTexts();
         OnImageChanged();
     }
 
@@ -1576,6 +1788,10 @@ public partial class PlatformEditorViewModel : ObservableObject
                 break;
             case nameof(PlatformPieceViewModel.Opacity):
             case nameof(PlatformPieceViewModel.Hue):
+            case nameof(PlatformPieceViewModel.Saturation):
+            case nameof(PlatformPieceViewModel.Contrast):
+            case nameof(PlatformPieceViewModel.Darken):
+            case nameof(PlatformPieceViewModel.Blur):
                 if (!_syncing)
                 {
                     OnRowValuesChanged();
@@ -1592,8 +1808,7 @@ public partial class PlatformEditorViewModel : ObservableObject
         _syncing = true;
         if (Pieces.FirstOrDefault(p => p.IsTicked) is { } first)
         {
-            Opacity = first.Opacity;
-            Hue = first.Hue;
+            SyncValues(first);
         }
 
         _syncing = false;
@@ -1601,8 +1816,11 @@ public partial class PlatformEditorViewModel : ObservableObject
         OnPropertyChanged(nameof(TickedCount));
         OnPropertyChanged(nameof(HasTicked));
         OnPropertyChanged(nameof(CanAdjust));
-        OnPropertyChanged(nameof(OpacityText));
-        OnPropertyChanged(nameof(HueText));
+        RaiseValueTexts();
+
+        // On each piece the pan box is the first ticked piece's, so whether there is room to pan can change.
+        OnPropertyChanged(nameof(CanPanX));
+        OnPropertyChanged(nameof(CanPanY));
         OnPropertyChanged(nameof(ImageText));
         OnPropertyChanged(nameof(ImageHintVisible));
         OnPropertyChanged(nameof(CanUseImage));
@@ -1626,9 +1844,33 @@ public partial class PlatformEditorViewModel : ObservableObject
     /// <summary>A row moved on its own: the shared readings may have gone Mixed, and the map did change.</summary>
     private void OnRowValuesChanged()
     {
+        RaiseValueTexts();
+        OnPropertyChanged(nameof(CanResetImage));
+        ResetImageCommand.NotifyCanExecuteChanged();
+        SchedulePreview();
+    }
+
+    /// <summary>The shared sliders read one row, or the defaults for none. Callers hold _syncing so nothing fans
+    /// back out.</summary>
+    private void SyncValues(PlatformPieceViewModel? from)
+    {
+        Opacity = from?.Opacity ?? PlatformPieceViewModel.DefaultOpacity;
+        Hue = from?.Hue ?? PlatformPieceViewModel.DefaultHue;
+        Saturation = from?.Saturation ?? PlatformPieceViewModel.DefaultTone;
+        Contrast = from?.Contrast ?? PlatformPieceViewModel.DefaultTone;
+        Darken = from?.Darken ?? PlatformPieceViewModel.DefaultTone;
+        Blur = from?.Blur ?? PlatformPieceViewModel.DefaultTone;
+    }
+
+    /// <summary>Every slider reading, which can go Mixed or blank whenever the ticks or a row move.</summary>
+    private void RaiseValueTexts()
+    {
         OnPropertyChanged(nameof(OpacityText));
         OnPropertyChanged(nameof(HueText));
-        SchedulePreview();
+        OnPropertyChanged(nameof(SaturationText));
+        OnPropertyChanged(nameof(ContrastText));
+        OnPropertyChanged(nameof(DarkenText));
+        OnPropertyChanged(nameof(BlurText));
     }
 
     /// <summary>What a Replace or a Reset image changed: the value line, the Reset button, and the map.</summary>
@@ -1735,7 +1977,7 @@ public partial class PlatformEditorViewModel : ObservableObject
             return;
         }
 
-        var (panX, panY) = (PanX, PanY);
+        var (panX, panY, zoom) = (PanX, PanY, Zoom);
         var fit = Fit;
         var written = new List<MapEntry>();
         using var cts = new CancellationTokenSource();
@@ -1769,7 +2011,7 @@ public partial class PlatformEditorViewModel : ObservableObject
                         row.CopyOrWriteResult(Path.Combine(packRoot, row.RelativePath), masks.GetValueOrDefault(row.RelativePath));
                     }
 
-                    record.SetMap(folder, DateTimeOffset.Now, EntriesFor(rows, packRoot, panX, panY, fit));
+                    record.SetMap(folder, DateTimeOffset.Now, EntriesFor(rows, packRoot, panX, panY, fit, zoom));
                     record.Save(packRoot);
                 });
                 written.Add(set.Map);
@@ -1808,7 +2050,8 @@ public partial class PlatformEditorViewModel : ObservableObject
     /// editor rather than to a row, so an Across row writes down the one the picture was laid with (spec 6.2).</summary>
     internal static Dictionary<string, PlatformPieceEntry> EntriesFor(
         IReadOnlyList<PlatformPieceViewModel> rows, string packRoot, double panX, double panY,
-        PictureFit fit = PictureFit.Fill)
+        PictureFit fit = PictureFit.Fill,
+        double zoom = PanZoom.MinZoom)
     {
         var entries = new Dictionary<string, PlatformPieceEntry>(StringComparer.OrdinalIgnoreCase);
         foreach (var row in rows)
@@ -1824,17 +2067,18 @@ public partial class PlatformEditorViewModel : ObservableObject
             {
                 entry.Opacity = row.Opacity;
                 entry.Hue = row.Hue;
-                if (entry.Art == PlatformArt.EachPiece)
+                entry.Saturation = row.Saturation;
+                entry.Contrast = row.Contrast;
+                entry.Darken = row.Darken;
+                entry.Blur = row.Blur;
+                if (entry.Art is PlatformArt.EachPiece or PlatformArt.Across)
                 {
-                    entry.Picture = row.ReplacementPath;
-                    entry.Fit = fit;
-                }
-                else if (entry.Art == PlatformArt.Across)
-                {
+                    // 3.10: the pan and zoom apply on each piece as well as across the platforms.
                     entry.Picture = row.ReplacementPath;
                     entry.Fit = fit;
                     entry.PanX = panX;
                     entry.PanY = panY;
+                    entry.Zoom = zoom;
                 }
             }
 

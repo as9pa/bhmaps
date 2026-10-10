@@ -21,6 +21,16 @@ public sealed class PlatformPieceEntry
 
     public int? Hue { get; set; }
 
+    /// <summary>The tone controls, -100..100 for Saturation and Contrast and 0..100 for Darken and Blur. Missing
+    /// before 3.10, and missing reads as 0.</summary>
+    public int? Saturation { get; set; }
+
+    public int? Contrast { get; set; }
+
+    public int? Darken { get; set; }
+
+    public int? Blur { get; set; }
+
     public PlatformArt Art { get; set; }
 
     public string? Picture { get; set; }
@@ -32,6 +42,9 @@ public sealed class PlatformPieceEntry
     public double? PanX { get; set; }
 
     public double? PanY { get; set; }
+
+    /// <summary>1..4 over the cover fit, Fill only. Missing before 3.10, and missing reads as 1.</summary>
+    public double? Zoom { get; set; }
 
     /// <summary>Lowercase hex SHA-256 of the file this entry was written for, so a piece replaced outside BhMaps
     /// can be spotted.</summary>

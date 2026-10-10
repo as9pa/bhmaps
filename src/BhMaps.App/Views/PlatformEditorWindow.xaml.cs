@@ -44,13 +44,20 @@ public partial class PlatformEditorWindow : Window
         }
     }
 
-    /// <summary>Spec 6.2: the preview drags the picture that is laid across the platforms. The Viewbox draws the
-    /// composed stage at whatever size the card leaves it, so a delta in the Image's own coordinates is scaled
-    /// back to the stage's 1280 by 720 before the view model sees it.</summary>
+    /// <summary>Spec 6.2: the preview drags the picture, laid across the platforms or on each piece (3.10). The
+    /// Viewbox draws the composed stage at whatever size the card leaves it, so a delta in the Image's own
+    /// coordinates is scaled back to the stage's 1280 by 720 before the view model sees it. A double-click puts
+    /// the picture back in the middle.</summary>
     private void Preview_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if (DataContext is not PlatformEditorViewModel { CanPan: true } || sender is not UIElement preview)
+        if (DataContext is not PlatformEditorViewModel { CanPan: true } vm || sender is not UIElement preview)
         {
+            return;
+        }
+
+        if (e.ClickCount == 2)
+        {
+            vm.CentrePan();
             return;
         }
 
@@ -82,5 +89,19 @@ public partial class PlatformEditorWindow : Window
 
         _panFrom = null;
         preview.ReleaseMouseCapture();
+    }
+
+    /// <summary>3.10: the wheel zooms 10% a notch about the point under the cursor, in the stage's own pixels.</summary>
+    private void Preview_MouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (DataContext is not PlatformEditorViewModel { CanPan: true } vm || sender is not FrameworkElement preview)
+        {
+            return;
+        }
+
+        var at = e.GetPosition(preview);
+        var scale = preview.ActualWidth > 0 ? MapCompositor.PanelWidth / preview.ActualWidth : 1.0;
+        vm.WheelZoom(at.X * scale, at.Y * scale, e.Delta / (double)Mouse.MouseWheelDeltaForOneLine);
+        e.Handled = true;
     }
 }

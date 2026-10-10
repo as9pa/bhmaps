@@ -203,6 +203,25 @@ public class EditRecordTests
     }
 
     [Fact]
+    public void Background_zoom_round_trips_and_is_absent_on_older_records()
+    {
+        using var tmp = new TempDir();
+        File.WriteAllText(
+            BackgroundEditRecord.PathFor(tmp.Path),
+            """{ "version": 1, "slots": { "Backgrounds\\BG_Sewer.jpg": { "picture": "a.jpg", "mode": "cover", "panX": 0.5, "panY": 0.5, "darken": 0.1, "hash": "aa" } } }""");
+
+        var old = BackgroundEditRecord.Load(tmp.Path);
+        Assert.Null(old.Entry("Backgrounds\\BG_Sewer.jpg")!.Zoom);
+        Assert.Null(old.Entry("Backgrounds\\BG_Sewer.jpg")!.Extra);
+
+        old.Set("Backgrounds\\BG_Sewer.jpg", new BackgroundSlotEntry { SavedAt = SavedAt, Picture = "a.jpg", Zoom = 2.5 });
+        old.Save(tmp.Path);
+
+        Assert.Equal(2.5, BackgroundEditRecord.Load(tmp.Path).Entry("Backgrounds\\BG_Sewer.jpg")!.Zoom);
+        Assert.Contains("\"zoom\": 2.5", File.ReadAllText(BackgroundEditRecord.PathFor(tmp.Path)));
+    }
+
+    [Fact]
     public void Background_record_from_before_3_3_reads_colour_and_blur_as_absent()
     {
         using var tmp = new TempDir();
