@@ -62,6 +62,21 @@
             </LinearGradientBrush>
         </Border.Background>
       </Border>
+
+      <!-- 3.7.2: the picture eases in under the top bar's hairline instead of starting at full strength right
+           against it. The top stop is the top bar's own colour (BgBrush), so the bar and the page meet on the
+           same colour and the picture comes up over the first 96 px. -->
+      <Border Height="96" VerticalAlignment="Top">
+        <Border.Background>
+          <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+            <GradientStop Offset="0" Color="#FF161514" />
+            <GradientStop Offset="0.2" Color="#D6161514" />
+            <GradientStop Offset="0.45" Color="#8A161514" />
+            <GradientStop Offset="0.7" Color="#3A161514" />
+            <GradientStop Offset="1" Color="#00161514" />
+          </LinearGradientBrush>
+        </Border.Background>
+      </Border>
     </Grid>
 
   <DockPanel Margin="24,8,24,24">
