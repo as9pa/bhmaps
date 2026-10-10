@@ -520,11 +520,9 @@
                       Style="{StaticResource EditorSlider}"
                       Thumb.DragCompleted="Slider_DragCompleted"
                       Value="{Binding DarkenPercent}" />
-              <!-- The unit is a TextBlock of its own, so the readout's format string has no percent sign to escape. -->
-              <StackPanel Grid.Row="1" Grid.Column="1" Margin="8,0,0,0" Orientation="Horizontal">
-                <TextBlock Style="{StaticResource Readout}" Text="{Binding DarkenPercent, StringFormat=F0}" />
-                <TextBlock VerticalAlignment="Center" Style="{StaticResource MonoText}" Text="%" />
-              </StackPanel>
+              <!-- One readout with the unit inside it, so this column is as wide as the others and the track lines up. -->
+              <TextBlock Grid.Row="1" Grid.Column="1" Margin="8,0,0,0" Style="{StaticResource Readout}"
+                         Text="{Binding DarkenPercent, StringFormat={}{0:F0}%}" />
             </Grid>
           </Grid>
 
