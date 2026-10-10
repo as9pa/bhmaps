@@ -83,7 +83,7 @@
 
   <DockPanel Margin="24,8,24,24">
       <StackPanel DockPanel.Dock="Top" Margin="0,12,0,16" VerticalAlignment="Top">
-        <controls:PageHeader Title="{Binding Title}">
+        <controls:PageHeader x:Name="Header" Title="{Binding Title}">
       <controls:PageHeader.Leading>
         <Button AutomationProperties.Name="Back" Command="{Binding BackToPacksCommand}"
                 controls:Icon.Glyph="{StaticResource Icon.ChevronLeft}" Style="{StaticResource PlainButton}"
@@ -129,12 +129,17 @@
       </controls:PageHeader.Actions>
         </controls:PageHeader>
 
-        <!-- Indented to the title, which the back chevron pushes across by its own padded width. -->
-        <TextBlock Margin="46,-5,0,0"
-                   FontSize="{StaticResource FontBody}"
-                   Foreground="{StaticResource TextBrush}"
-                   Text="{Binding Subtitle}"
-                   TextTrimming="CharacterEllipsis" />
+        <!-- Indented to the title, which the back chevron pushes across by its own padded width. 3.9: the
+             indent was a fixed 46 px, but the chevron button measures wider than that (14 px padding each side
+             plus the icon slot's 7 px right margin, which an icon-only button still carries), so the line started
+             about 9 px left of the title. The spacer now takes the button's real width plus the header's 4 px. -->
+        <DockPanel Margin="0,-5,0,0">
+          <Border Width="{Binding Leading.ActualWidth, ElementName=Header}" Margin="0,0,4,0" DockPanel.Dock="Left" />
+          <TextBlock FontSize="{StaticResource FontBody}"
+                     Foreground="{StaticResource TextBrush}"
+                     Text="{Binding Subtitle}"
+                     TextTrimming="CharacterEllipsis" />
+        </DockPanel>
       </StackPanel>
 
     <!-- The body and the no-pack note share one cell, as they did before the rewrite: the DockPanel fills with

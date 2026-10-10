@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Add as new" Width="460" SizeToContent="Height" ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        Style="{StaticResource ChromeWindow}"
         Background="{StaticResource BgBrush}">
   <!-- 3.7.3: the background editor's Add as new. The labels and the error line are AddPicturesWindow's. -->
   <Window.Resources>

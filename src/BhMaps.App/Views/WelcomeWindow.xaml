@@ -4,6 +4,7 @@
         xmlns:converters="clr-namespace:BhMaps.App.Converters"
         Title="Welcome to BhMaps" Width="620" SizeToContent="Height" ResizeMode="NoResize"
         WindowStartupLocation="CenterScreen" ShowInTaskbar="True"
+        Style="{StaticResource ChromeWindow}"
         Background="{StaticResource BgBrush}"
         Closing="OnClosing">
   <Window.Resources>

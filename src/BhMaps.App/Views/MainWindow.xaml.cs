@@ -16,7 +16,14 @@ public partial class MainWindow : Window
         Loaded += OnLoaded;
         Closed += OnClosed;
         PreviewKeyDown += OnPreviewKeyDown;
+        StateChanged += OnStateChanged;
     }
+
+    /// <summary>3.9: a maximized chromeless window hangs its resize border off every screen edge, so the
+    /// content is padded in by that much. The caption buttons follow the state themselves.</summary>
+    private void OnStateChanged(object? sender, EventArgs e) =>
+        RootGrid.Margin =
+            WindowState == WindowState.Maximized ? SystemParameters.WindowResizeBorderThickness : new Thickness(0);
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {

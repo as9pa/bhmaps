@@ -36,9 +36,6 @@
                       Opacity="0" />
             </Grid>
             <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="Chrome" Property="Background" Value="{StaticResource Surface2Brush}" />
-              </Trigger>
               <Trigger Property="IsKeyboardFocused" Value="True">
                 <Setter TargetName="Ring" Property="Opacity" Value="0.6" />
               </Trigger>
@@ -119,11 +116,37 @@
               <!-- The menu is the row's own instance, because TileMenu is x:Shared="False", and it inherits this
                    Border's DataContext, which is the row (q7). Realise is what starts the row's pictures. 3.3:
                    F2 anywhere in the row renames its pack. -->
-              <Border Margin="0,0,0,8"
+              <!-- 3.9: no box. A Line hairline under each row, and hover fades the whole row to Surface. -->
+              <Border BorderBrush="{StaticResource LineBrush}"
+                      BorderThickness="0,0,0,1"
                       ContextMenu="{StaticResource TileMenu}"
                       KeyDown="OnRowKeyDown"
-                      controls:RowRealiser.Realise="True"
-                      Style="{StaticResource CardBorder}">
+                      controls:RowRealiser.Realise="True">
+                <Border.Background>
+                  <SolidColorBrush Color="#001C1B1A" />
+                </Border.Background>
+                <Border.Style>
+                  <Style TargetType="Border">
+                    <Style.Triggers>
+                      <Trigger Property="IsMouseOver" Value="True">
+                        <Trigger.EnterActions>
+                          <BeginStoryboard>
+                            <Storyboard>
+                              <ColorAnimation Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)" To="{StaticResource SurfaceColor}" Duration="{StaticResource FadeDuration}" />
+                            </Storyboard>
+                          </BeginStoryboard>
+                        </Trigger.EnterActions>
+                        <Trigger.ExitActions>
+                          <BeginStoryboard>
+                            <Storyboard>
+                              <ColorAnimation Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)" Duration="{StaticResource FadeDuration}" />
+                            </Storyboard>
+                          </BeginStoryboard>
+                        </Trigger.ExitActions>
+                      </Trigger>
+                    </Style.Triggers>
+                  </Style>
+                </Border.Style>
                 <Grid>
                   <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />

@@ -5,6 +5,7 @@
         Title="Import folders" Width="1000" Height="720" MinWidth="780" MinHeight="520"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
         AllowDrop="True" PreviewDragOver="Window_PreviewDragOver" PreviewDrop="Window_PreviewDrop"
+        Style="{StaticResource ChromeWindow}"
         Background="{StaticResource BgBrush}">
   <Window.Resources>
     <BooleanToVisibilityConverter x:Key="BoolToVis" />

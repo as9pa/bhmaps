@@ -4,6 +4,15 @@
         xmlns:controls="clr-namespace:BhMaps.App.Views.Controls"
         Title="BhMaps" Width="1280" Height="800" MinWidth="1000" MinHeight="640"
         Background="{StaticResource BgBrush}">
+  <!-- 3.9: the title bar is the top bar. The caption is the bar's 44 px; anything clickable in it says
+       IsHitTestVisibleInChrome so it is not swallowed by the drag area. -->
+  <WindowChrome.WindowChrome>
+    <WindowChrome CaptionHeight="44"
+                  CornerRadius="0"
+                  GlassFrameThickness="0"
+                  ResizeBorderThickness="{x:Static SystemParameters.WindowResizeBorderThickness}"
+                  UseAeroCaptionButtons="False" />
+  </WindowChrome.WindowChrome>
   <!-- Nothing on a page triggers a rescan, so the keyboard does; Ctrl+1..5 are the five tabs (addendum A).
        Ctrl+K is in the code-behind: it navigates and then focuses, which a command cannot do. Ctrl+Z and Escape
        are the status strip's two links (3.0); both commands say no when the strip is not offering them, and a
@@ -22,9 +31,10 @@
 
   <Window.Resources>
     <BooleanToVisibilityConverter x:Key="BoolToVis" />
+
   </Window.Resources>
 
-  <Grid>
+  <Grid x:Name="RootGrid">
     <Grid.RowDefinitions>
       <RowDefinition Height="44" />
       <RowDefinition Height="Auto" />
@@ -37,10 +47,11 @@
             Background="{StaticResource BgBrush}"
             BorderBrush="{StaticResource LineBrush}"
             BorderThickness="0,0,0,1">
-      <Grid Margin="16,0,12,0">
+      <Grid Margin="16,0,0,0">
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="Auto" />
           <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" />
           <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
 
@@ -55,7 +66,7 @@
             <ColumnDefinition Width="*" />
           </Grid.ColumnDefinitions>
 
-          <StackPanel VerticalAlignment="Center" Orientation="Horizontal">
+          <StackPanel VerticalAlignment="Center" Orientation="Horizontal" WindowChrome.IsHitTestVisibleInChrome="True">
             <Button Command="{Binding NavigateMapsCommand}" Content="Maps" Style="{StaticResource TopBarTab}" Tag="{Binding Maps}" />
             <Button Command="{Binding NavigateBackgroundsCommand}" Content="Backgrounds" Style="{StaticResource TopBarTab}" Tag="{Binding Backgrounds}" />
             <Button Command="{Binding NavigatePlatformsCommand}" Content="Platforms" Style="{StaticResource TopBarTab}" Tag="{Binding Platforms}" />
@@ -71,10 +82,11 @@
                                 Margin="12,0,12,0"
                                 HorizontalAlignment="Right"
                                 VerticalAlignment="Center"
-                                DataContext="{Binding Status}" />
+                                DataContext="{Binding Status}"
+                                WindowChrome.IsHitTestVisibleInChrome="True" />
         </Grid>
 
-        <StackPanel Grid.Column="2" VerticalAlignment="Center" Orientation="Horizontal">
+        <StackPanel Grid.Column="2" VerticalAlignment="Center" Orientation="Horizontal" WindowChrome.IsHitTestVisibleInChrome="True">
 
           <!-- Spec 7.3: one quiet line, only for a newer release that has not been waved away. It navigates to
                the Settings row that offers the download; nothing here downloads or restarts anything. -->
@@ -172,6 +184,9 @@
             </StackPanel>
           </Grid>
         </StackPanel>
+
+        <!-- 3.9: the caption buttons, flush with the window's right edge. -->
+        <controls:CaptionButtons Grid.Column="3" Margin="12,0,0,0" />
       </Grid>
     </Border>
 

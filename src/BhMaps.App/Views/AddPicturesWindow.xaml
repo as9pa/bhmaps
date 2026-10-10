@@ -6,6 +6,7 @@
         Title="Add Image" Width="900" Height="720" MinWidth="760" MinHeight="600"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
         AllowDrop="True" PreviewDragOver="Window_PreviewDragOver" PreviewDrop="Window_PreviewDrop"
+        Style="{StaticResource ChromeWindow}"
         Background="{StaticResource BgBrush}">
   <Window.Resources>
     <BooleanToVisibilityConverter x:Key="BoolToVis" />

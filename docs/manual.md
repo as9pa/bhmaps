@@ -9,6 +9,15 @@ and `.jpg` files inside the `mapArt` folder and inside its own library, plus its
 folder, and it keeps a copy of every original so it can put it back. The game's data files are read and never written, and
 nothing else in the game install is touched.
 
+## What is new in 3.9.0
+
+Every window has one bar at the top, with its title and its buttons, instead of the Windows title bar.
+Map pictures sit on the page without boxes around them.
+Pack rows have a line between them instead of a box around each one.
+Settings sits in the middle of the page.
+The editor preview fits the picture and sits in the middle of its column.
+An empty page shows an icon and a hint along with its sentence.
+
 ## What is new in 3.8.0
 
 Buttons, chips and tabs fade on hover and press instead of switching at once.

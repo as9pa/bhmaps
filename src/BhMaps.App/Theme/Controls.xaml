@@ -1691,4 +1691,70 @@
       </Trigger>
     </Style.Triggers>
   </Style>
+
+  <!-- 3.9: no window keeps the system's title bar. A window with a system caption takes this style instead: one
+       32 px row with the window's title on the left in Text2 and the caption buttons on the right, then the
+       window's own content. The caption is that row, so it drags, and double-click maximizes where the window
+       can be maximized. Without the system frame nothing marks the window's edge, so it draws DialogWindow's 1 px
+       Line; maximized, the edge gives way to padding as deep as the resize border hanging off the screen. A
+       window that cannot be resized has no resize border either. -->
+  <Style x:Key="ChromeWindow" TargetType="Window">
+    <Setter Property="WindowChrome.WindowChrome">
+      <Setter.Value>
+        <WindowChrome CaptionHeight="32"
+                      CornerRadius="0"
+                      GlassFrameThickness="0"
+                      ResizeBorderThickness="{x:Static SystemParameters.WindowResizeBorderThickness}"
+                      UseAeroCaptionButtons="False" />
+      </Setter.Value>
+    </Setter>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Window">
+          <Border x:Name="Frame"
+                  Background="{TemplateBinding Background}"
+                  BorderBrush="{StaticResource LineBrush}"
+                  BorderThickness="1">
+            <DockPanel>
+              <Grid Height="32" DockPanel.Dock="Top">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Margin="16,0,12,0"
+                           VerticalAlignment="Center"
+                           FontSize="{StaticResource FontBody}"
+                           Foreground="{StaticResource Text2Brush}"
+                           Text="{TemplateBinding Title}"
+                           TextTrimming="CharacterEllipsis" />
+                <controls:CaptionButtons Grid.Column="1" />
+              </Grid>
+              <AdornerDecorator>
+                <ContentPresenter />
+              </AdornerDecorator>
+            </DockPanel>
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="WindowState" Value="Maximized">
+              <Setter TargetName="Frame" Property="BorderThickness" Value="0" />
+              <Setter TargetName="Frame" Property="Padding" Value="{x:Static SystemParameters.WindowResizeBorderThickness}" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+    <Style.Triggers>
+      <Trigger Property="ResizeMode" Value="NoResize">
+        <Setter Property="WindowChrome.WindowChrome">
+          <Setter.Value>
+            <WindowChrome CaptionHeight="32"
+                          CornerRadius="0"
+                          GlassFrameThickness="0"
+                          ResizeBorderThickness="0"
+                          UseAeroCaptionButtons="False" />
+          </Setter.Value>
+        </Setter>
+      </Trigger>
+    </Style.Triggers>
+  </Style>
 </ResourceDictionary>
