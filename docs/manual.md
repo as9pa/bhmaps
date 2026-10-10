@@ -9,6 +9,12 @@ and `.jpg` files inside the `mapArt` folder and inside its own library, plus its
 folder, and it keeps a copy of every original so it can put it back. The game's data files are read and never written, and
 nothing else in the game install is touched.
 
+## What is new in 3.7.6
+
+Picking a category chip clears the search box, so an old search never leaves the new chip showing nothing.
+The search box also has an X on its right while it holds text; click it to clear the search.
+The search boxes now say Search maps, Search platforms and Search backgrounds.
+
 ## What is new in 3.7.5
 
 The All chip hides minigame maps during a search too. Pick Minigames to search them.

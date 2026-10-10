@@ -31,6 +31,9 @@ public partial class MapsViewModel : PageViewModel, ITileSized
     private ScanSnapshot? _snapshot;
     private CancellationTokenSource? _previews;
 
+    /// <summary>True while a chip change empties the search, so the grid filters once for the pair.</summary>
+    private bool _clearingSearch;
+
     public MapsViewModel(MainViewModel shell)
         : base(shell)
     {
@@ -437,9 +440,17 @@ public partial class MapsViewModel : PageViewModel, ITileSized
             _previews.Token);
     }
 
-    partial void OnSearchTextChanged(string value) => ApplyFilter();
+    partial void OnSearchTextChanged(string value)
+    {
+        if (!_clearingSearch)
+        {
+            ApplyFilter();
+        }
+    }
 
-    /// <summary>The shared chip changed, here or on another page: the row shows it and the grid answers it.</summary>
+    /// <summary>The shared chip changed, here or on another page: the row shows it and the grid answers it.
+    /// 3.7.6: a new chip also empties the search, so a search typed under the old chip cannot leave the new
+    /// one stuck on nothing. Only the search is written here, never the chip, so nothing comes back round.</summary>
     private void OnShellLevelSetChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName != nameof(MainViewModel.SelectedLevelSet))
@@ -448,6 +459,11 @@ public partial class MapsViewModel : PageViewModel, ITileSized
         }
 
         OnPropertyChanged(nameof(SelectedChip));
+
+        _clearingSearch = true;
+        SearchText = "";
+        _clearingSearch = false;
+
         ApplyFilter();
     }
 

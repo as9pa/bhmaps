@@ -28,6 +28,9 @@ public abstract partial class RowsPageViewModel : PageViewModel, ITileSized
 
     private CancellationTokenSource? _loads;
 
+    /// <summary>True while a chip change empties the search, so the rows filter once for the pair.</summary>
+    private bool _clearingSearch;
+
     protected RowsPageViewModel(MainViewModel shell, TileSize storedSize)
         : base(shell)
     {
@@ -250,7 +253,10 @@ public abstract partial class RowsPageViewModel : PageViewModel, ITileSized
     {
         OnPropertyChanged(nameof(ShowClearSearch));
         OnPropertyChanged(nameof(EmptyActionText));
-        ApplyFilter();
+        if (!_clearingSearch)
+        {
+            ApplyFilter();
+        }
     }
 
     partial void OnTileSizeChanged(TileSize value)
@@ -263,7 +269,9 @@ public abstract partial class RowsPageViewModel : PageViewModel, ITileSized
         OnPropertyChanged(nameof(ShowTileApply));
     }
 
-    /// <summary>The shared chip changed, here or on another page: the row shows it and the rows answer it.</summary>
+    /// <summary>The shared chip changed, here or on another page: the row shows it and the rows answer it.
+    /// 3.7.6: a new chip also empties the search, so a search typed under the old chip cannot leave the new
+    /// one stuck on nothing. Only the search is written here, never the chip, so nothing comes back round.</summary>
     private void OnShellLevelSetChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName != nameof(MainViewModel.SelectedLevelSet))
@@ -272,6 +280,11 @@ public abstract partial class RowsPageViewModel : PageViewModel, ITileSized
         }
 
         OnPropertyChanged(nameof(SelectedChip));
+
+        _clearingSearch = true;
+        SearchText = "";
+        _clearingSearch = false;
+
         ApplyFilter();
     }
 

@@ -247,6 +247,42 @@
     <Setter Property="Padding" Value="{StaticResource Gap8}" />
   </Style>
 
+  <!-- 3.7.6: the X inside a page's search box. A bare glyph in the second text colour that lifts to the first on
+       hover, with no fill or ring of its own, so it reads as part of the box. Never focusable: a click leaves the
+       caret where it was, and Tab goes from the box to the next control without stopping here. The page shows it
+       only while the box has text. -->
+  <Style x:Key="SearchClearButton" TargetType="Button">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{StaticResource Text2Brush}" />
+    <Setter Property="Width" Value="26" />
+    <Setter Property="HorizontalAlignment" Value="Right" />
+    <Setter Property="VerticalAlignment" Value="Stretch" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Focusable" Value="False" />
+    <Setter Property="IsTabStop" Value="False" />
+    <Setter Property="AutomationProperties.Name" Value="Clear search" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Button">
+          <!-- The transparent fill is the hit area: the whole right end of the box, not just the glyph's strokes.
+               Dynamic, because Icons.xaml sits beside this dictionary in App.xaml rather than inside it. -->
+          <Border Background="{TemplateBinding Background}">
+            <controls:Icon HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           Foreground="{TemplateBinding Foreground}"
+                           Geometry="{DynamicResource Icon.X}"
+                           Size="12" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
   <Style x:Key="StripLinkText" TargetType="TextBlock">
     <Setter Property="Foreground" Value="{StaticResource Text2Brush}" />
     <Setter Property="FontSize" Value="{StaticResource FontBody}" />
