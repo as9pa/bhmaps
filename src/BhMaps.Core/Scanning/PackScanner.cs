@@ -106,7 +106,7 @@ public static class PackScanner
         return new Pack(info.Name, contentRoot, ScanContent(contentRoot)) { FolderPath = info.FullName };
     }
 
-    /// <summary>3.7: the folder a pack keeps its map-select pictures under, images	humbnails. It is never one of
+    /// <summary>3.7: the folder a pack keeps its map-select pictures under, images\thumbnails. It is never one of
     /// the pack's map folders.</summary>
     public const string ImagesFolderName = "images";
 

@@ -78,6 +78,35 @@ public static class PackPictures
     public static IReadOnlyList<PackPicture> ForApply(Pack pack, IReadOnlyList<MapEntry> maps, IReadOnlyList<MapEntry> allMaps) =>
         Match(pack, PackApplier.MapsTouched(pack, maps), allMaps);
 
+    /// <summary>Import from pack: the source pack's pictures of this map copied into the target pack's own
+    /// images\thumbnails (the one it has, else beside its mapArt, else at its root). Returns the failures.</summary>
+    public static IReadOnlyList<FileFailure> CopyIntoPack(Pack source, Pack target, MapEntry map, IReadOnlyList<MapEntry> allMaps)
+    {
+        var failures = new List<FileFailure>();
+        var pictures = Match(source, [map], allMaps);
+        if (pictures.Count == 0)
+        {
+            return failures;
+        }
+
+        var dir = Dir(target) ?? Path.Combine(target.FolderPath, PackScanner.ImagesFolderName, "thumbnails");
+        foreach (var picture in pictures)
+        {
+            var to = Path.Combine(dir, picture.FileName);
+            try
+            {
+                Directory.CreateDirectory(dir);
+                File.Copy(picture.SourcePath, to, overwrite: true);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                failures.Add(new FileFailure(to, ex.Message));
+            }
+        }
+
+        return failures;
+    }
+
     /// <summary>Copies the pack's jpg over the game's picture as-is, after keeping the game's own copy the way a
     /// rendered write does, and notes it in the thumbnails record so later saves leave it alone.</summary>
     public static void Copy(PackPicture picture, ThumbnailTarget target, string packName, string recordPath)
