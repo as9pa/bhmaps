@@ -1,5 +1,7 @@
 # BhMaps
 
+![The Maps grid, every map with its composed preview](docs/images/maps.png)
+
 Brawlhalla map art manager for Windows. It keeps packs of map art in a library, shows every map
 under its in-game name with a preview composed from the game's own level data, and copies packs into
 the game with one click, with an Undo for the last write.
@@ -31,42 +33,62 @@ Brawlhalla open or closed, and show on the next match load.
 
 ## What it does
 
-- Maps is a grid of every map with a composed preview and a tag saying what art is on it: the pack it
-  matches, an any-map picture's name, or Missing. Clicking a map opens a panel with everything that one
-  map can do.
-- Backgrounds and Platforms are one row per map, with every background or platform set that map could
-  have laid out along it. One click applies the one you want.
-- Packs imports folders as packs, applies them, exports them, and captures the game's current art as
-  a Default pack.
-- Add Image fits any image to the background size and writes it into a pack, and the editor
-  crops, pans and darkens one picture into a map's background slot, for one map or for all of them.
-- The platform editor fades a map's platforms with an Opacity slider and recolours them with a Hue
-  slider, over a live preview that can show only the selected pieces, and saves the result into a
-  pack. Replace lays one picture across the platforms, dragged into place.
-- Both editors remember what was saved into a pack: reopening one on the same map and pack brings
-  back its fit, pan, opacity and hue, with a Start fresh link to drop them and begin again.
-- Right-click any picture in a pack to put it on one map, a map picked from a
-  list, or every map; right-click any map card to apply a pack or picture, edit it or reset it.
-- The My Backgrounds switch on Backgrounds shows your own pictures on every row at once, or hides
-  them all while you compare packs.
-- Hide a pack from the lists with the eye on its Packs row: it stays in the library and keeps
-  working, but its pictures and platform sets no longer take up a tile on every row, except where the
-  game is showing them.
+- **Map grid.** Every map under its in-game name, with a preview composed from the game's own level
+  data and a tag saying what art is on it: the pack it matches, a picture's name, or Missing.
+- **Packs.** Folders of map art, kept in a library. Import, export, duplicate and apply them: one
+  background or platform set to a map in one click, or a whole pack to every map at once. The game's
+  own art is captured as a Default pack so any map can be reset.
+- **Custom images.** Add any `.png` or `.jpg` and it is fitted to the map's background size and
+  written into a pack, ready to apply.
+- **Platform art.** Put a custom image on platforms as well, per piece or laid across the whole set
+  and dragged into place.
+- **Background editor.** Crop and pan, with Hue, Saturation, Contrast, Blur and Darken sliders over a
+  live preview, for one map or for all of them.
+- **Platform editor.** Opacity and Hue per piece, over a live preview that can show only the selected
+  pieces.
+- **Map-select thumbnails.** Each map's art also replaces its thumbnail on the game's map select
+  screen, keeping the original for a reset.
+- **Undo.** Puts back whatever the last write into the game folder overwrote or deleted.
+
+![The Packs page, one row per pack with thumbnails and Apply all](docs/images/packs.png)
+
+![The Backgrounds page, one row per map with every background it could have](docs/images/backgrounds.png)
+
+| Background editor | Platform editor |
+| --- | --- |
+| ![Background editor with fit, pan, hue, saturation, contrast, darken and blur](docs/images/editor-background.png) | ![Platform editor with per-piece opacity and hue over a live preview](docs/images/editor-platform.png) |
+
+### More
+
+- Click a map to open a panel with everything that one map can do. Right-click a map card to apply
+  a pack or picture, edit it or reset it. Right-click any picture in a pack to put it on one map, a
+  map picked from a list, or every map.
+- Backgrounds and Platforms are one row per map with every set that map could have laid out along
+  it. The My Backgrounds switch shows your own pictures on every row at once, or hides them while you
+  compare packs.
+- Both editors remember what was saved into a pack. Reopen one on the same map and pack and its fit,
+  pan, opacity and hue come back, with a Start fresh link to drop them.
+- Copy to pack, Move to pack, Ctrl+C, Ctrl+X and Ctrl+V move a map or a picture between packs.
+  Import from pack copies all of another pack's maps, or the ones you pick, into the one you are
+  looking at. Duplicate copies a
+  whole pack under a new name. Delete takes a picture, a platform set or a map out of a pack and puts
+  the default back on any map showing it.
+- Each Packs row leads with a thumbnail: the pack's first map composed with the pack's art over it,
+  or its first background picture in Backgrounds mode.
+- Rename a pack from its row menu or with F2. The folder on disk is renamed, and the hidden list and
+  applied record follow the new name. Default cannot be renamed.
+- Keyboard shortcuts: F5 rescans, Ctrl+Z undoes, Escape cancels a running write, Ctrl+1 to Ctrl+5
+  switch between Maps, Backgrounds, Platforms, Packs and Settings, Ctrl+K focuses the Maps search,
+  and Ctrl+plus, Ctrl+minus and Ctrl+0 change the zoom.
+- Hide a pack with the eye on its Packs row. It stays in the library and keeps working, but stops
+  taking up a tile on every row, except where the game is showing it.
 - Refresh, next to Launch, applies again what changed at the source, restores missing files and
   rewrites the map-select thumbnails, in one write with one Undo. After a game update, a new map's
   own art goes into the Default pack by itself.
-- Map-select thumbnails put each map's new art on the game's map select screen as well, keeping
-  the original so a reset or an Undo puts it back.
-- Undo puts back whatever the last write into the game folder overwrote or deleted.
-- Only `.png` and `.jpg` files inside `mapArt` are ever changed, plus the map-select thumbnails;
-  the game's data files are read only.
-- Every tile in a pack has a menu. **Copy to pack...** and **Move to pack...**, or Ctrl+C, Ctrl+X and
-  Ctrl+V, take a map or a picture from one pack to another, and the red **Delete** lines take a
-  picture, a platform set or a map out of a pack and put the default back on any map showing it.
-- **Import from pack** copies all of another pack's maps, or the ones you pick, into the pack you are
-  looking at, and **Duplicate** in the Packs menu copies a whole pack under a new name.
-- BhMaps checks for a new release once a day and can download it and swap itself over when you close
-  it. The check is one line in Settings and can be turned off.
+- Only `.png` and `.jpg` files inside `mapArt` are ever changed, plus the map-select thumbnails. The
+  game's data files are read only. Undo puts back whatever the last write overwrote or deleted.
+- Checks for a new release once a day and can update itself in place. One line in Settings turns it
+  off.
 
 ## Files
 
