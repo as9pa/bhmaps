@@ -17,7 +17,8 @@
           <Grid Width="200" Height="{StaticResource ActionHeight}" VerticalAlignment="Center">
             <!-- Padding 33,6,10,0 is Task 4's measurement, not a typo; do not put 3 back. Tagged, not named: an
                  element inside PageHeader's content cannot take an x:Name, and RowKeys finds the box by this. -->
-            <TextBox Padding="33,6,10,0"
+            <!-- 3.7.6: 28 on the right, so typed text stops short of the clear button. -->
+            <TextBox Padding="33,6,28,0"
                      AutomationProperties.Name="{Binding SearchPlaceholder}"
                      Style="{StaticResource FieldTextBox}"
                      Tag="SearchBox"
@@ -46,6 +47,12 @@
                 </Style>
               </TextBlock.Style>
             </TextBlock>
+
+            <!-- 3.7.6: the box's X, there only while it has text. -->
+            <Button Margin="0,0,3,0"
+                    Command="{Binding ClearSearchCommand}"
+                    Style="{StaticResource SearchClearButton}"
+                    Visibility="{Binding ShowClearSearch, Converter={StaticResource BoolToVis}}" />
           </Grid>
 
           <controls:SizePicker Margin="16,0,0,0" VerticalAlignment="Center" Value="{Binding TileSize}" />

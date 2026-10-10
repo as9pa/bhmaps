@@ -473,7 +473,8 @@
                  10 to the icon, 15 of icon, 8 to the text. -->
             <!-- Tagged, not named: an element inside the PageHeader's content cannot take an x:Name, because
                  the user control owns a name scope of its own. Ctrl+K finds the box by this marker. -->
-            <TextBox Padding="33,6,10,0"
+            <!-- 3.7.6: 28 on the right, so typed text stops short of the clear button. -->
+            <TextBox Padding="33,6,28,0"
                      AutomationProperties.Name="Search maps"
                      Style="{StaticResource FieldTextBox}"
                      Tag="SearchBox"
@@ -502,6 +503,12 @@
                 </Style>
               </TextBlock.Style>
             </TextBlock>
+
+            <!-- 3.7.6: the box's X, there only while it has text. -->
+            <Button Margin="0,0,3,0"
+                    Command="{Binding ClearSearchCommand}"
+                    Style="{StaticResource SearchClearButton}"
+                    Visibility="{Binding ShowClearSearch, Converter={StaticResource BoolToVis}}" />
           </Grid>
 
           <!-- Spec 3.1: the size belongs to the header row, where nothing the chip row does can move it. -->
