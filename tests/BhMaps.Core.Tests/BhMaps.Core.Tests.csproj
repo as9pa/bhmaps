@@ -18,6 +18,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\BhMaps.Core\BhMaps.Core.csproj" />
+    <ProjectReference Include="..\..\src\BhMaps.App\BhMaps.App.csproj" />
   </ItemGroup>
 
   <ItemGroup>
