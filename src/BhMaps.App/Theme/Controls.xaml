@@ -1266,21 +1266,28 @@
               <Grid.RenderTransform>
                 <ScaleTransform x:Name="Lift" ScaleX="1" ScaleY="1" />
               </Grid.RenderTransform>
-              <Border Background="{StaticResource TileBrush}" ClipToBounds="True" CornerRadius="{StaticResource Radius}">
-                <!-- Prototype: the thumbnail fades in when its binding delivers it. From 0 rather than a resting
-                     Opacity of 0, so a picture whose update never fires is still drawn. -->
-                <Image RenderOptions.BitmapScalingMode="HighQuality" Source="{Binding Thumbnail, NotifyOnTargetUpdated=True}" Stretch="UniformToFill">
-                  <Image.Triggers>
-                    <EventTrigger RoutedEvent="Binding.TargetUpdated">
-                      <BeginStoryboard>
-                        <Storyboard>
-                          <DoubleAnimation Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="{StaticResource ImageFadeDuration}" />
-                        </Storyboard>
-                      </BeginStoryboard>
-                    </EventTrigger>
-                  </Image.Triggers>
-                </Image>
+              <!-- 3.9.1: the picture is a rounded Border's ImageBrush, so its corners follow the Radius. It was
+                   an Image in a Border with ClipToBounds, which clips to the square bounds, so the picture's
+                   corners showed past the rounded hairline. The Image stays, hidden, only to raise TargetUpdated
+                   for the fade: an ImageBrush cannot. -->
+              <Border Background="{StaticResource TileBrush}" CornerRadius="{StaticResource Radius}" />
+              <Border x:Name="Picture" CornerRadius="{StaticResource Radius}" RenderOptions.BitmapScalingMode="HighQuality">
+                <Border.Background>
+                  <ImageBrush ImageSource="{Binding Thumbnail}" Stretch="UniformToFill" />
+                </Border.Background>
               </Border>
+              <!-- From 0 rather than a resting Opacity of 0, so a picture whose update never fires is still drawn. -->
+              <Image Source="{Binding Thumbnail, NotifyOnTargetUpdated=True}" Visibility="Hidden">
+                <Image.Triggers>
+                  <EventTrigger RoutedEvent="Binding.TargetUpdated">
+                    <BeginStoryboard>
+                      <Storyboard>
+                        <DoubleAnimation Storyboard.TargetName="Picture" Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="{StaticResource ImageFadeDuration}" />
+                      </Storyboard>
+                    </BeginStoryboard>
+                  </EventTrigger>
+                </Image.Triggers>
+              </Image>
               <Border BorderThickness="1" CornerRadius="{StaticResource Radius}" IsHitTestVisible="False">
                 <Border.BorderBrush>
                   <SolidColorBrush x:Name="Edge" Color="{StaticResource LineColor}" />

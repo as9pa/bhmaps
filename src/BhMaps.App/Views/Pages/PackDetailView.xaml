@@ -207,14 +207,18 @@
                             ToolTip="{Binding Caption}">
                       <StackPanel>
                         <Grid>
+                          <!-- 3.9.1: the Viewbox sets the size and draws nothing; the picture is a rounded Border's
+                               ImageBrush, so its corners stay inside the rounded hairline. -->
                           <Viewbox Stretch="Uniform">
                             <Grid Width="{Binding Source={x:Static imaging:MapCompositor.CardWidth}, Mode=OneTime}"
-                                  Height="{Binding Source={x:Static imaging:MapCompositor.CardHeight}, Mode=OneTime}"
-                                  Background="{StaticResource TileBrush}">
-                              <Image RenderOptions.BitmapScalingMode="HighQuality" Source="{Binding Preview}"
-                                     Stretch="UniformToFill" />
-                            </Grid>
+                                  Height="{Binding Source={x:Static imaging:MapCompositor.CardHeight}, Mode=OneTime}" />
                           </Viewbox>
+                          <Border Background="{StaticResource TileBrush}" CornerRadius="{StaticResource Radius}" />
+                          <Border CornerRadius="{StaticResource Radius}" RenderOptions.BitmapScalingMode="HighQuality">
+                            <Border.Background>
+                              <ImageBrush ImageSource="{Binding Preview}" Stretch="UniformToFill" />
+                            </Border.Background>
+                          </Border>
                           <!-- Prototype: the picture's hairline, Line to Line2 on hover. -->
                           <Border BorderThickness="1" CornerRadius="{StaticResource Radius}" IsHitTestVisible="False">
                             <Border.BorderBrush>

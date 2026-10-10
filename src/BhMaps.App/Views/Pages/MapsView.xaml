@@ -636,20 +636,20 @@
                       <Grid.RenderTransform>
                         <ScaleTransform x:Name="Lift" ScaleX="1" ScaleY="1" />
                       </Grid.RenderTransform>
-                      <!-- 3.9: the picture takes the Radius corners through a mask of the same shape. -->
-                      <Border x:Name="Mask" Background="Black" CornerRadius="{StaticResource Radius}" />
+                      <!-- 3.9.1: the picture takes the Radius corners as a rounded Border's ImageBrush, the way the
+                           panel tiles do. 3.9 masked it with a VisualBrush of a black rounded Border, and at display
+                           scaling above 100% that mask and the Border under it left dark slivers past the corners.
+                           The Viewbox still sets the size and draws nothing. -->
                       <Viewbox Stretch="Uniform">
-                        <Viewbox.OpacityMask>
-                          <VisualBrush Visual="{Binding ElementName=Mask}" />
-                        </Viewbox.OpacityMask>
                         <Grid Width="{Binding Source={x:Static imaging:MapCompositor.CardWidth}, Mode=OneTime}"
-                              Height="{Binding Source={x:Static imaging:MapCompositor.CardHeight}, Mode=OneTime}"
-                              Background="{StaticResource TileBrush}">
-                          <Image RenderOptions.BitmapScalingMode="HighQuality"
-                                 Source="{Binding Preview}"
-                                 Stretch="UniformToFill" />
-                        </Grid>
+                              Height="{Binding Source={x:Static imaging:MapCompositor.CardHeight}, Mode=OneTime}" />
                       </Viewbox>
+                      <Border Background="{StaticResource TileBrush}" CornerRadius="{StaticResource Radius}" />
+                      <Border CornerRadius="{StaticResource Radius}" RenderOptions.BitmapScalingMode="HighQuality">
+                        <Border.Background>
+                          <ImageBrush ImageSource="{Binding Preview}" Stretch="UniformToFill" />
+                        </Border.Background>
+                      </Border>
 
                       <!-- Spec 3.1: Missing is a mark on the picture, at every size since 3.2 took the tag off the
                            card. Over the Viewbox rather than inside it: the Viewbox scales the compositor's 640 px
