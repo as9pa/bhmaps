@@ -50,12 +50,9 @@ public partial class PlatformsViewModel : RowsPageViewModel
         // have nothing to open, so the tile is handed null and its menu leaves the line out (spec 9).
         var sets = MapChoices.Platforms(Shell, map, status, snapshot, SetWidth, SetHeight, showFiles: null);
         List<object> alwaysShown = [.. sets.Where(t => t.InGame), .. sets.Where(t => !t.InGame)];
-        var (tag, missing) = Tag(map, status);
-
         return new MapRowViewModel(
             map,
-            tag,
-            missing,
+            IsMissing(map, status),
             Haystack(map, sets),
             alwaysShown,
             [],
@@ -64,25 +61,13 @@ public partial class PlatformsViewModel : RowsPageViewModel
             ComposeSetAsync);
     }
 
-    /// <summary>Addendum C's state tag, measured over this map's own folder only: Missing beats the game's own
-    /// art beats the first pack that matched, and Default draws no tag at all.</summary>
-    private static (string Tag, bool Missing) Tag(MapEntry map, MapStatus? status)
+    /// <summary>Whether the row's name draws as missing, measured over this map's own folder only.</summary>
+    private static bool IsMissing(MapEntry map, MapStatus? status)
     {
         var prefix = map.FolderName + Path.DirectorySeparatorChar;
-        var files = (status?.Files ?? Array.Empty<MapFileStatus>())
-            .Where(f => f.RelativePath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-            .ToList();
-        if (files.Any(f => f.State == MapFileState.Missing))
-        {
-            return ("Missing", true);
-        }
-
-        if (files.Any(f => f.State == MapFileState.Custom))
-        {
-            return ("In game only", false);
-        }
-
-        return (files.SelectMany(f => f.PackNames).FirstOrDefault() ?? "", false);
+        return (status?.Files ?? Array.Empty<MapFileStatus>()).Any(f =>
+            f.RelativePath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+            && f.State == MapFileState.Missing);
     }
 
     /// <summary>Addendum C: the search matches map and pack names.</summary>

@@ -103,7 +103,6 @@ public partial class BackgroundsViewModel : RowsPageViewModel
 
         return new MapRowViewModel(
             map,
-            card.TagText,
             card.IsMissing,
             Haystack(map, pictures, snapshot.Catalog.LayoutsOf(map.FolderName)),
             alwaysShown,

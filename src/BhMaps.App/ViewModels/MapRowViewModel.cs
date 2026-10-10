@@ -6,8 +6,7 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace BhMaps.App.ViewModels;
 
-/// <summary>One row of the Backgrounds or Platforms page (addendum B and C): one map, the tag that says what it
-/// is showing, and every choice that map has on that page. A row is for clicking the choice you want.</summary>
+/// <summary>One row of the Backgrounds or Platforms page (addendum B and C): one map's name and every choice that map has on that page. A row is for clicking the choice you want.</summary>
 public sealed partial class MapRowViewModel : ObservableObject
 {
     private readonly IReadOnlyList<object> _alwaysShown;
@@ -20,7 +19,6 @@ public sealed partial class MapRowViewModel : ObservableObject
 
     public MapRowViewModel(
         MapEntry map,
-        string tagText,
         bool isMissing,
         string haystack,
         IReadOnlyList<object> alwaysShown,
@@ -30,7 +28,6 @@ public sealed partial class MapRowViewModel : ObservableObject
         Func<PlatformSetTileViewModel, CancellationToken, Task>? composeSet)
     {
         Map = map;
-        TagText = tagText;
         IsMissing = isMissing;
         Haystack = haystack;
         _alwaysShown = alwaysShown;
@@ -48,13 +45,9 @@ public sealed partial class MapRowViewModel : ObservableObject
 
     public string DisplayName => Map.DisplayName;
 
-    /// <summary>The pack name, the any-map picture's name, "Missing", or empty for Default. The page decides it:
-    /// Backgrounds takes the Maps card's own tag, Platforms measures the map's folder instead.</summary>
-    public string TagText { get; }
-
+    /// <summary>Whether the map's folder is not in the game, which the row's name shows in the missing colour. The
+    /// page decides it: Backgrounds takes the Maps card's own state, Platforms measures the map's folder instead.</summary>
     public bool IsMissing { get; }
-
-    public bool ShowTag => TagText.Length > 0;
 
     /// <summary>Everything the search box matches against: the map's name, then every choice's caption and file
     /// name, one per line (addendum B).</summary>

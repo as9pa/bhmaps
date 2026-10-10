@@ -1126,7 +1126,7 @@
     <Button Style="{StaticResource RowChoiceTileButton}" />
   </DataTemplate>
 
-  <!-- Addendum B and C: one row, shared by both rows pages. Name column 168 px, then the strip, with the "+N"
+  <!-- Addendum B and C: one row, shared by both rows pages. Name column 120 px, then the strip, with the "+N"
        tile floating at the strip's right end rather than in a column of its own: a column would take width from
        the strip, which would change the overflow, which would change the column, which is a layout loop.
        StripPanel keeps MoreWidth clear for it instead. -->
@@ -1134,53 +1134,37 @@
     <Border controls:RowRealiser.Realise="True" Style="{StaticResource RowBorder}">
       <Grid>
         <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="168" />
+          <ColumnDefinition Width="120" />
           <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
+        <!-- The name alone, centred, on up to two lines. A missing map says so in the name's colour and tooltip
+             rather than in a tag of its own. A TextBlock has no MaxLines, so two fixed 17 px lines and a 34 px
+             cap clamp it, and the ellipsis trims the second line. Colour and tooltip are set in the style, not
+             on the element, so the trigger can win. -->
         <StackPanel Margin="0,0,12,0" VerticalAlignment="Center">
-          <TextBlock FontSize="{StaticResource FontBody}"
+          <TextBlock HorizontalAlignment="Stretch"
+                     FontSize="{StaticResource FontBody}"
                      FontWeight="Medium"
+                     MaxHeight="34"
+                     LineHeight="17"
+                     LineStackingStrategy="BlockLineHeight"
                      Text="{Binding DisplayName}"
+                     TextAlignment="Center"
                      TextTrimming="CharacterEllipsis"
-                     ToolTip="{Binding DisplayName}" />
-
-          <!-- Two tags, because Missing is a style of its own rather than a colour on the ordinary one. Each sits
-               in a wrapper that carries the visibility, so neither theme style is derived from. -->
-          <Grid MaxWidth="156"
-                Margin="0,3,0,0"
-                HorizontalAlignment="Left"
-                Visibility="{Binding ShowTag, Converter={StaticResource BoolToVis}}">
-            <Grid>
-              <Grid.Style>
-                <Style TargetType="Grid">
-                  <Style.Triggers>
-                    <DataTrigger Binding="{Binding IsMissing}" Value="True">
-                      <Setter Property="Visibility" Value="Collapsed" />
-                    </DataTrigger>
-                  </Style.Triggers>
-                </Style>
-              </Grid.Style>
-              <Border Style="{StaticResource StateTagBorder}">
-                <TextBlock Text="{Binding TagText}" TextTrimming="CharacterEllipsis" />
-              </Border>
-            </Grid>
-            <Grid>
-              <Grid.Style>
-                <Style TargetType="Grid">
-                  <Setter Property="Visibility" Value="Collapsed" />
-                  <Style.Triggers>
-                    <DataTrigger Binding="{Binding IsMissing}" Value="True">
-                      <Setter Property="Visibility" Value="Visible" />
-                    </DataTrigger>
-                  </Style.Triggers>
-                </Style>
-              </Grid.Style>
-              <Border Style="{StaticResource MissingTagBorder}">
-                <TextBlock Text="{Binding TagText}" TextTrimming="CharacterEllipsis" />
-              </Border>
-            </Grid>
-          </Grid>
+                     TextWrapping="Wrap">
+            <TextBlock.Style>
+              <Style BasedOn="{StaticResource {x:Type TextBlock}}" TargetType="TextBlock">
+                <Setter Property="ToolTip" Value="{Binding DisplayName}" />
+                <Style.Triggers>
+                  <DataTrigger Binding="{Binding IsMissing}" Value="True">
+                    <Setter Property="Foreground" Value="{StaticResource MissingFgBrush}" />
+                    <Setter Property="ToolTip" Value="Missing: the map's folder is not in the game" />
+                  </DataTrigger>
+                </Style.Triggers>
+              </Style>
+            </TextBlock.Style>
+          </TextBlock>
         </StackPanel>
 
         <Grid Grid.Column="1">
