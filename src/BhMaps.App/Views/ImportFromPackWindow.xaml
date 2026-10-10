@@ -38,13 +38,13 @@
           <ColumnDefinition Width="*" />
           <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
-        <Border Width="40" Height="22" CornerRadius="3"
+        <Border Width="40" Height="22" CornerRadius="{StaticResource Radius}"
                 RenderOptions.BitmapScalingMode="HighQuality">
           <Border.Background>
             <ImageBrush ImageSource="{Binding Thumbnail}" Stretch="UniformToFill" />
           </Border.Background>
         </Border>
-        <CheckBox Grid.Column="1" Margin="10,0,10,0" VerticalAlignment="Center"
+        <CheckBox Grid.Column="1" Margin="8,0,8,0" VerticalAlignment="Center"
                   AutomationProperties.Name="{Binding Name}"
                   Content="{Binding Name}"
                   FocusVisualStyle="{StaticResource DialogFocusRing}"
@@ -68,18 +68,18 @@
       </Grid.RowDefinitions>
 
       <TextBlock FontSize="{StaticResource FontSection}" FontWeight="SemiBold" Text="{Binding Title}" TextWrapping="Wrap" />
-      <TextBlock Grid.Row="1" Margin="0,6,0,0" FontSize="{StaticResource FontCaption}" Foreground="{StaticResource Text3Brush}"
+      <TextBlock Grid.Row="1" Margin="0,8,0,0" FontSize="{StaticResource FontCaption}" Foreground="{StaticResource Text3Brush}"
                  Text="{Binding Subtitle}" TextWrapping="Wrap" />
 
-      <StackPanel Grid.Row="2" Margin="0,14,0,0">
+      <StackPanel Grid.Row="2" Margin="0,16,0,0">
         <TextBlock Foreground="{StaticResource Text2Brush}" Text="From" />
-        <ComboBox x:Name="From" Margin="0,6,0,0" AutomationProperties.Name="From"
+        <ComboBox x:Name="From" Margin="0,8,0,0" AutomationProperties.Name="From"
                   DisplayMemberPath="Label"
                   FocusVisualStyle="{StaticResource DialogFocusRing}"
                   ItemsSource="{Binding Sources}"
                   SelectedItem="{Binding Source, Mode=TwoWay}" />
-        <TextBlock Margin="0,14,0,0" Foreground="{StaticResource Text2Brush}" Text="Which maps" />
-        <RadioButton Margin="0,6,0,0" Content="{Binding AllMapsText}"
+        <TextBlock Margin="0,16,0,0" Foreground="{StaticResource Text2Brush}" Text="Which maps" />
+        <RadioButton Margin="0,8,0,0" Content="{Binding AllMapsText}"
                      FocusVisualStyle="{StaticResource DialogFocusRing}"
                      GroupName="Which" IsChecked="{Binding AllMaps, Mode=TwoWay}" />
         <RadioButton Margin="0,4,0,0" Content="Choose maps"
@@ -104,7 +104,7 @@
                  KeyboardNavigation.TabNavigation="Continue"
                  ScrollViewer.HorizontalScrollBarVisibility="Disabled" />
 
-        <TextBlock Grid.Row="1" Margin="0,12,0,6"
+        <TextBlock Grid.Row="1" Margin="0,12,0,8"
                    Foreground="{StaticResource Text2Brush}" Text="Pictures"
                    Visibility="{Binding HasLooseRows, Converter={StaticResource BoolToVis}}" />
         <ListBox Grid.Row="2" MaxHeight="120"

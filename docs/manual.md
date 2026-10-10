@@ -9,6 +9,13 @@ and `.jpg` files inside the `mapArt` folder and inside its own library, plus its
 folder, and it keeps a copy of every original so it can put it back. The game's data files are read and never written, and
 nothing else in the game install is touched.
 
+## What is new in 3.8.0
+
+Buttons, chips and tabs fade on hover and press instead of switching at once.
+Map cards and a pack's pictures brighten their edge and lift slightly under the pointer.
+Scrollbars stay a thin line and widen when the pointer is over them, so they are easier to grab.
+Corners and spacing follow one scale across the app, and section headings are a little brighter.
+
 ## What is new in 3.7.6
 
 Picking a category chip clears the search box, so an old search never leaves the new chip showing nothing.

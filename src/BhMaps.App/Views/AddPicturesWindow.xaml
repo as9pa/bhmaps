@@ -13,12 +13,12 @@
 
     <!-- One label style carries the whole panel's vertical rhythm, so a block is a label and its control. -->
     <Style x:Key="FieldLabel" TargetType="TextBlock" BasedOn="{StaticResource SectionHeaderText}">
-      <Setter Property="Margin" Value="0,18,0,6" />
+      <Setter Property="Margin" Value="0,16,0,8" />
     </Style>
 
     <!-- Its own Text drives the visibility, so a valid pack name takes the line back rather than leaving a gap. -->
     <Style x:Key="ErrorText" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
-      <Setter Property="Margin" Value="0,6,0,0" />
+      <Setter Property="Margin" Value="0,8,0,0" />
       <Setter Property="FontSize" Value="12" />
       <Setter Property="Foreground" Value="{StaticResource MissingFgBrush}" />
       <Setter Property="TextWrapping" Value="Wrap" />
@@ -41,7 +41,7 @@
          template, where the chosen radio draws as a hollow ring and the rest as filled discs. -->
     <Style x:Key="FitRadio" TargetType="RadioButton" BasedOn="{StaticResource {x:Type RadioButton}}">
       <Setter Property="MinWidth" Value="0" />
-      <Setter Property="Margin" Value="0,0,18,6" />
+      <Setter Property="Margin" Value="0,0,16,8" />
       <Setter Property="GroupName" Value="Fit" />
     </Style>
 
@@ -79,7 +79,7 @@
         <TextBlock HorizontalAlignment="Center"
                    Style="{StaticResource HintText}"
                    Text="Drop pictures anywhere on this window." />
-        <Button Margin="0,10,0,0"
+        <Button Margin="0,8,0,0"
                 HorizontalAlignment="Center"
                 Command="{Binding PickFilesCommand}"
                 Content="Pick files"
@@ -89,10 +89,10 @@
       </StackPanel>
     </Border>
 
-    <Border Grid.Row="1" Grid.Column="0" Margin="0,14,0,0" Style="{StaticResource CardBorder}">
+    <Border Grid.Row="1" Grid.Column="0" Margin="0,16,0,0" Style="{StaticResource CardBorder}">
       <DockPanel>
         <TextBlock DockPanel.Dock="Top"
-                   Margin="14,10,14,8"
+                   Margin="16,8,16,8"
                    Style="{StaticResource SectionHeaderText}"
                    Text="{Binding CountText}" />
         <Border DockPanel.Dock="Top" Height="1" Background="{StaticResource LineBrush}" />
@@ -100,7 +100,7 @@
         <Grid>
           <!-- Focusable="False" plus Continue: the list is never an invisible tab stop of its own, and Tab walks
                straight through the Remove buttons inside the realized rows. -->
-          <ListBox Margin="6"
+          <ListBox Margin="8"
                    AutomationProperties.Name="Pictures to add"
                    Focusable="False"
                    ItemContainerStyle="{StaticResource PictureRowItem}"
@@ -129,7 +129,7 @@
           </ListBox>
 
           <!-- Empty is its own state (spec 7.8); the list has no other way to say there is nothing in it yet. -->
-          <TextBlock Margin="14,14,14,0"
+          <TextBlock Margin="16,16,16,0"
                      VerticalAlignment="Top"
                      Text="No pictures yet. Drop them here or pick files.">
             <TextBlock.Style>
@@ -166,7 +166,12 @@
                   CornerRadius="{StaticResource Radius}">
             <Grid>
               <!-- 320x180 is what the view model renders, so nothing here is resampled a second time. -->
-              <Image Source="{Binding Preview}" Stretch="Fill" />
+              <!-- Prototype: an ImageBrush on a Border, so the preview has the Radius corners every other picture has. -->
+              <Border CornerRadius="{StaticResource Radius}">
+                <Border.Background>
+                  <ImageBrush ImageSource="{Binding Preview}" Stretch="Fill" />
+                </Border.Background>
+              </Border>
               <TextBlock Margin="16"
                          HorizontalAlignment="Center"
                          VerticalAlignment="Center"
@@ -221,13 +226,13 @@
                        FocusVisualStyle="{StaticResource DialogFocusRing}"
                        GroupName="Then"
                        IsChecked="{Binding ThenLibrary}" />
-          <RadioButton Margin="0,6,0,0"
+          <RadioButton Margin="0,8,0,0"
                        Content="{Binding MapChoiceText}"
                        FocusVisualStyle="{StaticResource DialogFocusRing}"
                        GroupName="Then"
                        IsChecked="{Binding ThenMap}"
                        Visibility="{Binding ShowMapChoice, Converter={StaticResource BoolToVis}}" />
-          <RadioButton Margin="0,6,0,0"
+          <RadioButton Margin="0,8,0,0"
                        Content="{Binding AllChoiceText}"
                        FocusVisualStyle="{StaticResource DialogFocusRing}"
                        GroupName="Then"
@@ -241,7 +246,7 @@
 
     <StackPanel Grid.Row="2"
                 Grid.ColumnSpan="2"
-                Margin="0,18,0,0"
+                Margin="0,16,0,0"
                 HorizontalAlignment="Right"
                 Orientation="Horizontal">
       <!-- No command: IsCancel closes with false, so the shell imports nothing. Escape does the same. -->
