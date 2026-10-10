@@ -1,0 +1,63 @@
+<Window x:Class="BhMaps.App.Views.AddAsNewWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Add as new" Width="460" SizeToContent="Height" ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        Background="{StaticResource BgBrush}">
+  <!-- 3.7.3: the background editor's Add as new. The labels and the error line are AddPicturesWindow's. -->
+  <Window.Resources>
+    <BooleanToVisibilityConverter x:Key="BoolToVis" />
+
+    <Style x:Key="FieldLabel" TargetType="TextBlock" BasedOn="{StaticResource SectionHeaderText}">
+      <Setter Property="Margin" Value="0,18,0,6" />
+    </Style>
+
+    <!-- Its own Text drives the visibility, so a valid name takes the line back rather than leaving a gap. -->
+    <Style x:Key="ErrorText" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+      <Setter Property="Margin" Value="0,6,0,0" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{StaticResource MissingFgBrush}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Style.Triggers>
+        <Trigger Property="Text" Value="">
+          <Setter Property="Visibility" Value="Collapsed" />
+        </Trigger>
+      </Style.Triggers>
+    </Style>
+  </Window.Resources>
+
+  <StackPanel Margin="24,6,24,24">
+    <TextBlock Style="{StaticResource FieldLabel}" Text="Picture name" />
+    <TextBox x:Name="NameBox"
+             AutomationProperties.Name="Picture name"
+             Style="{StaticResource FieldTextBox}"
+             Text="{Binding PictureName, UpdateSourceTrigger=PropertyChanged}" />
+
+    <TextBlock Style="{StaticResource FieldLabel}" Text="Pack" />
+    <ComboBox AutomationProperties.Name="Pack"
+              ItemsSource="{Binding PackChoices}"
+              SelectedItem="{Binding TargetPack}" />
+    <TextBox Margin="0,8,0,0"
+             AutomationProperties.Name="New pack name"
+             Style="{StaticResource FieldTextBox}"
+             Text="{Binding NewPackName, UpdateSourceTrigger=PropertyChanged}"
+             Visibility="{Binding IsNewPack, Converter={StaticResource BoolToVis}}" />
+    <TextBlock AutomationProperties.Name="Error" Style="{StaticResource ErrorText}" Text="{Binding Error}" />
+
+    <StackPanel Margin="0,20,0,0" HorizontalAlignment="Right" Orientation="Horizontal">
+      <!-- No command: IsCancel closes with false, which the editor reads as cancelled. -->
+      <Button Margin="0,0,8,0"
+              AutomationProperties.Name="Cancel"
+              Content="Cancel"
+              FocusVisualStyle="{StaticResource DialogFocusRing}"
+              IsCancel="True"
+              Style="{StaticResource PlainButton}" />
+      <Button AutomationProperties.Name="Add"
+              Command="{Binding AddCommand}"
+              Content="Add"
+              FocusVisualStyle="{StaticResource DialogFocusRing}"
+              IsDefault="True"
+              Style="{StaticResource PrimaryButton}" />
+    </StackPanel>
+  </StackPanel>
+</Window>

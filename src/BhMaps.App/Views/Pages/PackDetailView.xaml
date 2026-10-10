@@ -10,6 +10,7 @@
   <UserControl.Resources>
     <BooleanToVisibilityConverter x:Key="BoolToVis" />
     <converters:NullToVisibilityConverter x:Key="NullToVis" />
+    <converters:PackTileSelectionConverter x:Key="TileSelection" />
 
     <!-- 3.7.2: the chips and the size switch in the header draw no fill of their own, so the backdrop shows
          through them; the border, the checked fill and the hover stay. -->
@@ -24,7 +25,8 @@
     <KeyBinding Key="V" Modifiers="Control" Command="{Binding PasteCommand}" />
   </UserControl.InputBindings>
 
-  <Grid>
+  <!-- 3.7.3: image files dropped anywhere on a pack the app writes to open Add pictures with them listed. -->
+  <Grid AllowDrop="True" Background="Transparent" DragOver="Page_DragOver" Drop="Page_Drop">
     <!-- 3.0: the backdrop. The pack's first card, blown up and faded into the page, so the page opens with the
          pack's own art rather than a title on empty background. Since 3.7.2 it is the whole page, edge to edge
          and down to the bottom, behind the header and the cards, and it stays put while the cards scroll over
@@ -175,9 +177,11 @@
             </Border>
 
             <Grid>
-              <ListBox x:Name="Tiles" ItemsSource="{Binding Items}" SelectedItem="{Binding SelectedTile}"
+              <!-- 3.7.3: ItemsSource is set in the code-behind, the cards plus the Add image card after them. -->
+              <ListBox x:Name="Tiles" SelectedItem="{Binding SelectedTile, Converter={StaticResource TileSelection}}"
                        SelectionMode="Single" Style="{StaticResource TileListBox}"
                        PreviewKeyDown="Tiles_PreviewKeyDown"
+                       SelectionChanged="Tiles_SelectionChanged"
                        ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                        ScrollViewer.VerticalScrollBarVisibility="Auto">
                 <ListBox.Resources>
@@ -186,31 +190,7 @@
                   <Style TargetType="ScrollViewer">
                     <Setter Property="behaviors:SmoothScroll.IsEnabled" Value="True" />
                   </Style>
-                </ListBox.Resources>
-                <ListBox.ItemContainerStyle>
-                  <!-- The theme's ring, plus one click to open: a plain click selects and opens the drawer, and the
-                       keyboard opens with Enter, which the code-behind handles (spec 5). -->
-                  <Style TargetType="ListBoxItem" BasedOn="{StaticResource TileListBoxItem}">
-                    <Setter Property="AutomationProperties.Name" Value="{Binding Caption}" />
-                    <!-- 3.0: no margin here, because the justified panel owns the gutter. -->
-                    <Setter Property="Margin" Value="0" />
-                    <EventSetter Event="PreviewMouseLeftButtonUp" Handler="Tile_Click" />
-                    <EventSetter Event="MouseEnter" Handler="Tile_MouseEnter" />
-                    <EventSetter Event="MouseLeave" Handler="Tile_MouseLeave" />
-                  </Style>
-                </ListBox.ItemContainerStyle>
-                <ListBox.ItemsPanel>
-                  <ItemsPanelTemplate>
-                    <!-- 3.0: the same justified grid the Maps page has. The size is a target width; the panel fits
-                         as many tiles across as it can and shares the rest of the row out over them, so the grid
-                         reaches the edge whatever the drawer is doing. -->
-                    <controls:JustifiedPanel VerticalAlignment="Top"
-                                             Gap="12"
-                                             TargetWidth="{Binding DataContext.TargetCardWidth, RelativeSource={RelativeSource AncestorType=ListBox}}" />
-                  </ItemsPanelTemplate>
-                </ListBox.ItemsPanel>
-                <ListBox.ItemTemplate>
-                  <DataTemplate>
+                  <DataTemplate DataType="{x:Type pages:PackTileViewModel}">
                     <!-- Background="Transparent" so a right click on the gap between the picture and the caption
                          reaches the menu, which the Border carries for the whole tile (spec 4.1). -->
                     <Border x:Name="Tile"
@@ -267,7 +247,71 @@
                       </Trigger>
                     </DataTemplate.Triggers>
                   </DataTemplate>
-                </ListBox.ItemTemplate>
+                  <!-- 3.7.3: the last item of the grid, a card-sized outline that opens Add pictures. The invisible
+                       Viewbox gives it a card's shape at whatever width the panel hands it; the blank caption line
+                       keeps it as tall as a named card. The button takes no focus: the keyboard lands on the item,
+                       and Enter or Space there runs the same command (the code-behind). -->
+                  <DataTemplate DataType="{x:Type pages:AddImageTile}">
+                    <StackPanel>
+                      <Button AutomationProperties.Name="Add image"
+                              Command="{Binding DataContext.AddImageCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                              Cursor="Hand"
+                              Focusable="False"
+                              FocusVisualStyle="{x:Null}"
+                              Foreground="{StaticResource Text2Brush}">
+                        <Button.Template>
+                          <ControlTemplate TargetType="Button">
+                            <Grid>
+                              <Viewbox Stretch="Uniform">
+                                <Rectangle Width="{Binding Source={x:Static imaging:MapCompositor.CardWidth}, Mode=OneTime}"
+                                           Height="{Binding Source={x:Static imaging:MapCompositor.CardHeight}, Mode=OneTime}" />
+                              </Viewbox>
+                              <Border x:Name="Box"
+                                      Background="Transparent"
+                                      BorderBrush="{StaticResource LineBrush}"
+                                      BorderThickness="1"
+                                      CornerRadius="{StaticResource Radius}" />
+                              <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <controls:Icon HorizontalAlignment="Center" Geometry="{StaticResource Icon.Plus}" Size="20" />
+                                <TextBlock Margin="0,8,0,0" HorizontalAlignment="Center" Text="Add image" />
+                              </StackPanel>
+                            </Grid>
+                            <ControlTemplate.Triggers>
+                              <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Box" Property="Background" Value="{StaticResource Surface2Brush}" />
+                                <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+                              </Trigger>
+                            </ControlTemplate.Triggers>
+                          </ControlTemplate>
+                        </Button.Template>
+                      </Button>
+                      <TextBlock Margin="2,8,2,0" Text=" "
+                                 Visibility="{Binding DataContext.ShowName, RelativeSource={RelativeSource AncestorType=ListBox}, Converter={StaticResource BoolToVis}}" />
+                    </StackPanel>
+                  </DataTemplate>
+                </ListBox.Resources>
+                <ListBox.ItemContainerStyle>
+                  <!-- The theme's ring, plus one click to open: a plain click selects and opens the drawer, and the
+                       keyboard opens with Enter, which the code-behind handles (spec 5). -->
+                  <Style TargetType="ListBoxItem" BasedOn="{StaticResource TileListBoxItem}">
+                    <Setter Property="AutomationProperties.Name" Value="{Binding Caption}" />
+                    <!-- 3.0: no margin here, because the justified panel owns the gutter. -->
+                    <Setter Property="Margin" Value="0" />
+                    <EventSetter Event="PreviewMouseLeftButtonUp" Handler="Tile_Click" />
+                    <EventSetter Event="MouseEnter" Handler="Tile_MouseEnter" />
+                    <EventSetter Event="MouseLeave" Handler="Tile_MouseLeave" />
+                  </Style>
+                </ListBox.ItemContainerStyle>
+                <ListBox.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <!-- 3.0: the same justified grid the Maps page has. The size is a target width; the panel fits
+                         as many tiles across as it can and shares the rest of the row out over them, so the grid
+                         reaches the edge whatever the drawer is doing. -->
+                    <controls:JustifiedPanel VerticalAlignment="Top"
+                                             Gap="12"
+                                             TargetWidth="{Binding DataContext.TargetCardWidth, RelativeSource={RelativeSource AncestorType=ListBox}}" />
+                  </ItemsPanelTemplate>
+                </ListBox.ItemsPanel>
               </ListBox>
 
               <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{StaticResource Text2Brush}"
@@ -276,7 +320,7 @@
                   <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
                     <Setter Property="Visibility" Value="Collapsed" />
                     <Style.Triggers>
-                      <DataTrigger Binding="{Binding Items.Count, ElementName=Tiles}" Value="0">
+                      <DataTrigger Binding="{Binding Items.Count}" Value="0">
                         <Setter Property="Visibility" Value="Visible" />
                       </DataTrigger>
                     </Style.Triggers>

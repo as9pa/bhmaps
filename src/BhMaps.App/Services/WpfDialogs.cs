@@ -67,6 +67,8 @@ public sealed class WpfDialogs : IDialogs
         return ShowModal(window) == true ? window.Value : null;
     }
 
+    public bool AddAsNew(AddAsNewViewModel vm) => ShowModal(new AddAsNewWindow { DataContext = vm }) == true;
+
     private static bool ShowDialog(CommonDialog dialog) =>
         (Owner is { } owner ? dialog.ShowDialog(owner) : dialog.ShowDialog()) == true;
 

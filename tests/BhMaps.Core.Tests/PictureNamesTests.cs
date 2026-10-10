@@ -57,6 +57,25 @@ public class PictureNamesTests
     }
 
     [Fact]
+    public void Copy_StartsAtTwoInAPackThatDoesNotHoldTheSource()
+    {
+        Assert.Equal("wharf (2).jpg", PictureNames.Copy("wharf.jpg", []));
+        Assert.Equal("wharf (2).jpg", PictureNames.Copy("wharf.jpg", ["grove.jpg"]));
+    }
+
+    [Fact]
+    public void Copy_CountsUpPastCopiesAlreadyThere()
+    {
+        Assert.Equal("wharf (3).jpg", PictureNames.Copy("wharf.jpg", ["wharf.jpg", "wharf (2).jpg"]));
+    }
+
+    [Fact]
+    public void Copy_ComparesNamesTheWayWindowsDoes()
+    {
+        Assert.Equal("wharf (3).jpg", PictureNames.Copy("wharf.jpg", ["WHARF (2).JPG"]));
+    }
+
+    [Fact]
     public void ForImport_CleansEachNameAndKeepsTwoOfTheSameName()
     {
         var names = PictureNames.ForImport(

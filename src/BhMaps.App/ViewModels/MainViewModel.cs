@@ -513,7 +513,8 @@ public partial class MainViewModel : ObservableObject
 
     /// <summary>Spec 7.1: the window collects pictures, a pack and one of four outcomes. The import and any apply
     /// belong here, because both belong to the busy boundary.</summary>
-    public async Task OpenAddPicturesAsync(AddPicturesTarget target)
+    public async Task OpenAddPicturesAsync(
+        AddPicturesTarget target, string? presetPack = null, IEnumerable<string>? droppedFiles = null)
     {
         if (Snapshot is not { } snapshot)
         {
@@ -526,7 +527,13 @@ public partial class MainViewModel : ObservableObject
             snapshot.Packs.Where(p => !p.IsDiscovered).Select(p => p.Name).ToList(),
             target.Kind,
             mapName,
-            snapshot.Catalog.Maps.Count);
+            snapshot.Catalog.Maps.Count,
+            presetPack);
+        if (droppedFiles is not null)
+        {
+            vm.AcceptDroppedFiles(droppedFiles);
+        }
+
         var window = new AddPicturesWindow { DataContext = vm, Owner = Application.Current.MainWindow, ShowActivated = !App.Quiet };
         if (window.ShowDialog() != true)
         {

@@ -1,3 +1,4 @@
+using BhMaps.App.ViewModels;
 using BhMaps.Core.Model;
 
 namespace BhMaps.App.Services;
@@ -29,4 +30,7 @@ public interface IDialogs
 
     /// <summary>Single-line text prompt. Null when cancelled.</summary>
     string? PromptText(string title, string message, string initial);
+
+    /// <summary>3.7.3: the background editor's Add as new popup. False when cancelled.</summary>
+    bool AddAsNew(AddAsNewViewModel vm);
 }
