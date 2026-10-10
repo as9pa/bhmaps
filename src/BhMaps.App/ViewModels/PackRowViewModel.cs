@@ -201,5 +201,5 @@ public sealed partial class PackRowViewModel : ObservableObject
     private static string WhereText(string packName, int appliedMaps) =>
         packName.Equals(DefaultPack.Name, StringComparison.OrdinalIgnoreCase)
             ? DefaultWhereText
-            : appliedMaps == 0 ? NotInGameText : $"On {Plural(appliedMaps, "map")}.";
+            : appliedMaps == 0 ? NotInGameText : $"Active on {Plural(appliedMaps, "map")}.";
 }

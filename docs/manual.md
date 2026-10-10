@@ -9,6 +9,18 @@ and `.jpg` files inside the `mapArt` folder and inside its own library, plus its
 folder, and it keeps a copy of every original so it can put it back. The game's data files are read and never written, and
 nothing else in the game install is touched.
 
+## What is new in 3.7
+
+A pack can carry its own map-select pictures: `.jpg` files in an `images\thumbnails` folder at the pack's
+root, or beside its `mapArt` folder when it wraps one, named the way the game names them in
+`<game>\images\thumbnails`. When you apply the pack, each picture whose map the pack puts art on is copied
+into the game as it is, in place of the picture BhMaps would render, and the done line counts them, for
+example "Summer applied to 3 maps, 2 pictures." A picture for a map the pack has no art for, one the game
+shares between two maps, and one whose name no map uses are left out. The pack's picture stays on the game
+through later saves until the map is reset to default; Undo of the apply puts the previous picture back.
+Import from a pack brings a map's picture along with its art. The pack row says "Active on 3 maps." where it
+said "On 3 maps.".
+
 ## What is new in 3.6.2
 
 A discovered pack, one found outside `packs` by its `mapArt` folder, can be deleted and renamed from its
@@ -307,13 +319,14 @@ can do. Nothing about the files it writes changed.
   already written as they are.
 - **Reset to default** also clears what the editors remembered for the maps it resets, so they open
   fresh afterwards, and **Undo** puts that memory back along with the files.
-- Settings has a **Map-select thumbnails** switch, off until you turn it on. With it on, a write that
-  changes a map's art also renders that map at 290 by 164 and writes the picture over the map's own
-  thumbnail in `<game>\images\thumbnails`, so the map select screen shows the art you put on. The
-  original thumbnail is kept in `%APPDATA%\BhMaps\thumbnails-original`, and Reset to default, Undo
-  and turning the switch off again put it back. A map whose thumbnail is shared with another map,
-  one that names no thumbnail, and one whose file is not there are left alone, and the map panel says
-  which of those it is.
+- Every save that changes a map's art also writes that map's map-select picture over its own
+  thumbnail in `<game>\images\thumbnails`, so the map select screen shows the art you put on. When
+  the pack being applied has its own picture for the map in its `images\thumbnails` folder, that jpg is
+  copied as it is; otherwise BhMaps renders its composite at 290 by 164. A pack's picture stays until
+  the map is reset to default. The original thumbnail is kept in `%APPDATA%\BhMaps\thumbnails-original`,
+  and Reset to default and Undo put it back. A map whose thumbnail is shared with another map, one that
+  names no thumbnail, and one whose file is not there are left alone, and the map panel says which of
+  those it is.
 - A card no longer shows its old picture for a moment after a write. The cards of the maps a write
   touched reload their previews before the rest of the grid refreshes, so what you see is what was
   just written.
@@ -437,12 +450,15 @@ describes things by where they are and what they do. Nothing on disk changes sha
 | Undo of the last game write                          | `%APPDATA%\BhMaps\undo\`                                                                                      |
 | Downloaded updates                                   | `%APPDATA%\BhMaps\updates\`                                                                                   |
 | Kept map-select thumbnails                           | `%APPDATA%\BhMaps\thumbnails-original\`                                                                       |
+| Pack pictures on the game, kept until reset          | `%APPDATA%\BhMaps\thumbnails.bhmaps.json`                                                                    |
 
 The map art folder and the library are chosen in the welcome window and editable in Settings; the
 data files are wherever the game folder is. Only `<library>\packs` is written, so anything
 else kept in the library folder is left alone. BhMaps also reads packs kept elsewhere in the library: any
 folder with a `mapArt` folder inside it is a pack named after that folder, with its game folders read from
-the `mapArt` folder, for example `<library>\Summer\mapArt\BloodMoon\<file>`. The search looks at most
+the `mapArt` folder, for example `<library>\Summer\mapArt\BloodMoon\<file>`. A pack may also hold its
+own map-select pictures in `images\thumbnails`, at its root or beside its `mapArt`; that folder is never read
+as a map. The search looks at most
 three folders deep, counting the library's own subfolders as the first, so `mapArt` itself has to sit
 within those three. It does not look inside a pack it has found, skips `packs`, and skips junctions,
 links and folders it cannot open. These discovered packs are read only: they can be viewed, applied,
