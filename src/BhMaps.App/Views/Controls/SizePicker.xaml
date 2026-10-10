@@ -35,8 +35,9 @@
     </Style>
   </UserControl.Resources>
 
+  <!-- Dynamic so a page can clear the pill's fill (3.7.2, see SizePickerFillBrush). -->
   <Border Height="{StaticResource ActionHeight}"
-          Background="{StaticResource Surface2Brush}"
+          Background="{DynamicResource SizePickerFillBrush}"
           BorderBrush="{StaticResource LineBrush}"
           BorderThickness="1"
           CornerRadius="{StaticResource RadiusPill}">

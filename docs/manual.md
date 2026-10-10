@@ -9,6 +9,16 @@ and `.jpg` files inside the `mapArt` folder and inside its own library, plus its
 folder, and it keeps a copy of every original so it can put it back. The game's data files are read and never written, and
 nothing else in the game install is touched.
 
+## What is new in 3.7.2
+
+A pack's page shows the pack's first card behind the whole page, edge to edge and down to the bottom of the
+window, faded so it is strongest at the top and still faintly there at the bottom. The cards scroll over it
+and the picture stays put. The chips and the size switch in the page's header no longer draw a filled box,
+so the picture shows through them, and the subtitle sits closer under the pack's name.
+
+- The Packs rows and a pack's page count platforms, for example "25 platforms, 27 backgrounds.", where
+  they said maps before.
+
 ## What is new in 3.7.1
 
 A pack's map-select picture now stays only while that pack's art is on the map. Applying a pack without a

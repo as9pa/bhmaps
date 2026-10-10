@@ -21,6 +21,11 @@
   <!-- The ground a label needs when it is drawn over map art rather than over a surface: the page's own
        near-black at 85 percent, so the art it covers is still felt through it. -->
   <SolidColorBrush x:Key="ScrimBrush" Color="#D9161514" />
+  <!-- 3.7.2: the fill behind an unchecked chip and the one behind the size switch's pill. Keys of their own,
+       read with DynamicResource, so a page can clear them: a pack's page sets both Transparent, so its header
+       controls sit on the backdrop picture instead of on grey boxes. Surface and Surface2 everywhere else. -->
+  <SolidColorBrush x:Key="ChipFillBrush" Color="#1C1B1A" />
+  <SolidColorBrush x:Key="SizePickerFillBrush" Color="#242220" />
   <!-- The accent is the text colour itself: one primary action per page, the selected or checked state, the
        keyboard focus ring, and text links. There is no second hue. -->
   <SolidColorBrush x:Key="AccentBrush" Color="#F1EFEA" />
