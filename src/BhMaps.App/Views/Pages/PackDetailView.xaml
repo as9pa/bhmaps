@@ -38,7 +38,7 @@
           <ImageBrush ImageSource="{Binding BackdropTile.Preview}" Opacity="0.35" Stretch="UniformToFill" />
         </Border.Background>
         <Border.Effect>
-          <BlurEffect Radius="48" KernelType="Gaussian" RenderingBias="Performance" />
+          <BlurEffect Radius="24" KernelType="Gaussian" RenderingBias="Performance" />
         </Border.Effect>
       </Border>
 

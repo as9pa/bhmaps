@@ -11,8 +11,9 @@ nothing else in the game install is touched.
 
 ## What is new in 3.7.2
 
-A pack's page shows the pack's first card behind the whole page, edge to edge and down to the bottom of the
-window, faded so it is strongest at the top and still faintly there at the bottom. The cards scroll over it
+A pack's page shows the pack's first card, softly blurred, behind the whole page, edge to edge and down to
+the bottom of the window. It eases in under the top bar's line, is strongest near the top and is still
+faintly there at the bottom. The cards scroll over it
 and the picture stays put. The chips and the size switch in the page's header no longer draw a filled box,
 so the picture shows through them, and the subtitle sits closer under the pack's name.
 
