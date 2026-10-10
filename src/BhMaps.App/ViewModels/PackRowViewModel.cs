@@ -193,9 +193,9 @@ public sealed partial class PackRowViewModel : ObservableObject
     /// <summary>"1 map" but "0 maps" and "3 maps". Shared with the page's confirm text, which counts files.</summary>
     public static string Plural(int count, string noun) => count == 1 ? $"{count} {noun}" : $"{count} {noun}s";
 
-    /// <summary>The first sentence, as in "25 maps, 27 backgrounds."</summary>
+    /// <summary>The first sentence, as in "25 platforms, 27 backgrounds." (3.7.2: platforms, not maps.)</summary>
     private static string HoldsText(int mapCount, int backgroundCount) =>
-        $"{Plural(mapCount, "map")}, {Plural(backgroundCount, "background")}.";
+        $"{Plural(mapCount, "platform")}, {Plural(backgroundCount, "background")}.";
 
     /// <summary>The second sentence: where the pack's art is, as in "Active on 3 maps.". Empty when the art is
     /// on no map, and always for the Default pack, which is never applied as such (3.7.1).</summary>

@@ -270,7 +270,8 @@
   <Style x:Key="ChipToggle" TargetType="ToggleButton">
     <Setter Property="FontFamily" Value="{StaticResource Sans}" />
     <Setter Property="FontSize" Value="{StaticResource FontBody}" />
-    <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+    <!-- Dynamic so a page can clear it (3.7.2, see ChipFillBrush). -->
+    <Setter Property="Background" Value="{DynamicResource ChipFillBrush}" />
     <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="Foreground" Value="{StaticResource Text2Brush}" />
