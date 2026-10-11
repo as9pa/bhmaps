@@ -28,24 +28,20 @@ public abstract partial class RowsPageViewModel : PageViewModel, ITileSized
 
     private CancellationTokenSource? _loads;
 
-    /// <summary>True while a chip change empties the search, so the rows filter once for the pair.</summary>
-    private bool _clearingSearch;
-
     protected RowsPageViewModel(MainViewModel shell, TileSize storedSize)
         : base(shell)
     {
         Rows = [];
         _chips.Add(AllChip);
 
-        // After the collections, because setting it runs the change hook that filters them.
-        SearchText = "";
-
         // Handed in rather than read here, so the constructor reaches for nothing the subclass owns.
         TileSize = storedSize;
 
         // 3.1: the chip is the shell's, so a chip picked on another of the three pages arrives as a shell change
-        // rather than as a set of this page's property. Subscribed for the life of the app, like the page is.
-        shell.PropertyChanged += OnShellLevelSetChanged;
+        // rather than as a set of this page's property. The search is the shell's too, and arrives the same way.
+        // Subscribed for the life of the app, like the page is, so a page out of sight is filtered as the change
+        // happens and shows no stale rows when it comes back.
+        shell.PropertyChanged += OnShellFilterChanged;
     }
 
     /// <summary>The last scan, or null before the first one.</summary>
@@ -61,8 +57,13 @@ public abstract partial class RowsPageViewModel : PageViewModel, ITileSized
     /// <summary>"All" and the UI set labels. Without level data the set chips are gone entirely (spec 3.6).</summary>
     public IReadOnlyList<string> Chips => _chips;
 
-    [ObservableProperty]
-    public partial string SearchText { get; set; }
+    /// <summary>The search box. One string for Maps, Backgrounds and Platforms, so the value lives on the shell
+    /// and this is the box's way in and out of it, as <see cref="SelectedChip" /> is the chip row's.</summary>
+    public string SearchText
+    {
+        get => Shell.SearchText;
+        set => Shell.SearchText = value ?? "";
+    }
 
     /// <summary>The chip the level-set filter is on. 3.1: one filter for Maps, Backgrounds and Platforms, so
     /// the value lives on the shell and this is the chip row's way in and out of it.</summary>
@@ -249,16 +250,6 @@ public abstract partial class RowsPageViewModel : PageViewModel, ITileSized
     [RelayCommand]
     private void GoToPacks() => Shell.NavigatePacksCommand.Execute(null);
 
-    partial void OnSearchTextChanged(string value)
-    {
-        OnPropertyChanged(nameof(ShowClearSearch));
-        OnPropertyChanged(nameof(EmptyActionText));
-        if (!_clearingSearch)
-        {
-            ApplyFilter();
-        }
-    }
-
     partial void OnTileSizeChanged(TileSize value)
     {
         SaveSize(value);
@@ -269,21 +260,24 @@ public abstract partial class RowsPageViewModel : PageViewModel, ITileSized
         OnPropertyChanged(nameof(ShowTileApply));
     }
 
-    /// <summary>The shared chip changed, here or on another page: the row shows it and the rows answer it.
-    /// 3.7.6: a new chip also empties the search, so a search typed under the old chip cannot leave the new
-    /// one stuck on nothing. Only the search is written here, never the chip, so nothing comes back round.</summary>
-    private void OnShellLevelSetChanged(object? sender, PropertyChangedEventArgs e)
+    /// <summary>The shared chip or the shared search changed, here or on another page: the box and the chip row
+    /// show it and the rows answer it. A new chip empties the search on the shell (3.7.6), which arrives here as
+    /// a search change of its own. Nothing is written back, so nothing comes back round.</summary>
+    private void OnShellFilterChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName != nameof(MainViewModel.SelectedLevelSet))
+        switch (e.PropertyName)
         {
-            return;
+            case nameof(MainViewModel.SelectedLevelSet):
+                OnPropertyChanged(nameof(SelectedChip));
+                break;
+            case nameof(MainViewModel.SearchText):
+                OnPropertyChanged(nameof(SearchText));
+                OnPropertyChanged(nameof(ShowClearSearch));
+                OnPropertyChanged(nameof(EmptyActionText));
+                break;
+            default:
+                return;
         }
-
-        OnPropertyChanged(nameof(SelectedChip));
-
-        _clearingSearch = true;
-        SearchText = "";
-        _clearingSearch = false;
 
         ApplyFilter();
     }

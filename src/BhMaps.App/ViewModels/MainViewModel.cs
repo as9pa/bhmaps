@@ -75,8 +75,9 @@ public partial class MainViewModel : ObservableObject
         Status = new StatusViewModel(Cancel, UndoAsync);
         _launcher = new GameLauncher();
 
-        // Before the pages, because each of the three chip rows reads it as it is built.
+        // Before the pages, because each of the three chip rows and search boxes reads them as it is built.
         SelectedLevelSet = AllLevelSet;
+        SearchText = "";
         Maps = new MapsViewModel(this);
         Backgrounds = new BackgroundsViewModel(this);
         Platforms = new PlatformsViewModel(this);
@@ -157,6 +158,16 @@ public partial class MainViewModel : ObservableObject
     /// persisted: every run starts on All, as it did before.</summary>
     [ObservableProperty]
     public partial string SelectedLevelSet { get; set; }
+
+    /// <summary>The search box Maps, Backgrounds and Platforms all filter by. One string on the shell, like the
+    /// chip, so text typed on one of the three is the text the next one shows and filters by. Not persisted.
+    /// </summary>
+    [ObservableProperty]
+    public partial string SearchText { get; set; }
+
+    /// <summary>3.7.6: a new chip empties the search, so a search typed under the old chip cannot leave the new
+    /// one stuck on nothing. Here rather than on each page, so it happens once for the three.</summary>
+    partial void OnSelectedLevelSetChanged(string value) => SearchText = "";
 
     /// <summary>Addendum B: unfolded rows fold back when the page is left, so coming back to a rows page shows
     /// the same thing it shows on a first visit.</summary>
