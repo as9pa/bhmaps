@@ -1,6 +1,6 @@
 # BhMaps
 
-![The Maps grid, every map with its composed preview](docs/images/maps.png)
+![Applying a whole pack to every map in one click](docs/images/apply-launch.gif)
 
 Brawlhalla map art manager for Windows. It keeps packs of map art in a library, shows every map
 under its in-game name with a preview composed from the game's own level data, and copies packs into
@@ -51,6 +51,8 @@ Brawlhalla open or closed, and show on the next match load.
 - **Map-select thumbnails.** Each map's art also replaces its thumbnail on the game's map select
   screen, keeping the original for a reset.
 - **Undo.** Puts back whatever the last write into the game folder overwrote or deleted.
+
+![The Maps grid, every map with its composed preview](docs/images/maps.png)
 
 ![The Packs page, one row per pack with thumbnails and Apply all](docs/images/packs.png)
 
