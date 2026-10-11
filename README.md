@@ -72,9 +72,8 @@ Brawlhalla open or closed, and show on the next match load.
   pan, zoom and tone sliders come back, with a Start fresh link to drop them.
 - Copy to pack, Move to pack, Ctrl+C, Ctrl+X and Ctrl+V move a map or a picture between packs.
   Import from pack copies all of another pack's maps, or the ones you pick, into the one you are
-  looking at. Duplicate copies a
-  whole pack under a new name. Delete takes a picture, a platform set or a map out of a pack and puts
-  the default back on any map showing it.
+  looking at. Duplicate copies a whole pack under a new name. Delete takes a picture, a platform set
+  or a map out of a pack and puts the default back on any map showing it.
 - Each Packs row leads with a thumbnail: the pack's first map composed with the pack's art over it,
   or its first background picture in Backgrounds mode.
 - Rename a pack from its row menu or with F2. The folder on disk is renamed, and the hidden list and
