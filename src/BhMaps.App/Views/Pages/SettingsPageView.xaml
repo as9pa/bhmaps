@@ -58,13 +58,64 @@
       <Setter Property="VerticalAlignment" Value="Bottom" />
       <Setter Property="Background" Value="{StaticResource LineBrush}" />
     </Style>
+
+    <!-- The credit line's links: StripLinkText's quiet underline on an inline link, so a narrow window wraps the
+         line as text. Text2, lifting to Text on hover like the strip's links. -->
+    <Style x:Key="CreditLink" TargetType="Hyperlink">
+      <Setter Property="Foreground" Value="{StaticResource Text2Brush}" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="FocusVisualStyle" Value="{StaticResource DialogFocusRing}" />
+      <Setter Property="TextDecorations">
+        <Setter.Value>
+          <TextDecorationCollection>
+            <TextDecoration Location="Underline">
+              <TextDecoration.Pen>
+                <Pen Brush="{StaticResource Text3Brush}" Thickness="1" />
+              </TextDecoration.Pen>
+            </TextDecoration>
+          </TextDecorationCollection>
+        </Setter.Value>
+      </Setter>
+      <Style.Triggers>
+        <Trigger Property="IsMouseOver" Value="True">
+          <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+        </Trigger>
+      </Style.Triggers>
+    </Style>
   </UserControl.Resources>
 
-  <DockPanel Margin="24,8,24,24">
+  <DockPanel Margin="24,8,24,16">
     <!-- 3.9: the column is centred in the page at its 760 px, and the title rides the same column. A
          stretched element clamped by MaxWidth is centred in its slot, so both land on the same edges. -->
     <controls:PageHeader DockPanel.Dock="Top" MaxWidth="760" Title="Settings" />
-    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+    <!-- 3.10.3: the owner asked for credit where every user sees it. It first sat under the title; after trying
+         it the owner moved it to a quiet footer centred at the bottom, since it reads as a credit, not a setting.
+         Outside the scrolling form, so it stays in view and the links still work while an operation runs. -->
+    <TextBlock MaxWidth="760"
+               Margin="0,12,0,0"
+               HorizontalAlignment="Center"
+               DockPanel.Dock="Bottom"
+               FontSize="{StaticResource FontBody}"
+               Foreground="{StaticResource Text2Brush}"
+               TextAlignment="Center"
+               TextWrapping="Wrap">
+      <Run Text="BhMaps" /> <Run Text="{Binding Version, Mode=OneWay}" /> <Run Text="by" />
+      <Run FontWeight="Medium" Foreground="{StaticResource TextBrush}" Text="aexax" /> <Run Text="on Discord" />
+      <Run Foreground="{StaticResource Text3Brush}" Text="·" />
+      <Hyperlink AutomationProperties.Name="Open BhMaps on GitHub"
+                 Command="{Binding OpenRepositoryCommand}"
+                 Style="{StaticResource CreditLink}">GitHub</Hyperlink>
+      <Run Foreground="{StaticResource Text3Brush}" Text="·" />
+      <Hyperlink AutomationProperties.Name="Open the GPL-3.0 license"
+                 Command="{Binding OpenLicenseCommand}"
+                 Style="{StaticResource CreditLink}">GPL-3.0</Hyperlink>
+    </TextBlock>
+    <!-- Not a tab stop and no focus box, like the Packs page's list: arrow keys from a focused row still bubble
+         up and scroll it. Without this the whole form showed a light outline once the credit moved outside it. -->
+    <ScrollViewer FocusVisualStyle="{x:Null}"
+                  Focusable="False"
+                  HorizontalScrollBarVisibility="Disabled"
+                  VerticalScrollBarVisibility="Auto">
       <!-- Every row here writes something, so none of them is offered while a long operation is running. The
            three grids share one scope so their action columns line up as one column down the whole form. -->
       <StackPanel MaxWidth="760"
@@ -105,7 +156,7 @@
             <Button AutomationProperties.Name="Change game folder"
                     Command="{Binding ChangeGameCommand}"
                     Content="Change"
-                    Style="{StaticResource OutlineButton}"
+                    Style="{StaticResource PlainButton}"
                     ToolTip="Change game folder" />
             <Button Margin="8,0,0,0"
                     AutomationProperties.Name="Open game folder"
@@ -131,7 +182,7 @@
             <Button AutomationProperties.Name="Change library folder"
                     Command="{Binding ChangeLibraryCommand}"
                     Content="Change"
-                    Style="{StaticResource OutlineButton}"
+                    Style="{StaticResource PlainButton}"
                     ToolTip="Change library folder" />
             <Button Margin="8,0,0,0"
                     AutomationProperties.Name="Open library folder"
@@ -194,28 +245,37 @@
         </Grid>
 
         <TextBlock Style="{StaticResource SettingSection}" Text="Updates" />
+        <!-- 3.10.3: the owner asked for the whole Updates section in one row. Its actions column stays out of the
+             shared group: five controls would push every other section's values left, and the value column here
+             wraps the status instead when the window is narrow. -->
         <Grid>
           <Grid.ColumnDefinitions>
             <ColumnDefinition Width="180" />
             <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="Auto" MinWidth="160" SharedSizeGroup="SettingActions" />
+            <ColumnDefinition Width="Auto" MinWidth="160" />
           </Grid.ColumnDefinitions>
           <Grid.RowDefinitions>
             <RowDefinition Height="Auto" MinHeight="56" />
-            <RowDefinition Height="Auto" MinHeight="56" />
           </Grid.RowDefinitions>
 
-          <!-- Version -->
+          <!-- Version (spec 7.2, 7.3) -->
           <Border Grid.Row="0" Style="{StaticResource SettingRule}" />
           <TextBlock Grid.Row="0" Grid.Column="0" Style="{StaticResource SettingLabel}" Text="Version" />
-          <StackPanel Grid.Row="0" Grid.Column="1" Style="{StaticResource SettingCell}">
-            <TextBlock Style="{StaticResource SettingValue}" Text="{Binding Version}" />
-
-            <!-- Spec 7.3: one second line for every state, available, up to date, never checked, failed, and the
-                 two download states. The view model owns which one it is. -->
-            <TextBlock Style="{StaticResource SettingHelp}"
-                       Text="{Binding UpdateLine}"
-                       Visibility="{Binding HasUpdateLine, Converter={StaticResource BoolToVis}}" />
+          <StackPanel Grid.Row="0" Grid.Column="1" Margin="0,8,16,8" Style="{StaticResource SettingCell}">
+            <!-- Spec 7.3: one status for every state, available, up to date, never checked, failed, and the two
+                 download states. The view model owns which one it is. It sits beside the version and wraps
+                 inside this column when it is long. When it last ran is this line: the check is the same one. -->
+            <DockPanel>
+              <TextBlock VerticalAlignment="Center"
+                         DockPanel.Dock="Left"
+                         Style="{StaticResource SettingValue}"
+                         Text="{Binding Version}" />
+              <TextBlock Margin="14,0,0,0"
+                         VerticalAlignment="Center"
+                         Style="{StaticResource SettingHelp}"
+                         Text="{Binding UpdateLine}"
+                         Visibility="{Binding HasUpdateLine, Converter={StaticResource BoolToVis}}" />
+            </DockPanel>
             <ProgressBar Margin="0,8,0,0"
                          Style="{StaticResource ThinProgress}"
                          Value="{Binding DownloadProgress, Mode=OneWay}"
@@ -241,22 +301,17 @@
                     Style="{StaticResource PrimaryButton}"
                     ToolTip="Downloads the new version, checks it, replaces this copy of BhMaps and restarts it."
                     Visibility="{Binding CanUpdate, Converter={StaticResource BoolToVis}}" />
-          </StackPanel>
-
-          <!-- Updates (spec 7.2, 7.3). Under Version, because it is about the row above it. What the check costs
-               is the switch's tooltip, and when it last ran is the Version row's line: it is the same check. -->
-          <Border Grid.Row="1" Style="{StaticResource SettingRule}" />
-          <!-- No label of its own: the section is called Updates, and the switch's text says the rest. -->
-          <StackPanel Grid.Row="1" Grid.Column="1" Style="{StaticResource SettingCell}">
-            <CheckBox AutomationProperties.Name="Check for updates when BhMaps starts"
-                      Content="Check for updates when BhMaps starts"
+            <!-- What the check costs is the switch's tooltip. -->
+            <CheckBox Margin="16,0,0,0"
+                      VerticalAlignment="Center"
+                      AutomationProperties.Name="Check for updates when BhMaps starts"
+                      Content="Check on start"
                       FocusVisualStyle="{StaticResource DialogFocusRing}"
                       Foreground="{StaticResource TextBrush}"
                       IsChecked="{Binding CheckForUpdates}"
-                      ToolTip="Once a day, one small request to github.com. Nothing is sent about you or your library." />
-          </StackPanel>
-          <StackPanel Grid.Row="1" Style="{StaticResource SettingActions}">
-            <Button Command="{Binding CheckNowCommand}"
+                      ToolTip="Check for updates when BhMaps starts. Once a day, one small request to github.com. Nothing is sent about you or your library." />
+            <Button Margin="8,0,0,0"
+                    Command="{Binding CheckNowCommand}"
                     Content="Check now"
                     FocusVisualStyle="{StaticResource DialogFocusRing}"
                     Style="{StaticResource PlainButton}" />

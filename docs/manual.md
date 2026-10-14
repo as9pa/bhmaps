@@ -9,6 +9,14 @@ and `.jpg` files inside the `mapArt` folder and inside its own library, plus its
 folder, and it keeps a copy of every original so it can put it back. The game's data files are read and never written, and
 nothing else in the game install is touched.
 
+## What is new in 3.10.3
+
+- Settings has a credit line centred at the bottom: BhMaps and its version, by aexax on Discord, and links to the GitHub page and the GPL-3.0 license.
+- Updates in Settings is one row: the version and its update status, then Check on start and Check now on the right.
+- The Change buttons next to Open in Settings have no border, like Open.
+- Settings is a gear at the right of the top bar, after the game line; the tabs on the left are the game tools. Ctrl+5 still opens it.
+- The Refresh button in the top bar has no border any more. It still lights up when you point at it.
+
 ## What is new in 3.10.2
 
 - **Edit in another app** in the platform editor works again on Windows 11 when Photos is the default PNG app. It opened nothing before and showed "No application is associated with the specified file". It now opens Windows' Pick an app window, which lists GIMP, Paint and the rest, and picks for this file only, so the default app does not change.
@@ -573,8 +581,8 @@ folder BhMaps runs from has to be one it can write to.
 
 ## Pages
 
-The top bar carries the app's name, then the five tabs: Maps, Backgrounds, Platforms, Packs and
-Settings. Ctrl+1 to Ctrl+5 switch between them, and Ctrl+K goes to Maps and puts the cursor in its
+The top bar carries the app's name, then the four tabs: Maps, Backgrounds, Platforms and Packs.
+Settings is the gear at the right, after the game line. Ctrl+1 to Ctrl+4 switch tabs and Ctrl+5 opens Settings, and Ctrl+K goes to Maps and puts the cursor in its
 search box. After the tabs is the status line: what the app is doing or has just done, on one line
 with its dot and its links, trimmed to the room between the tabs and the buttons at the right and
 said in full by hovering it. On the right is the game line, reading "Brawlhalla running", or "Brawlhalla not running"
