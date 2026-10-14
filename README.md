@@ -34,7 +34,7 @@ Brawlhalla open or closed, and show on the next match load.
 - **Map grid:** every map by its in-game name, with a live preview and what art is on it.
 - **Packs:** keep map art in packs and apply one map or a whole pack in one click.
 - **Backgrounds and Platforms:** every option for each map, side by side.
-- **Custom images:** add any `.png` or `.jpg` as a background or on the platforms.
+- **Custom images:** add any `.png`, `.jpg`, `.bmp` or `.webp` as a background or on the platforms.
 - **Editors:** pan, zoom, hue, saturation, contrast, darken and blur, with a live preview.
 - **Map-select thumbnails:** match the art you picked.
 - **Undo and Reset:** put back the last change, or the game's own art on any map.
