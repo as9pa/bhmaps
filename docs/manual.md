@@ -9,6 +9,10 @@ and `.jpg` files inside the `mapArt` folder and inside its own library, plus its
 folder, and it keeps a copy of every original so it can put it back. The game's data files are read and never written, and
 nothing else in the game install is touched.
 
+## What is new in 3.10.1
+
+- Maps, Backgrounds and Platforms share one search. Text typed on one page is still there on the other two, and picking a chip clears it everywhere.
+
 ## What is new in 3.9.3
 
 - Packs the app makes on its own are called Custom Pack, then Custom Pack 2, Custom Pack 3 and so on. The editors, New pack and the Add as new popups suggest these names.
@@ -222,8 +226,8 @@ A map card's **Apply picture** flyout is now
 with a greyed last line counting the ones left out and naming them when you rest on it. The picture chooser that **More pictures...** and **Apply to a map...** open is a grid now: 760 by 560, resizable, with each picture at 224 by 126 and its name under it, instead of a list with a thumbnail the size of a fingernail.
 
 The chip row is one filter now: All, Ranked 1v1, Ranked 2v2, Tournament and Minigames are shared by
-Maps, Backgrounds and Platforms, so a chip picked on one of them is the chip the other two show. Each
-page still has its own search box, and every run starts on All.
+Maps, Backgrounds and Platforms, so a chip picked on one of them is the chip the other two show.
+Every run starts on All. Since 3.10.1 the search box is shared the same way.
 
 ## What is new in 3.0
 
