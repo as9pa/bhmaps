@@ -9,6 +9,10 @@ and `.jpg` files inside the `mapArt` folder and inside its own library, plus its
 folder, and it keeps a copy of every original so it can put it back. The game's data files are read and never written, and
 nothing else in the game install is touched.
 
+## What is new in 3.10.2
+
+- **Edit in another app** in the platform editor works again on Windows 11 when Photos is the default PNG app. It opened nothing before and showed "No application is associated with the specified file". It now opens Windows' Pick an app window, which lists GIMP, Paint and the rest, and picks for this file only, so the default app does not change.
+
 ## What is new in 3.10.1
 
 - Maps, Backgrounds and Platforms share one search. Text typed on one page is still there on the other two, and picking a chip clears it everywhere.
