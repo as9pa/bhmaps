@@ -52,13 +52,11 @@ Brawlhalla open or closed, and show on the next match load.
   screen, keeping the original for a reset.
 - **Undo.** Puts back whatever the last write into the game folder overwrote or deleted.
 
+| Backgrounds | Platforms |
+| --- | --- |
+| ![The Backgrounds page, one row per map with every background it could have](docs/images/backgrounds.png) | ![The Platforms page, one row per map with every platform set it could have](docs/images/platforms.png) |
+
 ![The Packs page, one row per pack with thumbnails and Apply all](docs/images/packs.png)
-
-![The Backgrounds page, one row per map with every background it could have](docs/images/backgrounds.png)
-
-![The Platforms page, one row per map with every platform set it could have](docs/images/platforms.png)
-
-![A map's panel, with its preview, Reset, and every background and platform set it could use](docs/images/map-panel.png)
 
 | Background editor | Platform editor |
 | --- | --- |
