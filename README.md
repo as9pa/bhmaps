@@ -14,8 +14,6 @@
 
 <p><b><a href="https://github.com/as9pa/bhmaps/releases/latest/download/bhmaps.exe">Download bhmaps.exe</a></b> &middot; Windows 10 or 11 &middot; 135 MB</p>
 
-<sub>This repository is the official home of BhMaps, and its <a href="https://github.com/as9pa/bhmaps/releases">Releases</a> page is the official download.</sub>
-
 </div>
 
 ![The Maps grid, every map with its composed preview](docs/images/maps.png)
