@@ -6,6 +6,8 @@ Brawlhalla map art manager for Windows. It keeps packs of map art in a library, 
 under its in-game name with a preview composed from the game's own level data, and copies packs into
 the game with one click, with an Undo for the last write.
 
+**[Download bhmaps.exe](https://github.com/as9pa/bhmaps/releases/latest/download/bhmaps.exe)** (Windows 10 or 11, 64-bit)
+
 ## Download
 
 Requires Windows 10 or 11, 64-bit, and Brawlhalla installed through Steam.
@@ -17,12 +19,6 @@ Requires Windows 10 or 11, 64-bit, and Brawlhalla installed through Steam.
 
 Take the `.exe` unless you already have .NET 10 installed. Windows may warn on first run because the
 exe is unsigned: choose "More info", then "Run anyway".
-
-From 2.6 the app checks this page for a newer release once a day and offers to update itself. It is
-one small request to github.com, nothing about you or your library is sent, and the check can be
-turned off in Settings under Updates. Both builds update in place: press **Update** in Settings and
-BhMaps downloads the new version, checks it, replaces itself and restarts, with nothing to download
-by hand. Keep BhMaps in a folder it can write to, such as Documents or Desktop, for that to work.
 
 ## First run
 
@@ -55,6 +51,13 @@ Every menu, shortcut and option is in the [manual](docs/manual.md).
 | Background editor | Platform editor |
 | --- | --- |
 | ![Background editor with fit, pan, zoom, hue, saturation, contrast, darken and blur](docs/images/editor-background.png) | ![Platform editor with pan, zoom and per-piece tone sliders over a live preview](docs/images/editor-platform.png) |
+
+## Updates
+
+BhMaps checks for a new release once a day: one small request to github.com, with nothing about
+you or your library sent. Press **Update** in Settings and it downloads the new version, checks it,
+replaces itself and restarts. Keep it in a folder it can write to, such as Documents or Desktop.
+The check can be turned off in Settings under Updates.
 
 ## Files
 
