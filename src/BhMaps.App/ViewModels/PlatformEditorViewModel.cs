@@ -1620,7 +1620,7 @@ public partial class PlatformEditorViewModel : ObservableObject
             }
 
             WatchFolder(folder);
-            if (EditorLauncher.OpenWith(copy) is { } reason)
+            if (await EditorLauncher.OpenWithAsync(copy) is { } reason)
             {
                 ImageError = reason;
                 failed = true;
