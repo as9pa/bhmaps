@@ -84,17 +84,20 @@
     </Style>
   </UserControl.Resources>
 
-  <DockPanel Margin="24,8,24,24">
+  <DockPanel Margin="24,8,24,16">
     <!-- 3.9: the column is centred in the page at its 760 px, and the title rides the same column. A
          stretched element clamped by MaxWidth is centred in its slot, so both land on the same edges. -->
     <controls:PageHeader DockPanel.Dock="Top" MaxWidth="760" Title="Settings" />
-    <!-- 3.10.3: the owner asked for credit where every user sees it, so it is a small caption under the title
-         rather than a setting row. Outside the form below, so the links still work while an operation runs. -->
+    <!-- 3.10.3: the owner asked for credit where every user sees it. It first sat under the title; after trying
+         it the owner moved it to a quiet footer centred at the bottom, since it reads as a credit, not a setting.
+         Outside the scrolling form, so it stays in view and the links still work while an operation runs. -->
     <TextBlock MaxWidth="760"
-               Margin="0,0,0,12"
-               DockPanel.Dock="Top"
+               Margin="0,12,0,0"
+               HorizontalAlignment="Center"
+               DockPanel.Dock="Bottom"
                FontSize="{StaticResource FontBody}"
                Foreground="{StaticResource Text2Brush}"
+               TextAlignment="Center"
                TextWrapping="Wrap">
       <Run Text="BhMaps" /> <Run Text="{Binding Version, Mode=OneWay}" /> <Run Text="by" />
       <Run FontWeight="Medium" Foreground="{StaticResource TextBrush}" Text="aex" />
@@ -109,7 +112,12 @@
                  Command="{Binding OpenLicenseCommand}"
                  Style="{StaticResource CreditLink}">GPL-3.0</Hyperlink>
     </TextBlock>
-    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+    <!-- Not a tab stop and no focus box, like the Packs page's list: arrow keys from a focused row still bubble
+         up and scroll it. Without this the whole form showed a light outline once the credit moved outside it. -->
+    <ScrollViewer FocusVisualStyle="{x:Null}"
+                  Focusable="False"
+                  HorizontalScrollBarVisibility="Disabled"
+                  VerticalScrollBarVisibility="Auto">
       <!-- Every row here writes something, so none of them is offered while a long operation is running. The
            three grids share one scope so their action columns line up as one column down the whole form. -->
       <StackPanel MaxWidth="760"
