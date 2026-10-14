@@ -11,8 +11,9 @@ nothing else in the game install is touched.
 
 ## What is new in 3.10.3
 
-- Settings has a credit line centred at the bottom: BhMaps and its version, by aex, Discord aexax, and links to the GitHub page and the GPL-3.0 license.
-- The Version row in Settings is one line: the version number with its update status beside it.
+- Settings has a credit line centred at the bottom: BhMaps and its version, by aexax on Discord, and links to the GitHub page and the GPL-3.0 license.
+- Updates in Settings is one row: the version and its update status, then Check on start and Check now on the right.
+- The Change buttons next to Open in Settings have no border, like Open.
 - The Refresh button in the top bar has no border any more. It still lights up when you point at it.
 
 ## What is new in 3.10.2

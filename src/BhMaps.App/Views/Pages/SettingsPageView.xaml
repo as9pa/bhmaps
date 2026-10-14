@@ -100,9 +100,7 @@
                TextAlignment="Center"
                TextWrapping="Wrap">
       <Run Text="BhMaps" /> <Run Text="{Binding Version, Mode=OneWay}" /> <Run Text="by" />
-      <Run FontWeight="Medium" Foreground="{StaticResource TextBrush}" Text="aex" />
-      <Run Foreground="{StaticResource Text3Brush}" Text="·" />
-      <Run Text="Discord" /> <Run FontWeight="Medium" Foreground="{StaticResource TextBrush}" Text="aexax" />
+      <Run FontWeight="Medium" Foreground="{StaticResource TextBrush}" Text="aexax" /> <Run Text="on Discord" />
       <Run Foreground="{StaticResource Text3Brush}" Text="·" />
       <Hyperlink AutomationProperties.Name="Open BhMaps on GitHub"
                  Command="{Binding OpenRepositoryCommand}"
@@ -158,7 +156,7 @@
             <Button AutomationProperties.Name="Change game folder"
                     Command="{Binding ChangeGameCommand}"
                     Content="Change"
-                    Style="{StaticResource OutlineButton}"
+                    Style="{StaticResource PlainButton}"
                     ToolTip="Change game folder" />
             <Button Margin="8,0,0,0"
                     AutomationProperties.Name="Open game folder"
@@ -184,7 +182,7 @@
             <Button AutomationProperties.Name="Change library folder"
                     Command="{Binding ChangeLibraryCommand}"
                     Content="Change"
-                    Style="{StaticResource OutlineButton}"
+                    Style="{StaticResource PlainButton}"
                     ToolTip="Change library folder" />
             <Button Margin="8,0,0,0"
                     AutomationProperties.Name="Open library folder"
@@ -247,24 +245,26 @@
         </Grid>
 
         <TextBlock Style="{StaticResource SettingSection}" Text="Updates" />
+        <!-- 3.10.3: the owner asked for the whole Updates section in one row. Its actions column stays out of the
+             shared group: five controls would push every other section's values left, and the value column here
+             wraps the status instead when the window is narrow. -->
         <Grid>
           <Grid.ColumnDefinitions>
             <ColumnDefinition Width="180" />
             <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="Auto" MinWidth="160" SharedSizeGroup="SettingActions" />
+            <ColumnDefinition Width="Auto" MinWidth="160" />
           </Grid.ColumnDefinitions>
           <Grid.RowDefinitions>
             <RowDefinition Height="Auto" MinHeight="56" />
-            <RowDefinition Height="Auto" MinHeight="56" />
           </Grid.RowDefinitions>
 
-          <!-- Version -->
+          <!-- Version (spec 7.2, 7.3) -->
           <Border Grid.Row="0" Style="{StaticResource SettingRule}" />
           <TextBlock Grid.Row="0" Grid.Column="0" Style="{StaticResource SettingLabel}" Text="Version" />
-          <StackPanel Grid.Row="0" Grid.Column="1" Style="{StaticResource SettingCell}">
+          <StackPanel Grid.Row="0" Grid.Column="1" Margin="0,8,16,8" Style="{StaticResource SettingCell}">
             <!-- Spec 7.3: one status for every state, available, up to date, never checked, failed, and the two
-                 download states. The view model owns which one it is. 3.10.3: it sits beside the version on one
-                 line rather than under it, so the row reads as a single line like the others. -->
+                 download states. The view model owns which one it is. It sits beside the version and wraps
+                 inside this column when it is long. When it last ran is this line: the check is the same one. -->
             <DockPanel>
               <TextBlock VerticalAlignment="Center"
                          DockPanel.Dock="Left"
@@ -301,22 +301,17 @@
                     Style="{StaticResource PrimaryButton}"
                     ToolTip="Downloads the new version, checks it, replaces this copy of BhMaps and restarts it."
                     Visibility="{Binding CanUpdate, Converter={StaticResource BoolToVis}}" />
-          </StackPanel>
-
-          <!-- Updates (spec 7.2, 7.3). Under Version, because it is about the row above it. What the check costs
-               is the switch's tooltip, and when it last ran is the Version row's line: it is the same check. -->
-          <Border Grid.Row="1" Style="{StaticResource SettingRule}" />
-          <!-- No label of its own: the section is called Updates, and the switch's text says the rest. -->
-          <StackPanel Grid.Row="1" Grid.Column="1" Style="{StaticResource SettingCell}">
-            <CheckBox AutomationProperties.Name="Check for updates when BhMaps starts"
-                      Content="Check for updates when BhMaps starts"
+            <!-- What the check costs is the switch's tooltip. -->
+            <CheckBox Margin="16,0,0,0"
+                      VerticalAlignment="Center"
+                      AutomationProperties.Name="Check for updates when BhMaps starts"
+                      Content="Check on start"
                       FocusVisualStyle="{StaticResource DialogFocusRing}"
                       Foreground="{StaticResource TextBrush}"
                       IsChecked="{Binding CheckForUpdates}"
-                      ToolTip="Once a day, one small request to github.com. Nothing is sent about you or your library." />
-          </StackPanel>
-          <StackPanel Grid.Row="1" Style="{StaticResource SettingActions}">
-            <Button Command="{Binding CheckNowCommand}"
+                      ToolTip="Check for updates when BhMaps starts. Once a day, one small request to github.com. Nothing is sent about you or your library." />
+            <Button Margin="8,0,0,0"
+                    Command="{Binding CheckNowCommand}"
                     Content="Check now"
                     FocusVisualStyle="{StaticResource DialogFocusRing}"
                     Style="{StaticResource PlainButton}" />
