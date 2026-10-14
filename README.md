@@ -14,6 +14,8 @@
 
 <p><b><a href="https://github.com/as9pa/bhmaps/releases/latest/download/bhmaps.exe">Download bhmaps.exe</a></b> &middot; Windows 10 or 11 &middot; 135 MB</p>
 
+<sub>Needs Brawlhalla on Steam. Windows may warn on first run because the exe is unsigned: choose "More info", then "Run anyway".</sub>
+
 </div>
 
 ![The Maps grid, every map with its composed preview](docs/images/maps.png)
@@ -21,18 +23,6 @@
 It keeps packs of map art in a library, shows every map under its in-game name with a preview
 composed from the game's own level data, and copies packs into the game with one click, with an Undo
 for the last write.
-
-## Download
-
-Requires Windows 10 or 11, 64-bit, and Brawlhalla installed through Steam.
-
-| [Releases](https://github.com/as9pa/bhmaps/releases) | Size    | Needs .NET?                                                                       |
-| ---------------------------------------------------- | ------- | --------------------------------------------------------------------------------- |
-| `bhmaps.exe`                                         | ~135 MB | No, the runtime is inside                                                         |
-| `bhmaps-dotnet.zip`                                  | ~0.8 MB | Yes, [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) |
-
-Take the `.exe` unless you already have .NET 10 installed. Windows may warn on first run because the
-exe is unsigned: choose "More info", then "Run anyway".
 
 ## First run
 
@@ -94,6 +84,12 @@ pwsh -File scripts\publish.ps1
 Needs the .NET 10 SDK. `scripts\publish.ps1` writes both release files into `dist\`.
 See [docs/manual.md](docs/manual.md) for every page, how status and previews are computed,
 development against a throwaway copy of the game folder, and known limitations.
+
+## Other downloads
+
+Every version is on the [Releases](https://github.com/as9pa/bhmaps/releases) page. If you already have the
+[.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0), `bhmaps-dotnet.zip` (about 1 MB) is
+the same app without the runtime inside.
 
 ## Contributing
 
