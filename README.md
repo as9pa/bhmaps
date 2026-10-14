@@ -4,7 +4,7 @@
 
 <p>Brawlhalla map art manager for Windows</p>
 
-<p>by <a href="https://github.com/as9pa">aex</a> &middot; Discord <b>aexax</b></p>
+<p>by <b>aexax</b> on Discord</p>
 
 <p>
 <a href="https://github.com/as9pa/bhmaps/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/as9pa/bhmaps?label=release&color=3b4252"></a>
@@ -109,7 +109,7 @@ includes its code, you must release that program's source under the same license
 and author notices.
 
 Additional term under section 7(b) of the GPL: any copy or modified version must keep the author
-attribution "BhMaps by aex" with a link to https://github.com/as9pa/bhmaps, in its documentation and in
+attribution "BhMaps by aexax" with a link to https://github.com/as9pa/bhmaps, in its documentation and in
 any about or credits screen it shows.
 
-Copyright (C) 2026 aex
+Copyright (C) 2026 aexax
