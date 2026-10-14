@@ -13,8 +13,8 @@
                   ResizeBorderThickness="{x:Static SystemParameters.WindowResizeBorderThickness}"
                   UseAeroCaptionButtons="False" />
   </WindowChrome.WindowChrome>
-  <!-- Nothing on a page triggers a rescan, so the keyboard does; Ctrl+1..5 are the five tabs (addendum A).
-       Ctrl+K is in the code-behind: it navigates and then focuses, which a command cannot do. Ctrl+Z and Escape
+  <!-- Nothing on a page triggers a rescan, so the keyboard does; Ctrl+1..4 are the four tabs and Ctrl+5 the
+       Settings gear (addendum A, 3.10.3). Ctrl+K is in the code-behind: it navigates and then focuses, which a command cannot do. Ctrl+Z and Escape
        are the status strip's two links (3.0); both commands say no when the strip is not offering them, and a
        page that answers Escape itself is asked first, because its own binding sits nearer the focus than this
        one. -->
@@ -32,6 +32,20 @@
   <Window.Resources>
     <BooleanToVisibilityConverter x:Key="BoolToVis" />
 
+    <!-- 3.10.3: the top bar's glyph-only squares, Refresh and the Settings gear, so the two stay a pair. The owner
+         asked for the border to go; the outline made Refresh the only boxed control in a flat bar. OutlineButton
+         with its line taken away rather than PlainButton: the glyph stays at full Text, and PlainButton's hover
+         only lifts the ink to Text, which would show nothing here, while OutlineButton's Surface2 hover and Surface
+         press fills still do. The left padding is the glyph's own 7 px right margin given back, so it sits in the
+         middle. -->
+    <Style x:Key="TopBarIconButton" BasedOn="{StaticResource OutlineButton}" TargetType="Button">
+      <Setter Property="Width" Value="{StaticResource ActionHeight}" />
+      <Setter Property="Height" Value="{StaticResource ActionHeight}" />
+      <Setter Property="Padding" Value="7,0,0,0" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+
   </Window.Resources>
 
   <Grid x:Name="RootGrid">
@@ -41,8 +55,8 @@
       <RowDefinition Height="*" />
     </Grid.RowDefinitions>
 
-    <!-- Addendum A: brand, five tabs, the status line, and the game line at the right. 44 px with a hairline
-         under it, and it stays 44 px whatever the status line is saying (3.1). -->
+    <!-- Addendum A: brand, four tabs, the status line, and Refresh, the game line and the Settings gear at the
+         right (3.10.3). 44 px with a hairline under it, and it stays 44 px whatever the status line is saying (3.1). -->
     <Border Grid.Row="0"
             Background="{StaticResource BgBrush}"
             BorderBrush="{StaticResource LineBrush}"
@@ -71,7 +85,6 @@
             <Button Command="{Binding NavigateBackgroundsCommand}" Content="Backgrounds" Style="{StaticResource TopBarTab}" Tag="{Binding Backgrounds}" />
             <Button Command="{Binding NavigatePlatformsCommand}" Content="Platforms" Style="{StaticResource TopBarTab}" Tag="{Binding Platforms}" />
             <Button Command="{Binding NavigatePacksCommand}" Content="Packs" Style="{StaticResource TopBarTab}" Tag="{Binding Packs}" />
-            <Button Command="{Binding NavigateSettingsCommand}" Content="Settings" Style="{StaticResource TopBarTab}" Tag="{Binding SettingsPage}" />
           </StackPanel>
 
           <!-- 3.1: the one line the shell says anything on, moved out of the foot of the page and into the bar.
@@ -111,26 +124,16 @@
           <!-- Spec 2.8: writes the game back to what the app says is on. It stands whether the game is up or
                down, because the write path already handles a running game; only the missing folder takes it
                away, as it takes away every other write. The glyph alone in a square (3.0): the top bar had two
-               words of button before the game line, and the tooltip and the accessible name still say Refresh.
-               The left padding is the glyph's own 7 px right margin given back, so it sits in the middle. -->
-          <Button Width="{StaticResource ActionHeight}"
-                  Height="{StaticResource ActionHeight}"
-                  Margin="0,0,12,0"
-                  Padding="7,0,0,0"
+               words of button before the game line, and the tooltip and the accessible name still say Refresh. -->
+          <Button Margin="0,0,12,0"
                   AutomationProperties.Name="Refresh"
                   Command="{Binding RefreshGameCommand}"
                   ToolTip="Refresh: re-apply what is on, restore missing files, redraw the map-select thumbnails"
                   controls:Icon.Glyph="{StaticResource Icon.Refresh}">
             <Button.Style>
-              <!-- 3.10.3: the owner asked for the border to go; the outline made it the only boxed control in a
-                   flat bar. OutlineButton with its line taken away rather than PlainButton: the glyph stays at
-                   full Text, and PlainButton's hover only lifts the ink to Text, which would show nothing here,
-                   while OutlineButton's Surface2 hover and Surface press fills still do. Disabled rather than
-                   gone while the folder is missing (3.0): the pages say the folder is missing, so the top bar
-                   only has to stop being clickable. -->
-              <Style BasedOn="{StaticResource OutlineButton}" TargetType="Button">
-                <Setter Property="BorderThickness" Value="0" />
-                <Setter Property="BorderBrush" Value="Transparent" />
+              <!-- Disabled rather than gone while the folder is missing (3.0): the pages say the folder is
+                   missing, so the top bar only has to stop being clickable. -->
+              <Style BasedOn="{StaticResource TopBarIconButton}" TargetType="Button">
                 <Style.Triggers>
                   <DataTrigger Binding="{Binding GameFolderMissing}" Value="True">
                     <Setter Property="IsEnabled" Value="False" />
@@ -188,6 +191,16 @@
               </Button>
             </StackPanel>
           </Grid>
+
+          <!-- 3.10.3, owner: the tab row is game tools only; app controls (Refresh, status, Settings) sit on the
+               right. The gear wears Refresh's square and never shows a selected state: open or not, it looks
+               the same (owner's pick). Ctrl+5 still opens it. -->
+          <Button Margin="12,0,0,0"
+                  AutomationProperties.Name="Settings"
+                  Command="{Binding NavigateSettingsCommand}"
+                  Style="{StaticResource TopBarIconButton}"
+                  ToolTip="Settings (Ctrl+5)"
+                  controls:Icon.Glyph="{StaticResource Icon.Settings}" />
         </StackPanel>
 
         <!-- 3.9: the caption buttons, flush with the window's right edge. -->
