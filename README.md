@@ -6,6 +6,8 @@ Brawlhalla map art manager for Windows. It keeps packs of map art in a library, 
 under its in-game name with a preview composed from the game's own level data, and copies packs into
 the game with one click, with an Undo for the last write.
 
+Made by **aexax**. Discord: `aexax`. GitHub: [as9pa](https://github.com/as9pa). This repository is the official home of BhMaps, and its [Releases](https://github.com/as9pa/bhmaps/releases) page is the official download.
+
 **[Download bhmaps.exe](https://github.com/as9pa/bhmaps/releases/latest/download/bhmaps.exe)** (Windows 10 or 11, 64-bit)
 
 ## Download
@@ -32,7 +34,7 @@ Brawlhalla open or closed, and show on the next match load.
 - **Map grid:** every map by its in-game name, with a live preview and what art is on it.
 - **Packs:** keep map art in packs and apply one map or a whole pack in one click.
 - **Backgrounds and Platforms:** every option for each map, side by side.
-- **Custom images:** add any `.png` or `.jpg` as a background or on the platforms.
+- **Custom images:** add any `.png`, `.jpg`, `.bmp` or `.webp` as a background or on the platforms.
 - **Editors:** pan, zoom, hue, saturation, contrast, darken and blur, with a live preview.
 - **Map-select thumbnails:** match the art you picked.
 - **Undo and Reset:** put back the last change, or the game's own art on any map.
@@ -80,3 +82,20 @@ pwsh -File scripts\publish.ps1
 Needs the .NET 10 SDK. `scripts\publish.ps1` writes both release files into `dist\`.
 See [docs/manual.md](docs/manual.md) for every page, how status and previews are computed,
 development against a throwaway copy of the game folder, and known limitations.
+
+## Contributing
+
+Bug reports, ideas and pull requests are welcome here on GitHub, or message `aexax` on Discord.
+
+## License
+
+BhMaps is free software under the [GNU General Public License v3.0](LICENSE), and it stays free for everyone.
+You may use, study, change and share it. If you share BhMaps, a modified version of it, or a program that
+includes its code, you must release that program's source under the same license and keep the copyright
+and author notices.
+
+Additional term under section 7(b) of the GPL: any copy or modified version must keep the author
+attribution "BhMaps by aexax" with a link to https://github.com/as9pa/bhmaps, in its documentation and in
+any about or credits screen it shows.
+
+Copyright (C) 2026 aexax
