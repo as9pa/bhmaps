@@ -122,10 +122,15 @@
                   ToolTip="Refresh: re-apply what is on, restore missing files, redraw the map-select thumbnails"
                   controls:Icon.Glyph="{StaticResource Icon.Refresh}">
             <Button.Style>
-              <!-- Outlined rather than plain (3.0): it writes into the game folder, and a write does not read as
-                   quietly as Launch beside it. Disabled rather than gone while the folder is missing (3.0): the
-                   pages say the folder is missing, so the top bar only has to stop being clickable. -->
+              <!-- 3.10.3: the owner asked for the border to go; the outline made it the only boxed control in a
+                   flat bar. OutlineButton with its line taken away rather than PlainButton: the glyph stays at
+                   full Text, and PlainButton's hover only lifts the ink to Text, which would show nothing here,
+                   while OutlineButton's Surface2 hover and Surface press fills still do. Disabled rather than
+                   gone while the folder is missing (3.0): the pages say the folder is missing, so the top bar
+                   only has to stop being clickable. -->
               <Style BasedOn="{StaticResource OutlineButton}" TargetType="Button">
+                <Setter Property="BorderThickness" Value="0" />
+                <Setter Property="BorderBrush" Value="Transparent" />
                 <Style.Triggers>
                   <DataTrigger Binding="{Binding GameFolderMissing}" Value="True">
                     <Setter Property="IsEnabled" Value="False" />

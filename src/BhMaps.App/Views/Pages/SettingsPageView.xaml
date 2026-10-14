@@ -58,12 +58,57 @@
       <Setter Property="VerticalAlignment" Value="Bottom" />
       <Setter Property="Background" Value="{StaticResource LineBrush}" />
     </Style>
+
+    <!-- The credit line's links: StripLinkText's quiet underline on an inline link, so a narrow window wraps the
+         line as text. Text2, lifting to Text on hover like the strip's links. -->
+    <Style x:Key="CreditLink" TargetType="Hyperlink">
+      <Setter Property="Foreground" Value="{StaticResource Text2Brush}" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="FocusVisualStyle" Value="{StaticResource DialogFocusRing}" />
+      <Setter Property="TextDecorations">
+        <Setter.Value>
+          <TextDecorationCollection>
+            <TextDecoration Location="Underline">
+              <TextDecoration.Pen>
+                <Pen Brush="{StaticResource Text3Brush}" Thickness="1" />
+              </TextDecoration.Pen>
+            </TextDecoration>
+          </TextDecorationCollection>
+        </Setter.Value>
+      </Setter>
+      <Style.Triggers>
+        <Trigger Property="IsMouseOver" Value="True">
+          <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+        </Trigger>
+      </Style.Triggers>
+    </Style>
   </UserControl.Resources>
 
   <DockPanel Margin="24,8,24,24">
     <!-- 3.9: the column is centred in the page at its 760 px, and the title rides the same column. A
          stretched element clamped by MaxWidth is centred in its slot, so both land on the same edges. -->
     <controls:PageHeader DockPanel.Dock="Top" MaxWidth="760" Title="Settings" />
+    <!-- 3.10.3: the owner asked for credit where every user sees it, so it is a small caption under the title
+         rather than a setting row. Outside the form below, so the links still work while an operation runs. -->
+    <TextBlock MaxWidth="760"
+               Margin="0,0,0,12"
+               DockPanel.Dock="Top"
+               FontSize="{StaticResource FontBody}"
+               Foreground="{StaticResource Text2Brush}"
+               TextWrapping="Wrap">
+      <Run Text="BhMaps" /> <Run Text="{Binding Version, Mode=OneWay}" /> <Run Text="by" />
+      <Run FontWeight="Medium" Foreground="{StaticResource TextBrush}" Text="aex" />
+      <Run Foreground="{StaticResource Text3Brush}" Text="·" />
+      <Run Text="Discord" /> <Run FontWeight="Medium" Foreground="{StaticResource TextBrush}" Text="aexax" />
+      <Run Foreground="{StaticResource Text3Brush}" Text="·" />
+      <Hyperlink AutomationProperties.Name="Open BhMaps on GitHub"
+                 Command="{Binding OpenRepositoryCommand}"
+                 Style="{StaticResource CreditLink}">GitHub</Hyperlink>
+      <Run Foreground="{StaticResource Text3Brush}" Text="·" />
+      <Hyperlink AutomationProperties.Name="Open the GPL-3.0 license"
+                 Command="{Binding OpenLicenseCommand}"
+                 Style="{StaticResource CreditLink}">GPL-3.0</Hyperlink>
+    </TextBlock>
     <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
       <!-- Every row here writes something, so none of them is offered while a long operation is running. The
            three grids share one scope so their action columns line up as one column down the whole form. -->
@@ -209,13 +254,20 @@
           <Border Grid.Row="0" Style="{StaticResource SettingRule}" />
           <TextBlock Grid.Row="0" Grid.Column="0" Style="{StaticResource SettingLabel}" Text="Version" />
           <StackPanel Grid.Row="0" Grid.Column="1" Style="{StaticResource SettingCell}">
-            <TextBlock Style="{StaticResource SettingValue}" Text="{Binding Version}" />
-
-            <!-- Spec 7.3: one second line for every state, available, up to date, never checked, failed, and the
-                 two download states. The view model owns which one it is. -->
-            <TextBlock Style="{StaticResource SettingHelp}"
-                       Text="{Binding UpdateLine}"
-                       Visibility="{Binding HasUpdateLine, Converter={StaticResource BoolToVis}}" />
+            <!-- Spec 7.3: one status for every state, available, up to date, never checked, failed, and the two
+                 download states. The view model owns which one it is. 3.10.3: it sits beside the version on one
+                 line rather than under it, so the row reads as a single line like the others. -->
+            <DockPanel>
+              <TextBlock VerticalAlignment="Center"
+                         DockPanel.Dock="Left"
+                         Style="{StaticResource SettingValue}"
+                         Text="{Binding Version}" />
+              <TextBlock Margin="14,0,0,0"
+                         VerticalAlignment="Center"
+                         Style="{StaticResource SettingHelp}"
+                         Text="{Binding UpdateLine}"
+                         Visibility="{Binding HasUpdateLine, Converter={StaticResource BoolToVis}}" />
+            </DockPanel>
             <ProgressBar Margin="0,8,0,0"
                          Style="{StaticResource ThinProgress}"
                          Value="{Binding DownloadProgress, Mode=OneWay}"

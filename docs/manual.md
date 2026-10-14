@@ -9,6 +9,12 @@ and `.jpg` files inside the `mapArt` folder and inside its own library, plus its
 folder, and it keeps a copy of every original so it can put it back. The game's data files are read and never written, and
 nothing else in the game install is touched.
 
+## What is new in 3.10.3
+
+- Settings opens with a credit line under its title: BhMaps and its version, by aex, Discord aexax, and links to the GitHub page and the GPL-3.0 license.
+- The Version row in Settings is one line: the version number with its update status beside it.
+- The Refresh button in the top bar has no border any more. It still lights up when you point at it.
+
 ## What is new in 3.10.2
 
 - **Edit in another app** in the platform editor works again on Windows 11 when Photos is the default PNG app. It opened nothing before and showed "No application is associated with the specified file". It now opens Windows' Pick an app window, which lists GIMP, Paint and the rest, and picks for this file only, so the default app does not change.

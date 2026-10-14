@@ -1,14 +1,28 @@
-# BhMaps
+<div align="center">
+
+<h1>BhMaps</h1>
+
+<p>Brawlhalla map art manager for Windows</p>
+
+<p>by <a href="https://github.com/as9pa">aex</a> &middot; Discord <b>aexax</b></p>
+
+<p>
+<a href="https://github.com/as9pa/bhmaps/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/as9pa/bhmaps?label=release&color=3b4252"></a>
+<a href="LICENSE"><img alt="License: GPL-3.0" src="https://img.shields.io/badge/license-GPL--3.0-3b4252"></a>
+<img alt="Discord: aexax" src="https://img.shields.io/badge/Discord-aexax-5865F2">
+</p>
+
+<p><b><a href="https://github.com/as9pa/bhmaps/releases/latest/download/bhmaps.exe">Download bhmaps.exe</a></b> &middot; Windows 10 or 11 &middot; 135 MB</p>
+
+<sub>This repository is the official home of BhMaps, and its <a href="https://github.com/as9pa/bhmaps/releases">Releases</a> page is the official download.</sub>
+
+</div>
 
 ![The Maps grid, every map with its composed preview](docs/images/maps.png)
 
-Brawlhalla map art manager for Windows. It keeps packs of map art in a library, shows every map
-under its in-game name with a preview composed from the game's own level data, and copies packs into
-the game with one click, with an Undo for the last write.
-
-Made by **aexax**. Discord: `aexax`. GitHub: [as9pa](https://github.com/as9pa). This repository is the official home of BhMaps, and its [Releases](https://github.com/as9pa/bhmaps/releases) page is the official download.
-
-**[Download bhmaps.exe](https://github.com/as9pa/bhmaps/releases/latest/download/bhmaps.exe)** (Windows 10 or 11, 64-bit)
+It keeps packs of map art in a library, shows every map under its in-game name with a preview
+composed from the game's own level data, and copies packs into the game with one click, with an Undo
+for the last write.
 
 ## Download
 
@@ -95,7 +109,7 @@ includes its code, you must release that program's source under the same license
 and author notices.
 
 Additional term under section 7(b) of the GPL: any copy or modified version must keep the author
-attribution "BhMaps by aexax" with a link to https://github.com/as9pa/bhmaps, in its documentation and in
+attribution "BhMaps by aex" with a link to https://github.com/as9pa/bhmaps, in its documentation and in
 any about or credits screen it shows.
 
-Copyright (C) 2026 aexax
+Copyright (C) 2026 aex
