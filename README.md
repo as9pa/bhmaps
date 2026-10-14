@@ -56,6 +56,10 @@ Brawlhalla open or closed, and show on the next match load.
 
 ![The Backgrounds page, one row per map with every background it could have](docs/images/backgrounds.png)
 
+![The Platforms page, one row per map with every platform set it could have](docs/images/platforms.png)
+
+![A map's panel, with its preview, Reset, and every background and platform set it could use](docs/images/map-panel.png)
+
 | Background editor | Platform editor |
 | --- | --- |
 | ![Background editor with fit, pan, zoom, hue, saturation, contrast, darken and blur](docs/images/editor-background.png) | ![Platform editor with pan, zoom and per-piece tone sliders over a live preview](docs/images/editor-platform.png) |

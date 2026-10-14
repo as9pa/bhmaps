@@ -31,23 +31,19 @@ public partial class MapsViewModel : PageViewModel, ITileSized
     private ScanSnapshot? _snapshot;
     private CancellationTokenSource? _previews;
 
-    /// <summary>True while a chip change empties the search, so the grid filters once for the pair.</summary>
-    private bool _clearingSearch;
-
     public MapsViewModel(MainViewModel shell)
         : base(shell)
     {
         Cards = [];
         _chips.Add(AllChip);
 
-        // After the collections, because setting it runs the change hook that filters them.
-        SearchText = "";
-
         TileSize = shell.Services.Settings.MapsTileSize;
 
         // 3.1: the chip is the shell's, so a chip picked on Backgrounds or Platforms arrives as a shell change
-        // rather than as a set of this page's property. Subscribed for the life of the app, like the page is.
-        shell.PropertyChanged += OnShellLevelSetChanged;
+        // rather than as a set of this page's property. The search is the shell's too, and arrives the same way.
+        // Subscribed for the life of the app, like the page is, so the grid is filtered while out of sight and
+        // shows no stale cards when it comes back.
+        shell.PropertyChanged += OnShellFilterChanged;
     }
 
     public override string Title => "Maps";
@@ -58,9 +54,14 @@ public partial class MapsViewModel : PageViewModel, ITileSized
     /// <summary>Every card the last scan produced, filtered or not. The rows pages build their rows from it.</summary>
     public IReadOnlyList<MapCardViewModel> AllCards => _all;
 
-    /// <summary>The header's search box (spec 3.1). The page's own string now; the shell has no search box left.</summary>
-    [ObservableProperty]
-    public partial string SearchText { get; set; }
+    /// <summary>The header's search box (spec 3.1). One string for Maps, Backgrounds and Platforms, so the value
+    /// lives on the shell and this is the box's way in and out of it, as <see cref="SelectedChip" /> is the chip
+    /// row's.</summary>
+    public string SearchText
+    {
+        get => Shell.SearchText;
+        set => Shell.SearchText = value ?? "";
+    }
 
     /// <summary>"All" and the UI set labels. Without level data the set chips are gone entirely (spec 3.6). An
     /// ObservableCollection behind the read-only surface, because the row changes when the level data does.
@@ -440,29 +441,22 @@ public partial class MapsViewModel : PageViewModel, ITileSized
             _previews.Token);
     }
 
-    partial void OnSearchTextChanged(string value)
+    /// <summary>The shared chip or the shared search changed, here or on another page: the box and the chip row
+    /// show it and the grid answers it. A new chip empties the search on the shell (3.7.6), which arrives here as
+    /// a search change of its own. Nothing is written back, so nothing comes back round.</summary>
+    private void OnShellFilterChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (!_clearingSearch)
+        switch (e.PropertyName)
         {
-            ApplyFilter();
+            case nameof(MainViewModel.SelectedLevelSet):
+                OnPropertyChanged(nameof(SelectedChip));
+                break;
+            case nameof(MainViewModel.SearchText):
+                OnPropertyChanged(nameof(SearchText));
+                break;
+            default:
+                return;
         }
-    }
-
-    /// <summary>The shared chip changed, here or on another page: the row shows it and the grid answers it.
-    /// 3.7.6: a new chip also empties the search, so a search typed under the old chip cannot leave the new
-    /// one stuck on nothing. Only the search is written here, never the chip, so nothing comes back round.</summary>
-    private void OnShellLevelSetChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName != nameof(MainViewModel.SelectedLevelSet))
-        {
-            return;
-        }
-
-        OnPropertyChanged(nameof(SelectedChip));
-
-        _clearingSearch = true;
-        SearchText = "";
-        _clearingSearch = false;
 
         ApplyFilter();
     }
