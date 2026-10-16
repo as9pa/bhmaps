@@ -4,8 +4,6 @@
 
 <p>Brawlhalla map art manager for Windows</p>
 
-<p>by <b>aexax</b> on Discord</p>
-
 <p>
 <a href="https://github.com/as9pa/bhmaps/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/as9pa/bhmaps?label=release&color=3b4252"></a>
 <a href="LICENSE"><img alt="License: GPL-3.0" src="https://img.shields.io/badge/license-GPL--3.0-3b4252"></a>
