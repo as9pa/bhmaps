@@ -10,8 +10,6 @@
 <a href="https://github.com/as9pa/bhmaps/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/as9pa/bhmaps?label=release&color=3b4252"></a>
 <a href="LICENSE"><img alt="License: GPL-3.0" src="https://img.shields.io/badge/license-GPL--3.0-3b4252"></a>
 <img alt="Discord: aexax" src="https://img.shields.io/badge/Discord-aexax-5865F2">
-<a href="https://www.youtube.com/watch?v=6NYbLIYhMeY"><img alt="Watch: Introducing BhMaps" src="https://img.shields.io/badge/YouTube-Introducing%20BhMaps-c4302b?logo=youtube&logoColor=white"></a>
-</p>
 
 <p><b><a href="https://github.com/as9pa/bhmaps/releases/latest/download/bhmaps.exe">Download bhmaps.exe</a></b> &middot; Windows 10 or 11 &middot; 135 MB</p>
 
