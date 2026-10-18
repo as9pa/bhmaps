@@ -6,6 +6,7 @@
 
 <p>
 <a href="https://github.com/as9pa/bhmaps/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/as9pa/bhmaps?label=release&color=3b4252"></a>
+<a href="https://github.com/as9pa/bhmaps/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/as9pa/bhmaps/total?color=3b4252"></a>
 <a href="LICENSE"><img alt="License: GPL-3.0" src="https://img.shields.io/badge/license-GPL--3.0-3b4252"></a>
 <img alt="Discord: aexax" src="https://img.shields.io/badge/Discord-aexax-5865F2">
 
