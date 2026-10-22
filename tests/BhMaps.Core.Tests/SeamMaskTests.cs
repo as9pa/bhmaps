@@ -311,6 +311,51 @@ public class SeamMaskTests
         Assert.Equal(a, mask[(10 * 40) + 20], 5);
     }
 
+    /// <summary>One file drawn twice, the second flipped and overlapping the first by four columns at different file
+    /// pixels: column c of the first lies under column 15 - c of the second, so columns 6 to 9 are the lower layer in
+    /// one draw and the upper in the other. They settle on the value both share, so the strip composites like one
+    /// layer instead of siding with the upper draw.</summary>
+    [Theory]
+    [InlineData(1.0, 1 - 0.70710678)]
+    [InlineData(0.6, 0.39737)]
+    public void Compute_SettlesAMirroredPairOverlappingAtDifferentPixels(double s, double factor)
+    {
+        const double a = 0.5;
+        var level = Level("L", Node(0, 0, new LevelAsset("a.png", 0, 0, 0, 0), new LevelAsset("a.png", 6, 0, -10, 0)));
+
+        var masks = SeamMask.Compute([level], [Piece("a.png", (byte)Math.Round(s * 255), a, size: 10)]);
+
+        var mask = Assert.Single(masks).Value;
+        var target = a * (1 - ((1 - s) * (1 - s)));
+        for (var y = 0; y < 10; y++)
+        {
+            for (var c = 0; c < 6; c++)
+            {
+                Assert.Equal(a, mask[(y * 10) + c], 5);
+            }
+
+            for (var c = 6; c < 10; c++)
+            {
+                Assert.Equal(factor, mask[(y * 10) + c], 3);
+                var composite = 1 - ((1 - (s * mask[(y * 10) + c])) * (1 - (s * mask[(y * 10) + 15 - c])));
+                Assert.True(Math.Abs(composite - target) <= 1.0 / 255, $"column {c}: got {composite}, want {target}");
+            }
+        }
+    }
+
+    /// <summary>One file drawn twice, the second shifted over the first without flipping: the upper draw's columns 0 to
+    /// 3 cover the lower draw's columns 6 to 9, which want 0 against them, but the upper draw shows its own columns 6
+    /// to 9 uncovered and with more light, so the merge keeps the plain fade there, as before.</summary>
+    [Fact]
+    public void Compute_KeepsAShiftedCopyOfOneFileAsBefore()
+    {
+        var level = Level("L", Node(0, 0, new LevelAsset("a.png", 0, 0, 0, 0), new LevelAsset("a.png", 6, 0, 0, 0)));
+
+        var masks = SeamMask.Compute([level], [Piece("a.png", 255, 0.5, size: 10)]);
+
+        Assert.Empty(masks);
+    }
+
     [Fact]
     public void Parse_MarksAMovingPlatform()
     {

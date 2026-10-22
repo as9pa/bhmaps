@@ -162,8 +162,10 @@ public static class SeamMask
     /// Every use of a piece in <paramref name="levels"/> wants its own factor on a pixel; where they differ the
     /// piece gets the value that leaves the fewest uses with a visible error (see <see cref="Merge"/>), and where
     /// one use draws the same file pixel on top of itself (a flipped copy meeting in the middle) the value is
-    /// solved exactly. Only faded pieces are passed in: a piece at full strength above another changes nothing in
-    /// the formula. A piece with nothing to correct is left out of the result.
+    /// solved exactly. Where copies of one file overlap at different file pixels (a half and its mirror sharing a
+    /// strip), each pixel's value depends on its partner's, so those pixels are refined together until they settle
+    /// (see <see cref="Refine"/>). Only faded pieces are passed in: a piece at full strength above another changes
+    /// nothing in the formula. A piece with nothing to correct is left out of the result.
     /// <para>With <paramref name="preferred"/>, the name of the layout open in the editor, that layout's uses win:
     /// wherever one of them sees a pixel, the value is merged over its uses alone, so they get it exactly where they
     /// agree, and the other layouts' uses only break ties among them or decide the pixels the preferred layout does
@@ -240,13 +242,14 @@ public static class SeamMask
         foreach (var (piece, list) in uses)
         {
             var plain = (float)Math.Clamp(piece.Opacity, 0, 1);
-            var merged = Merge(piece, plain, list, out var wrong);
+            var merged = Merge(piece, plain, list);
+            Refine(piece, plain, list, merged);
             if (merged.Any(v => Math.Abs(v - plain) >= Agreement))
             {
                 result[piece.RelativePath] = merged;
             }
 
-            if (preferred != null && wrong > 0 && wrongElsewhere != null)
+            if (preferred != null && wrongElsewhere != null && CountWrongElsewhere(piece, list, merged) is > 0 and var wrong)
             {
                 wrongElsewhere[piece.RelativePath] = wrong;
             }
@@ -257,9 +260,18 @@ public static class SeamMask
 
     /// <summary>What one use of a piece wants of every pixel: the factor, and the light that reaches the piece
     /// there through the faded pieces above it (1 uncovered, 0 hidden, below 0 where another draw of the same
-    /// file pixel already carries this one, see <see cref="SolveSelf"/>), and whether it is a use in the preferred
-    /// layout.</summary>
-    private sealed record Want(float[] Factor, float[] Through, bool Preferred = false);
+    /// file pixel already carries this one, see <see cref="SolveSelf"/>, or where this draw lies over another
+    /// draw of the file and leaves the value to it, see <see cref="Refine"/>), and whether it is a use in the preferred
+    /// layout. It keeps the placement and its neighbours so the pixels in <see cref="Coupled"/>, whose value depends
+    /// on another pixel of the same file, can be wanted again against the merged values.</summary>
+    private sealed record Want(
+        float[] Factor,
+        float[] Through,
+        Placement Own,
+        List<(Placement Upper, IReadOnlyList<Vector> Shifts)> Above,
+        List<Placement> SelfBelow,
+        int[] Coupled,
+        bool Preferred = false);
 
     /// <summary>The merged factor of every pixel over the uses of a piece. Moving this piece's written alpha at a
     /// pixel by d moves the composite under one use by d times the light T reaching the piece there, and the native
@@ -271,113 +283,182 @@ public static class SeamMask
     /// them accepts. Uses that agree get their value exactly, a slight disagreement gets a middle value no use
     /// shows, and a wide one gets the value the most uses want. Each use counts once. Where a use of the preferred
     /// layout sees the pixel (some light reaches it), only the preferred uses choose and are averaged, and the other
-    /// uses they leave satisfied break a tie between candidates. <paramref name="wrongElsewhere"/> counts the pixels
-    /// the result leaves visibly wrong under the uses outside the preferred layout, once per use.</summary>
-    private static float[] Merge(SeamPiece piece, float plain, List<Want> uses, out long wrongElsewhere)
+    /// uses they leave satisfied break a tie between candidates.</summary>
+    private static float[] Merge(SeamPiece piece, float plain, List<Want> uses)
     {
-        wrongElsewhere = 0;
         var merged = new float[piece.Width * piece.Height];
         var low = new double[uses.Count];
         var high = new double[uses.Count];
         for (var p = 0; p < merged.Length; p++)
         {
-            var s = piece.Alpha[p] / 255.0;
-            float? first = null;
-            var agree = true;
-            foreach (var use in uses)
-            {
-                if (use.Through[p] < 0)
-                {
-                    continue;
-                }
-
-                first ??= use.Factor[p];
-                agree &= Math.Abs(use.Factor[p] - first.Value) < Agreement;
-            }
-
-            if (agree || s == 0)
-            {
-                merged[p] = first ?? plain;
-                continue;
-            }
-
-            for (var u = 0; u < uses.Count; u++)
-            {
-                var through = uses[u].Through[p];
-                var slack = through > 0 ? Unseen / (through * s) : double.PositiveInfinity;
-                low[u] = through < 0 ? double.NaN : uses[u].Factor[p] - slack;
-                high[u] = through < 0 ? double.NaN : uses[u].Factor[p] + slack;
-            }
-
-            // S3: the map open in the editor wins wherever one of its uses sees this pixel.
-            var preferredOnly = uses.Exists(u => u.Preferred && u.Through[p] > 0);
-            var best = (Count: -1, Weight: -1.0, Others: -1, At: 0.0);
-            for (var c = 0; c < uses.Count; c++)
-            {
-                if (double.IsNaN(low[c]) || (preferredOnly && !uses[c].Preferred))
-                {
-                    continue;
-                }
-
-                var at = double.IsNegativeInfinity(low[c]) ? uses[c].Factor[p] : low[c];
-                var count = 0;
-                var weight = 0.0;
-                var others = 0;
-                for (var u = 0; u < uses.Count; u++)
-                {
-                    if (!(low[u] <= at && at <= high[u]))
-                    {
-                        continue;
-                    }
-
-                    if (preferredOnly && !uses[u].Preferred)
-                    {
-                        others++;
-                        continue;
-                    }
-
-                    count++;
-                    weight += uses[u].Through[p] * uses[u].Through[p];
-                }
-
-                if (count > best.Count
-                    || (count == best.Count && weight > best.Weight)
-                    || (count == best.Count && weight == best.Weight && others > best.Others))
-                {
-                    best = (count, weight, others, at);
-                }
-            }
-
-            double sum = 0, total = 0, floor = double.NegativeInfinity, ceiling = double.PositiveInfinity;
-            for (var u = 0; u < uses.Count; u++)
-            {
-                if (low[u] <= best.At && best.At <= high[u] && (uses[u].Preferred || !preferredOnly))
-                {
-                    var w = uses[u].Through[p] * uses[u].Through[p];
-                    sum += w * uses[u].Factor[p];
-                    total += w;
-                    floor = Math.Max(floor, low[u]);
-                    ceiling = Math.Min(ceiling, high[u]);
-                }
-            }
-
-            var value = total > 0 ? sum / total : best.At;
-            merged[p] = (float)Math.Clamp(Math.Clamp(value, floor, ceiling), 0, plain);
-            for (var u = 0; u < uses.Count; u++)
-            {
-                if (!uses[u].Preferred && uses[u].Through[p] > 0 && !(low[u] <= merged[p] && merged[p] <= high[u]))
-                {
-                    wrongElsewhere++;
-                }
-            }
+            merged[p] = MergeAt(piece, plain, uses, p, low, high);
         }
 
         return merged;
     }
 
+    /// <summary>The merged factor of pixel <paramref name="p"/> (see <see cref="Merge"/>), with
+    /// <paramref name="low"/> and <paramref name="high"/> as room for each use's accepted range.</summary>
+    private static float MergeAt(SeamPiece piece, float plain, List<Want> uses, int p, double[] low, double[] high)
+    {
+        var s = piece.Alpha[p] / 255.0;
+        float? first = null;
+        var agree = true;
+        foreach (var use in uses)
+        {
+            if (use.Through[p] < 0)
+            {
+                continue;
+            }
+
+            first ??= use.Factor[p];
+            agree &= Math.Abs(use.Factor[p] - first.Value) < Agreement;
+        }
+
+        if (agree || s == 0)
+        {
+            return first ?? plain;
+        }
+
+        for (var u = 0; u < uses.Count; u++)
+        {
+            var through = uses[u].Through[p];
+            var slack = through > 0 ? Unseen / (through * s) : double.PositiveInfinity;
+            low[u] = through < 0 ? double.NaN : uses[u].Factor[p] - slack;
+            high[u] = through < 0 ? double.NaN : uses[u].Factor[p] + slack;
+        }
+
+        // S3: the map open in the editor wins wherever one of its uses sees this pixel.
+        var preferredOnly = uses.Exists(u => u.Preferred && u.Through[p] > 0);
+        var best = (Count: -1, Weight: -1.0, Others: -1, At: 0.0);
+        for (var c = 0; c < uses.Count; c++)
+        {
+            if (double.IsNaN(low[c]) || (preferredOnly && !uses[c].Preferred))
+            {
+                continue;
+            }
+
+            var at = double.IsNegativeInfinity(low[c]) ? uses[c].Factor[p] : low[c];
+            var count = 0;
+            var weight = 0.0;
+            var others = 0;
+            for (var u = 0; u < uses.Count; u++)
+            {
+                if (!(low[u] <= at && at <= high[u]))
+                {
+                    continue;
+                }
+
+                if (preferredOnly && !uses[u].Preferred)
+                {
+                    others++;
+                    continue;
+                }
+
+                count++;
+                weight += uses[u].Through[p] * uses[u].Through[p];
+            }
+
+            if (count > best.Count
+                || (count == best.Count && weight > best.Weight)
+                || (count == best.Count && weight == best.Weight && others > best.Others))
+            {
+                best = (count, weight, others, at);
+            }
+        }
+
+        double sum = 0, total = 0, floor = double.NegativeInfinity, ceiling = double.PositiveInfinity;
+        for (var u = 0; u < uses.Count; u++)
+        {
+            if (low[u] <= best.At && best.At <= high[u] && (uses[u].Preferred || !preferredOnly))
+            {
+                var w = uses[u].Through[p] * uses[u].Through[p];
+                sum += w * uses[u].Factor[p];
+                total += w;
+                floor = Math.Max(floor, low[u]);
+                ceiling = Math.Min(ceiling, high[u]);
+            }
+        }
+
+        var value = total > 0 ? sum / total : best.At;
+        return (float)Math.Clamp(Math.Clamp(value, floor, ceiling), 0, plain);
+    }
+
+    /// <summary>Settles the pixels whose wanted value depends on another pixel of the same file: where a copy of the
+    /// file lies over another copy at a different file pixel (a half and its mirror sharing a strip), the lower draw
+    /// wants its value against the upper pixel's merged value, which is wanted in turn against its own partner. Each
+    /// pass wants those pixels again against <paramref name="merged"/>, merges them, and moves halfway there:
+    /// stepping all the way swings between two values for ever, and halfway settles on the value both draws share
+    /// within a few passes. A copy only shifted over another settles in one pass, as its partner is not coupled
+    /// back. Stops once no pixel moves by a tenth of an alpha level, or after 12 passes.</summary>
+    private static void Refine(SeamPiece piece, float plain, List<Want> uses, float[] merged)
+    {
+        var coupled = uses.SelectMany(u => u.Coupled).Distinct().ToArray();
+        if (coupled.Length == 0)
+        {
+            return;
+        }
+
+        var low = new double[uses.Count];
+        var high = new double[uses.Count];
+        var covering = new List<Cover>();
+        for (var pass = 0; pass < 12; pass++)
+        {
+            foreach (var use in uses)
+            {
+                foreach (var index in use.Coupled)
+                {
+                    (use.Factor[index], use.Through[index]) =
+                        WantAt(use.Own, use.Above, use.SelfBelow, index, merged, covering, out _);
+                }
+            }
+
+            var moved = 0.0;
+            foreach (var p in coupled)
+            {
+                var next = (merged[p] + MergeAt(piece, plain, uses, p, low, high)) / 2;
+                moved = Math.Max(moved, Math.Abs(next - merged[p]));
+                merged[p] = next;
+            }
+
+            if (moved < 0.1 / 255)
+            {
+                return;
+            }
+        }
+    }
+
+    /// <summary>How many pixels <paramref name="merged"/> leaves visibly wrong (an error over <see cref="Unseen"/>,
+    /// see <see cref="Merge"/>) under the uses outside the preferred layout, counted once per use.</summary>
+    private static long CountWrongElsewhere(SeamPiece piece, List<Want> uses, float[] merged)
+    {
+        var wrong = 0L;
+        for (var p = 0; p < merged.Length; p++)
+        {
+            var s = piece.Alpha[p] / 255.0;
+            foreach (var use in uses)
+            {
+                var through = use.Through[p];
+                if (use.Preferred || through <= 0)
+                {
+                    continue;
+                }
+
+                var slack = Unseen / (through * s);
+                if (!(use.Factor[p] - slack <= merged[p] && merged[p] <= use.Factor[p] + slack))
+                {
+                    wrong++;
+                }
+            }
+        }
+
+        return wrong;
+    }
+
     /// <summary>A piece covering a pixel: its native alpha and opacity, and whether it is the same file pixel drawn
-    /// again, whose written alpha is the one being solved for.</summary>
-    private readonly record struct Cover(double S, double A, bool Self);
+    /// again, whose written alpha is the one being solved for, or the written alpha it is taken at where it is
+    /// another pixel of the same file (NaN for any other piece).</summary>
+    private readonly record struct Cover(double S, double A, bool Self, double Fixed = double.NaN);
 
     /// <summary>One use of a piece: the matrix from its pixels to level space and back, its level-space bounds, and
     /// the moving platforms it rides on.</summary>
@@ -427,89 +508,124 @@ public static class SeamMask
     /// written alpha over the native alpha where something does. Where another use of the same piece above this
     /// one draws the same file pixel at this point, both draws carry this pixel's value, so what it wants depends on
     /// itself. That pixel is solved exactly (see <see cref="SolveSelf"/>), and the upper draw wants nothing of its
-    /// own there: its share is in the solve. A piece above that shifts against this one (see <see cref="Shifts"/>)
-    /// covers only where it stays over the point at every shift; elsewhere it moves away in game and the art keeps
-    /// the plain fade.</summary>
+    /// own there: its share is in the solve. Where the use above draws a different pixel of the same file here (a
+    /// mirrored or shifted copy), this draw wants its value against that pixel's merged value, which starts at the
+    /// plain opacity and is settled by <see cref="Refine"/>; the upper draw again wants nothing of its own there. A
+    /// piece above that shifts against this one (see <see cref="Shifts"/>) covers only where it stays over the point
+    /// at every shift; elsewhere it moves away in game and the art keeps the plain fade.</summary>
     private static Want Wanted(
         Placement own, List<(Placement Upper, IReadOnlyList<Vector> Shifts)> above, List<Placement> selfBelow)
     {
         var piece = own.Piece;
-        var plain = Math.Clamp(piece.Opacity, 0, 1);
+        var plain = (float)Math.Clamp(piece.Opacity, 0, 1);
         var factor = new float[piece.Width * piece.Height];
         var light = new float[factor.Length];
-        Array.Fill(factor, (float)plain);
+        Array.Fill(factor, plain);
         Array.Fill(light, 1f);
         if (above.Count == 0 && selfBelow.Count == 0)
         {
-            return new Want(factor, light);
+            return new Want(factor, light, own, above, selfBelow, []);
         }
 
+        var current = new float[factor.Length];
+        Array.Fill(current, plain);
         var covering = new List<Cover>(above.Count);
-        for (var y = 0; y < piece.Height; y++)
+        var coupled = new List<int>();
+        for (var index = 0; index < factor.Length; index++)
         {
-            for (var x = 0; x < piece.Width; x++)
+            (factor[index], light[index]) = WantAt(own, above, selfBelow, index, current, covering, out var depends);
+            if (depends)
             {
-                var index = (y * piece.Width) + x;
-                var s = piece.Alpha[index] / 255.0;
-                if (s == 0)
-                {
-                    continue;
-                }
-
-                var point = own.ToLevel.Transform(new Point(x + 0.5, y + 0.5));
-                if (selfBelow.Exists(b => b.Bounds.Contains(point) && b.IndexAt(point) == index))
-                {
-                    light[index] = -1;
-                    continue;
-                }
-
-                covering.Clear();
-                var self = false;
-                foreach (var (other, shifts) in above)
-                {
-                    if (other.Bounds.Contains(point)
-                        && other.AlphaAt(point) is > 0 and var blended
-                        && (shifts.Count == 0 || other.CoversThroughout(point, shifts)))
-                    {
-                        // The same file pixel drawn again is solved as this pixel's own value (see SolveSelf), so
-                        // it covers with that value, not a blend of its neighbours. Only a draw that keeps its place
-                        // stays on the same file pixel.
-                        var same = shifts.Count == 0 && other.Piece == piece && other.IndexAt(point) == index;
-                        self |= same;
-                        covering.Add(new Cover(same ? s : blended, Math.Clamp(other.Piece.Opacity, 0, 1), same));
-                    }
-                }
-
-                if (covering.Count == 0)
-                {
-                    continue;
-                }
-
-                var written = self ? SolveSelf(s, plain, covering) : Stack(s, plain, covering, 0).Written;
-                factor[index] = (float)Math.Clamp(written / s, 0, plain);
-                light[index] = (float)Stack(s, plain, covering, written).Through;
+                coupled.Add(index);
             }
         }
 
-        return new Want(factor, light);
+        return new Want(factor, light, own, above, selfBelow, [.. coupled]);
+    }
+
+    /// <summary>What one use wants of pixel <paramref name="index"/> (see <see cref="Wanted"/>), taking another
+    /// pixel of the same file drawn above it at its value in <paramref name="current"/>; <paramref name="coupled"/>
+    /// tells whether it did. <paramref name="covering"/> is scratch room.</summary>
+    private static (float Factor, float Light) WantAt(
+        Placement own,
+        List<(Placement Upper, IReadOnlyList<Vector> Shifts)> above,
+        List<Placement> selfBelow,
+        int index,
+        float[] current,
+        List<Cover> covering,
+        out bool coupled)
+    {
+        coupled = false;
+        var piece = own.Piece;
+        var plain = Math.Clamp(piece.Opacity, 0, 1);
+        var s = piece.Alpha[index] / 255.0;
+        if (s == 0)
+        {
+            return ((float)plain, 1f);
+        }
+
+        var point = own.ToLevel.Transform(new Point((index % piece.Width) + 0.5, (index / piece.Width) + 0.5));
+        if (selfBelow.Exists(b => b.Bounds.Contains(point)
+            && b.IndexAt(point) is >= 0 and var j
+            && (j == index || piece.Alpha[j] > 0)))
+        {
+            // Another draw of this file below carries the value here: this same pixel (see SolveSelf) or the pixel
+            // under it, which wants its value against this one's (see Refine).
+            return ((float)plain, -1f);
+        }
+
+        covering.Clear();
+        var self = false;
+        foreach (var (other, shifts) in above)
+        {
+            if (other.Bounds.Contains(point)
+                && other.AlphaAt(point) is > 0 and var blended
+                && (shifts.Count == 0 || other.CoversThroughout(point, shifts)))
+            {
+                // The same file pixel drawn again is solved as this pixel's own value (see SolveSelf), so it covers
+                // with that value, not a blend of its neighbours; another pixel of the file covers at its current
+                // value. Only a draw that keeps its place stays on one file pixel.
+                var j = shifts.Count == 0 && other.Piece == piece ? other.IndexAt(point) : -1;
+                var same = j == index;
+                var opacity = Math.Clamp(other.Piece.Opacity, 0, 1);
+                if (j >= 0 && !same)
+                {
+                    coupled = true;
+                    covering.Add(new Cover(blended, opacity, false, blended * current[j]));
+                    continue;
+                }
+
+                self |= same;
+                covering.Add(new Cover(same ? s : blended, opacity, same));
+            }
+        }
+
+        if (covering.Count == 0)
+        {
+            return ((float)plain, 1f);
+        }
+
+        var written = self ? SolveSelf(s, plain, covering) : Stack(s, plain, covering, 0).Written;
+        return ((float)Math.Clamp(written / s, 0, plain), (float)Stack(s, plain, covering, written).Through);
     }
 
     /// <summary>The written alpha this piece wants under <paramref name="above"/> (top first), and the light that
     /// reaches it through them. Other pieces are taken as corrected to their own wanted weight, as in
-    /// <see cref="Written"/>. A <see cref="Cover.Self"/> entry is written at <paramref name="x"/>, and whatever it
-    /// gives this file pixel's colour more or less than one layer would is taken off or added to this draw.</summary>
+    /// <see cref="Written"/>. A <see cref="Cover.Self"/> entry is written at <paramref name="x"/> and a
+    /// <see cref="Cover.Fixed"/> one at that value, and whatever it gives this file's colour more or less than one
+    /// layer would is taken off or added to this draw.</summary>
     private static (double Written, double Through) Stack(double s, double a, List<Cover> above, double x)
     {
         var native = 1.0;
         var through = 1.0;
         var owed = 0.0;
-        foreach (var (sj, aj, self) in above)
+        foreach (var (sj, aj, self, fixedAt) in above)
         {
             var wanted = aj * sj * native;
-            var wj = self ? x : wanted / through;
-            if (self)
+            var wj = self ? x : double.IsNaN(fixedAt) ? wanted / through : fixedAt;
+            if (self || !double.IsNaN(fixedAt))
             {
-                owed += wanted - (x * through);
+                owed += wanted - (wj * through);
             }
 
             native *= 1 - sj;
