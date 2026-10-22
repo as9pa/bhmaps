@@ -22,9 +22,8 @@ public sealed record PieceGuideSet(
 
 /// <summary>Spec G1/G2/G5: the geometry behind the editor's piece boxes, overlap hatching and hitboxes. Pure geometry
 /// of file rectangles: transparent pixels count as covered, and two uses of one file at the same spot overlap like
-/// any other pair. Only pieces of the same <see cref="PlacedAsset.Group"/> are paired, because pieces of different
-/// groups do not keep their places relative to each other in game (the seam mask pairs the same way). Safe to call
-/// from any thread.</summary>
+/// any other pair. Moving platforms are paired at their rest position, the position the stage shows, the same way
+/// the seam mask pairs them. Safe to call from any thread.</summary>
 public static class PieceGuides
 {
     /// <summary>An intersection smaller than this, in square level units, is a shared edge or corner, not an
@@ -100,7 +99,7 @@ public static class PieceGuides
         {
             for (var j = i + 1; j < pieces.Count; j++)
             {
-                if (pieces[i].Group != pieces[j].Group || !bounds[i].IntersectsWith(bounds[j]))
+                if (!bounds[i].IntersectsWith(bounds[j]))
                 {
                     continue;
                 }

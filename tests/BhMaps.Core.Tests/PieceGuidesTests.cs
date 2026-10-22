@@ -97,13 +97,15 @@ public class PieceGuidesTests
     }
 
     [Fact]
-    public void Overlaps_NoneAcrossGroups()
+    public void Overlaps_PairAMovingPlatformAtRestWithStillArt()
     {
         var level = Level(
             Still(new LevelAsset("a.png", 0, 0, 100, 50)),
             Node(0, 0, 0, true, new LevelAsset("b.png", 10, 10, 100, 50)));
 
-        Assert.Empty(PieceGuides.Build(level, Sizes()).Overlaps);
+        var overlap = Assert.Single(PieceGuides.Build(level, Sizes()).Overlaps);
+        Assert.Equal(90, overlap.Width, 3);
+        Assert.Equal(40, overlap.Height, 3);
     }
 
     [Fact]
