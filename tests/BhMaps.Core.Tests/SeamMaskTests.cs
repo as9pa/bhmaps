@@ -112,15 +112,69 @@ public class SeamMaskTests
         Assert.Equal(0f, lower.Value[30], 5);
     }
 
-    [Fact]
-    public void Compute_KeepsThePlainFadeWhereTwoUsesDisagree()
-    {
-        var overlapping = Level("One", Node(0, 0, new LevelAsset("a.png", 0, 0, 0, 0), new LevelAsset("b.png", 20, 0, 0, 0)));
-        var apart = Level("Two", Node(0, 0, new LevelAsset("a.png", 0, 0, 0, 0), new LevelAsset("b.png", 60, 0, 0, 0)));
+    private static readonly LevelDesc Overlapping =
+        Level("One", Node(0, 0, new LevelAsset("a.png", 0, 0, 0, 0), new LevelAsset("b.png", 20, 0, 0, 0)));
 
-        var masks = SeamMask.Compute([overlapping, apart], [Piece("a.png", 255, 0.5), Piece("b.png", 255, 0.5)]);
+    private static readonly LevelDesc Apart =
+        Level("Two", Node(0, 0, new LevelAsset("a.png", 0, 0, 0, 0), new LevelAsset("b.png", 60, 0, 0, 0)));
+
+    /// <summary>Covered in one layout and not in the other, by a faint piece: a middle value both uses accept, not the
+    /// plain fade that leaves the covered one wrong.</summary>
+    [Fact]
+    public void Compute_GivesAMiddleValueBothUsesAcceptWhereTheyDifferSlightly()
+    {
+        const double a = 0.5, t = 0.03;
+        var masks = SeamMask.Compute([Overlapping, Apart], [Piece("a.png", 255, a), Piece("b.png", (byte)Math.Round(t * 255), a)]);
+
+        var lower = Assert.Single(masks);
+        Assert.Equal(@"Grove\a.png", lower.Key);
+        var s = Math.Round(t * 255) / 255;
+        var covered = SeamMask.Written(1, a, [(s, a)]);
+        var x = lower.Value[30];
+        Assert.Equal(a, lower.Value[5], 5);
+        Assert.True(x > covered && x < a - (0.5 / 255), $"got {x}, covered wants {covered}");
+        Assert.True((a - x) <= 2.0 / 255 && (x - covered) * (1 - (a * s)) <= 2.0 / 255, $"got {x}");
+    }
+
+    /// <summary>Covered in two layouts and not in a third, by a piece too strong for one value to suit all three: the
+    /// two covered uses get their value exactly, instead of all three falling back to the plain fade.</summary>
+    [Fact]
+    public void Compute_GivesTheValueMostUsesWantWhereTheyDifferWidely()
+    {
+        const double a = 0.5, t = 0.6;
+        var again = Overlapping with { LevelName = "Three" };
+        var masks = SeamMask.Compute([Overlapping, Apart, again], [Piece("a.png", 255, a), Piece("b.png", (byte)(t * 255), a)]);
+
+        var lower = Assert.Single(masks).Value;
+        Assert.Equal(a, lower[5], 5);
+        Assert.Equal(SeamMask.Written(1, a, [(t, a)]), lower[30], 5);
+    }
+
+    /// <summary>One covered use against one uncovered one, too far apart to share a value: the uncovered use, which
+    /// shows any error at full strength, keeps the plain fade.</summary>
+    [Fact]
+    public void Compute_KeepsThePlainFadeWhereOneCoveredUseDiffersWidelyFromOneUncovered()
+    {
+        var masks = SeamMask.Compute([Overlapping, Apart], [Piece("a.png", 255, 0.5), Piece("b.png", 255, 0.5)]);
 
         Assert.Empty(masks);
+    }
+
+    /// <summary>One file drawn twice, once flipped, overlapping by three columns: the middle column is the same file
+    /// pixel in both draws, so its value is solved so the two draws together composite like one layer.</summary>
+    [Fact]
+    public void Compute_SolvesAFlippedPairMeetingInTheMiddleExactly()
+    {
+        const double a = 0.5, s = 0.6;
+        var level = Level("L", Node(0, 0, new LevelAsset("a.png", 0, 0, 0, 0), new LevelAsset("a.png", 37, 0, -40, 0)));
+
+        var masks = SeamMask.Compute([level], [Piece("a.png", (byte)(s * 255), a)]);
+
+        var mask = Assert.Single(masks).Value;
+        var x = mask[38] * s;
+        Assert.Equal(a * (1 - ((1 - s) * (1 - s))), 1 - ((1 - x) * (1 - x)), 5);
+        Assert.Equal(a, mask[5], 5);
+        Assert.Equal(a, mask[(10 * 40) + 20], 5);
     }
 
     [Fact]

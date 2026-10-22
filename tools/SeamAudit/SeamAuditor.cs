@@ -112,37 +112,9 @@ internal sealed class SeamAuditor
                 idealUngrouped.Add(Ideal(uses[k], aboveAny, plain));
             }
 
-            // The best one mask per file can do within this layout under the mask's rule, where moving pieces at
-            // rest count like any other: the ungrouped ideal where every use agrees, plain where they differ.
-            var maskInMap = new Dictionary<string, float[]?>(StringComparer.OrdinalIgnoreCase);
-            foreach (var f in files)
-            {
-                float[]? merged = null;
-                for (int k = 0; k < uses.Count; k++)
-                {
-                    if (!uses[k].RelativePath.Equals(f, StringComparison.OrdinalIgnoreCase))
-                    {
-                        continue;
-                    }
-
-                    if (merged == null)
-                    {
-                        merged = (float[])idealUngrouped[k].Clone();
-                    }
-                    else
-                    {
-                        for (int p = 0; p < merged.Length; p++)
-                        {
-                            if (Math.Abs(merged[p] - idealUngrouped[k][p]) >= 0.5f / 255)
-                            {
-                                merged[p] = plain;
-                            }
-                        }
-                    }
-                }
-
-                maskInMap[f] = merged;
-            }
+            // The best one mask per file can do within this layout under the mask's rule: the mask computed over
+            // this layout alone, so uses of one file in it are merged exactly as the written mask merges them.
+            var maskInMap = SeamMask.Compute([level], pieces);
 
             var imagesWritten = new Dictionary<string, BitmapSource>(StringComparer.OrdinalIgnoreCase);
             var imagesInMap = new Dictionary<string, BitmapSource>(StringComparer.OrdinalIgnoreCase);
@@ -150,7 +122,7 @@ internal sealed class SeamAuditor
             {
                 var d = Get(f)!;
                 imagesWritten[f] = Scaled(d, maskWritten.TryGetValue(f, out var mw) ? mw : null, plain);
-                imagesInMap[f] = Scaled(d, maskInMap[f], plain);
+                imagesInMap[f] = Scaled(d, maskInMap.TryGetValue(f, out var mm) ? mm : null, plain);
             }
 
             var pxWritten = Render(
