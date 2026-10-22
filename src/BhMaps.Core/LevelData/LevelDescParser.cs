@@ -26,9 +26,65 @@ public static class LevelDescParser
             BuildCamera(root.Element("CameraBounds")),
             root.Elements("Background").Select(BuildBackground).ToList(),
             root.Elements()
-                .Where(e => !NonPlatformElements.Contains(e.Name.LocalName))
+                .Where(e => !NonPlatformElements.Contains(e.Name.LocalName) && !IsCollision(e))
                 .Select(BuildNode)
-                .ToList());
+                .ToList())
+        {
+            Collisions = BuildCollisions(root),
+        };
+    }
+
+    /// <summary>Every element named *Collision is collision, never part of the platform tree. DynamicCollision is
+    /// the one container among them.</summary>
+    private static bool IsCollision(XElement element) =>
+        element.Name.LocalName.EndsWith("Collision", StringComparison.Ordinal);
+
+    /// <summary>The lines of a DynamicCollision are relative to its X and Y and are stored offset by them, with its
+    /// PlatID (see <see cref="CollisionLine"/> for why the offset belongs here). A kind the enum does not name is
+    /// skipped.</summary>
+    private static List<CollisionLine> BuildCollisions(XElement root)
+    {
+        var lines = new List<CollisionLine>();
+        foreach (var element in root.Elements().Where(IsCollision))
+        {
+            if (element.Name.LocalName == "DynamicCollision")
+            {
+                var platId = Read(element, "PlatID");
+                var x = Num(element, "X", 0);
+                var y = Num(element, "Y", 0);
+                foreach (var child in element.Elements().Where(IsCollision))
+                {
+                    AddLine(lines, child, x, y, platId);
+                }
+            }
+            else
+            {
+                AddLine(lines, element, 0, 0, null);
+            }
+        }
+
+        return lines;
+    }
+
+    /// <summary>A horizontal line names one Y and a vertical line one X; both ends take it.</summary>
+    private static void AddLine(List<CollisionLine> lines, XElement element, double dx, double dy, string? platId)
+    {
+        var name = element.Name.LocalName[..^"Collision".Length];
+        if (!Enum.TryParse<CollisionKind>(name, out var kind) || !Enum.IsDefined(kind))
+        {
+            return;
+        }
+
+        var x = NumOrNull(element, "X");
+        var y = NumOrNull(element, "Y");
+        var anchorX = NumOrNull(element, "AnchorX");
+        var anchorY = NumOrNull(element, "AnchorY");
+        lines.Add(new CollisionLine(
+            kind,
+            dx + (NumOrNull(element, "X1") ?? x ?? 0), dy + (NumOrNull(element, "Y1") ?? y ?? 0),
+            dx + (NumOrNull(element, "X2") ?? x ?? 0), dy + (NumOrNull(element, "Y2") ?? y ?? 0),
+            platId,
+            dx + anchorX, dy + anchorY));
     }
 
     private static CameraBounds BuildCamera(XElement? element) =>
@@ -76,7 +132,51 @@ public static class LevelDescParser
             Num(element, "Rotation", 0),
             (string?)element.Attribute("Theme"),
             assets, children,
-            element.Name.LocalName == "MovingPlatform");
+            element.Name.LocalName == "MovingPlatform",
+            element.Name.LocalName == "MovingPlatform" ? BuildTravel(element.Element("Animation")) : null);
+    }
+
+    /// <summary>The offsets a moving platform's path stays inside (see <see cref="PlatformTravel"/>). No Animation
+    /// means it never leaves its rest position.</summary>
+    private static PlatformTravel BuildTravel(XElement? animation)
+    {
+        var offsets = new List<TravelOffset>();
+        var turns = false;
+        if (animation is null)
+        {
+            return new PlatformTravel(offsets, turns);
+        }
+
+        // Keyframes in Phases count from the phase's own start, and a curve bends the path off the straight line, so
+        // either leaves the timing to the bounds alone.
+        var frames = NumOrNull(animation, "NumFrames") ?? 0;
+        var keyFrames = animation.Descendants("KeyFrame").ToList();
+        var timed = frames > 0
+            && keyFrames.Count > 0
+            && !animation.Descendants("Phase").Any()
+            && keyFrames.Prepend(animation).All(e => NumOrNull(e, "CenterX") is null && NumOrNull(e, "CenterY") is null)
+            && keyFrames.All(e => NumOrNull(e, "FrameNum") is not null);
+
+        AddCentre(offsets, animation);
+        foreach (var frame in keyFrames)
+        {
+            offsets.Add(new TravelOffset(Num(frame, "X", 0), Num(frame, "Y", 0), timed ? Num(frame, "FrameNum", 0) : 0));
+            AddCentre(offsets, frame);
+            turns |= Num(frame, "Rotation", 0) != 0;
+        }
+
+        return new PlatformTravel(offsets, turns, timed ? frames : 0);
+    }
+
+    /// <summary>A curve centre names one or both coordinates; the missing one is 0, as on a KeyFrame.</summary>
+    private static void AddCentre(List<TravelOffset> offsets, XElement element)
+    {
+        var x = NumOrNull(element, "CenterX");
+        var y = NumOrNull(element, "CenterY");
+        if (x is not null || y is not null)
+        {
+            offsets.Add(new TravelOffset(x ?? 0, y ?? 0));
+        }
     }
 
     /// <summary>An attribute or a same-named child element, whichever is present.</summary>

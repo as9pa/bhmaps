@@ -9,6 +9,17 @@ and `.jpg` files inside the `mapArt` folder and inside its own library, plus its
 folder, and it keeps a copy of every original so it can put it back. The game's data files are read and never written, and
 nothing else in the game install is touched.
 
+## What is new in 3.11.0
+
+- **Fewer lines on faded platforms.** Where two platform pictures overlap, a faded platform used to show a darker band, because the overlap got faded twice. The overlap correction now also covers:
+  - art under moving platforms (corrected where the platform sits over it for most of its loop);
+  - one picture used twice in a map, mirrored copies included (the line down the middle of Grumpy Temple);
+  - pictures that are stretched in the game.
+- A picture shared by several maps is corrected for the map open in the editor. Its row says "lines may show there when faded" for the other maps.
+- **Guides** in Edit platforms: a box around every piece, hatching where pieces overlap, and the game's hitboxes. Press G to hide them. **Selected only** keeps the guides for the selected pieces. The legend under the stage names each layer; click a line to hide that layer.
+- Ctrl+scroll in Edit platforms looks closer without changing the art.
+- After updating, fade platforms again to get the new correction. Platforms faded with 3.10 keep their old masks until then.
+
 ## What is new in 3.10.3
 
 - Settings has a credit line centred at the bottom: BhMaps and its version, by aexax on Discord, and links to the GitHub page and the GPL-3.0 license.

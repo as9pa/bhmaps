@@ -75,9 +75,18 @@ public sealed class AssetSources
 }
 
 /// <summary>One drawn image of a level, in draw order. <see cref="Transform"/> takes the asset's node space to
-/// level space. <see cref="Group"/> is 0 for everything that stands still and one number per moving platform,
-/// because pieces of different groups do not keep their places relative to each other in game.</summary>
-public sealed record PlacedAsset(LevelAsset Asset, string RelativePath, Matrix Transform, int Group);
+/// level space, with moving platforms at their rest position. <see cref="Group"/> is 0 for everything that stands
+/// still and one number per moving platform, because pieces of different groups do not keep their places relative
+/// to each other in game. <see cref="Movers"/> lists the moving platforms the piece rides on, outermost first, empty
+/// for a piece that stands still.</summary>
+public sealed record PlacedAsset(
+    LevelAsset Asset, string RelativePath, Matrix Transform, int Group, IReadOnlyList<Mover>? Movers = null);
+
+/// <summary>A moving platform a piece rides on: its group, and the level-space offsets from its rest position that
+/// its path stays inside, rest included (see <see cref="PlatformTravel"/>). Null offsets mean its keyframes turn it,
+/// which offsets cannot follow. <see cref="Cycle"/> is where it is over one animation cycle, in level space, when its
+/// timing is clear (see <see cref="PlatformTravel.Sample"/> and <see cref="MoverShifts"/>), and null otherwise.</summary>
+public sealed record Mover(int Group, IReadOnlyList<Vector>? Offsets, MoverShifts? Cycle = null);
 
 /// <summary>Draws a map the way the game composes it: the background stretched over the camera bounds,
 /// then the platform tree walked depth-first. Safe to call from any thread; every bitmap it returns is frozen.</summary>
@@ -184,21 +193,11 @@ public static class MapCompositor
             }
             else if (camera.W > 0 && camera.H > 0)
             {
-                var scale = Math.Min(width / camera.W, height / camera.H);
-                var offsetX = (width - (camera.W * scale)) / 2;
-                var offsetY = (height - (camera.H * scale)) / 2;
+                var stage = StageTransform(camera, width, height);
                 var decoded = new Dictionary<string, BitmapSource?>(StringComparer.OrdinalIgnoreCase);
 
-                dc.PushClip(new RectangleGeometry(new Rect(offsetX, offsetY, camera.W * scale, camera.H * scale)));
-                dc.PushTransform(new TransformGroup
-                {
-                    Children =
-                    {
-                        new TranslateTransform(-camera.X, -camera.Y),
-                        new ScaleTransform(scale, scale),
-                        new TranslateTransform(offsetX, offsetY),
-                    },
-                });
+                dc.PushClip(new RectangleGeometry(Rect.Transform(new Rect(camera.X, camera.Y, camera.W, camera.H), stage)));
+                dc.PushTransform(new MatrixTransform(stage));
 
                 if (mode == PreviewMode.Both)
                 {
@@ -315,10 +314,29 @@ public static class MapCompositor
         var groups = 0;
         foreach (var node in level.Platforms)
         {
-            WalkNode(node, level.AssetDir, Matrix.Identity, 0, ref groups, placed);
+            WalkNode(node, level.AssetDir, Matrix.Identity, [], ref groups, placed);
         }
 
         return placed;
+    }
+
+    /// <summary>Takes level space to a <paramref name="width" /> by <paramref name="height" /> bitmap the way
+    /// <see cref="Render" /> draws it: <paramref name="camera" /> scaled uniformly to fit and centred, so the bands
+    /// left over sit evenly on both sides. Identity for a camera with no area, which <see cref="Render" /> does not
+    /// draw at all.</summary>
+    public static Matrix StageTransform(CameraBounds camera, int width, int height)
+    {
+        if (camera.W <= 0 || camera.H <= 0)
+        {
+            return Matrix.Identity;
+        }
+
+        var scale = Math.Min(width / camera.W, height / camera.H);
+        var matrix = Matrix.Identity;
+        matrix.Translate(-camera.X, -camera.Y);
+        matrix.Scale(scale, scale);
+        matrix.Translate((width - (camera.W * scale)) / 2, (height - (camera.H * scale)) / 2);
+        return matrix;
     }
 
     /// <summary>Takes a piece's own pixels (0..pixelWidth by 0..pixelHeight) to its node's space: stretched over
@@ -340,7 +358,12 @@ public static class MapCompositor
     }
 
     private static void WalkNode(
-        PlatformNode node, string assetDir, Matrix parent, int group, ref int groups, List<PlacedAsset> placed)
+        PlatformNode node,
+        string assetDir,
+        Matrix parent,
+        IReadOnlyList<Mover> movers,
+        ref int groups,
+        List<PlacedAsset> placed)
     {
         if (node.IsThemed)
         {
@@ -354,17 +377,25 @@ public static class MapCompositor
         transform.Append(parent);
         if (node.Moving)
         {
-            group = ++groups;
+            // A keyframe offset moves the node within its parent, so it reaches level space through the parent's
+            // scale and rotation alone.
+            var travel = node.Travel;
+            var offsets = travel is { Turns: true }
+                ? null
+                : (travel?.Offsets ?? []).Select(o => parent.Transform(new Vector(o.X, o.Y))).Prepend(new Vector()).ToList();
+            var cycle = offsets is null ? null : travel?.Sample()?.Select(o => parent.Transform(new Vector(o.X, o.Y)));
+            movers = [.. movers, new Mover(++groups, offsets, cycle is null ? null : MoverShifts.Of(cycle))];
         }
 
+        var group = movers.Count == 0 ? 0 : movers[^1].Group;
         foreach (var asset in node.Assets)
         {
-            placed.Add(new PlacedAsset(asset, AssetPath.Resolve(assetDir, asset.AssetName), transform, group));
+            placed.Add(new PlacedAsset(asset, AssetPath.Resolve(assetDir, asset.AssetName), transform, group, movers));
         }
 
         foreach (var child in node.Children)
         {
-            WalkNode(child, assetDir, transform, group, ref groups, placed);
+            WalkNode(child, assetDir, transform, movers, ref groups, placed);
         }
     }
 

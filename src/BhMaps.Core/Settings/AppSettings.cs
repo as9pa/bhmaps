@@ -38,7 +38,16 @@ public sealed record AppSettings(
 
     /// <summary>3.9.3: the one-time rename of an old "My Backgrounds" pack to Custom Pack has run (or found nothing
     /// to rename), so a pack the user names My Backgrounds later is left alone.</summary>
-    bool MyBackgroundsMigrated = false)
+    bool MyBackgroundsMigrated = false,
+
+    /// <summary>G3: the platform editor draws its guides (piece boxes, overlaps, hitboxes) over the stage. On until
+    /// the user turns them off, and one switch for every map.</summary>
+    bool ShowGuides = true,
+
+    /// <summary>G4: the guide layers hidden from the legend under the stage, by their layer names (Lava, Boxes).
+    /// One app-wide choice like <see cref="ShowGuides"/>. Read through <see cref="HiddenGuides"/>, which is never
+    /// null.</summary>
+    IReadOnlyList<string>? HiddenGuideLayers = null)
 {
     public const string DefaultGamePath = @"C:\Program Files (x86)\Steam\steamapps\common\Brawlhalla\mapArt";
 
@@ -63,6 +72,10 @@ public sealed record AppSettings(
     public IReadOnlyCollection<string> HiddenPacks => HiddenPackNames ?? EmptyHidden;
 
     private static readonly IReadOnlyList<string> EmptyHidden = [];
+
+    /// <summary>G4: the hidden guide layers, never null, so a settings file that never carried the key reads the
+    /// same as one that carried an empty array.</summary>
+    public IReadOnlyCollection<string> HiddenGuides => HiddenGuideLayers ?? EmptyHidden;
 
     /// <summary>Whether this pack is kept out of the lists. Names are compared the way the file system compares
     /// them, so a pack hidden as "Dark" is still hidden after the folder is renamed to "dark".</summary>

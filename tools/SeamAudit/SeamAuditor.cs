@@ -1,0 +1,520 @@
+using System.Windows;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using BhMaps.Core.Imaging;
+using BhMaps.Core.LevelData;
+
+namespace BhMaps.Tools.SeamAudit;
+
+/// <summary>A decoded piece: its pixel size, its Bgra32 pixels and its straight alpha, row by row.</summary>
+internal sealed record PieceImage(int Width, int Height, byte[] Pixels, byte[] Alpha);
+
+/// <summary>Seam pixels left in one layout at one opacity while that layout is the one open in the editor, split by
+/// cause. <see cref="Moving"/> and <see cref="Other"/> stay even with the ideal one-layer fade (caused by moving
+/// platforms over art they do not cover for most of their cycle, and everything else); <see cref="TwiceInMap"/> comes from uses of one file in the layout
+/// wanting different values; <see cref="SharedFile"/> from a file other layouts share. <see cref="Ideal"/> counts
+/// seam pixels in the ideal fade itself. <see cref="OtherMaps"/> is the cost elsewhere: file pixels the mask written
+/// for this layout leaves visibly wrong in other layouts, once per use.</summary>
+internal sealed record SeamCounts(
+    long Total,
+    long Moving,
+    long Other,
+    long TwiceInMap,
+    long SharedFile,
+    long Ideal,
+    long OtherMaps
+)
+{
+    public static readonly SeamCounts Zero = new(0, 0, 0, 0, 0, 0, 0);
+
+    public SeamCounts Add(SeamCounts o) =>
+        new(
+            Total + o.Total,
+            Moving + o.Moving,
+            Other + o.Other,
+            TwiceInMap + o.TwiceInMap,
+            SharedFile + o.SharedFile,
+            Ideal + o.Ideal,
+            OtherMaps + o.OtherMaps
+        );
+}
+
+/// <summary>Renders each layout with its pieces faded through <see cref="SeamMask"/> and compares it against the
+/// ideal fade, where the whole stack composites like one layer. Must run on an STA thread.</summary>
+internal sealed class SeamAuditor
+{
+    /// <summary>A rendered channel counts as a seam when it is off the expected value by more than this.</summary>
+    private const int Tolerance = 3;
+
+    /// <summary>Layouts render at most this many pixels on their long side.</summary>
+    private const double MaxRenderSide = 6000;
+
+    /// <summary>The decoded image cache is dropped between layouts once it holds more than this many bytes.</summary>
+    private const long CacheLimit = 2_000_000_000;
+
+    private readonly AssetSources _sources;
+    private readonly IReadOnlyList<LevelDesc> _levels;
+    private readonly Dictionary<string, PieceImage> _cache = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <param name="mapArtPath">The game's mapArt folder.</param>
+    /// <param name="levels">Every layout the mask considers when a file is shared between layouts.</param>
+    public SeamAuditor(string mapArtPath, IReadOnlyList<LevelDesc> levels)
+    {
+        _sources = new AssetSources(mapArtPath);
+        _levels = levels;
+    }
+
+    /// <summary>Audits one layout at each opacity. Null when none of its pieces resolve. With
+    /// <paramref name="diffPath"/>, also writes the coloured diff of the first opacity there: grey correct, yellow
+    /// twice in map, cyan shared file, red moving or other.</summary>
+    public IReadOnlyDictionary<double, SeamCounts>? Audit(
+        LevelDesc level,
+        IReadOnlyList<double> opacities,
+        string? diffPath = null
+    )
+    {
+        var uses = Place(level);
+        if (uses.Count == 0)
+        {
+            return null;
+        }
+
+        var bounds = uses.Select(p => p.Bounds).Aggregate(Rect.Union);
+        double scale = Math.Min(1, MaxRenderSide / Math.Max(bounds.Width, bounds.Height));
+        int width = (int)Math.Ceiling(bounds.Width * scale),
+            height = (int)Math.Ceiling(bounds.Height * scale);
+        var reference = Render(uses.Select(p => (p, Full(p.Image))).ToList(), bounds, scale, width, height);
+        var referenceStill = uses.Exists(p => p.Group != 0)
+            ? Render(uses.Where(p => p.Group == 0).Select(p => (p, Full(p.Image))).ToList(), bounds, scale, width, height)
+            : null;
+        var result = new Dictionary<double, SeamCounts>();
+        foreach (var op in opacities)
+        {
+            float plain = (float)op;
+            var files = uses.Select(p => p.RelativePath).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            var pieces = files
+                .Select(f =>
+                {
+                    var d = Get(f)!;
+                    return new SeamPiece(f, d.Width, d.Height, d.Alpha, op);
+                })
+                .ToList();
+            var wrongElsewhere = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+            var maskWritten = ComputeMask(level, pieces, wrongElsewhere);
+
+            // The ideal per use: faded under every use above it, under the mask's rule for moving platforms: a use
+            // that shifts against this one in game counts only where it covers this one for more than half of its
+            // cycle, or at every keyframe where its timing is unclear (see SeamMask.Covers).
+            // Elsewhere the ideal keeps the plain fade and its seams at rest land in the moving row as unfixable.
+            var ideal = new List<float[]>();
+            for (int k = 0; k < uses.Count; k++)
+            {
+                var above = new List<PieceUse>();
+                for (int j = uses.Count - 1; j > k; j--)
+                {
+                    if (uses[j].Bounds.IntersectsWith(uses[k].Bounds))
+                    {
+                        above.Add(uses[j]);
+                    }
+                }
+
+                ideal.Add(Ideal(uses[k], above, plain));
+            }
+
+            // A moving platform causes an ideal seam only when the ideal over the standing pieces alone, held
+            // against their own full-strength render, is clean there.
+            byte[]? pxStill = null;
+            if (referenceStill != null)
+            {
+                var still = new List<(PieceUse, BitmapSource)>();
+                for (int k = 0; k < uses.Count; k++)
+                {
+                    if (uses[k].Group != 0)
+                    {
+                        continue;
+                    }
+
+                    var above = new List<PieceUse>();
+                    for (int j = uses.Count - 1; j > k; j--)
+                    {
+                        if (uses[j].Group == 0 && uses[j].Bounds.IntersectsWith(uses[k].Bounds))
+                        {
+                            above.Add(uses[j]);
+                        }
+                    }
+
+                    still.Add((uses[k], Scaled(uses[k].Image, Ideal(uses[k], above, plain), plain)));
+                }
+
+                pxStill = Render(still, bounds, scale, width, height);
+            }
+
+            // The best one mask per file can do within this layout under the mask's rule: the mask computed over
+            // this layout alone, so uses of one file in it are merged exactly as the written mask merges them.
+            var maskInMap = SeamMask.Compute([level], pieces);
+
+            var imagesWritten = new Dictionary<string, BitmapSource>(StringComparer.OrdinalIgnoreCase);
+            var imagesInMap = new Dictionary<string, BitmapSource>(StringComparer.OrdinalIgnoreCase);
+            foreach (var f in files)
+            {
+                var d = Get(f)!;
+                imagesWritten[f] = Scaled(d, maskWritten.TryGetValue(f, out var mw) ? mw : null, plain);
+                imagesInMap[f] = Scaled(d, maskInMap.TryGetValue(f, out var mm) ? mm : null, plain);
+            }
+
+            var pxWritten = Render(
+                uses.Select(p => (p, imagesWritten[p.RelativePath])).ToList(),
+                bounds,
+                scale,
+                width,
+                height
+            );
+            var pxInMap = Render(
+                uses.Select(p => (p, imagesInMap[p.RelativePath])).ToList(),
+                bounds,
+                scale,
+                width,
+                height
+            );
+            var pxIdeal = Render(
+                uses.Select((p, k) => (p, Scaled(p.Image, ideal[k], plain))).ToList(),
+                bounds,
+                scale,
+                width,
+                height
+            );
+
+            long total = 0,
+                moving = 0,
+                other = 0,
+                twice = 0,
+                shared = 0,
+                idealSeams = 0;
+            bool draw = diffPath != null && op == opacities[0];
+            byte[]? diff = draw ? new byte[width * height * 4] : null;
+            for (int i = 0; i < width * height * 4; i += 4)
+            {
+                bool written = Seam(pxWritten, reference, op, i),
+                    inIdeal = Seam(pxIdeal, reference, op, i),
+                    inMap = written && Seam(pxInMap, reference, op, i);
+                if (inIdeal)
+                {
+                    idealSeams++;
+                }
+
+                if (!written)
+                {
+                    if (diff != null)
+                    {
+                        byte g = (byte)(reference[i + 3] / 5);
+                        diff[i] = g;
+                        diff[i + 1] = g;
+                        diff[i + 2] = g;
+                        diff[i + 3] = 255;
+                    }
+
+                    continue;
+                }
+
+                total++;
+                if (inIdeal)
+                {
+                    // Seams the one-layer ideal keeps too, which no mask can remove: put down to a moving platform
+                    // only where taking the moving platforms away clears them.
+                    if (pxStill != null && !Seam(pxStill, referenceStill!, op, i))
+                    {
+                        moving++;
+                    }
+                    else
+                    {
+                        other++;
+                    }
+
+                    Paint(diff, i, r: 255);
+                }
+                else if (inMap)
+                {
+                    twice++;
+                    Paint(diff, i, r: 255, g: 255);
+                }
+                else
+                {
+                    shared++;
+                    Paint(diff, i, g: 255, b: 255);
+                }
+            }
+
+            result[op] = new SeamCounts(total, moving, other, twice, shared, idealSeams, wrongElsewhere.Values.Sum());
+            if (diff != null)
+            {
+                SavePng(diff, width, height, diffPath!);
+            }
+        }
+
+        if (_cache.Values.Sum(v => (long)v.Pixels.Length) > CacheLimit)
+        {
+            _cache.Clear();
+        }
+
+        return result;
+    }
+
+    /// <summary>The one place the audit asks <see cref="SeamMask"/> for the written masks: over every layout, as
+    /// written while <paramref name="open"/> is the layout open in the editor (S3), which is what the owner sees
+    /// there. <paramref name="wrongElsewhere"/> gets what that mask leaves wrong in the other layouts.</summary>
+    private IReadOnlyDictionary<string, float[]> ComputeMask(
+        LevelDesc open,
+        IReadOnlyList<SeamPiece> pieces,
+        IDictionary<string, long> wrongElsewhere
+    ) => SeamMask.Compute(_levels, pieces, open.LevelName, wrongElsewhere);
+
+    /// <summary>Every piece of the layout that resolves, bottom first.</summary>
+    private List<PieceUse> Place(LevelDesc level)
+    {
+        var uses = new List<PieceUse>();
+        foreach (var placed in MapCompositor.Walk(level))
+        {
+            var image = Get(placed.RelativePath);
+            if (image == null)
+            {
+                continue;
+            }
+
+            var to = MapCompositor.AssetTransform(placed.Asset, image.Width, image.Height);
+            to.Append(placed.Transform);
+            var from = to;
+            if (!from.HasInverse)
+            {
+                continue;
+            }
+
+            from.Invert();
+            var bounds = new Rect(0, 0, image.Width, image.Height);
+            bounds.Transform(to);
+            uses.Add(new PieceUse(image, placed.RelativePath, to, from, bounds, placed.Group, placed.Movers));
+        }
+
+        return uses;
+    }
+
+    private PieceImage? Get(string relativePath)
+    {
+        if (_cache.TryGetValue(relativePath, out var cached))
+        {
+            return cached;
+        }
+
+        var path = _sources.ResolveAsset(relativePath);
+        if (path == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            using var stream = File.OpenRead(path);
+            var frame = BitmapDecoder
+                .Create(stream, BitmapCreateOptions.None, BitmapCacheOption.OnLoad)
+                .Frames[0];
+            var converted = new FormatConvertedBitmap(frame, PixelFormats.Bgra32, null, 0);
+            int w = converted.PixelWidth,
+                h = converted.PixelHeight;
+            var pixels = new byte[w * h * 4];
+            converted.CopyPixels(pixels, w * 4, 0);
+            var alpha = new byte[w * h];
+            for (int i = 0; i < alpha.Length; i++)
+            {
+                alpha[i] = pixels[i * 4 + 3];
+            }
+
+            return _cache[relativePath] = new PieceImage(w, h, pixels, alpha);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>The piece with each pixel's alpha multiplied by its mask factor, or by the plain opacity when
+    /// there is no mask.</summary>
+    private static BitmapSource Scaled(PieceImage image, float[]? mask, float plain)
+    {
+        var pixels = (byte[])image.Pixels.Clone();
+        for (int i = 0; i < image.Width * image.Height; i++)
+        {
+            float s = mask == null ? plain : mask[i];
+            pixels[i * 4 + 3] = (byte)
+                Math.Round(image.Alpha[i] * Math.Clamp(s, 0, 1), MidpointRounding.AwayFromZero);
+        }
+
+        var bitmap = BitmapSource.Create(
+            image.Width,
+            image.Height,
+            96,
+            96,
+            PixelFormats.Bgra32,
+            null,
+            pixels,
+            image.Width * 4
+        );
+        bitmap.Freeze();
+        return bitmap;
+    }
+
+    private static BitmapSource Full(PieceImage image)
+    {
+        var bitmap = BitmapSource.Create(
+            image.Width,
+            image.Height,
+            96,
+            96,
+            PixelFormats.Bgra32,
+            null,
+            image.Pixels,
+            image.Width * 4
+        );
+        bitmap.Freeze();
+        return bitmap;
+    }
+
+    /// <summary>The ideal mask of one use: the factor that makes it composite under <paramref name="above"/>
+    /// (top first) like one layer at the plain opacity. A use that shifts against this one in game covers only where
+    /// it counts as staying over it, as in the mask (see <see cref="SeamMask.Shifts"/> and
+    /// <see cref="SeamMask.Covers"/>).</summary>
+    private static float[] Ideal(PieceUse own, List<PieceUse> above, float plain)
+    {
+        var mask = new float[own.Image.Width * own.Image.Height];
+        Array.Fill(mask, plain);
+        var shifts = above.Select(o => SeamMask.Shifts(o.Movers, own.Movers)).ToList();
+        if (above.Count == 0)
+        {
+            return mask;
+        }
+
+        var cover = new List<(double, double)>();
+        for (int y = 0; y < own.Image.Height; y++)
+        {
+            for (int x = 0; x < own.Image.Width; x++)
+            {
+                int ix = y * own.Image.Width + x;
+                double s = own.Image.Alpha[ix] / 255.0;
+                if (s == 0)
+                {
+                    continue;
+                }
+
+                var pt = own.To.Transform(new Point(x + .5, y + .5));
+                cover.Clear();
+                for (int j = 0; j < above.Count; j++)
+                {
+                    var o = above[j];
+                    if (
+                        o.Bounds.Contains(pt)
+                        && o.AlphaAt(pt) is > 0 and var sj
+                        && shifts[j] is { } shift
+                        && (
+                            shift.Count == 0
+                            || SeamMask.Covers(o.From, o.Image.Width, o.Image.Height, pt, shift)
+                        )
+                    )
+                    {
+                        cover.Add((sj, plain));
+                    }
+                }
+
+                if (cover.Count > 0)
+                {
+                    mask[ix] = (float)Math.Clamp(SeamMask.Written(s, plain, cover) / s, 0, plain);
+                }
+            }
+        }
+
+        return mask;
+    }
+
+    /// <summary>Composites the uses bottom first into a Pbgra32 buffer of the layout's bounds.</summary>
+    private static byte[] Render(
+        List<(PieceUse Use, BitmapSource Image)> items,
+        Rect bounds,
+        double scale,
+        int width,
+        int height
+    )
+    {
+        var visual = new DrawingVisual();
+        using (var dc = visual.RenderOpen())
+        {
+            foreach (var (use, image) in items)
+            {
+                var m = use.To;
+                m.Append(new Matrix(1, 0, 0, 1, -bounds.X, -bounds.Y));
+                m.Append(new Matrix(scale, 0, 0, scale, 0, 0));
+                dc.PushTransform(new MatrixTransform(m));
+                dc.DrawImage(image, new Rect(0, 0, use.Image.Width, use.Image.Height));
+                dc.Pop();
+            }
+        }
+
+        var target = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+        target.Render(visual);
+        var pixels = new byte[width * height * 4];
+        target.CopyPixels(pixels, width * 4, 0);
+        return pixels;
+    }
+
+    /// <summary>True when the pixel at byte <paramref name="i"/> differs from the full-strength reference scaled
+    /// by the opacity.</summary>
+    private static bool Seam(byte[] rendered, byte[] reference, double op, int i)
+    {
+        for (int c = 0; c < 4; c++)
+        {
+            int expected = (int)Math.Round(reference[i + c] * op, MidpointRounding.AwayFromZero);
+            if (Math.Abs(rendered[i + c] - expected) > Tolerance)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static void Paint(byte[]? diff, int i, byte r = 0, byte g = 0, byte b = 0)
+    {
+        if (diff == null)
+        {
+            return;
+        }
+
+        diff[i] = b;
+        diff[i + 1] = g;
+        diff[i + 2] = r;
+        diff[i + 3] = 255;
+    }
+
+    private static void SavePng(byte[] pixels, int width, int height, string path)
+    {
+        var bitmap = BitmapSource.Create(width, height, 96, 96, PixelFormats.Bgra32, null, pixels, width * 4);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        using var stream = File.Create(path);
+        encoder.Save(stream);
+    }
+
+    /// <summary>One use of a piece in the layout: the matrix from its pixels to level space and back, its
+    /// level-space bounds, its group (moving platforms get their own) and the moving platforms it rides on.</summary>
+    private sealed record PieceUse(
+        PieceImage Image,
+        string RelativePath,
+        Matrix To,
+        Matrix From,
+        Rect Bounds,
+        int Group,
+        IReadOnlyList<Mover>? Movers
+    )
+    {
+        /// <summary>The native alpha (0..1) the piece shows at this level point, blended as the game and the
+        /// renderer draw it stretched (S4), 0 outside the piece.</summary>
+        public double AlphaAt(Point q) => SeamMask.Blended(Image.Alpha, Image.Width, Image.Height, From.Transform(q));
+    }
+}

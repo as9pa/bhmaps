@@ -12,13 +12,15 @@ public sealed record LevelAsset(string AssetName, double X, double Y, double W, 
 
 /// <summary>One transform node of a level's platform tree. Absent attributes mean identity. A node that names an
 /// image on itself owns the first entry of <see cref="Assets"/>, at the node's own origin. <see cref="Moving"/> marks a
-/// MovingPlatform, whose subtree moves as one piece apart from the rest of the level (3.2 O1).</summary>
+/// MovingPlatform, whose subtree moves as one piece apart from the rest of the level (3.2 O1), and
+/// <see cref="Travel"/> is where its animation takes it.</summary>
 public sealed record PlatformNode(
     double X, double Y, double Scale, double ScaleX, double ScaleY, double Rotation,
     string? Theme,
     IReadOnlyList<LevelAsset> Assets,
     IReadOnlyList<PlatformNode> Children,
-    bool Moving = false)
+    bool Moving = false,
+    PlatformTravel? Travel = null)
 {
     /// <summary>A themed node is seasonal, and the compositor skips it.</summary>
     [JsonIgnore]
@@ -31,12 +33,95 @@ public sealed record PlatformNode(
     public double EffectiveScaleY => Scale * ScaleY;
 }
 
+/// <summary>Where a MovingPlatform's animation takes it, in its parent's space. <see cref="Offsets"/> are the
+/// offsets from its rest position that its path stays inside: every KeyFrame's X and Y (a missing one is 0), in the
+/// Animation and in its Phases, and every curve centre (CenterX, CenterY) on a KeyFrame or on the Animation, which
+/// bends the path between two keyframes but keeps it inside their hull with the centre. <see cref="Turns"/> is true
+/// when a KeyFrame rotates the platform, which offsets cannot describe. <see cref="Frames"/> is the Animation's
+/// NumFrames when its timing is clear: then <see cref="Offsets"/> are exactly its KeyFrames, each at its FrameNum,
+/// and the path runs from one to the next in a straight line, the last back to the first a cycle later. It is 0 when
+/// the timing is unclear (Phases, curve centres, a KeyFrame without FrameNum, no NumFrames), and the offsets bound
+/// the path only.</summary>
+public sealed record PlatformTravel(IReadOnlyList<TravelOffset> Offsets, bool Turns, double Frames = 0)
+{
+    /// <summary>The most moments of a cycle <see cref="Sample"/> looks at.</summary>
+    public const int MaxSamples = 512;
+
+    /// <summary>Where the platform is at evenly spaced moments of one animation cycle, one per frame up to
+    /// <see cref="MaxSamples"/>, or null when <see cref="Frames"/> is 0.</summary>
+    public IReadOnlyList<TravelOffset>? Sample()
+    {
+        if (Frames <= 0 || Offsets.Count == 0)
+        {
+            return null;
+        }
+
+        var keys = Offsets.OrderBy(o => o.Frame).ToList();
+        var first = keys[0].Frame;
+        var count = Math.Clamp((int)Math.Round(Frames), 1, MaxSamples);
+        var samples = new List<TravelOffset>(count);
+        var k = 0;
+        for (var i = 0; i < count; i++)
+        {
+            var frame = first + (i * Frames / count);
+            while (k + 1 < keys.Count && keys[k + 1].Frame <= frame)
+            {
+                k++;
+            }
+
+            var from = keys[k];
+            var (to, at) = k + 1 < keys.Count ? (keys[k + 1], keys[k + 1].Frame) : (keys[0], first + Frames);
+            var t = at > from.Frame ? (frame - from.Frame) / (at - from.Frame) : 0;
+            samples.Add(new TravelOffset(from.X + ((to.X - from.X) * t), from.Y + ((to.Y - from.Y) * t)));
+        }
+
+        return samples;
+    }
+}
+
+/// <summary>One offset from a moving platform's rest position, and the FrameNum of its KeyFrame when the travel is
+/// timed (see <see cref="PlatformTravel.Frames"/>).</summary>
+public sealed record TravelOffset(double X, double Y, double Frame = 0);
+
+/// <summary>The kind of a collision line: its element name without the "Collision" suffix, so HardCollision is
+/// <see cref="Hard"/>.</summary>
+public enum CollisionKind
+{
+    Hard,
+    Soft,
+    NoSlide,
+    BouncyHard,
+    BouncySoft,
+    BouncyNoSlide,
+    Lava,
+    PressurePlate,
+    SoftPressurePlate,
+    GameModeHard,
+    Mud,
+}
+
+/// <summary>One collision segment in level units, whichever of the game's three forms it was written in (X1 X2 Y,
+/// X Y1 Y2, or X1 X2 Y1 Y2). A curved line also names the control point it bends towards in
+/// <see cref="AnchorX"/> and <see cref="AnchorY"/>. <see cref="PlatId"/> is the PlatID of the DynamicCollision the
+/// line came from, null for a line that never moves. Such a line is already offset by its container's X and Y, which
+/// puts it where the game has it at rest: MapCompositor.Walk draws a MovingPlatform at its own X and Y and ignores its
+/// Animation, and the game moves the platform and the collision of the same PlatID by the same animation offset, so a
+/// later step that animates either adds that offset to both and needs nothing from the parser.</summary>
+public sealed record CollisionLine(
+    CollisionKind Kind, double X1, double Y1, double X2, double Y2, string? PlatId = null,
+    double? AnchorX = null, double? AnchorY = null);
+
+/// <summary><see cref="Collisions"/> sits outside the positional list so every caller that builds a level without
+/// collision keeps compiling; it is empty unless the parser fills it.</summary>
 public sealed record LevelDesc(
     string LevelName,
     string AssetDir,
     CameraBounds Camera,
     IReadOnlyList<LevelBackground> Backgrounds,
-    IReadOnlyList<PlatformNode> Platforms);
+    IReadOnlyList<PlatformNode> Platforms)
+{
+    public IReadOnlyList<CollisionLine> Collisions { get; init; } = [];
+}
 
 /// <summary><see cref="ThumbnailFile"/> is the map-select picture the game names in ThumbnailPNGFile, kept
 /// verbatim because the game names a .jpg in that field. Null when the level names none.</summary>

@@ -28,7 +28,7 @@ public static class SettingsStore
         // more; it stays known so an old file's copy of it is dropped rather than carried back.
         "writeGameThumbnails",
         "checkForUpdates", "lastUpdateCheck", "dismissedUpdate", "hiddenPacks",
-        "myBackgroundsMigrated",
+        "myBackgroundsMigrated", "showGuides", "hiddenGuides",
     ];
 
     public static string DefaultAppDataDir =>
@@ -106,10 +106,12 @@ public static class SettingsStore
             Bool(obj, "checkForUpdates", fallback: true),
             Time(obj, "lastUpdateCheck"),
             Str(obj, "dismissedUpdate") is { Length: > 0 } tag ? tag : null,
-            Hidden(obj),
+            Hidden(obj, "hiddenPacks"),
             Dismissed(obj),
             Mode(obj),
-            Bool(obj, "myBackgroundsMigrated"))
+            Bool(obj, "myBackgroundsMigrated"),
+            Bool(obj, "showGuides", fallback: true),
+            Hidden(obj, "hiddenGuides"))
         {
             Unknown = unknown.Count == 0 ? null : unknown,
         };
@@ -135,6 +137,7 @@ public static class SettingsStore
             ["dismissedUpdate"] = settings.DismissedUpdate,
             ["previewMode"] = settings.PreviewMode.ToString().ToLowerInvariant(),
             ["myBackgroundsMigrated"] = settings.MyBackgroundsMigrated,
+            ["showGuides"] = settings.ShowGuides,
         };
 
         // Spec 8: a library nobody has applied from writes no key at all, rather than an empty object nobody reads.
@@ -159,6 +162,18 @@ public static class SettingsStore
             }
 
             obj["hiddenPacks"] = hidden;
+        }
+
+        // G4: nothing hidden writes no key at all, the same way the hidden packs do.
+        if (settings.HiddenGuides.Count > 0)
+        {
+            var layers = new JsonArray();
+            foreach (var layer in settings.HiddenGuides)
+            {
+                layers.Add(layer);
+            }
+
+            obj["hiddenGuides"] = layers;
         }
 
         // 3.1: a library with no dismissed note writes no key at all, the same way the hidden packs do.
@@ -365,9 +380,9 @@ public static class SettingsStore
         return read;
     }
 
-    private static IReadOnlyList<string>? Hidden(JsonObject obj)
+    private static IReadOnlyList<string>? Hidden(JsonObject obj, string key)
     {
-        if (obj["hiddenPacks"] is not JsonArray names)
+        if (obj[key] is not JsonArray names)
         {
             return null;
         }

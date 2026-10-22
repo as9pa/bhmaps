@@ -237,16 +237,45 @@ public partial class PlatformPieceViewModel : ObservableObject
         }
     }
 
+    /// <summary>What <see cref="SharedWithOtherMapsNote"/> and a row's "also in" mark say about the other maps.</summary>
+    public const string FadedLinesText = "lines may show there when faded";
+
+    /// <summary>The line a row can show when <see cref="SharedWithOtherMaps"/> is true.</summary>
+    public const string SharedWithOtherMapsNote = "Used on other maps too: " + FadedLinesText;
+
+    /// <summary>S3: a row's quiet line under its file name. The "also in" mark, with <see cref="FadedLinesText"/>
+    /// after it when <paramref name="shared"/>, so the row grows by one line at most; <see cref="SharedWithOtherMapsNote"/>
+    /// when there is no mark to append to.</summary>
+    public static string AlsoInLine(string alsoIn, bool shared) =>
+        !shared ? alsoIn
+        : alsoIn.Length == 0 ? SharedWithOtherMapsNote
+        : alsoIn + ", " + FadedLinesText;
+
+    /// <summary>S3: true when this row's file is also used by other layouts and the seam mask written for the map
+    /// open in the editor leaves some of those uses visibly wrong. Worked out by <see cref="SeamMasks"/> and set
+    /// through <see cref="ApplyShared"/>.</summary>
+    [ObservableProperty]
+    public partial bool SharedWithOtherMaps { get; private set; }
+
     /// <summary>Spec 3.2 O1: the seam mask of every faded row of one map's set, keyed by relative path, over the
     /// playable layouts of <paramref name="model"/>. <paramref name="missing"/> is true when a row is faded and
-    /// there is no level data to correct it with, which leaves every row fading on its own as before.</summary>
+    /// there is no level data to correct it with, which leaves every row fading on its own as before. S3: with
+    /// <paramref name="openLevel"/>, the LevelName of the layout open in the editor, that layout's uses of a shared
+    /// file win, and <paramref name="shared"/> says for every row whether other layouts are left with lines.
+    /// Callers run this inside Task.Run, so the flags are handed back for the caller to apply on the UI thread
+    /// once it knows the work is still current.</summary>
     public static IReadOnlyDictionary<string, float[]> SeamMasks(
-        IReadOnlyList<PlatformPieceViewModel> rows, LevelDataModel? model, out bool missing)
+        IReadOnlyList<PlatformPieceViewModel> rows,
+        LevelDataModel? model,
+        out bool missing,
+        out IReadOnlyList<(PlatformPieceViewModel Row, bool Shared)> shared,
+        string? openLevel = null)
     {
         var faded = rows.Where(r => r.Opacity < DefaultOpacity).ToList();
         missing = faded.Count > 0 && model is null;
         if (faded.Count == 0 || model is null)
         {
+            shared = [.. rows.Select(row => (row, false))];
             return new Dictionary<string, float[]>();
         }
 
@@ -265,9 +294,28 @@ public partial class PlatformPieceViewModel : ObservableObject
             }
         }
 
-        // A dev or test level is not a layout anyone plays, so it must not veto a correction the real ones agree on.
+        // A dev or test level is not a layout anyone plays, so it must not veto a correction the real ones agree on,
+        // unless it is the one open in the editor.
         var hidden = model.Types.Where(t => !t.Included).Select(t => t.LevelName).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        return SeamMask.Compute(model.Levels.Where(l => !hidden.Contains(l.LevelName)), pieces);
+        if (openLevel != null)
+        {
+            hidden.Remove(openLevel);
+        }
+
+        var wrongElsewhere = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        var masks = SeamMask.Compute(model.Levels.Where(l => !hidden.Contains(l.LevelName)), pieces, openLevel, wrongElsewhere);
+        shared = [.. rows.Select(row => (row, wrongElsewhere.ContainsKey(row.RelativePath)))];
+        return masks;
+    }
+
+    /// <summary>S3: sets the flags <see cref="SeamMasks"/> handed back. The rows are bound to the window, so this
+    /// runs on the UI thread, after the caller has checked the flags are not from work a newer one replaced.</summary>
+    public static void ApplyShared(IReadOnlyList<(PlatformPieceViewModel Row, bool Shared)> shared)
+    {
+        foreach (var (row, value) in shared)
+        {
+            row.SharedWithOtherMaps = value;
+        }
     }
 
     /// <summary>What Save and the preview write for this row: a plain copy when nothing about it changed, its
