@@ -185,21 +185,11 @@ public static class MapCompositor
             }
             else if (camera.W > 0 && camera.H > 0)
             {
-                var scale = Math.Min(width / camera.W, height / camera.H);
-                var offsetX = (width - (camera.W * scale)) / 2;
-                var offsetY = (height - (camera.H * scale)) / 2;
+                var stage = StageTransform(camera, width, height);
                 var decoded = new Dictionary<string, BitmapSource?>(StringComparer.OrdinalIgnoreCase);
 
-                dc.PushClip(new RectangleGeometry(new Rect(offsetX, offsetY, camera.W * scale, camera.H * scale)));
-                dc.PushTransform(new TransformGroup
-                {
-                    Children =
-                    {
-                        new TranslateTransform(-camera.X, -camera.Y),
-                        new ScaleTransform(scale, scale),
-                        new TranslateTransform(offsetX, offsetY),
-                    },
-                });
+                dc.PushClip(new RectangleGeometry(Rect.Transform(new Rect(camera.X, camera.Y, camera.W, camera.H), stage)));
+                dc.PushTransform(new MatrixTransform(stage));
 
                 if (mode == PreviewMode.Both)
                 {
@@ -320,6 +310,25 @@ public static class MapCompositor
         }
 
         return placed;
+    }
+
+    /// <summary>Takes level space to a <paramref name="width" /> by <paramref name="height" /> bitmap the way
+    /// <see cref="Render" /> draws it: <paramref name="camera" /> scaled uniformly to fit and centred, so the bands
+    /// left over sit evenly on both sides. Identity for a camera with no area, which <see cref="Render" /> does not
+    /// draw at all.</summary>
+    public static Matrix StageTransform(CameraBounds camera, int width, int height)
+    {
+        if (camera.W <= 0 || camera.H <= 0)
+        {
+            return Matrix.Identity;
+        }
+
+        var scale = Math.Min(width / camera.W, height / camera.H);
+        var matrix = Matrix.Identity;
+        matrix.Translate(-camera.X, -camera.Y);
+        matrix.Scale(scale, scale);
+        matrix.Translate((width - (camera.W * scale)) / 2, (height - (camera.H * scale)) / 2);
+        return matrix;
     }
 
     /// <summary>Takes a piece's own pixels (0..pixelWidth by 0..pixelHeight) to its node's space: stretched over
