@@ -191,8 +191,8 @@
 
         <!-- G1/G3: the stage takes focus on a click, so G toggles the guides from it. The guides sit outside the
              Viewbox, laid over it, so their lines are drawn in screen pixels; the code behind gives them the
-             Viewbox's scale and offset. G6: Ctrl+scroll looks closer by a render transform on the Viewbox, clipped
-             to the stage, and Space+drag pans it; the art is not touched. -->
+             Viewbox's scale and offset. G6: Ctrl+scroll looks closer by a render transform on the stage's
+             viewport, clipped to the stage, and Space+drag pans it; the art is not touched. -->
         <Grid x:Name="Stage"
               Grid.Row="1"
               Margin="16"
@@ -212,34 +212,44 @@
           <Grid.InputBindings>
             <KeyBinding Key="G" Command="{Binding ToggleGuidesCommand}" />
           </Grid.InputBindings>
-          <!-- 1280x720 is the size the view model composes at; the Viewbox only scales what came back, so
-               nothing is resampled twice. Zoomed in, the view model composes at a multiple of it instead. -->
-          <Viewbox x:Name="StageBox" SizeChanged="StageBox_SizeChanged" Stretch="Uniform">
-            <Viewbox.RenderTransform>
+          <!-- G6: the view's zoom and pan sit on this grid, which fills the stage as the guides do, so the one
+               matrix means the same pixels on both. On the Viewbox itself it would apply inside the Viewbox's own
+               box, which is the picture's size and sits centred in the stage, and the art would part from the
+               guides by that offset times the zoom less one. -->
+          <Grid x:Name="StageViewport">
+            <Grid.RenderTransform>
               <MatrixTransform x:Name="StageView" />
-            </Viewbox.RenderTransform>
-            <Border Width="1280" Height="720" Background="{StaticResource BgBrush}">
-              <!-- Spec 6.2: dragging the picture that is laid across the platforms. The Image is the composed
-                   stage at its own 1280 by 720, so the code behind only has to undo the Viewbox's scale. -->
-              <Image MouseLeftButtonDown="Preview_MouseLeftButtonDown"
-                     MouseLeftButtonUp="Preview_MouseLeftButtonUp"
-                     MouseMove="Preview_MouseMove"
-                     MouseWheel="Preview_MouseWheel"
-                     RenderOptions.BitmapScalingMode="HighQuality"
-                     Source="{Binding Preview}"
-                     Stretch="Fill">
-                <Image.Style>
-                  <Style TargetType="Image">
-                    <Style.Triggers>
-                      <DataTrigger Binding="{Binding CanPan}" Value="True">
-                        <Setter Property="Cursor" Value="SizeAll" />
-                      </DataTrigger>
-                    </Style.Triggers>
-                  </Style>
-                </Image.Style>
-              </Image>
-            </Border>
-          </Viewbox>
+            </Grid.RenderTransform>
+            <!-- 1280x720 is the size the view model composes at; the Viewbox only scales what came back, so
+                 nothing is resampled twice. Zoomed in, the view model composes at a multiple of it instead, and the
+                 Border keeps the Image at 1280 by 720, so the Viewbox's fit does not change with the bitmap. -->
+            <Viewbox x:Name="StageBox" SizeChanged="StageBox_SizeChanged" Stretch="Uniform">
+              <Border x:Name="StageArt"
+                      Width="1280"
+                      Height="720"
+                      Background="{StaticResource BgBrush}">
+                <!-- Spec 6.2: dragging the picture that is laid across the platforms. The Image is the composed
+                     stage at its own 1280 by 720, so the code behind only has to undo the Viewbox's scale. -->
+                <Image MouseLeftButtonDown="Preview_MouseLeftButtonDown"
+                       MouseLeftButtonUp="Preview_MouseLeftButtonUp"
+                       MouseMove="Preview_MouseMove"
+                       MouseWheel="Preview_MouseWheel"
+                       RenderOptions.BitmapScalingMode="HighQuality"
+                       Source="{Binding Preview}"
+                       Stretch="Fill">
+                  <Image.Style>
+                    <Style TargetType="Image">
+                      <Style.Triggers>
+                        <DataTrigger Binding="{Binding CanPan}" Value="True">
+                          <Setter Property="Cursor" Value="SizeAll" />
+                        </DataTrigger>
+                      </Style.Triggers>
+                    </Style>
+                  </Image.Style>
+                </Image>
+              </Border>
+            </Viewbox>
+          </Grid>
 
           <controls:GuidesOverlay x:Name="GuidesLayer"
                                   Guides="{Binding Guides}"

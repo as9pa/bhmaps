@@ -90,9 +90,10 @@ public partial class PlatformEditorWindow : Window
 
     private void StageBox_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateGuidesTransform();
 
-    /// <summary>G1: level space to the guides' own pixels, composed in this one place: the view model's stage
-    /// transform for the camera on show, then the Viewbox's fit of the 1280 by 720 stage into the card, then the
-    /// view's own zoom and pan.</summary>
+    /// <summary>G1: level space to the guides' own pixels: the view model's stage transform for the camera on show,
+    /// then wherever the 1280 by 720 picture really is on screen. That second part is read back from the visual
+    /// tree, the Viewbox's fit and the view's zoom and pan included, so the guides cannot part from the art.
+    /// </summary>
     private void UpdateGuidesTransform()
     {
         if (DataContext is not PlatformEditorViewModel vm)
@@ -101,9 +102,24 @@ public partial class PlatformEditorWindow : Window
         }
 
         var levelToScreen = vm.LevelToStage;
-        levelToScreen.Append(StageToCard());
-        levelToScreen.Append(ViewTransform());
+        levelToScreen.Append(ArtToGuides());
         GuidesLayer.LevelToScreen = levelToScreen;
+    }
+
+    /// <summary>G6: the picture's 1280 by 720 to the guides' pixels as WPF draws it. Before the first layout, or
+    /// were the two ever not in one tree, the same thing composed by hand.</summary>
+    private Matrix ArtToGuides()
+    {
+        if (StageBox.ActualWidth > 0
+            && StageArt.IsDescendantOf(Stage)
+            && StageArt.TransformToVisual(GuidesLayer) is Transform drawn)
+        {
+            return drawn.Value;
+        }
+
+        var composed = StageToCard();
+        composed.Append(ViewTransform());
+        return composed;
     }
 
     /// <summary>The Viewbox's uniform scale and its offset inside the guides' box, read from its layout. Before the
@@ -119,7 +135,8 @@ public partial class PlatformEditorWindow : Window
 
         // The layout offsets alone: TranslatePoint would also carry the view's render transform, which comes after
         // this, in ViewTransform.
-        var origin = (Point)(VisualTreeHelper.GetOffset(StageBox) - VisualTreeHelper.GetOffset(GuidesLayer));
+        var origin = (Point)(VisualTreeHelper.GetOffset(StageBox) + VisualTreeHelper.GetOffset(StageViewport)
+            - VisualTreeHelper.GetOffset(GuidesLayer));
         var fit = Matrix.Identity;
         fit.Scale(scale, scale);
         fit.Translate(
@@ -128,9 +145,9 @@ public partial class PlatformEditorWindow : Window
         return fit;
     }
 
-    /// <summary>G6: the view's own zoom and pan, in the guides' pixels, applied last. The same matrix is the
-    /// Viewbox's render transform; the Viewbox and the guides both fill the stage, so their pixels are the same
-    /// pixels and the guides follow the picture exactly. Identity at fit.</summary>
+    /// <summary>G6: the view's own zoom and pan, in the stage's pixels, applied last. It is the render transform
+    /// of the viewport that holds the Viewbox; the viewport and the guides both fill the stage, so their pixels are
+    /// the same pixels. Identity at fit.</summary>
     private Matrix ViewTransform() => new(_viewZoom, 0, 0, _viewZoom, _viewOffset.X, _viewOffset.Y);
 
     /// <summary>G6: the view back to fit, and the preview back to its own 1280 by 720 straight away.</summary>
