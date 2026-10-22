@@ -49,8 +49,17 @@ public static class SeamMask
     /// piece gets the value that leaves the fewest uses with a visible error (see <see cref="Merge"/>), and where
     /// one use draws the same file pixel on top of itself (a flipped copy meeting in the middle) the value is
     /// solved exactly. Only faded pieces are passed in: a piece at full strength above another changes nothing in
-    /// the formula. A piece with nothing to correct is left out of the result.</summary>
-    public static IReadOnlyDictionary<string, float[]> Compute(IEnumerable<LevelDesc> levels, IReadOnlyList<SeamPiece> pieces)
+    /// the formula. A piece with nothing to correct is left out of the result.
+    /// <para>With <paramref name="preferred"/>, the name of the layout open in the editor, that layout's uses win:
+    /// wherever one of them sees a pixel, the value is merged over its uses alone, so they get it exactly where they
+    /// agree, and the other layouts' uses only break ties among them or decide the pixels the preferred layout does
+    /// not see. <paramref name="wrongElsewhere"/> then gets, per piece, how many pixels the result leaves visibly
+    /// wrong under a use in another layout, counted once per use; a piece with none is left out.</para></summary>
+    public static IReadOnlyDictionary<string, float[]> Compute(
+        IEnumerable<LevelDesc> levels,
+        IReadOnlyList<SeamPiece> pieces,
+        string? preferred = null,
+        IDictionary<string, long>? wrongElsewhere = null)
     {
         var byPath = new Dictionary<string, SeamPiece>(StringComparer.OrdinalIgnoreCase);
         foreach (var piece in pieces)
@@ -69,6 +78,7 @@ public static class SeamMask
 
         foreach (var level in levels)
         {
+            var isPreferred = preferred != null && string.Equals(level.LevelName, preferred, StringComparison.OrdinalIgnoreCase);
             var placements = new List<Placement>();
             foreach (var placed in MapCompositor.Walk(level))
             {
@@ -106,7 +116,7 @@ public static class SeamMask
                     uses[own.Piece] = list = [];
                 }
 
-                list.Add(Wanted(own, above, selfBelow));
+                list.Add(Wanted(own, above, selfBelow) with { Preferred = isPreferred });
             }
         }
 
@@ -114,10 +124,15 @@ public static class SeamMask
         foreach (var (piece, list) in uses)
         {
             var plain = (float)Math.Clamp(piece.Opacity, 0, 1);
-            var merged = Merge(piece, plain, list);
+            var merged = Merge(piece, plain, list, out var wrong);
             if (merged.Any(v => Math.Abs(v - plain) >= Agreement))
             {
                 result[piece.RelativePath] = merged;
+            }
+
+            if (preferred != null && wrong > 0 && wrongElsewhere != null)
+            {
+                wrongElsewhere[piece.RelativePath] = wrong;
             }
         }
 
@@ -126,8 +141,9 @@ public static class SeamMask
 
     /// <summary>What one use of a piece wants of every pixel: the factor, and the light that reaches the piece
     /// there through the faded pieces above it (1 uncovered, 0 hidden, below 0 where another draw of the same
-    /// file pixel already carries this one, see <see cref="SolveSelf"/>).</summary>
-    private sealed record Want(float[] Factor, float[] Through);
+    /// file pixel already carries this one, see <see cref="SolveSelf"/>), and whether it is a use in the preferred
+    /// layout.</summary>
+    private sealed record Want(float[] Factor, float[] Through, bool Preferred = false);
 
     /// <summary>The merged factor of every pixel over the uses of a piece. Moving this piece's written alpha at a
     /// pixel by d moves the composite under one use by d times the light T reaching the piece there, and the native
@@ -137,10 +153,13 @@ public static class SeamMask
     /// uses with an error over <see cref="Unseen"/>, ties going to the uses the more light reaches. Among the uses
     /// it satisfies it takes the least squared error, the mean weighted by T^2, kept inside the range every one of
     /// them accepts. Uses that agree get their value exactly, a slight disagreement gets a middle value no use
-    /// shows, and a wide one gets the value the most uses want. Each use counts once, so a use can later be given
-    /// more say than another.</summary>
-    private static float[] Merge(SeamPiece piece, float plain, List<Want> uses)
+    /// shows, and a wide one gets the value the most uses want. Each use counts once. Where a use of the preferred
+    /// layout sees the pixel (some light reaches it), only the preferred uses choose and are averaged, and the other
+    /// uses they leave satisfied break a tie between candidates. <paramref name="wrongElsewhere"/> counts the pixels
+    /// the result leaves visibly wrong under the uses outside the preferred layout, once per use.</summary>
+    private static float[] Merge(SeamPiece piece, float plain, List<Want> uses, out long wrongElsewhere)
     {
+        wrongElsewhere = 0;
         var merged = new float[piece.Width * piece.Height];
         var low = new double[uses.Count];
         var high = new double[uses.Count];
@@ -174,10 +193,12 @@ public static class SeamMask
                 high[u] = through < 0 ? double.NaN : uses[u].Factor[p] + slack;
             }
 
-            var best = (Count: -1, Weight: -1.0, At: 0.0);
+            // S3: the map open in the editor wins wherever one of its uses sees this pixel.
+            var preferredOnly = uses.Exists(u => u.Preferred && u.Through[p] > 0);
+            var best = (Count: -1, Weight: -1.0, Others: -1, At: 0.0);
             for (var c = 0; c < uses.Count; c++)
             {
-                if (double.IsNaN(low[c]))
+                if (double.IsNaN(low[c]) || (preferredOnly && !uses[c].Preferred))
                 {
                     continue;
                 }
@@ -185,25 +206,36 @@ public static class SeamMask
                 var at = double.IsNegativeInfinity(low[c]) ? uses[c].Factor[p] : low[c];
                 var count = 0;
                 var weight = 0.0;
+                var others = 0;
                 for (var u = 0; u < uses.Count; u++)
                 {
-                    if (low[u] <= at && at <= high[u])
+                    if (!(low[u] <= at && at <= high[u]))
                     {
-                        count++;
-                        weight += uses[u].Through[p] * uses[u].Through[p];
+                        continue;
                     }
+
+                    if (preferredOnly && !uses[u].Preferred)
+                    {
+                        others++;
+                        continue;
+                    }
+
+                    count++;
+                    weight += uses[u].Through[p] * uses[u].Through[p];
                 }
 
-                if (count > best.Count || (count == best.Count && weight > best.Weight))
+                if (count > best.Count
+                    || (count == best.Count && weight > best.Weight)
+                    || (count == best.Count && weight == best.Weight && others > best.Others))
                 {
-                    best = (count, weight, at);
+                    best = (count, weight, others, at);
                 }
             }
 
             double sum = 0, total = 0, floor = double.NegativeInfinity, ceiling = double.PositiveInfinity;
             for (var u = 0; u < uses.Count; u++)
             {
-                if (low[u] <= best.At && best.At <= high[u])
+                if (low[u] <= best.At && best.At <= high[u] && (uses[u].Preferred || !preferredOnly))
                 {
                     var w = uses[u].Through[p] * uses[u].Through[p];
                     sum += w * uses[u].Factor[p];
@@ -215,6 +247,13 @@ public static class SeamMask
 
             var value = total > 0 ? sum / total : best.At;
             merged[p] = (float)Math.Clamp(Math.Clamp(value, floor, ceiling), 0, plain);
+            for (var u = 0; u < uses.Count; u++)
+            {
+                if (!uses[u].Preferred && uses[u].Through[p] > 0 && !(low[u] <= merged[p] && merged[p] <= high[u]))
+                {
+                    wrongElsewhere++;
+                }
+            }
         }
 
         return merged;

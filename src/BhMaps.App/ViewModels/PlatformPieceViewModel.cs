@@ -237,16 +237,32 @@ public partial class PlatformPieceViewModel : ObservableObject
         }
     }
 
+    /// <summary>The line a row can show when <see cref="SharedWithOtherMaps"/> is true.</summary>
+    public const string SharedWithOtherMapsNote = "Used on other maps too: lines may show there when faded";
+
+    /// <summary>S3: true when this row's file is also used by other layouts and the seam mask written for the map
+    /// open in the editor leaves some of those uses visibly wrong. Set by <see cref="SeamMasks"/>.</summary>
+    [ObservableProperty]
+    public partial bool SharedWithOtherMaps { get; private set; }
+
     /// <summary>Spec 3.2 O1: the seam mask of every faded row of one map's set, keyed by relative path, over the
     /// playable layouts of <paramref name="model"/>. <paramref name="missing"/> is true when a row is faded and
-    /// there is no level data to correct it with, which leaves every row fading on its own as before.</summary>
+    /// there is no level data to correct it with, which leaves every row fading on its own as before. S3: with
+    /// <paramref name="openLevel"/>, the LevelName of the layout open in the editor, that layout's uses of a shared
+    /// file win, and every row's <see cref="SharedWithOtherMaps"/> says whether other layouts are left with
+    /// lines.</summary>
     public static IReadOnlyDictionary<string, float[]> SeamMasks(
-        IReadOnlyList<PlatformPieceViewModel> rows, LevelDataModel? model, out bool missing)
+        IReadOnlyList<PlatformPieceViewModel> rows, LevelDataModel? model, out bool missing, string? openLevel = null)
     {
         var faded = rows.Where(r => r.Opacity < DefaultOpacity).ToList();
         missing = faded.Count > 0 && model is null;
         if (faded.Count == 0 || model is null)
         {
+            foreach (var row in rows)
+            {
+                row.SharedWithOtherMaps = false;
+            }
+
             return new Dictionary<string, float[]>();
         }
 
@@ -265,9 +281,22 @@ public partial class PlatformPieceViewModel : ObservableObject
             }
         }
 
-        // A dev or test level is not a layout anyone plays, so it must not veto a correction the real ones agree on.
+        // A dev or test level is not a layout anyone plays, so it must not veto a correction the real ones agree on,
+        // unless it is the one open in the editor.
         var hidden = model.Types.Where(t => !t.Included).Select(t => t.LevelName).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        return SeamMask.Compute(model.Levels.Where(l => !hidden.Contains(l.LevelName)), pieces);
+        if (openLevel != null)
+        {
+            hidden.Remove(openLevel);
+        }
+
+        var wrongElsewhere = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        var masks = SeamMask.Compute(model.Levels.Where(l => !hidden.Contains(l.LevelName)), pieces, openLevel, wrongElsewhere);
+        foreach (var row in rows)
+        {
+            row.SharedWithOtherMaps = wrongElsewhere.ContainsKey(row.RelativePath);
+        }
+
+        return masks;
     }
 
     /// <summary>What Save and the preview write for this row: a plain copy when nothing about it changed, its

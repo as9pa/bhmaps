@@ -160,6 +160,58 @@ public class SeamMaskTests
         Assert.Empty(masks);
     }
 
+    /// <summary>S3: the layout open in the editor wins. Covered there and uncovered in the other layout, too far
+    /// apart to share a value: the open layout's use gets its value exactly, and the other layout is reported.</summary>
+    [Fact]
+    public void Compute_GivesThePreferredLayoutsUseItsExactValueWhereAnotherDisagrees()
+    {
+        const double a = 0.5, t = 0.6;
+        var wrong = new Dictionary<string, long>();
+
+        var masks = SeamMask.Compute(
+            [Overlapping, Apart], [Piece("a.png", 255, a), Piece("b.png", (byte)(t * 255), a)], "One", wrong);
+
+        var lower = Assert.Single(masks).Value;
+        Assert.Equal(a, lower[5], 5);
+        Assert.Equal(SeamMask.Written(1, a, [((byte)(t * 255) / 255.0, a)]), lower[30], 5);
+        Assert.Equal(20 * 40, Assert.Single(wrong, w => w.Key == @"Grove\a.png").Value);
+    }
+
+    /// <summary>S3: the open layout wins against a majority too. Two layouts cover the piece and the open one does
+    /// not, so it keeps the plain fade it wants.</summary>
+    [Fact]
+    public void Compute_GivesThePreferredLayoutItsValueAgainstAMajority()
+    {
+        const double a = 0.5, t = 0.6;
+        var again = Overlapping with { LevelName = "Three" };
+        var wrong = new Dictionary<string, long>();
+
+        var masks = SeamMask.Compute(
+            [Overlapping, Apart, again], [Piece("a.png", 255, a), Piece("b.png", (byte)(t * 255), a)], "Two", wrong);
+
+        Assert.Empty(masks);
+        Assert.Equal(2 * 20 * 40, wrong[@"Grove\a.png"]);
+    }
+
+    /// <summary>With no preferred layout, or one that is not among the layouts, the merge is the one without it.</summary>
+    [Fact]
+    public void Compute_WithoutAPreferredLayout_IsUnchanged()
+    {
+        const double a = 0.5, t = 0.6;
+        var again = Overlapping with { LevelName = "Three" };
+        SeamPiece[] pieces = [Piece("a.png", 255, a), Piece("b.png", (byte)(t * 255), a)];
+        var wrong = new Dictionary<string, long>();
+
+        var plain = Assert.Single(SeamMask.Compute([Overlapping, Apart, again], pieces)).Value;
+        var none = Assert.Single(SeamMask.Compute([Overlapping, Apart, again], pieces, null, wrong)).Value;
+        var absent = Assert.Single(SeamMask.Compute([Overlapping, Apart, again], pieces, "Elsewhere")).Value;
+
+        Assert.Equal(plain, none);
+        Assert.Equal(plain, absent);
+        Assert.Empty(wrong);
+        Assert.Equal(SeamMask.Written(1, a, [(t, a)]), plain[30], 5);
+    }
+
     /// <summary>One file drawn twice, once flipped, overlapping by three columns: the middle column is the same file
     /// pixel in both draws, so its value is solved so the two draws together composite like one layer.</summary>
     [Fact]

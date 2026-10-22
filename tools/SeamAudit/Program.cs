@@ -119,6 +119,15 @@ internal static class Program
 
         Console.WriteLine($"Time {clock.Elapsed:hh\\:mm\\:ss}");
         Console.WriteLine();
+        Console.WriteLine("Each layout is measured as the owner sees it: with the masks written while it is open in");
+        Console.WriteLine("the editor, so its own uses of a shared file win (S3). A seam pixel gets one cause:");
+        Console.WriteLine("  moving        the one-layer ideal fade seams there too, and not without the moving platforms (at rest)");
+        Console.WriteLine("  other         the one-layer ideal fade seams there too, anywhere else (no mask can fix these)");
+        Console.WriteLine("  twice-in-map  the ideal is clean, but uses of one file in this layout want different values");
+        Console.WriteLine("  shared-file   clean within this layout, wrong only because other layouts share the file");
+        Console.WriteLine("  other-maps    not in the total: file pixels this layout's masks leave visibly wrong in the");
+        Console.WriteLine("                other layouts that share its files, once per use (the cost of editing it)");
+        Console.WriteLine();
         foreach (var op in opacities)
         {
             var t = totals[op];
@@ -128,6 +137,7 @@ internal static class Program
             Console.WriteLine($"  twice-in-map  {N(t.TwiceInMap),14}");
             Console.WriteLine($"  shared-file   {N(t.SharedFile),14}");
             Console.WriteLine($"  (ideal fade   {N(t.Ideal),14})");
+            Console.WriteLine($"  other-maps    {N(t.OtherMaps),14}");
         }
 
         Console.WriteLine();
@@ -140,7 +150,7 @@ internal static class Program
             var display = names.GetValueOrDefault(level.LevelName, "");
             Console.WriteLine(
                 $"  {level.LevelName,-28} {display,-22} {N(c.Total),11}  moving {N(c.Moving)}  other {N(c.Other)}"
-                    + $"  twice-in-map {N(c.TwiceInMap)}  shared-file {N(c.SharedFile)}"
+                    + $"  twice-in-map {N(c.TwiceInMap)}  shared-file {N(c.SharedFile)}  other-maps {N(c.OtherMaps)}"
             );
             if (outDir != null)
             {

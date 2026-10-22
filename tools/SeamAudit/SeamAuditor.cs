@@ -9,13 +9,23 @@ namespace BhMaps.Tools.SeamAudit;
 /// <summary>A decoded piece: its pixel size, its Bgra32 pixels and its straight alpha, row by row.</summary>
 internal sealed record PieceImage(int Width, int Height, byte[] Pixels, byte[] Alpha);
 
-/// <summary>Seam pixels left in one layout at one opacity, split by cause. <see cref="Moving"/> and
-/// <see cref="Other"/> stay even with the ideal one-layer fade (moving platform groups, and everything else);
-/// <see cref="TwiceInMap"/> comes from one file used twice in the layout; <see cref="SharedFile"/> from a file
-/// other layouts share. <see cref="Ideal"/> counts seam pixels in the ideal fade itself.</summary>
-internal sealed record SeamCounts(long Total, long Moving, long Other, long TwiceInMap, long SharedFile, long Ideal)
+/// <summary>Seam pixels left in one layout at one opacity while that layout is the one open in the editor, split by
+/// cause. <see cref="Moving"/> and <see cref="Other"/> stay even with the ideal one-layer fade (caused by moving
+/// platforms at rest, and everything else); <see cref="TwiceInMap"/> comes from uses of one file in the layout
+/// wanting different values; <see cref="SharedFile"/> from a file other layouts share. <see cref="Ideal"/> counts
+/// seam pixels in the ideal fade itself. <see cref="OtherMaps"/> is the cost elsewhere: file pixels the mask written
+/// for this layout leaves visibly wrong in other layouts, once per use.</summary>
+internal sealed record SeamCounts(
+    long Total,
+    long Moving,
+    long Other,
+    long TwiceInMap,
+    long SharedFile,
+    long Ideal,
+    long OtherMaps
+)
 {
-    public static readonly SeamCounts Zero = new(0, 0, 0, 0, 0, 0);
+    public static readonly SeamCounts Zero = new(0, 0, 0, 0, 0, 0, 0);
 
     public SeamCounts Add(SeamCounts o) =>
         new(
@@ -24,7 +34,8 @@ internal sealed record SeamCounts(long Total, long Moving, long Other, long Twic
             Other + o.Other,
             TwiceInMap + o.TwiceInMap,
             SharedFile + o.SharedFile,
-            Ideal + o.Ideal
+            Ideal + o.Ideal,
+            OtherMaps + o.OtherMaps
         );
 }
 
@@ -73,6 +84,9 @@ internal sealed class SeamAuditor
         int width = (int)Math.Ceiling(bounds.Width * scale),
             height = (int)Math.Ceiling(bounds.Height * scale);
         var reference = Render(uses.Select(p => (p, Full(p.Image))).ToList(), bounds, scale, width, height);
+        var referenceStill = uses.Exists(p => p.Group != 0)
+            ? Render(uses.Where(p => p.Group == 0).Select(p => (p, Full(p.Image))).ToList(), bounds, scale, width, height)
+            : null;
         var result = new Dictionary<double, SeamCounts>();
         foreach (var op in opacities)
         {
@@ -85,31 +99,51 @@ internal sealed class SeamAuditor
                     return new SeamPiece(f, d.Width, d.Height, d.Alpha, op);
                 })
                 .ToList();
-            var maskWritten = ComputeMask(pieces);
+            var wrongElsewhere = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+            var maskWritten = ComputeMask(level, pieces, wrongElsewhere);
 
-            // The ideal per use: faded under the uses above it in its own group, and ignoring groups.
+            // The ideal per use: faded under every use above it, ignoring groups as the mask has since S1.
             var ideal = new List<float[]>();
-            var idealUngrouped = new List<float[]>();
             for (int k = 0; k < uses.Count; k++)
             {
                 var above = new List<PieceUse>();
-                var aboveAny = new List<PieceUse>();
                 for (int j = uses.Count - 1; j > k; j--)
                 {
-                    if (!uses[j].Bounds.IntersectsWith(uses[k].Bounds))
-                    {
-                        continue;
-                    }
-
-                    aboveAny.Add(uses[j]);
-                    if (uses[j].Group == uses[k].Group)
+                    if (uses[j].Bounds.IntersectsWith(uses[k].Bounds))
                     {
                         above.Add(uses[j]);
                     }
                 }
 
                 ideal.Add(Ideal(uses[k], above, plain));
-                idealUngrouped.Add(Ideal(uses[k], aboveAny, plain));
+            }
+
+            // A moving platform at rest causes an ideal seam only when the ideal over the standing pieces alone, held
+            // against their own full-strength render, is clean there.
+            byte[]? pxStill = null;
+            if (referenceStill != null)
+            {
+                var still = new List<(PieceUse, BitmapSource)>();
+                for (int k = 0; k < uses.Count; k++)
+                {
+                    if (uses[k].Group != 0)
+                    {
+                        continue;
+                    }
+
+                    var above = new List<PieceUse>();
+                    for (int j = uses.Count - 1; j > k; j--)
+                    {
+                        if (uses[j].Group == 0 && uses[j].Bounds.IntersectsWith(uses[k].Bounds))
+                        {
+                            above.Add(uses[j]);
+                        }
+                    }
+
+                    still.Add((uses[k], Scaled(uses[k].Image, Ideal(uses[k], above, plain), plain)));
+                }
+
+                pxStill = Render(still, bounds, scale, width, height);
             }
 
             // The best one mask per file can do within this layout under the mask's rule: the mask computed over
@@ -141,13 +175,6 @@ internal sealed class SeamAuditor
             );
             var pxIdeal = Render(
                 uses.Select((p, k) => (p, Scaled(p.Image, ideal[k], plain))).ToList(),
-                bounds,
-                scale,
-                width,
-                height
-            );
-            var pxUngrouped = Render(
-                uses.Select((p, k) => (p, Scaled(p.Image, idealUngrouped[k], plain))).ToList(),
                 bounds,
                 scale,
                 width,
@@ -189,14 +216,15 @@ internal sealed class SeamAuditor
                 total++;
                 if (inIdeal)
                 {
-                    // Seams the ideal keeps too: from moving platform groups when the ungrouped ideal is clean.
-                    if (Seam(pxUngrouped, reference, op, i))
+                    // Seams the one-layer ideal keeps too, which no mask can remove: put down to a moving platform
+                    // at rest only where taking the moving platforms away clears them.
+                    if (pxStill != null && !Seam(pxStill, referenceStill!, op, i))
                     {
-                        other++;
+                        moving++;
                     }
                     else
                     {
-                        moving++;
+                        other++;
                     }
 
                     Paint(diff, i, r: 255);
@@ -213,7 +241,7 @@ internal sealed class SeamAuditor
                 }
             }
 
-            result[op] = new SeamCounts(total, moving, other, twice, shared, idealSeams);
+            result[op] = new SeamCounts(total, moving, other, twice, shared, idealSeams, wrongElsewhere.Values.Sum());
             if (diff != null)
             {
                 SavePng(diff, width, height, diffPath!);
@@ -228,10 +256,14 @@ internal sealed class SeamAuditor
         return result;
     }
 
-    /// <summary>The one place the audit asks <see cref="SeamMask"/> for the written masks, so a later change
-    /// (such as passing a preferred layout) lands here only.</summary>
-    private IReadOnlyDictionary<string, float[]> ComputeMask(IReadOnlyList<SeamPiece> pieces) =>
-        SeamMask.Compute(_levels, pieces);
+    /// <summary>The one place the audit asks <see cref="SeamMask"/> for the written masks: over every layout, as
+    /// written while <paramref name="open"/> is the layout open in the editor (S3), which is what the owner sees
+    /// there. <paramref name="wrongElsewhere"/> gets what that mask leaves wrong in the other layouts.</summary>
+    private IReadOnlyDictionary<string, float[]> ComputeMask(
+        LevelDesc open,
+        IReadOnlyList<SeamPiece> pieces,
+        IDictionary<string, long> wrongElsewhere
+    ) => SeamMask.Compute(_levels, pieces, open.LevelName, wrongElsewhere);
 
     /// <summary>Every piece of the layout that resolves, bottom first.</summary>
     private List<PieceUse> Place(LevelDesc level)
