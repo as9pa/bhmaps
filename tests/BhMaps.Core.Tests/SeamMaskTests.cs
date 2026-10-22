@@ -1,3 +1,4 @@
+using System.Windows;
 using BhMaps.Core.Imaging;
 using BhMaps.Core.LevelData;
 using BhMaps.Core.Tests.Helpers;
@@ -210,6 +211,40 @@ public class SeamMaskTests
         Assert.Equal(plain, absent);
         Assert.Empty(wrong);
         Assert.Equal(SeamMask.Written(1, a, [(t, a)]), plain[30], 5);
+    }
+
+    [Fact]
+    public void Blended_BlendsTheFourNearestPixelCentresAndHoldsTheEdges()
+    {
+        byte[] alpha = [0, 255, 0, 255];
+
+        Assert.Equal(0, SeamMask.Blended(alpha, 2, 2, new Point(0.5, 0.5)), 9);
+        Assert.Equal(0.5, SeamMask.Blended(alpha, 2, 2, new Point(1, 0.5)), 9);
+        Assert.Equal(1, SeamMask.Blended(alpha, 2, 2, new Point(1.9, 1.9)), 9);
+        Assert.Equal(0, SeamMask.Blended(alpha, 2, 2, new Point(0.1, 1.2)), 9);
+        Assert.Equal(0, SeamMask.Blended(alpha, 2, 2, new Point(2, 1)), 9);
+    }
+
+    /// <summary>S4: a soft-edged piece stretched three times over a solid one. The game blends the upper piece's
+    /// neighbouring pixels where it is stretched, so the lower piece is corrected for that blended cover, not for
+    /// the single nearest pixel, which would leave a thin rim.</summary>
+    [Fact]
+    public void Compute_CorrectsUnderAStretchedPieceForItsBlendedCover()
+    {
+        const double a = 0.5;
+        byte[] ramp = [0, 85, 170, 255];
+        var upper = new SeamPiece(@"Grove\b.png", 4, 4, [.. ramp, .. ramp, .. ramp, .. ramp], a);
+        var level = Level("L", Node(0, 0, new LevelAsset("a.png", 0, 0, 0, 0), new LevelAsset("b.png", 10, 10, 12, 12)));
+
+        var masks = SeamMask.Compute([level], [Piece("a.png", 255, a), upper]);
+
+        // Lower pixel (13, 16) has its centre at (1.1667, 2.1667) in the upper piece: two thirds of the way from
+        // column 0's centre to column 1's, so the game shows 85 * 2/3 there, where the nearest pixel is 85.
+        var lower = Assert.Single(masks).Value;
+        var blended = 85 * (2.0 / 3) / 255;
+        var nearest = 85 / 255.0;
+        Assert.Equal(a * (1 - blended) / (1 - (a * blended)), lower[(16 * 40) + 13], 5);
+        Assert.NotEqual(a * (1 - nearest) / (1 - (a * nearest)), lower[(16 * 40) + 13], 3);
     }
 
     /// <summary>One file drawn twice, once flipped, overlapping by three columns: the middle column is the same file

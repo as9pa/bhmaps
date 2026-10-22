@@ -490,15 +490,8 @@ internal sealed class SeamAuditor
     /// level-space bounds and its group (moving platforms get their own).</summary>
     private sealed record PieceUse(PieceImage Image, string RelativePath, Matrix To, Matrix From, Rect Bounds, int Group)
     {
-        /// <summary>The native alpha (0..1) of the pixel this level point falls on, 0 outside the piece.</summary>
-        public double AlphaAt(Point q)
-        {
-            var l = From.Transform(q);
-            int x = (int)Math.Floor(l.X),
-                y = (int)Math.Floor(l.Y);
-            return x < 0 || y < 0 || x >= Image.Width || y >= Image.Height
-                ? 0
-                : Image.Alpha[y * Image.Width + x] / 255.0;
-        }
+        /// <summary>The native alpha (0..1) the piece shows at this level point, blended as the game and the
+        /// renderer draw it stretched (S4), 0 outside the piece.</summary>
+        public double AlphaAt(Point q) => SeamMask.Blended(Image.Alpha, Image.Width, Image.Height, From.Transform(q));
     }
 }

@@ -44,6 +44,32 @@ public static class SeamMask
         return a * s * native / written;
     }
 
+    /// <summary>The native alpha (0..1) a piece of <paramref name="width"/> by <paramref name="height"/> pixels
+    /// shows at <paramref name="local"/> in its own pixel space when drawn stretched (spec S4). The game and the
+    /// preview (WPF's linear scaling) both blend the four nearest pixels: pixel centres sit at +0.5, and past the
+    /// outer centres the edge pixel is held. 0 outside the piece, which the drawn quad does not reach.</summary>
+    public static double Blended(byte[] alpha, int width, int height, Point local)
+    {
+        if (local.X < 0 || local.Y < 0 || local.X >= width || local.Y >= height)
+        {
+            return 0;
+        }
+
+        var u = local.X - 0.5;
+        var v = local.Y - 0.5;
+        var x0 = (int)Math.Floor(u);
+        var y0 = (int)Math.Floor(v);
+        var fx = u - x0;
+        var fy = v - y0;
+        int left = Math.Max(x0, 0),
+            right = Math.Min(x0 + 1, width - 1),
+            top = Math.Max(y0, 0),
+            bottom = Math.Min(y0 + 1, height - 1);
+        var upper = (alpha[(top * width) + left] * (1 - fx)) + (alpha[(top * width) + right] * fx);
+        var lower = (alpha[(bottom * width) + left] * (1 - fx)) + (alpha[(bottom * width) + right] * fx);
+        return ((upper * (1 - fy)) + (lower * fy)) / 255.0;
+    }
+
     /// <summary>Per piece, the factor each pixel's alpha is multiplied by instead of the plain opacity, row by row.
     /// Every use of a piece in <paramref name="levels"/> wants its own factor on a pixel; where they differ the
     /// piece gets the value that leaves the fewest uses with a visible error (see <see cref="Merge"/>), and where
@@ -282,8 +308,10 @@ public static class SeamMask
             return new Placement(piece, toLevel, fromLevel, bounds);
         }
 
-        /// <summary>The native alpha (0..1) of the pixel this level point falls on, 0 outside the piece.</summary>
-        public double AlphaAt(Point level) => IndexAt(level) is >= 0 and var index ? Piece.Alpha[index] / 255.0 : 0;
+        /// <summary>The native alpha (0..1) the piece shows at this level point, blended as the game draws it
+        /// stretched (see <see cref="Blended"/>), 0 outside the piece.</summary>
+        public double AlphaAt(Point level) =>
+            ToLevel.HasInverse ? Blended(Piece.Alpha, Piece.Width, Piece.Height, FromLevel.Transform(level)) : 0;
 
         /// <summary>The index of the pixel this level point falls on, -1 outside the piece.</summary>
         public int IndexAt(Point level)
@@ -341,11 +369,13 @@ public static class SeamMask
                 var self = false;
                 foreach (var other in above)
                 {
-                    if (other.Bounds.Contains(point) && other.AlphaAt(point) is > 0 and var sj)
+                    if (other.Bounds.Contains(point) && other.AlphaAt(point) is > 0 and var blended)
                     {
+                        // The same file pixel drawn again is solved as this pixel's own value (see SolveSelf), so
+                        // it covers with that value, not a blend of its neighbours.
                         var same = other.Piece == piece && other.IndexAt(point) == index;
                         self |= same;
-                        covering.Add(new Cover(sj, Math.Clamp(other.Piece.Opacity, 0, 1), same));
+                        covering.Add(new Cover(same ? s : blended, Math.Clamp(other.Piece.Opacity, 0, 1), same));
                     }
                 }
 
