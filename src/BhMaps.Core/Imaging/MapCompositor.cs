@@ -75,8 +75,9 @@ public sealed class AssetSources
 }
 
 /// <summary>One drawn image of a level, in draw order. <see cref="Transform"/> takes the asset's node space to
-/// level space. <see cref="Group"/> is 0 for everything that stands still and one number per moving platform,
-/// because pieces of different groups do not keep their places relative to each other in game.</summary>
+/// level space, with moving platforms at their rest position. <see cref="Group"/> is 0 for everything that stands
+/// still and one number per moving platform, because pieces of different groups do not keep their places relative
+/// to each other in game. The seam mask ignores it and corrects every piece at rest.</summary>
 public sealed record PlacedAsset(LevelAsset Asset, string RelativePath, Matrix Transform, int Group);
 
 /// <summary>Draws a map the way the game composes it: the background stretched over the camera bounds,

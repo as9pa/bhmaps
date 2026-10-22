@@ -10,7 +10,9 @@ public sealed record SeamPiece(string RelativePath, int Width, int Height, byte[
 
 /// <summary>Spec 3.2 O1: faded pieces that overlap would otherwise draw twice at partial strength and show bright
 /// seams. The mask makes each lower piece more transparent exactly where faded pieces above it cover it, so the
-/// stack composites like one layer. Safe to call from any thread.</summary>
+/// stack composites like one layer. Moving platform pieces join in at their rest position like any other piece:
+/// while a platform moves away in game, the art it leaves uncovered shows the plain fade. Safe to call from any
+/// thread.</summary>
 public static class SeamMask
 {
     /// <summary>Two uses of a piece agree on a pixel when their scales differ by less than this, well under one
@@ -78,7 +80,7 @@ public static class SeamMask
                 for (var j = placements.Count - 1; j > k; j--)
                 {
                     var other = placements[j];
-                    if (other.Group == own.Group && other.Bounds.IntersectsWith(own.Bounds))
+                    if (other.Bounds.IntersectsWith(own.Bounds))
                     {
                         above.Add(other);
                     }
@@ -121,7 +123,7 @@ public static class SeamMask
 
     /// <summary>One use of a piece: the matrix from its pixels to level space and back, and its level-space
     /// bounds.</summary>
-    private sealed record Placement(SeamPiece Piece, Matrix ToLevel, Matrix FromLevel, Rect Bounds, int Group)
+    private sealed record Placement(SeamPiece Piece, Matrix ToLevel, Matrix FromLevel, Rect Bounds)
     {
         public static Placement Of(SeamPiece piece, PlacedAsset placed)
         {
@@ -135,7 +137,7 @@ public static class SeamMask
 
             var bounds = new Rect(0, 0, piece.Width, piece.Height);
             bounds.Transform(toLevel);
-            return new Placement(piece, toLevel, fromLevel, bounds, placed.Group);
+            return new Placement(piece, toLevel, fromLevel, bounds);
         }
 
         /// <summary>The native alpha (0..1) of the pixel this level point falls on, 0 outside the piece.</summary>

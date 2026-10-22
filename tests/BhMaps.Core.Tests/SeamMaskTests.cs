@@ -99,14 +99,17 @@ public class SeamMaskTests
     }
 
     [Fact]
-    public void Compute_LeavesPiecesOnDifferentMovingPlatformsAlone()
+    public void Compute_CorrectsStaticArtUnderAMovingPlatformAtRest()
     {
         var still = Node(0, 0, new LevelAsset("a.png", 0, 0, 0, 0));
         var moving = new PlatformNode(20, 0, 1, 1, 1, 0, null, [new LevelAsset("b.png", 0, 0, 0, 0)], [], Moving: true);
 
         var masks = SeamMask.Compute([Level("L", still, moving)], [Piece("a.png", 255, 0.5), Piece("b.png", 255, 0.5)]);
 
-        Assert.Empty(masks);
+        var lower = Assert.Single(masks);
+        Assert.Equal(@"Grove\a.png", lower.Key);
+        Assert.Equal(0.5f, lower.Value[5], 5);
+        Assert.Equal(0f, lower.Value[30], 5);
     }
 
     [Fact]
