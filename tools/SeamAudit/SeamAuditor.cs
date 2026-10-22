@@ -112,8 +112,8 @@ internal sealed class SeamAuditor
                 idealUngrouped.Add(Ideal(uses[k], aboveAny, plain));
             }
 
-            // The best one mask per file can do within this layout: the ideal where every use agrees, plain
-            // where they differ.
+            // The best one mask per file can do within this layout under the mask's rule, where moving pieces at
+            // rest count like any other: the ungrouped ideal where every use agrees, plain where they differ.
             var maskInMap = new Dictionary<string, float[]?>(StringComparer.OrdinalIgnoreCase);
             foreach (var f in files)
             {
@@ -127,13 +127,13 @@ internal sealed class SeamAuditor
 
                     if (merged == null)
                     {
-                        merged = (float[])ideal[k].Clone();
+                        merged = (float[])idealUngrouped[k].Clone();
                     }
                     else
                     {
                         for (int p = 0; p < merged.Length; p++)
                         {
-                            if (Math.Abs(merged[p] - ideal[k][p]) >= 0.5f / 255)
+                            if (Math.Abs(merged[p] - idealUngrouped[k][p]) >= 0.5f / 255)
                             {
                                 merged[p] = plain;
                             }
