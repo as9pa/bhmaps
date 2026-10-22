@@ -416,6 +416,105 @@ public class SeamMaskTests
         Assert.Equal(a, mask[(10 * 40) + 20], 5);
     }
 
+    /// <summary>One file drawn twice, the second flipped and overlapping the first by four columns at different file
+    /// pixels: column c of the first lies under column 15 - c of the second, so columns 6 to 9 are the lower layer in
+    /// one draw and the upper in the other. They settle on the value both share, so the strip composites like one
+    /// layer instead of siding with the upper draw.</summary>
+    [Theory]
+    [InlineData(1.0, 1 - 0.70710678)]
+    [InlineData(0.6, 0.39737)]
+    public void Compute_SettlesAMirroredPairOverlappingAtDifferentPixels(double s, double factor)
+    {
+        const double a = 0.5;
+        var level = Level("L", Node(0, 0, new LevelAsset("a.png", 0, 0, 0, 0), new LevelAsset("a.png", 6, 0, -10, 0)));
+
+        var masks = SeamMask.Compute([level], [Piece("a.png", (byte)Math.Round(s * 255), a, size: 10)]);
+
+        var mask = Assert.Single(masks).Value;
+        var target = a * (1 - ((1 - s) * (1 - s)));
+        for (var y = 0; y < 10; y++)
+        {
+            for (var c = 0; c < 6; c++)
+            {
+                Assert.Equal(a, mask[(y * 10) + c], 5);
+            }
+
+            for (var c = 6; c < 10; c++)
+            {
+                Assert.Equal(factor, mask[(y * 10) + c], 3);
+                var composite = 1 - ((1 - (s * mask[(y * 10) + c])) * (1 - (s * mask[(y * 10) + 15 - c])));
+                Assert.True(Math.Abs(composite - target) <= 1.0 / 255, $"column {c}: got {composite}, want {target}");
+            }
+        }
+    }
+
+    /// <summary>The mirrored pair of the test above in the open layout, and the same file under another faded piece
+    /// in a second layout, which wants 0 on columns 6 to 9 as the pair does before settling. Settling would make
+    /// the pair right and the second layout wrong, no fewer uses wrong in all, so the columns keep the value from
+    /// before.</summary>
+    [Fact]
+    public void Compute_KeepsTheValueBeforeSettlingWhereSettlingLeavesNoFewerUsesWrong()
+    {
+        const double a = 0.5;
+        var mirrored = Level("One", Node(0, 0, new LevelAsset("a.png", 0, 0, 0, 0), new LevelAsset("a.png", 6, 0, -10, 0)));
+        var covered = Level("Two", Node(0, 0, new LevelAsset("a.png", 0, 0, 0, 0), new LevelAsset("b.png", 6, 0, 0, 0)));
+
+        var masks = SeamMask.Compute(
+            [mirrored, covered], [Piece("a.png", 255, a, size: 10), Piece("b.png", 255, a, size: 10)], "One");
+
+        var mask = Assert.Single(masks).Value;
+        for (var y = 0; y < 10; y++)
+        {
+            for (var c = 0; c < 6; c++)
+            {
+                Assert.Equal(a, mask[(y * 10) + c], 5);
+            }
+
+            for (var c = 6; c < 10; c++)
+            {
+                Assert.Equal(0f, mask[(y * 10) + c], 5);
+            }
+        }
+    }
+
+    /// <summary>A shifted copy under a faded piece over all of it, and a second layout with the file under that piece
+    /// alone. The copy's columns 0 to 3 lie over the first draw's columns 6 to 9 and would leave their value to it,
+    /// so the uncovered first draw would carry columns 0 to 3 at the plain fade and leave the second layout wrong.
+    /// The value from before, which both covered uses want, leaves no more uses wrong, so it stays.</summary>
+    [Fact]
+    public void Compute_KeepsTheValueBeforeWhereDeferringToAnotherDrawLeavesNoFewerUsesWrong()
+    {
+        var shifted = Level(
+            "One",
+            Node(0, 0, new LevelAsset("a.png", 0, 0, 0, 0), new LevelAsset("a.png", 6, 0, 0, 0), new LevelAsset("c.png", 6, 0, 0, 0)));
+        var covered = Level("Two", Node(0, 0, new LevelAsset("a.png", 0, 0, 0, 0), new LevelAsset("c.png", 0, 0, 0, 0)));
+
+        var masks = SeamMask.Compute(
+            [shifted, covered], [Piece("a.png", 255, 0.5, size: 10), Piece("c.png", 255, 0.5, size: 10)]);
+
+        var mask = Assert.Single(masks).Value;
+        for (var y = 0; y < 10; y++)
+        {
+            for (var c = 0; c < 4; c++)
+            {
+                Assert.Equal(0f, mask[(y * 10) + c], 5);
+            }
+        }
+    }
+
+    /// <summary>One file drawn twice, the second shifted over the first without flipping: the upper draw's columns 0 to
+    /// 3 cover the lower draw's columns 6 to 9, which want 0 against them, but the upper draw shows its own columns 6
+    /// to 9 uncovered and with more light, so the merge keeps the plain fade there, as before.</summary>
+    [Fact]
+    public void Compute_KeepsAShiftedCopyOfOneFileAsBefore()
+    {
+        var level = Level("L", Node(0, 0, new LevelAsset("a.png", 0, 0, 0, 0), new LevelAsset("a.png", 6, 0, 0, 0)));
+
+        var masks = SeamMask.Compute([level], [Piece("a.png", 255, 0.5, size: 10)]);
+
+        Assert.Empty(masks);
+    }
+
     [Fact]
     public void Parse_MarksAMovingPlatform()
     {
