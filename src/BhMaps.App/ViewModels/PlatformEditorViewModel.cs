@@ -1690,7 +1690,8 @@ public partial class PlatformEditorViewModel : ObservableObject
         var opened = new List<PlatformPieceViewModel>();
         var rows = Pieces;
         var model = _services.LevelData.Model;
-        var masks = await Task.Run(() => PlatformPieceViewModel.SeamMasks(rows, model, out _));
+        var openLevel = CurrentMap.BaseLevel.LevelName;
+        var masks = await Task.Run(() => PlatformPieceViewModel.SeamMasks(rows, model, out _, openLevel));
         foreach (var row in Pieces.Where(p => p.IsTicked).ToList())
         {
             var copy = Path.Combine(folder, row.FileName);
@@ -2101,9 +2102,11 @@ public partial class PlatformEditorViewModel : ObservableObject
                 var rows = set.Rows;
                 var folder = set.Map.FolderName;
                 var model = _services.LevelData.Model;
+                // S3: each set is written as the editor shows it when that set's map is the one open.
+                var openLevel = set.Map.BaseLevel.LevelName;
                 await Task.Run(() =>
                 {
-                    var masks = PlatformPieceViewModel.SeamMasks(rows, model, out var missing);
+                    var masks = PlatformPieceViewModel.SeamMasks(rows, model, out var missing, openLevel);
                     SeamFixSkipped |= missing;
                     foreach (var row in rows)
                     {
@@ -2296,7 +2299,7 @@ public partial class PlatformEditorViewModel : ObservableObject
                 () =>
                 {
                     // The preview shows the corrected files, the same ones Save writes (3.2 O1).
-                    var masks = PlatformPieceViewModel.SeamMasks(rows, model, out _);
+                    var masks = PlatformPieceViewModel.SeamMasks(rows, model, out _, level.LevelName);
                     foreach (var row in rows)
                     {
                         ct.ThrowIfCancellationRequested();

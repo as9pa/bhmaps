@@ -237,8 +237,19 @@ public partial class PlatformPieceViewModel : ObservableObject
         }
     }
 
+    /// <summary>What <see cref="SharedWithOtherMapsNote"/> and a row's "also in" mark say about the other maps.</summary>
+    public const string FadedLinesText = "lines may show there when faded";
+
     /// <summary>The line a row can show when <see cref="SharedWithOtherMaps"/> is true.</summary>
-    public const string SharedWithOtherMapsNote = "Used on other maps too: lines may show there when faded";
+    public const string SharedWithOtherMapsNote = "Used on other maps too: " + FadedLinesText;
+
+    /// <summary>S3: a row's quiet line under its file name. The "also in" mark, with <see cref="FadedLinesText"/>
+    /// after it when <paramref name="shared"/>, so the row grows by one line at most; <see cref="SharedWithOtherMapsNote"/>
+    /// when there is no mark to append to.</summary>
+    public static string AlsoInLine(string alsoIn, bool shared) =>
+        !shared ? alsoIn
+        : alsoIn.Length == 0 ? SharedWithOtherMapsNote
+        : alsoIn + ", " + FadedLinesText;
 
     /// <summary>S3: true when this row's file is also used by other layouts and the seam mask written for the map
     /// open in the editor leaves some of those uses visibly wrong. Set by <see cref="SeamMasks"/>.</summary>
@@ -258,11 +269,7 @@ public partial class PlatformPieceViewModel : ObservableObject
         missing = faded.Count > 0 && model is null;
         if (faded.Count == 0 || model is null)
         {
-            foreach (var row in rows)
-            {
-                row.SharedWithOtherMaps = false;
-            }
-
+            SetShared(rows, _ => false);
             return new Dictionary<string, float[]>();
         }
 
@@ -291,12 +298,31 @@ public partial class PlatformPieceViewModel : ObservableObject
 
         var wrongElsewhere = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
         var masks = SeamMask.Compute(model.Levels.Where(l => !hidden.Contains(l.LevelName)), pieces, openLevel, wrongElsewhere);
-        foreach (var row in rows)
+        SetShared(rows, row => wrongElsewhere.ContainsKey(row.RelativePath));
+        return masks;
+    }
+
+    /// <summary>Callers run <see cref="SeamMasks"/> inside Task.Run, and the rows are bound to the window, so the
+    /// flags are worked out here and handed to the UI thread to set.</summary>
+    private static void SetShared(IReadOnlyList<PlatformPieceViewModel> rows, Func<PlatformPieceViewModel, bool> shared)
+    {
+        var flags = rows.Select(row => (row, shared: shared(row))).ToList();
+        void Apply()
         {
-            row.SharedWithOtherMaps = wrongElsewhere.ContainsKey(row.RelativePath);
+            foreach (var (row, value) in flags)
+            {
+                row.SharedWithOtherMaps = value;
+            }
         }
 
-        return masks;
+        if (System.Windows.Application.Current?.Dispatcher is { } dispatcher && !dispatcher.CheckAccess())
+        {
+            dispatcher.InvokeAsync(Apply);
+        }
+        else
+        {
+            Apply();
+        }
     }
 
     /// <summary>What Save and the preview write for this row: a plain copy when nothing about it changed, its

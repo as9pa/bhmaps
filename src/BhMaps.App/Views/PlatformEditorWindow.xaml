@@ -20,7 +20,7 @@
 
     <!-- Only the fit switch needs it: its second button is on exactly when the property is off. -->
     <converters:InverseBooleanConverter x:Key="InverseBool" />
-    <converters:LookupConverter x:Key="Lookup" />
+    <converters:AlsoInLineConverter x:Key="AlsoInLine" />
 
     <!-- One label style carries the whole panel's vertical rhythm, so a block is a label and its control. -->
     <Style x:Key="FieldLabel" TargetType="TextBlock" BasedOn="{StaticResource SectionHeaderText}">
@@ -528,14 +528,16 @@
                                    Text="{Binding FileName}"
                                    TextTrimming="CharacterEllipsis" />
 
-                        <!-- 3.2: a piece another layout of the folder also draws, said quietly. -->
+                        <!-- 3.2: a piece another layout of the folder also draws, said quietly. S3: when the seam
+                             fix for this map leaves lines on those layouts, the same line says so. -->
                         <TextBlock FontSize="{StaticResource FontCaption}"
                                    Foreground="{StaticResource Text3Brush}"
                                    TextTrimming="CharacterEllipsis">
                           <TextBlock.Text>
-                            <MultiBinding Converter="{StaticResource Lookup}">
+                            <MultiBinding Converter="{StaticResource AlsoInLine}">
                               <Binding />
                               <Binding Path="DataContext.AlsoInMarks" RelativeSource="{RelativeSource AncestorType=Window}" />
+                              <Binding Path="SharedWithOtherMaps" />
                             </MultiBinding>
                           </TextBlock.Text>
                           <TextBlock.Style>
