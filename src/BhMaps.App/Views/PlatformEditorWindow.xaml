@@ -47,6 +47,13 @@
       <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
+    <!-- G4: a legend line under the stage, which also switches its layer. The app's plain button, small and in the
+         second text colour, with its hover, press and focus ring; the line's text follows the button's ink. -->
+    <Style x:Key="LegendLine" TargetType="Button" BasedOn="{StaticResource PlainButton}">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Padding" Value="6,4" />
+    </Style>
+
     <!-- G3: ChipToggle's chrome, hover and focus ring, with the state in an amber dot rather than ChipToggle's
          white fill, so the switch never reads as a third chip of the All pieces / Selected only pair. -->
     <Style x:Key="GuidesPill" TargetType="ToggleButton" BasedOn="{StaticResource ChipToggle}">
@@ -225,15 +232,65 @@
 
           <controls:GuidesOverlay x:Name="GuidesLayer"
                                   Guides="{Binding Guides}"
+                                  HiddenLayers="{Binding HiddenGuideLayers}"
                                   Visibility="{Binding ShowGuides, Converter={StaticResource BoolToVis}}" />
         </Grid>
 
-        <!-- 3.10: what the mouse does on the preview, one quiet line under it. -->
-        <TextBlock Grid.Row="2"
-                   Margin="16,0,16,12"
-                   Style="{StaticResource HintText}"
-                   Text="Drag to move the picture. Scroll to zoom. Double-click to centre. G shows or hides the guides."
-                   Visibility="{Binding Preview, Converter={StaticResource NullToVis}}" />
+        <StackPanel Grid.Row="2"
+                    Margin="16,0,16,12"
+                    Visibility="{Binding Preview, Converter={StaticResource NullToVis}}">
+          <!-- G4: the legend, only while the guides are on, and only the layers this layout has. One row that
+               wraps; each line is a button that hides its layer, its sample dimmed and its text saying so. The
+               negative margin lines the first sample up with the hint under it. -->
+          <ItemsControl Margin="-6,0,-6,4"
+                        Focusable="False"
+                        ItemsSource="{Binding GuideLegend}"
+                        Visibility="{Binding ShowGuides, Converter={StaticResource BoolToVis}}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <WrapPanel />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate DataType="{x:Type vm:GuideLegendLineViewModel}">
+                <Button AutomationProperties.Name="{Binding Text}"
+                        Command="{Binding ToggleCommand}"
+                        Style="{StaticResource LegendLine}">
+                  <StackPanel Orientation="Horizontal">
+                    <controls:GuideSwatch x:Name="Swatch"
+                                          Margin="0,0,6,0"
+                                          VerticalAlignment="Center"
+                                          Layer="{Binding Layer}" />
+                    <TextBlock VerticalAlignment="Center"
+                               FontSize="12"
+                               Foreground="{Binding (TextElement.Foreground), RelativeSource={RelativeSource AncestorType={x:Type ContentPresenter}}}"
+                               Text="{Binding Text}" />
+                  </StackPanel>
+                </Button>
+                <DataTemplate.Triggers>
+                  <DataTrigger Binding="{Binding IsHidden}" Value="True">
+                    <Setter TargetName="Swatch" Property="Opacity" Value="0.3" />
+                  </DataTrigger>
+                </DataTemplate.Triggers>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <!-- 3.10: what the mouse does on the preview, one quiet line under it. G4: with the guides off there is
+               no legend to click, and G brings them back. -->
+          <TextBlock Margin="0">
+            <TextBlock.Style>
+              <Style TargetType="TextBlock" BasedOn="{StaticResource HintText}">
+                <Setter Property="Text" Value="Drag to move. Scroll to zoom. Double-click to centre. G hides the guides. Click a legend line to hide it." />
+                <Style.Triggers>
+                  <DataTrigger Binding="{Binding ShowGuides}" Value="False">
+                    <Setter Property="Text" Value="Drag to move. Scroll to zoom. Double-click to centre. G shows the guides." />
+                  </DataTrigger>
+                </Style.Triggers>
+              </Style>
+            </TextBlock.Style>
+          </TextBlock>
+        </StackPanel>
 
         <!-- Spec 3.1: top left inside the card, on the image's own 16 px margin. A ListBox rather than two
              ToggleButtons, so the list owns which chip is on; ChipRow draws each item with ChipToggle and carries

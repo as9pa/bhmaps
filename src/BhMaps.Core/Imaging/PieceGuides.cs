@@ -18,7 +18,46 @@ public sealed record PieceOverlap(
 /// <summary>Everything the editor's guides draw for one level, all in level space: map it to the stage with
 /// <see cref="MapCompositor.StageTransform"/>.</summary>
 public sealed record PieceGuideSet(
-    IReadOnlyList<PieceOutline> Pieces, IReadOnlyList<PieceOverlap> Overlaps, IReadOnlyList<CollisionLine> Collisions);
+    IReadOnlyList<PieceOutline> Pieces, IReadOnlyList<PieceOverlap> Overlaps, IReadOnlyList<CollisionLine> Collisions)
+{
+    /// <summary>G4: the layers this set has something to draw in, in <see cref="GuideLayer"/> order: the legend
+    /// lists these and no others.</summary>
+    public IReadOnlyList<GuideLayer> Layers
+    {
+        get
+        {
+            var present = new HashSet<GuideLayer>(Collisions.Select(c => PieceGuides.LayerOf(c.Kind)));
+            if (Pieces.Count > 0)
+            {
+                present.Add(GuideLayer.Boxes);
+            }
+
+            if (Overlaps.Count > 0)
+            {
+                present.Add(GuideLayer.Overlaps);
+            }
+
+            return [.. Enum.GetValues<GuideLayer>().Where(present.Contains)];
+        }
+    }
+}
+
+/// <summary>G4/G5: one line of the guides' legend and one thing the user can hide. The collision kinds that draw
+/// alike share a layer (the three bouncy kinds, the two pressure plates). The names are what settings.json keeps,
+/// so they are never renamed.</summary>
+public enum GuideLayer
+{
+    Boxes,
+    Overlaps,
+    Hard,
+    Soft,
+    NoSlide,
+    Bouncy,
+    Lava,
+    PressurePlate,
+    GameModeHard,
+    Mud,
+}
 
 /// <summary>Spec G1/G2/G5: the geometry behind the editor's piece boxes, overlap hatching and hitboxes. Pure geometry
 /// of file rectangles: transparent pixels count as covered, and two uses of one file at the same spot overlap like
@@ -29,6 +68,20 @@ public static class PieceGuides
     /// <summary>An intersection smaller than this, in square level units, is a shared edge or corner, not an
     /// overlap.</summary>
     private const double MinArea = 1e-6;
+
+    /// <summary>G4/G5: the layer a collision kind is drawn and hidden in.</summary>
+    public static GuideLayer LayerOf(CollisionKind kind) =>
+        kind switch
+        {
+            CollisionKind.Soft => GuideLayer.Soft,
+            CollisionKind.NoSlide => GuideLayer.NoSlide,
+            CollisionKind.BouncyHard or CollisionKind.BouncySoft or CollisionKind.BouncyNoSlide => GuideLayer.Bouncy,
+            CollisionKind.Lava => GuideLayer.Lava,
+            CollisionKind.PressurePlate or CollisionKind.SoftPressurePlate => GuideLayer.PressurePlate,
+            CollisionKind.GameModeHard => GuideLayer.GameModeHard,
+            CollisionKind.Mud => GuideLayer.Mud,
+            _ => GuideLayer.Hard,
+        };
 
     /// <summary>The guides for <paramref name="level"/>. <paramref name="pixelSize"/> gives a file's pixel size by
     /// its path relative to mapArt, or null when the file is missing or unreadable; such a piece is not drawn, so it

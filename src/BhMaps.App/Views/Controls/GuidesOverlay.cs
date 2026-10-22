@@ -49,13 +49,12 @@ public sealed class GuidesOverlay : FrameworkElement
             typeof(GuidesOverlay),
             new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
 
-    public static readonly DependencyProperty ShowBoxesProperty = RegisterLayer(nameof(ShowBoxes));
-
-    public static readonly DependencyProperty ShowOverlapsProperty = RegisterLayer(nameof(ShowOverlaps));
-
-    public static readonly DependencyProperty ShowHitboxesProperty = RegisterLayer(nameof(ShowHitboxes));
-
-    public static readonly DependencyProperty ShowSpecialHitboxesProperty = RegisterLayer(nameof(ShowSpecialHitboxes));
+    public static readonly DependencyProperty HiddenLayersProperty =
+        DependencyProperty.Register(
+            nameof(HiddenLayers),
+            typeof(IReadOnlyCollection<GuideLayer>),
+            typeof(GuidesOverlay),
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
 
     private Cache? cache;
     private Palette? palette;
@@ -89,33 +88,13 @@ public sealed class GuidesOverlay : FrameworkElement
         set => SetValue(HoveredPieceProperty, value);
     }
 
-    /// <summary>G1, every piece's file rectangle.</summary>
-    public bool ShowBoxes
+    /// <summary>G4: the layers the legend switched off: the boxes (G1), the overlap bands and their size tags
+    /// (G2), or one collision layer (G5). Null or empty draws every layer. Set a new collection to change it; the
+    /// control does not watch one for changes.</summary>
+    public IReadOnlyCollection<GuideLayer>? HiddenLayers
     {
-        get => (bool)GetValue(ShowBoxesProperty);
-        set => SetValue(ShowBoxesProperty, value);
-    }
-
-    /// <summary>G2, the hatched overlap bands and their size tags.</summary>
-    public bool ShowOverlaps
-    {
-        get => (bool)GetValue(ShowOverlapsProperty);
-        set => SetValue(ShowOverlapsProperty, value);
-    }
-
-    /// <summary>G5, the Hard and Soft collision lines.</summary>
-    public bool ShowHitboxes
-    {
-        get => (bool)GetValue(ShowHitboxesProperty);
-        set => SetValue(ShowHitboxesProperty, value);
-    }
-
-    /// <summary>G5, every other collision kind (no-slide, bouncy, lava, pressure plates, game-mode hard, mud), on
-    /// its own so the common two can be shown without them. Independent of <see cref="ShowHitboxes"/>.</summary>
-    public bool ShowSpecialHitboxes
-    {
-        get => (bool)GetValue(ShowSpecialHitboxesProperty);
-        set => SetValue(ShowSpecialHitboxesProperty, value);
+        get => (IReadOnlyCollection<GuideLayer>?)GetValue(HiddenLayersProperty);
+        set => SetValue(HiddenLayersProperty, value);
     }
 
     protected override void OnRender(DrawingContext drawingContext)
@@ -128,15 +107,17 @@ public sealed class GuidesOverlay : FrameworkElement
         palette ??= new Palette(this);
         cache ??= Build(guides, LevelToScreen, VisualTreeHelper.GetDpi(this).DpiScaleX, new Rect(RenderSize));
 
+        var hidden = HiddenLayers ?? [];
         foreach (var hitbox in cache.Hitboxes)
         {
-            if (hitbox.Style is HitboxStyle.Hard or HitboxStyle.Soft ? ShowHitboxes : ShowSpecialHitboxes)
+            if (!hidden.Contains(hitbox.Layer))
             {
-                drawingContext.DrawGeometry(null, palette.Hitbox[(int)hitbox.Style], hitbox.Lines);
+                drawingContext.DrawGeometry(null, palette.LineOf(hitbox.Layer), hitbox.Lines);
             }
         }
 
-        if (ShowOverlaps)
+        var showOverlaps = !hidden.Contains(GuideLayer.Overlaps);
+        if (showOverlaps)
         {
             foreach (var overlap in cache.Overlaps)
             {
@@ -149,7 +130,7 @@ public sealed class GuidesOverlay : FrameworkElement
         }
 
         var hovered = HoveredPiece;
-        if (ShowBoxes)
+        if (!hidden.Contains(GuideLayer.Boxes))
         {
             // The hovered box last, so its solid line is never broken by a neighbour's dashes.
             Geometry? hoveredBox = null;
@@ -170,7 +151,7 @@ public sealed class GuidesOverlay : FrameworkElement
             }
         }
 
-        if (ShowOverlaps && hovered is not null)
+        if (showOverlaps && hovered is not null)
         {
             foreach (var overlap in cache.Overlaps)
             {
@@ -195,13 +176,6 @@ public sealed class GuidesOverlay : FrameworkElement
         InvalidateVisual();
         base.OnDpiChanged(oldDpi, newDpi);
     }
-
-    private static DependencyProperty RegisterLayer(string name) =>
-        DependencyProperty.Register(
-            name,
-            typeof(bool),
-            typeof(GuidesOverlay),
-            new FrameworkPropertyMetadata(true, FrameworkPropertyMetadataOptions.AffectsRender));
 
     private static void OnGeometryChanged(DependencyObject d, DependencyPropertyChangedEventArgs e) =>
         ((GuidesOverlay)d).cache = null;
@@ -235,7 +209,7 @@ public sealed class GuidesOverlay : FrameworkElement
         }
 
         var hitboxes = new List<HitboxGeometry>();
-        foreach (var group in guides.Collisions.GroupBy(c => StyleOf(c.Kind)))
+        foreach (var group in guides.Collisions.GroupBy(c => PieceGuides.LayerOf(c.Kind)))
         {
             var lines = new StreamGeometry();
             using (var context = lines.Open())
@@ -315,20 +289,6 @@ public sealed class GuidesOverlay : FrameworkElement
         return geometry;
     }
 
-    private static HitboxStyle StyleOf(CollisionKind kind) =>
-        kind switch
-        {
-            CollisionKind.Hard => HitboxStyle.Hard,
-            CollisionKind.Soft => HitboxStyle.Soft,
-            CollisionKind.NoSlide => HitboxStyle.NoSlide,
-            CollisionKind.BouncyHard or CollisionKind.BouncySoft or CollisionKind.BouncyNoSlide => HitboxStyle.Bouncy,
-            CollisionKind.Lava => HitboxStyle.Lava,
-            CollisionKind.PressurePlate or CollisionKind.SoftPressurePlate => HitboxStyle.PressurePlate,
-            CollisionKind.GameModeHard => HitboxStyle.GameModeHard,
-            CollisionKind.Mud => HitboxStyle.Mud,
-            _ => HitboxStyle.Hard,
-        };
-
     /// <summary>The overlap's width in level units on a small dark plate under the band, or above it when the
     /// band sits at the bottom edge; kept inside the control and on whole pixels so the text stays crisp.</summary>
     private void DrawTag(DrawingContext drawingContext, OverlapGeometry overlap)
@@ -366,30 +326,19 @@ public sealed class GuidesOverlay : FrameworkElement
         drawingContext.DrawText(text, new Point(x + padX, y + padY));
     }
 
-    private enum HitboxStyle
-    {
-        Hard,
-        Soft,
-        NoSlide,
-        Bouncy,
-        Lava,
-        PressurePlate,
-        GameModeHard,
-        Mud,
-    }
-
     private sealed record BoxGeometry(PieceOutline Piece, Geometry Outline);
 
     private sealed record OverlapGeometry(PieceOverlap Overlap, Geometry Shape, Geometry Hatch);
 
-    private sealed record HitboxGeometry(HitboxStyle Style, Geometry Lines);
+    private sealed record HitboxGeometry(GuideLayer Layer, Geometry Lines);
 
     private sealed record Cache(
         IReadOnlyList<BoxGeometry> Boxes, IReadOnlyList<OverlapGeometry> Overlaps, IReadOnlyList<HitboxGeometry> Hitboxes);
 
     /// <summary>Frozen pens and brushes from the theme, read once. The fallbacks are the theme's own values, for a
-    /// control that renders before its resources are reachable.</summary>
-    private sealed class Palette
+    /// control that renders before its resources are reachable. Shared with <see cref="GuideSwatch"/>, so the
+    /// legend draws each layer with the very pen the stage does.</summary>
+    internal sealed class Palette
     {
         public Palette(FrameworkElement owner)
         {
@@ -410,15 +359,15 @@ public sealed class GuidesOverlay : FrameworkElement
             // G5: Hard solid, Soft dashed, and each special kind its own quiet dash (lava by tint). Dash lengths
             // are in multiples of the 1.25 px thickness.
             const double t = 1.25;
-            Hitbox = new Pen[Enum.GetValues<HitboxStyle>().Length];
-            Hitbox[(int)HitboxStyle.Hard] = MakePen(hitbox, t, null);
-            Hitbox[(int)HitboxStyle.Soft] = MakePen(hitbox, t, [3, 2]);
-            Hitbox[(int)HitboxStyle.NoSlide] = MakePen(hitbox, t, [1, 2]);
-            Hitbox[(int)HitboxStyle.Bouncy] = MakePen(hitbox, t, [5, 2, 1, 2]);
-            Hitbox[(int)HitboxStyle.Lava] = MakePen(lava, t, null);
-            Hitbox[(int)HitboxStyle.PressurePlate] = MakePen(hitbox, t, [8, 3]);
-            Hitbox[(int)HitboxStyle.GameModeHard] = MakePen(hitbox, t, [8, 2, 1, 2, 1, 2]);
-            Hitbox[(int)HitboxStyle.Mud] = MakePen(lava, t, [1, 2]);
+            Hitbox = new Pen[Enum.GetValues<GuideLayer>().Length];
+            Hitbox[(int)GuideLayer.Hard] = MakePen(hitbox, t, null);
+            Hitbox[(int)GuideLayer.Soft] = MakePen(hitbox, t, [3, 2]);
+            Hitbox[(int)GuideLayer.NoSlide] = MakePen(hitbox, t, [1, 2]);
+            Hitbox[(int)GuideLayer.Bouncy] = MakePen(hitbox, t, [5, 2, 1, 2]);
+            Hitbox[(int)GuideLayer.Lava] = MakePen(lava, t, null);
+            Hitbox[(int)GuideLayer.PressurePlate] = MakePen(hitbox, t, [8, 3]);
+            Hitbox[(int)GuideLayer.GameModeHard] = MakePen(hitbox, t, [8, 2, 1, 2, 1, 2]);
+            Hitbox[(int)GuideLayer.Mud] = MakePen(lava, t, [1, 2]);
 
             TagPlate = owner.TryFindResource("ScrimBrush") as Brush
                 ?? Frozen(new SolidColorBrush(Color.FromArgb(0xD9, 0x16, 0x15, 0x14)));
@@ -441,6 +390,8 @@ public sealed class GuidesOverlay : FrameworkElement
 
         public Pen OverlapEdge { get; }
 
+        /// <summary>By <see cref="GuideLayer"/>; the Boxes and Overlaps slots are empty, see
+        /// <see cref="LineOf"/>.</summary>
         public Pen[] Hitbox { get; }
 
         public Brush TagPlate { get; }
@@ -450,6 +401,15 @@ public sealed class GuidesOverlay : FrameworkElement
         public Typeface TagTypeface { get; }
 
         public double TagSize { get; }
+
+        /// <summary>The line a layer is drawn with: the box's dash, the overlap's edge, or the hitbox pen.</summary>
+        public Pen LineOf(GuideLayer layer) =>
+            layer switch
+            {
+                GuideLayer.Boxes => Box,
+                GuideLayer.Overlaps => OverlapEdge,
+                _ => Hitbox[(int)layer],
+            };
 
         private static Color ColorOf(FrameworkElement owner, string key, Color fallback) =>
             owner.TryFindResource(key) is SolidColorBrush brush ? brush.Color : fallback;

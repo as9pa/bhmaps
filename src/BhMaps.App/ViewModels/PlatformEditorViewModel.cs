@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Media;
@@ -176,6 +177,12 @@ public partial class PlatformEditorViewModel : ObservableObject
         ShowGuides = services.Settings.ShowGuides;
         _restoringMode = false;
 
+        // G4: a name this version does not know is skipped, so a layer a later version adds cannot break the set.
+        HiddenGuideLayers = services.Settings.HiddenGuides
+            .Select(name => Enum.TryParse<GuideLayer>(name, ignoreCase: true, out var layer) ? layer : (GuideLayer?)null)
+            .OfType<GuideLayer>()
+            .ToHashSet();
+
         // 3.6 E2: custom platforms go into a pack of their own, so the default is a fresh Custom Pack N. Opened on
         // a pack's own tile, the edit is of that pack and goes back into it; the Default pack is the one
         // exception, because it is the game's own art and Reset reads from it.
@@ -302,6 +309,16 @@ public partial class PlatformEditorViewModel : ObservableObject
     /// the ticked pieces' boxes and their overlaps. Null until the first build.</summary>
     [ObservableProperty]
     public partial PieceGuideSet? Guides { get; set; }
+
+    /// <summary>G4: the guide layers the legend switched off. One app-wide set, remembered across restarts like
+    /// <see cref="ShowGuides"/>, so a layer hidden on one map stays hidden on the next. Replaced, never changed in
+    /// place, so the overlay sees each change.</summary>
+    [ObservableProperty]
+    public partial IReadOnlyCollection<GuideLayer> HiddenGuideLayers { get; set; } = [];
+
+    /// <summary>G4: the legend under the stage, one line per layer the map on the strip has (<see
+    /// cref="PieceGuideSet.Layers"/>), each a button that hides or shows its layer.</summary>
+    public ObservableCollection<GuideLegendLineViewModel> GuideLegend { get; } = [];
 
     /// <summary>Level space to the 1280 by 720 stage, for the camera the preview on show was composed with, so the
     /// guides move with the picture and never ahead of it.</summary>
@@ -769,6 +786,42 @@ public partial class PlatformEditorViewModel : ObservableObject
     /// <summary>G3: the G key on the stage.</summary>
     [RelayCommand]
     private void ToggleGuides() => ShowGuides = !ShowGuides;
+
+    /// <summary>G4: the legend follows the layers of the map on the strip. The same layers keep their lines, so a
+    /// rebuild for a tick or a filter does not take the keyboard focus off the line that has it.</summary>
+    partial void OnGuidesChanged(PieceGuideSet? value)
+    {
+        var layers = value?.Layers ?? [];
+        if (layers.SequenceEqual(GuideLegend.Select(line => line.Layer)))
+        {
+            return;
+        }
+
+        GuideLegend.Clear();
+        foreach (var layer in layers)
+        {
+            GuideLegend.Add(new GuideLegendLineViewModel(layer, HiddenGuideLayers.Contains(layer), ToggleGuideLayer));
+        }
+    }
+
+    /// <summary>G4: a legend line's click. Hides its layer or shows it again, and remembers the set app-wide.</summary>
+    private void ToggleGuideLayer(GuideLayer layer)
+    {
+        var hidden = HiddenGuideLayers.ToHashSet();
+        if (!hidden.Remove(layer))
+        {
+            hidden.Add(layer);
+        }
+
+        HiddenGuideLayers = hidden;
+        foreach (var line in GuideLegend)
+        {
+            line.IsHidden = hidden.Contains(line.Layer);
+        }
+
+        _services.UpdateSettings(
+            _services.Settings with { HiddenGuideLayers = [.. hidden.Order().Select(l => l.ToString())] });
+    }
 
     /// <summary>Where each piece is read from: the file the record's values were worked out from when a pack
     /// remembers this map (spec 5.2), and otherwise the pack's copy when the pack has one that draws something

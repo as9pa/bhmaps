@@ -462,6 +462,22 @@ public class SettingsStoreTests
     }
 
     [Fact]
+    public void SaveThenLoad_RoundTripsTheHiddenGuideLayers_NoneByDefault()
+    {
+        using var tmp = new TempDir();
+        var path = tmp.Sub("settings.json");
+
+        Assert.Empty(SettingsStore.Load(path).HiddenGuides);
+        SettingsStore.Save(path, AppSettings.Default);
+        Assert.DoesNotContain("hiddenGuides", File.ReadAllText(path));
+
+        SettingsStore.Save(path, AppSettings.Default with { HiddenGuideLayers = ["Lava", "Boxes"] });
+
+        Assert.Equal(["Lava", "Boxes"], SettingsStore.Load(path).HiddenGuides);
+        Assert.Null(SettingsStore.Load(path).Unknown);
+    }
+
+    [Fact]
     public void Load_IgnoresTheDroppedThumbnailSwitch()
     {
         using var tmp = new TempDir();

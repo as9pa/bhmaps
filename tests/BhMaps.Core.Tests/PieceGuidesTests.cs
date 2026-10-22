@@ -177,4 +177,22 @@ public class PieceGuidesTests
         AssertPoint(stage.Transform(new Point(-100, -50)), 0, 200);
         AssertPoint(stage.Transform(new Point(300, 50)), 1280, 520);
     }
+
+    [Fact]
+    public void Layers_ListOnlyWhatTheSetHasInLegendOrder()
+    {
+        var piece = new PieceOutline("a.png", 0, 0, [new(0, 0), new(1, 0), new(1, 1), new(0, 1)]);
+        var set = new PieceGuideSet(
+            [piece],
+            [],
+            [
+                new CollisionLine(CollisionKind.Lava, 0, 0, 1, 0),
+                new CollisionLine(CollisionKind.BouncySoft, 0, 0, 1, 0),
+                new CollisionLine(CollisionKind.Hard, 0, 0, 1, 0),
+                new CollisionLine(CollisionKind.BouncyHard, 0, 0, 1, 0),
+            ]);
+
+        Assert.Equal([GuideLayer.Boxes, GuideLayer.Hard, GuideLayer.Bouncy, GuideLayer.Lava], set.Layers);
+        Assert.Empty(new PieceGuideSet([], [], []).Layers);
+    }
 }
