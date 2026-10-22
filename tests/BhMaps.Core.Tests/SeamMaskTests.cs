@@ -343,6 +343,35 @@ public class SeamMaskTests
         }
     }
 
+    /// <summary>The mirrored pair of the test above in the open layout, and the same file under another faded piece
+    /// in a second layout, which wants 0 on columns 6 to 9 as the pair does before settling. Settling would make
+    /// the pair right and the second layout wrong, no fewer uses wrong in all, so the columns keep the value from
+    /// before.</summary>
+    [Fact]
+    public void Compute_KeepsTheValueBeforeSettlingWhereSettlingLeavesNoFewerUsesWrong()
+    {
+        const double a = 0.5;
+        var mirrored = Level("One", Node(0, 0, new LevelAsset("a.png", 0, 0, 0, 0), new LevelAsset("a.png", 6, 0, -10, 0)));
+        var covered = Level("Two", Node(0, 0, new LevelAsset("a.png", 0, 0, 0, 0), new LevelAsset("b.png", 6, 0, 0, 0)));
+
+        var masks = SeamMask.Compute(
+            [mirrored, covered], [Piece("a.png", 255, a, size: 10), Piece("b.png", 255, a, size: 10)], "One");
+
+        var mask = Assert.Single(masks).Value;
+        for (var y = 0; y < 10; y++)
+        {
+            for (var c = 0; c < 6; c++)
+            {
+                Assert.Equal(a, mask[(y * 10) + c], 5);
+            }
+
+            for (var c = 6; c < 10; c++)
+            {
+                Assert.Equal(0f, mask[(y * 10) + c], 5);
+            }
+        }
+    }
+
     /// <summary>One file drawn twice, the second shifted over the first without flipping: the upper draw's columns 0 to
     /// 3 cover the lower draw's columns 6 to 9, which want 0 against them, but the upper draw shows its own columns 6
     /// to 9 uncovered and with more light, so the merge keeps the plain fade there, as before.</summary>

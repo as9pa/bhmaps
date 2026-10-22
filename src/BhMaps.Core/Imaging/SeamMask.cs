@@ -387,10 +387,14 @@ public static class SeamMask
     /// <summary>Settles the pixels whose wanted value depends on another pixel of the same file: where a copy of the
     /// file lies over another copy at a different file pixel (a half and its mirror sharing a strip), the lower draw
     /// wants its value against the upper pixel's merged value, which is wanted in turn against its own partner. Each
-    /// pass wants those pixels again against <paramref name="merged"/>, merges them, and moves halfway there:
+    /// pass merges those pixels, moves halfway there, and wants them again against <paramref name="merged"/>:
     /// stepping all the way swings between two values for ever, and halfway settles on the value both draws share
     /// within a few passes. A copy only shifted over another settles in one pass, as its partner is not coupled
-    /// back. Stops once no pixel moves by a tenth of an alpha level, or after 12 passes.</summary>
+    /// back. Stops once no pixel moves by a tenth of an alpha level, or after 12 passes.
+    /// <para>Settling one use can leave another use of the file, in this layout or another, visibly wrong where it
+    /// was right. So a pixel keeps its settled value only where it leaves fewer of the piece's uses visibly wrong
+    /// than the value before, each use wanting against the values around it at the time; elsewhere it goes back.
+    /// If the mix of the two leaves no fewer uses wrong over all those pixels, all of them go back.</para></summary>
     private static void Refine(SeamPiece piece, float plain, List<Want> uses, float[] merged)
     {
         var coupled = uses.SelectMany(u => u.Coupled).Distinct().ToArray();
@@ -402,17 +406,24 @@ public static class SeamMask
         var low = new double[uses.Count];
         var high = new double[uses.Count];
         var covering = new List<Cover>();
+        Rewant(uses, merged, covering);
+        var start = new float[coupled.Length];
+        var wrongAtStart = new int[coupled.Length];
+        var startTotal = 0;
+        for (var i = 0; i < coupled.Length; i++)
+        {
+            start[i] = merged[coupled[i]];
+            wrongAtStart[i] = WrongUses(piece, uses, coupled[i], merged[coupled[i]]);
+            startTotal += wrongAtStart[i];
+        }
+
+        if (startTotal == 0)
+        {
+            return;
+        }
+
         for (var pass = 0; pass < 12; pass++)
         {
-            foreach (var use in uses)
-            {
-                foreach (var index in use.Coupled)
-                {
-                    (use.Factor[index], use.Through[index]) =
-                        WantAt(use.Own, use.Above, use.SelfBelow, index, merged, covering, out _);
-                }
-            }
-
             var moved = 0.0;
             foreach (var p in coupled)
             {
@@ -421,11 +432,94 @@ public static class SeamMask
                 merged[p] = next;
             }
 
+            if (moved == 0)
+            {
+                break;
+            }
+
+            Rewant(uses, merged, covering);
             if (moved < 0.1 / 255)
             {
-                return;
+                break;
             }
         }
+
+        var restored = false;
+        for (var i = 0; i < coupled.Length; i++)
+        {
+            var p = coupled[i];
+            if (merged[p] != start[i] && WrongUses(piece, uses, p, merged[p]) >= wrongAtStart[i])
+            {
+                merged[p] = start[i];
+                restored = true;
+            }
+        }
+
+        if (restored)
+        {
+            Rewant(uses, merged, covering);
+        }
+
+        var total = 0;
+        foreach (var p in coupled)
+        {
+            total += WrongUses(piece, uses, p, merged[p]);
+        }
+
+        if (total >= startTotal)
+        {
+            for (var i = 0; i < coupled.Length; i++)
+            {
+                merged[coupled[i]] = start[i];
+            }
+
+            Rewant(uses, merged, covering);
+        }
+    }
+
+    /// <summary>Wants every use's coupled pixels again against <paramref name="merged"/> (see
+    /// <see cref="WantAt"/>).</summary>
+    private static void Rewant(List<Want> uses, float[] merged, List<Cover> covering)
+    {
+        foreach (var use in uses)
+        {
+            foreach (var index in use.Coupled)
+            {
+                (use.Factor[index], use.Through[index]) =
+                    WantAt(use.Own, use.Above, use.SelfBelow, index, merged, covering, out _);
+            }
+        }
+    }
+
+    /// <summary>How many of the piece's uses that see pixel <paramref name="p"/> the factor <paramref name="value"/>
+    /// leaves visibly wrong there.</summary>
+    private static int WrongUses(SeamPiece piece, List<Want> uses, int p, float value)
+    {
+        var s = piece.Alpha[p] / 255.0;
+        var wrong = 0;
+        foreach (var use in uses)
+        {
+            if (IsWrong(use, p, s, value))
+            {
+                wrong++;
+            }
+        }
+
+        return wrong;
+    }
+
+    /// <summary>Whether the factor <paramref name="value"/> shows under a use that sees pixel <paramref name="p"/>
+    /// (native alpha <paramref name="s"/>) with an error over <see cref="Unseen"/> (see <see cref="Merge"/>).</summary>
+    private static bool IsWrong(Want use, int p, double s, float value)
+    {
+        var through = use.Through[p];
+        if (through <= 0)
+        {
+            return false;
+        }
+
+        var slack = Unseen / (through * s);
+        return !(use.Factor[p] - slack <= value && value <= use.Factor[p] + slack);
     }
 
     /// <summary>How many pixels <paramref name="merged"/> leaves visibly wrong (an error over <see cref="Unseen"/>,
@@ -438,14 +532,7 @@ public static class SeamMask
             var s = piece.Alpha[p] / 255.0;
             foreach (var use in uses)
             {
-                var through = use.Through[p];
-                if (use.Preferred || through <= 0)
-                {
-                    continue;
-                }
-
-                var slack = Unseen / (through * s);
-                if (!(use.Factor[p] - slack <= merged[p] && merged[p] <= use.Factor[p] + slack))
+                if (!use.Preferred && IsWrong(use, p, s, merged[p]))
                 {
                     wrong++;
                 }
