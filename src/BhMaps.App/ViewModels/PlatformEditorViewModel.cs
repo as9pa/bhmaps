@@ -300,6 +300,12 @@ public partial class PlatformEditorViewModel : ObservableObject
     [ObservableProperty]
     public partial ImageSource? Preview { get; set; }
 
+    /// <summary>G6: how many bitmap pixels the preview has per stage pixel. 1 at fit, so the stage is composed at
+    /// its own 1280 by 720 as before; the view raises it while it is zoomed in, so a closer look shows the art's
+    /// own detail rather than the fit preview blown up. <see cref="LevelToStage"/> stays in stage pixels.</summary>
+    [ObservableProperty]
+    public partial double PreviewScale { get; set; } = 1;
+
     /// <summary>G3: the guides are drawn over the stage. One app-wide setting, on until the user turns it off and
     /// remembered across restarts.</summary>
     [ObservableProperty]
@@ -740,6 +746,8 @@ public partial class PlatformEditorViewModel : ObservableObject
 
     /// <summary>The switch and the pan both mean the same thing: cut the ticked rows out of the loaded picture
     /// again. Nothing is loaded until a Replace or a record, and the record puts all three on at once.</summary>
+    partial void OnPreviewScaleChanged(double value) => SchedulePreview();
+
     partial void OnFitAcrossChanged(bool value) => ScheduleRecut();
 
     partial void OnFitChanged(PictureFit value) => ScheduleRecut();
@@ -2277,6 +2285,8 @@ public partial class PlatformEditorViewModel : ObservableObject
         var background = Current.BackgroundPath;
         var (focus, viewport) = FocusFor(level);
         var model = _services.LevelData.Model;
+        var width = (int)Math.Round(MapCompositor.PanelWidth * PreviewScale);
+        var height = (int)Math.Round(MapCompositor.PanelHeight * PreviewScale);
         var reading = "";
         try
         {
@@ -2298,8 +2308,7 @@ public partial class PlatformEditorViewModel : ObservableObject
 
             var sources = new AssetSources(root, backgroundOverride: background);
             var bitmap = await _services.Renderer.RunAsync(
-                () => MapCompositor.Render(
-                    level, MapCompositor.PanelWidth, MapCompositor.PanelHeight, sources, viewport, focus),
+                () => MapCompositor.Render(level, width, height, sources, viewport, focus),
                 ct);
             if (ct.IsCancellationRequested || stamp != _sequence)
             {

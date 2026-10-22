@@ -191,22 +191,33 @@
 
         <!-- G1/G3: the stage takes focus on a click, so G toggles the guides from it. The guides sit outside the
              Viewbox, laid over it, so their lines are drawn in screen pixels; the code behind gives them the
-             Viewbox's scale and offset. -->
+             Viewbox's scale and offset. G6: Ctrl+scroll looks closer by a render transform on the Viewbox, clipped
+             to the stage, and Space+drag pans it; the art is not touched. -->
         <Grid x:Name="Stage"
               Grid.Row="1"
               Margin="16"
               AutomationProperties.Name="Stage"
+              ClipToBounds="True"
               Focusable="True"
               FocusVisualStyle="{StaticResource DialogFocusRing}"
+              KeyDown="Stage_KeyDown"
+              KeyUp="Stage_KeyUp"
+              LostKeyboardFocus="Stage_LostKeyboardFocus"
               MouseLeave="Stage_MouseLeave"
               MouseMove="Stage_MouseMove"
-              PreviewMouseDown="Stage_PreviewMouseDown">
+              PreviewMouseDown="Stage_PreviewMouseDown"
+              PreviewMouseLeftButtonUp="Stage_PreviewMouseLeftButtonUp"
+              PreviewMouseWheel="Stage_PreviewMouseWheel"
+              SizeChanged="Stage_SizeChanged">
           <Grid.InputBindings>
             <KeyBinding Key="G" Command="{Binding ToggleGuidesCommand}" />
           </Grid.InputBindings>
           <!-- 1280x720 is the size the view model composes at; the Viewbox only scales what came back, so
-               nothing is resampled twice. -->
+               nothing is resampled twice. Zoomed in, the view model composes at a multiple of it instead. -->
           <Viewbox x:Name="StageBox" SizeChanged="StageBox_SizeChanged" Stretch="Uniform">
+            <Viewbox.RenderTransform>
+              <MatrixTransform x:Name="StageView" />
+            </Viewbox.RenderTransform>
             <Border Width="1280" Height="720" Background="{StaticResource BgBrush}">
               <!-- Spec 6.2: dragging the picture that is laid across the platforms. The Image is the composed
                    stage at its own 1280 by 720, so the code behind only has to undo the Viewbox's scale. -->
@@ -234,6 +245,24 @@
                                   Guides="{Binding Guides}"
                                   HiddenLayers="{Binding HiddenGuideLayers}"
                                   Visibility="{Binding ShowGuides, Converter={StaticResource BoolToVis}}" />
+
+          <!-- G6: how close the view is, only while it is closer than fit, quiet like the guides' size tags. A
+               double-click on it goes back to fit. -->
+          <Border x:Name="ZoomChip"
+                  Margin="8"
+                  Padding="6,2"
+                  HorizontalAlignment="Right"
+                  VerticalAlignment="Bottom"
+                  AutomationProperties.Name="Zoom"
+                  Background="{StaticResource ScrimBrush}"
+                  CornerRadius="3"
+                  MouseLeftButtonDown="ZoomChip_MouseLeftButtonDown"
+                  ToolTip="Double-click to fit"
+                  Visibility="Collapsed">
+            <TextBlock x:Name="ZoomChipText"
+                       FontSize="{StaticResource FontCaption}"
+                       Foreground="{StaticResource Text2Brush}" />
+          </Border>
         </Grid>
 
         <StackPanel Grid.Row="2"
@@ -281,10 +310,10 @@
           <TextBlock Margin="0">
             <TextBlock.Style>
               <Style TargetType="TextBlock" BasedOn="{StaticResource HintText}">
-                <Setter Property="Text" Value="Drag to move. Scroll to zoom. Double-click to centre. G hides the guides. Click a legend line to hide it." />
+                <Setter Property="Text" Value="Drag to move. Scroll to zoom. Ctrl+scroll looks closer. Double-click to centre. G hides the guides. Click a legend line to hide it." />
                 <Style.Triggers>
                   <DataTrigger Binding="{Binding ShowGuides}" Value="False">
-                    <Setter Property="Text" Value="Drag to move. Scroll to zoom. Double-click to centre. G shows the guides." />
+                    <Setter Property="Text" Value="Drag to move. Scroll to zoom. Ctrl+scroll looks closer. Double-click to centre. G shows the guides." />
                   </DataTrigger>
                 </Style.Triggers>
               </Style>
