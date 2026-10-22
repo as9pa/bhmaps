@@ -244,6 +244,7 @@ public static class SeamMask
             var plain = (float)Math.Clamp(piece.Opacity, 0, 1);
             var merged = Merge(piece, plain, list);
             Refine(piece, plain, list, merged);
+            KeepSeparateWhereNoWorse(piece, plain, list, merged);
             if (merged.Any(v => Math.Abs(v - plain) >= Agreement))
             {
                 result[piece.RelativePath] = merged;
@@ -271,6 +272,7 @@ public static class SeamMask
         List<(Placement Upper, IReadOnlyList<Vector> Shifts)> Above,
         List<Placement> SelfBelow,
         int[] Coupled,
+        int[] Deferred,
         bool Preferred = false);
 
     /// <summary>The merged factor of every pixel over the uses of a piece. Moving this piece's written alpha at a
@@ -477,6 +479,54 @@ public static class SeamMask
         }
     }
 
+    /// <summary>Settling draws of one file together (see <see cref="Refine"/>) takes the upper draw's say away where it
+    /// lies over another pixel of the file, and that draw may be covered by other pieces the lower one cannot make up
+    /// for, which leaves uses wrong that were right before. So wherever a use couples or defers a pixel, the pixel is
+    /// also merged as it was before, with every draw of the file wanting on its own (see <see cref="WantAt"/>), and
+    /// it keeps the settled value only where that leaves fewer of the piece's uses in every layout visibly wrong, each
+    /// counted by what it wants in its own way; on a tie the value from before stays. A piece no use couples or
+    /// defers skips this.</summary>
+    private static void KeepSeparateWhereNoWorse(SeamPiece piece, float plain, List<Want> uses, float[] merged)
+    {
+        var pixels = uses.SelectMany(u => u.Coupled.Concat(u.Deferred)).Distinct().ToArray();
+        if (pixels.Length == 0)
+        {
+            return;
+        }
+
+        var covering = new List<Cover>();
+        var separate = new List<Want>(uses.Count);
+        foreach (var use in uses)
+        {
+            var alone = use with { Factor = (float[])use.Factor.Clone(), Through = (float[])use.Through.Clone() };
+            foreach (var index in use.Coupled.Concat(use.Deferred))
+            {
+                (alone.Factor[index], alone.Through[index]) =
+                    WantAt(use.Own, use.Above, use.SelfBelow, index, merged, covering, true, out _, out _);
+            }
+
+            separate.Add(alone);
+        }
+
+        var low = new double[uses.Count];
+        var high = new double[uses.Count];
+        foreach (var p in pixels)
+        {
+            var before = MergeAt(piece, plain, separate, p, low, high);
+            if (WrongUses(piece, uses, p, merged[p]) < WrongUses(piece, separate, p, before))
+            {
+                continue;
+            }
+
+            merged[p] = before;
+            for (var u = 0; u < uses.Count; u++)
+            {
+                uses[u].Factor[p] = separate[u].Factor[p];
+                uses[u].Through[p] = separate[u].Through[p];
+            }
+        }
+    }
+
     /// <summary>Wants every use's coupled pixels again against <paramref name="merged"/> (see
     /// <see cref="WantAt"/>).</summary>
     private static void Rewant(List<Want> uses, float[] merged, List<Cover> covering)
@@ -486,7 +536,7 @@ public static class SeamMask
             foreach (var index in use.Coupled)
             {
                 (use.Factor[index], use.Through[index]) =
-                    WantAt(use.Own, use.Above, use.SelfBelow, index, merged, covering, out _);
+                    WantAt(use.Own, use.Above, use.SelfBelow, index, merged, covering, false, out _, out _);
             }
         }
     }
@@ -611,28 +661,38 @@ public static class SeamMask
         Array.Fill(light, 1f);
         if (above.Count == 0 && selfBelow.Count == 0)
         {
-            return new Want(factor, light, own, above, selfBelow, []);
+            return new Want(factor, light, own, above, selfBelow, [], []);
         }
 
         var current = new float[factor.Length];
         Array.Fill(current, plain);
         var covering = new List<Cover>(above.Count);
         var coupled = new List<int>();
+        var deferred = new List<int>();
         for (var index = 0; index < factor.Length; index++)
         {
-            (factor[index], light[index]) = WantAt(own, above, selfBelow, index, current, covering, out var depends);
+            (factor[index], light[index]) =
+                WantAt(own, above, selfBelow, index, current, covering, false, out var depends, out var defers);
             if (depends)
             {
                 coupled.Add(index);
             }
+
+            if (defers)
+            {
+                deferred.Add(index);
+            }
         }
 
-        return new Want(factor, light, own, above, selfBelow, [.. coupled]);
+        return new Want(factor, light, own, above, selfBelow, [.. coupled], [.. deferred]);
     }
 
     /// <summary>What one use wants of pixel <paramref name="index"/> (see <see cref="Wanted"/>), taking another
     /// pixel of the same file drawn above it at its value in <paramref name="current"/>; <paramref name="coupled"/>
-    /// tells whether it did. <paramref name="covering"/> is scratch room.</summary>
+    /// tells whether it did, and <paramref name="deferred"/> whether it left the value to another pixel of the file
+    /// below. With <paramref name="separate"/> it does neither and wants what it did before draws of one file were
+    /// settled together: another pixel of the file covers like any other piece. <paramref name="covering"/> is
+    /// scratch room.</summary>
     private static (float Factor, float Light) WantAt(
         Placement own,
         List<(Placement Upper, IReadOnlyList<Vector> Shifts)> above,
@@ -640,9 +700,12 @@ public static class SeamMask
         int index,
         float[] current,
         List<Cover> covering,
-        out bool coupled)
+        bool separate,
+        out bool coupled,
+        out bool deferred)
     {
         coupled = false;
+        deferred = false;
         var piece = own.Piece;
         var plain = Math.Clamp(piece.Opacity, 0, 1);
         var s = piece.Alpha[index] / 255.0;
@@ -654,10 +717,11 @@ public static class SeamMask
         var point = own.ToLevel.Transform(new Point((index % piece.Width) + 0.5, (index / piece.Width) + 0.5));
         if (selfBelow.Exists(b => b.Bounds.Contains(point)
             && b.IndexAt(point) is >= 0 and var j
-            && (j == index || piece.Alpha[j] > 0)))
+            && (j == index || (!separate && piece.Alpha[j] > 0))))
         {
             // Another draw of this file below carries the value here: this same pixel (see SolveSelf) or the pixel
             // under it, which wants its value against this one's (see Refine).
+            deferred = !selfBelow.Exists(b => b.Bounds.Contains(point) && b.IndexAt(point) == index);
             return ((float)plain, -1f);
         }
 
@@ -673,6 +737,11 @@ public static class SeamMask
                 // with that value, not a blend of its neighbours; another pixel of the file covers at its current
                 // value. Only a draw that keeps its place stays on one file pixel.
                 var j = shifts.Count == 0 && other.Piece == piece ? other.IndexAt(point) : -1;
+                if (separate && j != index)
+                {
+                    j = -1;
+                }
+
                 var same = j == index;
                 var opacity = Math.Clamp(other.Piece.Opacity, 0, 1);
                 if (j >= 0 && !same)

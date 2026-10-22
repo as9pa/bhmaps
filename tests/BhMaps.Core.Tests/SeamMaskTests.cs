@@ -372,6 +372,31 @@ public class SeamMaskTests
         }
     }
 
+    /// <summary>A shifted copy under a faded piece over all of it, and a second layout with the file under that piece
+    /// alone. The copy's columns 0 to 3 lie over the first draw's columns 6 to 9 and would leave their value to it,
+    /// so the uncovered first draw would carry columns 0 to 3 at the plain fade and leave the second layout wrong.
+    /// The value from before, which both covered uses want, leaves no more uses wrong, so it stays.</summary>
+    [Fact]
+    public void Compute_KeepsTheValueBeforeWhereDeferringToAnotherDrawLeavesNoFewerUsesWrong()
+    {
+        var shifted = Level(
+            "One",
+            Node(0, 0, new LevelAsset("a.png", 0, 0, 0, 0), new LevelAsset("a.png", 6, 0, 0, 0), new LevelAsset("c.png", 6, 0, 0, 0)));
+        var covered = Level("Two", Node(0, 0, new LevelAsset("a.png", 0, 0, 0, 0), new LevelAsset("c.png", 0, 0, 0, 0)));
+
+        var masks = SeamMask.Compute(
+            [shifted, covered], [Piece("a.png", 255, 0.5, size: 10), Piece("c.png", 255, 0.5, size: 10)]);
+
+        var mask = Assert.Single(masks).Value;
+        for (var y = 0; y < 10; y++)
+        {
+            for (var c = 0; c < 4; c++)
+            {
+                Assert.Equal(0f, mask[(y * 10) + c], 5);
+            }
+        }
+    }
+
     /// <summary>One file drawn twice, the second shifted over the first without flipping: the upper draw's columns 0 to
     /// 3 cover the lower draw's columns 6 to 9, which want 0 against them, but the upper draw shows its own columns 6
     /// to 9 uncovered and with more light, so the merge keeps the plain fade there, as before.</summary>
