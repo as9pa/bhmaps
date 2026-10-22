@@ -11,7 +11,7 @@ internal sealed record PieceImage(int Width, int Height, byte[] Pixels, byte[] A
 
 /// <summary>Seam pixels left in one layout at one opacity while that layout is the one open in the editor, split by
 /// cause. <see cref="Moving"/> and <see cref="Other"/> stay even with the ideal one-layer fade (caused by moving
-/// platforms at rest, and everything else); <see cref="TwiceInMap"/> comes from uses of one file in the layout
+/// platforms over art they do not cover at every keyframe, and everything else); <see cref="TwiceInMap"/> comes from uses of one file in the layout
 /// wanting different values; <see cref="SharedFile"/> from a file other layouts share. <see cref="Ideal"/> counts
 /// seam pixels in the ideal fade itself. <see cref="OtherMaps"/> is the cost elsewhere: file pixels the mask written
 /// for this layout leaves visibly wrong in other layouts, once per use.</summary>
@@ -102,7 +102,9 @@ internal sealed class SeamAuditor
             var wrongElsewhere = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
             var maskWritten = ComputeMask(level, pieces, wrongElsewhere);
 
-            // The ideal per use: faded under every use above it, ignoring groups as the mask has since S1.
+            // The ideal per use: faded under every use above it, under the mask's rule for moving platforms: a use
+            // that shifts against this one in game counts only where it covers this one at every keyframe.
+            // Elsewhere the ideal keeps the plain fade and its seams at rest land in the moving row as unfixable.
             var ideal = new List<float[]>();
             for (int k = 0; k < uses.Count; k++)
             {
@@ -118,7 +120,7 @@ internal sealed class SeamAuditor
                 ideal.Add(Ideal(uses[k], above, plain));
             }
 
-            // A moving platform at rest causes an ideal seam only when the ideal over the standing pieces alone, held
+            // A moving platform causes an ideal seam only when the ideal over the standing pieces alone, held
             // against their own full-strength render, is clean there.
             byte[]? pxStill = null;
             if (referenceStill != null)
@@ -217,7 +219,7 @@ internal sealed class SeamAuditor
                 if (inIdeal)
                 {
                     // Seams the one-layer ideal keeps too, which no mask can remove: put down to a moving platform
-                    // at rest only where taking the moving platforms away clears them.
+                    // only where taking the moving platforms away clears them.
                     if (pxStill != null && !Seam(pxStill, referenceStill!, op, i))
                     {
                         moving++;
@@ -288,7 +290,7 @@ internal sealed class SeamAuditor
             from.Invert();
             var bounds = new Rect(0, 0, image.Width, image.Height);
             bounds.Transform(to);
-            uses.Add(new PieceUse(image, placed.RelativePath, to, from, bounds, placed.Group));
+            uses.Add(new PieceUse(image, placed.RelativePath, to, from, bounds, placed.Group, placed.Movers));
         }
 
         return uses;
@@ -375,11 +377,13 @@ internal sealed class SeamAuditor
     }
 
     /// <summary>The ideal mask of one use: the factor that makes it composite under <paramref name="above"/>
-    /// (top first) like one layer at the plain opacity.</summary>
+    /// (top first) like one layer at the plain opacity. A use that shifts against this one in game covers only where
+    /// it stays over it at every shift, as in the mask (see <see cref="SeamMask.Shifts"/>).</summary>
     private static float[] Ideal(PieceUse own, List<PieceUse> above, float plain)
     {
         var mask = new float[own.Image.Width * own.Image.Height];
         Array.Fill(mask, plain);
+        var shifts = above.Select(o => SeamMask.Shifts(o.Movers, own.Movers)).ToList();
         if (above.Count == 0)
         {
             return mask;
@@ -399,9 +403,18 @@ internal sealed class SeamAuditor
 
                 var pt = own.To.Transform(new Point(x + .5, y + .5));
                 cover.Clear();
-                foreach (var o in above)
+                for (int j = 0; j < above.Count; j++)
                 {
-                    if (o.Bounds.Contains(pt) && o.AlphaAt(pt) is > 0 and var sj)
+                    var o = above[j];
+                    if (
+                        o.Bounds.Contains(pt)
+                        && o.AlphaAt(pt) is > 0 and var sj
+                        && shifts[j] is { } shift
+                        && (
+                            shift.Count == 0
+                            || SeamMask.CoversThroughout(o.From, o.Image.Width, o.Image.Height, pt, shift)
+                        )
+                    )
                     {
                         cover.Add((sj, plain));
                     }
@@ -487,8 +500,16 @@ internal sealed class SeamAuditor
     }
 
     /// <summary>One use of a piece in the layout: the matrix from its pixels to level space and back, its
-    /// level-space bounds and its group (moving platforms get their own).</summary>
-    private sealed record PieceUse(PieceImage Image, string RelativePath, Matrix To, Matrix From, Rect Bounds, int Group)
+    /// level-space bounds, its group (moving platforms get their own) and the moving platforms it rides on.</summary>
+    private sealed record PieceUse(
+        PieceImage Image,
+        string RelativePath,
+        Matrix To,
+        Matrix From,
+        Rect Bounds,
+        int Group,
+        IReadOnlyList<Mover>? Movers
+    )
     {
         /// <summary>The native alpha (0..1) the piece shows at this level point, blended as the game and the
         /// renderer draw it stretched (S4), 0 outside the piece.</summary>

@@ -121,7 +121,7 @@ internal static class Program
         Console.WriteLine();
         Console.WriteLine("Each layout is measured as the owner sees it: with the masks written while it is open in");
         Console.WriteLine("the editor, so its own uses of a shared file win (S3). A seam pixel gets one cause:");
-        Console.WriteLine("  moving        the one-layer ideal fade seams there too, and not without the moving platforms (at rest)");
+        Console.WriteLine("  moving        the one-layer ideal fade seams there too, and not without the moving platforms (art they leave as they move)");
         Console.WriteLine("  other         the one-layer ideal fade seams there too, anywhere else (no mask can fix these)");
         Console.WriteLine("  twice-in-map  the ideal is clean, but uses of one file in this layout want different values");
         Console.WriteLine("  shared-file   clean within this layout, wrong only because other layouts share the file");

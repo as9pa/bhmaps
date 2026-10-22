@@ -10,9 +10,9 @@ public sealed record SeamPiece(string RelativePath, int Width, int Height, byte[
 
 /// <summary>Spec 3.2 O1: faded pieces that overlap would otherwise draw twice at partial strength and show bright
 /// seams. The mask makes each lower piece more transparent exactly where faded pieces above it cover it, so the
-/// stack composites like one layer. Moving platform pieces join in at their rest position like any other piece:
-/// while a platform moves away in game, the art it leaves uncovered shows the plain fade. Safe to call from any
-/// thread.</summary>
+/// stack composites like one layer. A moving platform's pieces correct the art they cover only where they cover it at
+/// every keyframe of their animation, so the platform never leaves a lighter patch behind when it moves away; a
+/// platform that never leaves its rest position corrects like a still piece. Safe to call from any thread.</summary>
 public static class SeamMask
 {
     /// <summary>A factor this close to the plain opacity is the plain opacity, well under one alpha level.</summary>
@@ -70,6 +70,94 @@ public static class SeamMask
         return ((upper * (1 - fy)) + (lower * fy)) / 255.0;
     }
 
+    /// <summary>How far an upper piece riding on <paramref name="upper"/> can shift against a lower one riding on
+    /// <paramref name="lower"/> while the game runs (see <see cref="PlacedAsset.Movers"/>): empty where the two keep
+    /// their places, null where a platform between them turns, and otherwise the corners of the hull of every
+    /// relative offset. A platform both ride on moves them alike and drops out. The others are not tied to each other
+    /// in time, so every pairing of their offsets counts, which can only make the hull larger than the real one.
+    /// Keyframe motion stays inside the hull, so a convex footprint that covers a point at every corner covers it
+    /// throughout.</summary>
+    public static IReadOnlyList<Vector>? Shifts(IReadOnlyList<Mover>? upper, IReadOnlyList<Mover>? lower)
+    {
+        upper ??= [];
+        lower ??= [];
+        var shared = 0;
+        while (shared < upper.Count && shared < lower.Count && upper[shared].Group == lower[shared].Group)
+        {
+            shared++;
+        }
+
+        List<Vector> corners = [new Vector()];
+        var apart = upper.Skip(shared).Select(m => (m.Offsets, Sign: 1.0))
+            .Concat(lower.Skip(shared).Select(m => (m.Offsets, Sign: -1.0)));
+        foreach (var (offsets, sign) in apart)
+        {
+            if (offsets is null)
+            {
+                return null;
+            }
+
+            corners = Hull(corners.SelectMany(c => offsets.Select(o => c + (sign * o))));
+        }
+
+        return corners.TrueForAll(c => c == new Vector()) ? [] : corners;
+    }
+
+    /// <summary>Whether a piece of <paramref name="width"/> by <paramref name="height"/> pixels, taken from level
+    /// space to its pixels by <paramref name="fromLevel"/>, lies over the level point <paramref name="level"/> at
+    /// every one of <paramref name="shifts"/> (see <see cref="Shifts"/>; null never does).</summary>
+    public static bool CoversThroughout(
+        Matrix fromLevel, int width, int height, Point level, IReadOnlyList<Vector>? shifts)
+    {
+        if (shifts is null)
+        {
+            return false;
+        }
+
+        foreach (var shift in shifts)
+        {
+            var local = fromLevel.Transform(level - shift);
+            if (local.X < 0 || local.Y < 0 || local.X >= width || local.Y >= height)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>The corners of the convex hull of <paramref name="points"/> (Andrew's monotone chain): the lower
+    /// chain left to right, then the upper chain back. One or two points where they do not span an area.</summary>
+    private static List<Vector> Hull(IEnumerable<Vector> points)
+    {
+        var sorted = points.Distinct().OrderBy(p => p.X).ThenBy(p => p.Y).ToList();
+        if (sorted.Count < 3)
+        {
+            return sorted;
+        }
+
+        var hull = new List<Vector>();
+        foreach (var chain in new[] { sorted, Enumerable.Reverse(sorted).ToList() })
+        {
+            var start = hull.Count;
+            foreach (var p in chain)
+            {
+                while (hull.Count >= start + 2
+                    && Vector.CrossProduct(hull[^1] - hull[^2], p - hull[^2]) <= 0)
+                {
+                    hull.RemoveAt(hull.Count - 1);
+                }
+
+                hull.Add(p);
+            }
+
+            // Each chain's last point starts the other chain.
+            hull.RemoveAt(hull.Count - 1);
+        }
+
+        return hull;
+    }
+
     /// <summary>Per piece, the factor each pixel's alpha is multiplied by instead of the plain opacity, row by row.
     /// Every use of a piece in <paramref name="levels"/> wants its own factor on a pixel; where they differ the
     /// piece gets the value that leaves the fewest uses with a visible error (see <see cref="Merge"/>), and where
@@ -117,13 +205,13 @@ public static class SeamMask
             for (var k = 0; k < placements.Count; k++)
             {
                 var own = placements[k];
-                var above = new List<Placement>();
+                var above = new List<(Placement Upper, IReadOnlyList<Vector> Shifts)>();
                 for (var j = placements.Count - 1; j > k; j--)
                 {
                     var other = placements[j];
-                    if (other.Bounds.IntersectsWith(own.Bounds))
+                    if (other.Bounds.IntersectsWith(own.Bounds) && Shifts(other.Movers, own.Movers) is { } shifts)
                     {
-                        above.Add(other);
+                        above.Add((other, shifts));
                     }
                 }
 
@@ -131,7 +219,9 @@ public static class SeamMask
                 for (var j = 0; j < k; j++)
                 {
                     var other = placements[j];
-                    if (other.Piece == own.Piece && other.Bounds.IntersectsWith(own.Bounds))
+                    if (other.Piece == own.Piece
+                        && other.Bounds.IntersectsWith(own.Bounds)
+                        && Shifts(own.Movers, other.Movers) is { Count: 0 })
                     {
                         selfBelow.Add(other);
                     }
@@ -289,9 +379,10 @@ public static class SeamMask
     /// again, whose written alpha is the one being solved for.</summary>
     private readonly record struct Cover(double S, double A, bool Self);
 
-    /// <summary>One use of a piece: the matrix from its pixels to level space and back, and its level-space
-    /// bounds.</summary>
-    private sealed record Placement(SeamPiece Piece, Matrix ToLevel, Matrix FromLevel, Rect Bounds)
+    /// <summary>One use of a piece: the matrix from its pixels to level space and back, its level-space bounds, and
+    /// the moving platforms it rides on.</summary>
+    private sealed record Placement(
+        SeamPiece Piece, Matrix ToLevel, Matrix FromLevel, Rect Bounds, IReadOnlyList<Mover>? Movers)
     {
         public static Placement Of(SeamPiece piece, PlacedAsset placed)
         {
@@ -305,13 +396,17 @@ public static class SeamMask
 
             var bounds = new Rect(0, 0, piece.Width, piece.Height);
             bounds.Transform(toLevel);
-            return new Placement(piece, toLevel, fromLevel, bounds);
+            return new Placement(piece, toLevel, fromLevel, bounds, placed.Movers);
         }
 
         /// <summary>The native alpha (0..1) the piece shows at this level point, blended as the game draws it
         /// stretched (see <see cref="Blended"/>), 0 outside the piece.</summary>
         public double AlphaAt(Point level) =>
             ToLevel.HasInverse ? Blended(Piece.Alpha, Piece.Width, Piece.Height, FromLevel.Transform(level)) : 0;
+
+        /// <summary>Whether the piece lies over this level point at every one of <paramref name="shifts"/>.</summary>
+        public bool CoversThroughout(Point level, IReadOnlyList<Vector> shifts) =>
+            ToLevel.HasInverse && SeamMask.CoversThroughout(FromLevel, Piece.Width, Piece.Height, level, shifts);
 
         /// <summary>The index of the pixel this level point falls on, -1 outside the piece.</summary>
         public int IndexAt(Point level)
@@ -332,8 +427,11 @@ public static class SeamMask
     /// written alpha over the native alpha where something does. Where another use of the same piece above this
     /// one draws the same file pixel at this point, both draws carry this pixel's value, so what it wants depends on
     /// itself. That pixel is solved exactly (see <see cref="SolveSelf"/>), and the upper draw wants nothing of its
-    /// own there: its share is in the solve.</summary>
-    private static Want Wanted(Placement own, List<Placement> above, List<Placement> selfBelow)
+    /// own there: its share is in the solve. A piece above that shifts against this one (see <see cref="Shifts"/>)
+    /// covers only where it stays over the point at every shift; elsewhere it moves away in game and the art keeps
+    /// the plain fade.</summary>
+    private static Want Wanted(
+        Placement own, List<(Placement Upper, IReadOnlyList<Vector> Shifts)> above, List<Placement> selfBelow)
     {
         var piece = own.Piece;
         var plain = Math.Clamp(piece.Opacity, 0, 1);
@@ -367,13 +465,16 @@ public static class SeamMask
 
                 covering.Clear();
                 var self = false;
-                foreach (var other in above)
+                foreach (var (other, shifts) in above)
                 {
-                    if (other.Bounds.Contains(point) && other.AlphaAt(point) is > 0 and var blended)
+                    if (other.Bounds.Contains(point)
+                        && other.AlphaAt(point) is > 0 and var blended
+                        && (shifts.Count == 0 || other.CoversThroughout(point, shifts)))
                     {
                         // The same file pixel drawn again is solved as this pixel's own value (see SolveSelf), so
-                        // it covers with that value, not a blend of its neighbours.
-                        var same = other.Piece == piece && other.IndexAt(point) == index;
+                        // it covers with that value, not a blend of its neighbours. Only a draw that keeps its place
+                        // stays on the same file pixel.
+                        var same = shifts.Count == 0 && other.Piece == piece && other.IndexAt(point) == index;
                         self |= same;
                         covering.Add(new Cover(same ? s : blended, Math.Clamp(other.Piece.Opacity, 0, 1), same));
                     }

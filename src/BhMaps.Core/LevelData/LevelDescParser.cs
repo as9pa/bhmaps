@@ -132,7 +132,41 @@ public static class LevelDescParser
             Num(element, "Rotation", 0),
             (string?)element.Attribute("Theme"),
             assets, children,
-            element.Name.LocalName == "MovingPlatform");
+            element.Name.LocalName == "MovingPlatform",
+            element.Name.LocalName == "MovingPlatform" ? BuildTravel(element.Element("Animation")) : null);
+    }
+
+    /// <summary>The offsets a moving platform's path stays inside (see <see cref="PlatformTravel"/>). No Animation
+    /// means it never leaves its rest position.</summary>
+    private static PlatformTravel BuildTravel(XElement? animation)
+    {
+        var offsets = new List<TravelOffset>();
+        var turns = false;
+        if (animation is null)
+        {
+            return new PlatformTravel(offsets, turns);
+        }
+
+        AddCentre(offsets, animation);
+        foreach (var frame in animation.Descendants("KeyFrame"))
+        {
+            offsets.Add(new TravelOffset(Num(frame, "X", 0), Num(frame, "Y", 0)));
+            AddCentre(offsets, frame);
+            turns |= Num(frame, "Rotation", 0) != 0;
+        }
+
+        return new PlatformTravel(offsets, turns);
+    }
+
+    /// <summary>A curve centre names one or both coordinates; the missing one is 0, as on a KeyFrame.</summary>
+    private static void AddCentre(List<TravelOffset> offsets, XElement element)
+    {
+        var x = NumOrNull(element, "CenterX");
+        var y = NumOrNull(element, "CenterY");
+        if (x is not null || y is not null)
+        {
+            offsets.Add(new TravelOffset(x ?? 0, y ?? 0));
+        }
     }
 
     /// <summary>An attribute or a same-named child element, whichever is present.</summary>

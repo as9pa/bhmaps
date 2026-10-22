@@ -12,13 +12,15 @@ public sealed record LevelAsset(string AssetName, double X, double Y, double W, 
 
 /// <summary>One transform node of a level's platform tree. Absent attributes mean identity. A node that names an
 /// image on itself owns the first entry of <see cref="Assets"/>, at the node's own origin. <see cref="Moving"/> marks a
-/// MovingPlatform, whose subtree moves as one piece apart from the rest of the level (3.2 O1).</summary>
+/// MovingPlatform, whose subtree moves as one piece apart from the rest of the level (3.2 O1), and
+/// <see cref="Travel"/> is where its animation takes it.</summary>
 public sealed record PlatformNode(
     double X, double Y, double Scale, double ScaleX, double ScaleY, double Rotation,
     string? Theme,
     IReadOnlyList<LevelAsset> Assets,
     IReadOnlyList<PlatformNode> Children,
-    bool Moving = false)
+    bool Moving = false,
+    PlatformTravel? Travel = null)
 {
     /// <summary>A themed node is seasonal, and the compositor skips it.</summary>
     [JsonIgnore]
@@ -30,6 +32,16 @@ public sealed record PlatformNode(
     [JsonIgnore]
     public double EffectiveScaleY => Scale * ScaleY;
 }
+
+/// <summary>Where a MovingPlatform's animation takes it, in its parent's space. <see cref="Offsets"/> are the
+/// offsets from its rest position that its path stays inside: every KeyFrame's X and Y (a missing one is 0), in the
+/// Animation and in its Phases, and every curve centre (CenterX, CenterY) on a KeyFrame or on the Animation, which
+/// bends the path between two keyframes but keeps it inside their hull with the centre. <see cref="Turns"/> is true
+/// when a KeyFrame rotates the platform, which offsets cannot describe.</summary>
+public sealed record PlatformTravel(IReadOnlyList<TravelOffset> Offsets, bool Turns);
+
+/// <summary>One offset from a moving platform's rest position.</summary>
+public sealed record TravelOffset(double X, double Y);
 
 /// <summary>The kind of a collision line: its element name without the "Collision" suffix, so HardCollision is
 /// <see cref="Hard"/>.</summary>

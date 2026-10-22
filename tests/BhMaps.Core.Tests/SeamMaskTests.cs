@@ -113,6 +113,53 @@ public class SeamMaskTests
         Assert.Equal(0f, lower.Value[30], 5);
     }
 
+    private static PlatformNode Mover(double x, string asset, params TravelOffset[] offsets) =>
+        new(x, 0, 1, 1, 1, 0, null, [new LevelAsset(asset, 0, 0, 0, 0)], [], true, new PlatformTravel(offsets, false));
+
+    /// <summary>A platform that travels well clear of the art below at some keyframe never covers it throughout, so
+    /// the art keeps the plain fade instead of a lighter patch left behind when the platform moves away.</summary>
+    [Fact]
+    public void Compute_LeavesStaticArtAtThePlainFadeUnderAMovingPlatformThatTravelsAway()
+    {
+        var still = Node(0, 0, new LevelAsset("a.png", 0, 0, 0, 0));
+        var moving = Mover(20, "b.png", new TravelOffset(0, 0), new TravelOffset(100, -40));
+
+        var masks = SeamMask.Compute([Level("L", still, moving)], [Piece("a.png", 255, 0.5), Piece("b.png", 255, 0.5)]);
+
+        Assert.Empty(masks);
+    }
+
+    /// <summary>A platform at rest over x 20..60 that travels 10 to the right still covers x 30..40 of the art below
+    /// at every keyframe: only that part is corrected.</summary>
+    [Fact]
+    public void Compute_CorrectsOnlyTheArtAMovingPlatformCoversAtEveryKeyframe()
+    {
+        var still = Node(0, 0, new LevelAsset("a.png", 0, 0, 0, 0));
+        var moving = Mover(20, "b.png", new TravelOffset(10, 0));
+
+        var masks = SeamMask.Compute([Level("L", still, moving)], [Piece("a.png", 255, 0.5), Piece("b.png", 255, 0.5)]);
+
+        var lower = Assert.Single(masks);
+        Assert.Equal(@"Grove\a.png", lower.Key);
+        Assert.Equal(0.5f, lower.Value[5], 5);
+        Assert.Equal(0.5f, lower.Value[25], 5);
+        Assert.Equal(0f, lower.Value[35], 5);
+        Assert.Equal(0f, lower.Value[(39 * 40) + 39], 5);
+    }
+
+    /// <summary>Two pieces on one travelling platform keep their places against each other, so they correct as
+    /// still pieces do; a platform nested in it adds its own travel against them.</summary>
+    [Fact]
+    public void Shifts_DropAPlatformBothPiecesRideOnAndAddANestedOnesTravel()
+    {
+        var outer = new Mover(1, [new Vector(), new Vector(500, 0)]);
+        var inner = new Mover(2, [new Vector(), new Vector(0, 8)]);
+
+        Assert.Empty(SeamMask.Shifts([outer], [outer])!);
+        Assert.Equal([new Vector(), new Vector(0, 8)], SeamMask.Shifts([outer, inner], [outer])!.OrderBy(v => v.Y));
+        Assert.Null(SeamMask.Shifts([new Mover(3, null)], []));
+    }
+
     private static readonly LevelDesc Overlapping =
         Level("One", Node(0, 0, new LevelAsset("a.png", 0, 0, 0, 0), new LevelAsset("b.png", 20, 0, 0, 0)));
 
@@ -273,6 +320,31 @@ public class SeamMaskTests
 
         Assert.False(level.Platforms[0].Moving);
         Assert.True(level.Platforms[1].Moving);
+    }
+
+    /// <summary>Every KeyFrame counts, in the Animation and in its Phases, a missing X or Y is 0, a curve centre is a
+    /// point the path can reach, and a keyframe rotation marks the platform as turning.</summary>
+    [Fact]
+    public void Parse_ReadsAMovingPlatformsKeyframeOffsets()
+    {
+        var level = LevelDescParser.Parse(
+            "<LevelDesc AssetDir=\"Grove\" LevelName=\"L\">"
+            + "<MovingPlatform PlatID=\"1\" X=\"5\" Y=\"6\"><Animation NumFrames=\"100\" SlowMult=\"1\">"
+            + "<KeyFrame FrameNum=\"1\" /><KeyFrame FrameNum=\"20\" X=\"300\" />"
+            + "<Phase StartFrame=\"40\"><KeyFrame FrameNum=\"5\" Y=\"-50\" CenterX=\"10\" /></Phase></Animation>"
+            + "<Platform AssetName=\"a.png\" W=\"2\" H=\"2\" /></MovingPlatform>"
+            + "<MovingPlatform PlatID=\"2\"><Animation><KeyFrame FrameNum=\"1\" Rotation=\"3\" /></Animation></MovingPlatform>"
+            + "<MovingPlatform PlatID=\"3\" />"
+            + "<Platform X=\"1\" /></LevelDesc>");
+
+        var travel = level.Platforms[0].Travel!;
+        Assert.Equal(
+            [new TravelOffset(0, 0), new TravelOffset(300, 0), new TravelOffset(0, -50), new TravelOffset(10, 0)],
+            travel.Offsets);
+        Assert.False(travel.Turns);
+        Assert.True(level.Platforms[1].Travel!.Turns);
+        Assert.Empty(level.Platforms[2].Travel!.Offsets);
+        Assert.Null(level.Platforms[3].Travel);
     }
 
     /// <summary>Three overlapping pieces, one of them half transparent, faded to 50% with the mask, composite to the
