@@ -203,6 +203,7 @@
               KeyDown="Stage_KeyDown"
               KeyUp="Stage_KeyUp"
               LostKeyboardFocus="Stage_LostKeyboardFocus"
+              LostMouseCapture="Stage_LostMouseCapture"
               MouseLeave="Stage_MouseLeave"
               MouseMove="Stage_MouseMove"
               PreviewMouseDown="Stage_PreviewMouseDown"

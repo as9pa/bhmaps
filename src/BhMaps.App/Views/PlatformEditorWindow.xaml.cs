@@ -305,6 +305,16 @@ public partial class PlatformEditorWindow : Window
         }
     }
 
+    /// <summary>G6: the capture can go mid-drag without a button up (Alt+Tab, a dialog), and the pan and its hand
+    /// cursor go with it. The event bubbles, so only the stage's own capture, the pan's, ends it.</summary>
+    private void Stage_LostMouseCapture(object sender, MouseEventArgs e)
+    {
+        if (_viewPanFrom is not null && ReferenceEquals(e.OriginalSource, Stage))
+        {
+            EndViewPan();
+        }
+    }
+
     /// <summary>G6: a double-click on the zoom chip goes back to fit.</summary>
     private void ZoomChip_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {

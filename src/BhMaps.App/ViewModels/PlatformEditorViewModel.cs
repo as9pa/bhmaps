@@ -122,6 +122,10 @@ public partial class PlatformEditorViewModel : ObservableObject
     /// on it, so the map is never drawn from half a record.</summary>
     private readonly Task _recordArt;
 
+    /// <summary>G4: hidden layer names from the settings this version does not know, written back with the known
+    /// ones so a later version's choice survives a legend click here.</summary>
+    private readonly IReadOnlyList<string> _unknownHiddenGuides;
+
     private long _sequence;
 
     /// <summary>G1: each layout's file sizes by its index on the strip, read off the UI thread once, so a rebuild
@@ -178,10 +182,7 @@ public partial class PlatformEditorViewModel : ObservableObject
         _restoringMode = false;
 
         // G4: a name this version does not know is skipped, so a layer a later version adds cannot break the set.
-        HiddenGuideLayers = services.Settings.HiddenGuides
-            .Select(name => Enum.TryParse<GuideLayer>(name, ignoreCase: true, out var layer) ? layer : (GuideLayer?)null)
-            .OfType<GuideLayer>()
-            .ToHashSet();
+        HiddenGuideLayers = ReadHiddenGuides(services.Settings.HiddenGuides, out _unknownHiddenGuides);
 
         // 3.6 E2: custom platforms go into a pack of their own, so the default is a fresh Custom Pack N. Opened on
         // a pack's own tile, the edit is of that pack and goes back into it; the Default pack is the one
@@ -680,6 +681,8 @@ public partial class PlatformEditorViewModel : ObservableObject
     /// the values and the target pack are the set's.</summary>
     partial void OnCurrentIndexChanged(int value)
     {
+        // The last map's boxes are not this map's, and the transform they would draw with is about to change.
+        Guides = null;
         ValuesFromText = Current.ValuesFromText;
         HasValuesFrom = Current.HasValuesFrom;
         OnPropertyChanged(nameof(Pieces));
@@ -828,8 +831,36 @@ public partial class PlatformEditorViewModel : ObservableObject
         }
 
         _services.UpdateSettings(
-            _services.Settings with { HiddenGuideLayers = [.. hidden.Order().Select(l => l.ToString())] });
+            _services.Settings with { HiddenGuideLayers = HiddenGuideNames(hidden, _unknownHiddenGuides) });
     }
+
+    /// <summary>G4: the hidden layers in the settings. A name this version does not know goes to
+    /// <paramref name="unknown"/> rather than being dropped, so a later version's layer stays hidden after this
+    /// one saves the set.</summary>
+    public static HashSet<GuideLayer> ReadHiddenGuides(IEnumerable<string> names, out IReadOnlyList<string> unknown)
+    {
+        var known = new HashSet<GuideLayer>();
+        var skipped = new List<string>();
+        foreach (var name in names)
+        {
+            if (Enum.TryParse<GuideLayer>(name, ignoreCase: true, out var layer) && Enum.IsDefined(layer))
+            {
+                known.Add(layer);
+            }
+            else
+            {
+                skipped.Add(name);
+            }
+        }
+
+        unknown = skipped;
+        return known;
+    }
+
+    /// <summary>G4: what the settings keep for the hidden layers: the known ones in order, then the names this
+    /// version did not know, as they were read.</summary>
+    public static IReadOnlyList<string> HiddenGuideNames(IEnumerable<GuideLayer> hidden, IReadOnlyList<string> unknown) =>
+        [.. hidden.Order().Select(l => l.ToString()), .. unknown];
 
     /// <summary>Where each piece is read from: the file the record's values were worked out from when a pack
     /// remembers this map (spec 5.2), and otherwise the pack's copy when the pack has one that draws something
@@ -1691,7 +1722,9 @@ public partial class PlatformEditorViewModel : ObservableObject
         var rows = Pieces;
         var model = _services.LevelData.Model;
         var openLevel = CurrentMap.BaseLevel.LevelName;
-        var masks = await Task.Run(() => PlatformPieceViewModel.SeamMasks(rows, model, out _, openLevel));
+        var (masks, shared) = await Task.Run(() =>
+            (PlatformPieceViewModel.SeamMasks(rows, model, out _, out var flags, openLevel), flags));
+        PlatformPieceViewModel.ApplyShared(shared);
         foreach (var row in Pieces.Where(p => p.IsTicked).ToList())
         {
             var copy = Path.Combine(folder, row.FileName);
@@ -2088,7 +2121,10 @@ public partial class PlatformEditorViewModel : ObservableObject
             // One record for the run: every map of the set goes into the one pack, and it is written after each
             // map so a cancelled run leaves the record saying exactly what is in the pack.
             var record = await Task.Run(() => PlatformEditRecord.Load(packRoot));
-            foreach (var set in _sets)
+            // S3: a file two maps of the batch share is written once, by the first set that has it, and the open
+            // map's set goes first, so the pack holds the mask the preview showed rather than the last map's.
+            var writtenFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var set in _sets.OrderBy(s => s == Current ? 0 : 1))
             {
                 if (cts.IsCancellationRequested)
                 {
@@ -2106,10 +2142,15 @@ public partial class PlatformEditorViewModel : ObservableObject
                 var openLevel = set.Map.BaseLevel.LevelName;
                 await Task.Run(() =>
                 {
-                    var masks = PlatformPieceViewModel.SeamMasks(rows, model, out var missing, openLevel);
+                    var masks = PlatformPieceViewModel.SeamMasks(rows, model, out var missing, out _, openLevel);
                     SeamFixSkipped |= missing;
                     foreach (var row in rows)
                     {
+                        if (!writtenFiles.Add(row.RelativePath))
+                        {
+                            continue;
+                        }
+
                         row.CopyOrWriteResult(Path.Combine(packRoot, row.RelativePath), masks.GetValueOrDefault(row.RelativePath));
                     }
 
@@ -2291,6 +2332,7 @@ public partial class PlatformEditorViewModel : ObservableObject
         var width = (int)Math.Round(MapCompositor.PanelWidth * PreviewScale);
         var height = (int)Math.Round(MapCompositor.PanelHeight * PreviewScale);
         var reading = "";
+        IReadOnlyList<(PlatformPieceViewModel Row, bool Shared)> shared = [];
         try
         {
             // The record's pictures are what some of the rows are made of, so the first render waits for them.
@@ -2299,7 +2341,7 @@ public partial class PlatformEditorViewModel : ObservableObject
                 () =>
                 {
                     // The preview shows the corrected files, the same ones Save writes (3.2 O1).
-                    var masks = PlatformPieceViewModel.SeamMasks(rows, model, out _, level.LevelName);
+                    var masks = PlatformPieceViewModel.SeamMasks(rows, model, out _, out shared, level.LevelName);
                     foreach (var row in rows)
                     {
                         ct.ThrowIfCancellationRequested();
@@ -2318,6 +2360,8 @@ public partial class PlatformEditorViewModel : ObservableObject
                 return;
             }
 
+            // S3: only the render that lands sets the rows' lines, so an older one's flags cannot follow a newer's.
+            PlatformPieceViewModel.ApplyShared(shared);
             Preview = bitmap;
             LevelToStage = MapCompositor.StageTransform(
                 viewport ?? level.Camera, MapCompositor.PanelWidth, MapCompositor.PanelHeight);

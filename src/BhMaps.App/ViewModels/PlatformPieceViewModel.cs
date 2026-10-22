@@ -252,7 +252,8 @@ public partial class PlatformPieceViewModel : ObservableObject
         : alsoIn + ", " + FadedLinesText;
 
     /// <summary>S3: true when this row's file is also used by other layouts and the seam mask written for the map
-    /// open in the editor leaves some of those uses visibly wrong. Set by <see cref="SeamMasks"/>.</summary>
+    /// open in the editor leaves some of those uses visibly wrong. Worked out by <see cref="SeamMasks"/> and set
+    /// through <see cref="ApplyShared"/>.</summary>
     [ObservableProperty]
     public partial bool SharedWithOtherMaps { get; private set; }
 
@@ -260,16 +261,21 @@ public partial class PlatformPieceViewModel : ObservableObject
     /// playable layouts of <paramref name="model"/>. <paramref name="missing"/> is true when a row is faded and
     /// there is no level data to correct it with, which leaves every row fading on its own as before. S3: with
     /// <paramref name="openLevel"/>, the LevelName of the layout open in the editor, that layout's uses of a shared
-    /// file win, and every row's <see cref="SharedWithOtherMaps"/> says whether other layouts are left with
-    /// lines.</summary>
+    /// file win, and <paramref name="shared"/> says for every row whether other layouts are left with lines.
+    /// Callers run this inside Task.Run, so the flags are handed back for the caller to apply on the UI thread
+    /// once it knows the work is still current.</summary>
     public static IReadOnlyDictionary<string, float[]> SeamMasks(
-        IReadOnlyList<PlatformPieceViewModel> rows, LevelDataModel? model, out bool missing, string? openLevel = null)
+        IReadOnlyList<PlatformPieceViewModel> rows,
+        LevelDataModel? model,
+        out bool missing,
+        out IReadOnlyList<(PlatformPieceViewModel Row, bool Shared)> shared,
+        string? openLevel = null)
     {
         var faded = rows.Where(r => r.Opacity < DefaultOpacity).ToList();
         missing = faded.Count > 0 && model is null;
         if (faded.Count == 0 || model is null)
         {
-            SetShared(rows, _ => false);
+            shared = [.. rows.Select(row => (row, false))];
             return new Dictionary<string, float[]>();
         }
 
@@ -298,30 +304,17 @@ public partial class PlatformPieceViewModel : ObservableObject
 
         var wrongElsewhere = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
         var masks = SeamMask.Compute(model.Levels.Where(l => !hidden.Contains(l.LevelName)), pieces, openLevel, wrongElsewhere);
-        SetShared(rows, row => wrongElsewhere.ContainsKey(row.RelativePath));
+        shared = [.. rows.Select(row => (row, wrongElsewhere.ContainsKey(row.RelativePath)))];
         return masks;
     }
 
-    /// <summary>Callers run <see cref="SeamMasks"/> inside Task.Run, and the rows are bound to the window, so the
-    /// flags are worked out here and handed to the UI thread to set.</summary>
-    private static void SetShared(IReadOnlyList<PlatformPieceViewModel> rows, Func<PlatformPieceViewModel, bool> shared)
+    /// <summary>S3: sets the flags <see cref="SeamMasks"/> handed back. The rows are bound to the window, so this
+    /// runs on the UI thread, after the caller has checked the flags are not from work a newer one replaced.</summary>
+    public static void ApplyShared(IReadOnlyList<(PlatformPieceViewModel Row, bool Shared)> shared)
     {
-        var flags = rows.Select(row => (row, shared: shared(row))).ToList();
-        void Apply()
+        foreach (var (row, value) in shared)
         {
-            foreach (var (row, value) in flags)
-            {
-                row.SharedWithOtherMaps = value;
-            }
-        }
-
-        if (System.Windows.Application.Current?.Dispatcher is { } dispatcher && !dispatcher.CheckAccess())
-        {
-            dispatcher.InvokeAsync(Apply);
-        }
-        else
-        {
-            Apply();
+            row.SharedWithOtherMaps = value;
         }
     }
 
