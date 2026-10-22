@@ -223,4 +223,30 @@ public class LevelDataCacheTests
         Assert.True(platform.IsThemed);
         Assert.Equal(-3, Assert.Single(platform.Assets).W);
     }
+
+    [Fact]
+    public void SaveThenLoad_RoundTripsTheCollisionLines()
+    {
+        using var tmp = new TempDir();
+        var root = Path.Combine(tmp.Path, "game");
+        Directory.CreateDirectory(root);
+        File.WriteAllBytes(Path.Combine(root, "Dynamic.swz"), SwzWriter.Write(Key,
+            [Encoding.UTF8.GetBytes(LevelXml.Level("Grove", "Grove",
+                LevelXml.Camera(0, 0, 100, 50)
+                + "<HardCollision X1=\"1\" X2=\"9\" Y=\"5\" />"
+                + "<DynamicCollision PlatID=\"2\" X=\"10\" Y=\"20\"><SoftCollision X1=\"0\" X2=\"4\" Y=\"0\" />"
+                + "</DynamicCollision>"))]));
+        var read = LevelDataReader.Read(root, Key);
+        var path = LevelDataCache.PathFor(Path.Combine(tmp.Path, "appdata"));
+
+        LevelDataCache.Save(path, read.Model!, LevelDataReader.Stamp(root, read.Key));
+        var loaded = LevelDataCache.Load(path);
+
+        Assert.Equal(
+            [
+                new CollisionLine(CollisionKind.Hard, 1, 5, 9, 5),
+                new CollisionLine(CollisionKind.Soft, 10, 20, 14, 20, "2"),
+            ],
+            Assert.Single(loaded!.Value.Model.Levels).Collisions);
+    }
 }

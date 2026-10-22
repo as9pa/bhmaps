@@ -137,14 +137,17 @@ public class LevelDescParserTests
     public void Parse_IgnoresAnUnsizedAssetNameBecauseItNamesAnAnimationSymbolNotAnImage()
     {
         var xml = LevelXml.Level("Climb", "Climb", LevelXml.Camera(0, 0, 10, 10)
-            + "<PressurePlateCollision AssetName=\"a__AnimationPressurePlate\" X=\"3\" Y=\"4\" />"
-            + "<Platform AssetName=\"flat.png\" X=\"3\" W=\"10\" H=\"0\" />");
+            + "<Platform AssetName=\"a_LevelAnim_Flag\" X=\"3\" Y=\"4\" />"
+            + "<Platform AssetName=\"flat.png\" X=\"3\" W=\"10\" H=\"0\" />"
+            + "<PressurePlateCollision AssetName=\"a__AnimationPressurePlate\" X1=\"3\" X2=\"5\" Y=\"4\" />");
 
         var level = LevelDescParser.Parse(xml);
 
+        Assert.Equal(2, level.Platforms.Count);
         Assert.Empty(level.Platforms[0].Assets);
         Assert.Equal(3, level.Platforms[0].X);
         Assert.Empty(level.Platforms[1].Assets);
+        Assert.Equal(CollisionKind.PressurePlate, Assert.Single(level.Collisions).Kind);
     }
 
     [Fact]
@@ -238,6 +241,124 @@ public class LevelDescParserTests
         Assert.Equal(1, node.Scale);
         Assert.Equal(0, node.Assets[0].X);
         Assert.Equal(0, node.Assets[0].W);
+    }
+
+    [Fact]
+    public void Parse_NormalizesTheThreeSegmentFormsToTwoEnds()
+    {
+        var xml = LevelXml.Level("Grove", "Grove", LevelXml.Camera(0, 0, 10, 10)
+            + "<HardCollision X1=\"-100\" X2=\"250.5\" Y=\"40\" />"
+            + "<NoSlideCollision X=\"-100\" Y1=\"40\" Y2=\"300\" />"
+            + "<BouncyHardCollision X1=\"0\" X2=\"30\" Y1=\"10\" Y2=\"90\" />"
+            + "<HardCollision AnchorX=\"20\" AnchorY=\"5\" X1=\"0\" X2=\"40\" Y1=\"10\" Y2=\"30\" />");
+
+        var level = LevelDescParser.Parse(xml);
+
+        Assert.Equal(
+            [
+                new CollisionLine(CollisionKind.Hard, -100, 40, 250.5, 40),
+                new CollisionLine(CollisionKind.NoSlide, -100, 40, -100, 300),
+                new CollisionLine(CollisionKind.BouncyHard, 0, 10, 30, 90),
+                new CollisionLine(CollisionKind.Hard, 0, 10, 40, 30, null, 20, 5),
+            ],
+            level.Collisions);
+    }
+
+    [Fact]
+    public void Parse_OffsetsTheLinesOfADynamicCollisionByItsPositionAndKeepsItsPlatId()
+    {
+        var xml = LevelXml.Level("Grove", "Grove", LevelXml.Camera(0, 0, 10, 10)
+            + "<MovingPlatform PlatID=\"1\" X=\"400\" Y=\"-50\"><Platform AssetName=\"a.png\" W=\"10\" H=\"10\" />"
+            + "</MovingPlatform>"
+            + "<DynamicCollision PlatID=\"1\" X=\"500\" Y=\"-100\">"
+            + "<SoftCollision X1=\"10\" X2=\"310\" Y=\"0\" />"
+            + "<HardCollision X=\"0\" Y1=\"0\" Y2=\"90\" />"
+            + "<PressurePlateCollision AssetName=\"a__AnimationPressurePlate\" PlatID=\"1\" X1=\"-5\" X2=\"5\" Y1=\"1\" Y2=\"2\""
+            + " AnchorX=\"3\" AnchorY=\"4\" />"
+            + "</DynamicCollision>");
+
+        var level = LevelDescParser.Parse(xml);
+
+        Assert.Equal(
+            [
+                new CollisionLine(CollisionKind.Soft, 510, -100, 810, -100, "1"),
+                new CollisionLine(CollisionKind.Hard, 500, -100, 500, -10, "1"),
+                new CollisionLine(CollisionKind.PressurePlate, 495, -99, 505, -98, "1", 503, -96),
+            ],
+            level.Collisions);
+    }
+
+    [Fact]
+    public void Parse_KeepsCollisionOutOfThePlatformTreeAndLeavesPlatformsAlone()
+    {
+        var xml = LevelXml.Level("Grove", "Grove", LevelXml.Camera(0, 0, 10, 10)
+            + "<HardCollision X1=\"0\" X2=\"10\" Y=\"0\" />"
+            + "<Platform X=\"7\"><Asset AssetName=\"a.png\" W=\"1\" H=\"1\" /></Platform>"
+            + "<DynamicCollision PlatID=\"1\" X=\"5\" Y=\"5\"><SoftCollision X1=\"0\" X2=\"1\" Y=\"0\" /></DynamicCollision>"
+            + "<MovingPlatform PlatID=\"1\" X=\"3\"><Platform AssetName=\"b.png\" W=\"2\" H=\"2\" /></MovingPlatform>");
+
+        var level = LevelDescParser.Parse(xml);
+
+        Assert.Equal(2, level.Platforms.Count);
+        Assert.Equal(7, level.Platforms[0].X);
+        Assert.Equal("a.png", Assert.Single(level.Platforms[0].Assets).AssetName);
+        Assert.True(level.Platforms[1].Moving);
+        Assert.Equal(3, level.Platforms[1].X);
+        Assert.Equal(2, level.Collisions.Count);
+    }
+
+    [Fact]
+    public void Parse_CountsTheLinesOfABrawlhavenShapedLevel()
+    {
+        // Brawlhaven has 25 HardCollision lines and one SoftCollision. Synthetic coordinates in all three forms.
+        var hard = string.Concat(Enumerable.Range(0, 25).Select(i => (i % 3) switch
+        {
+            0 => $"<HardCollision X1=\"{i}\" X2=\"{i + 100}\" Y=\"{i * 10}\" />",
+            1 => $"<HardCollision X=\"{i}\" Y1=\"{i * 10}\" Y2=\"{(i * 10) + 50}\" />",
+            _ => $"<HardCollision X1=\"{i}\" X2=\"{i + 40}\" Y1=\"{i * 10}\" Y2=\"{(i * 10) + 40}\" />",
+        }));
+        var xml = LevelXml.Level("Brawlhaven", "Brawlhaven", LevelXml.Camera(0, 0, 10, 10)
+            + "<Platform X=\"1\"><Asset AssetName=\"a.png\" W=\"1\" H=\"1\" /></Platform>"
+            + hard
+            + "<SoftCollision X1=\"390\" X2=\"1080\" Y=\"2180\" />");
+
+        var level = LevelDescParser.Parse(xml);
+
+        Assert.Equal(26, level.Collisions.Count);
+        Assert.Equal(25, level.Collisions.Count(c => c.Kind == CollisionKind.Hard));
+        Assert.Equal(1, level.Collisions.Count(c => c.Kind == CollisionKind.Soft));
+        Assert.All(level.Collisions, c => Assert.Null(c.PlatId));
+        Assert.Single(level.Platforms);
+    }
+
+    [Theory]
+    [InlineData("Hard", CollisionKind.Hard)]
+    [InlineData("Soft", CollisionKind.Soft)]
+    [InlineData("NoSlide", CollisionKind.NoSlide)]
+    [InlineData("BouncyHard", CollisionKind.BouncyHard)]
+    [InlineData("BouncySoft", CollisionKind.BouncySoft)]
+    [InlineData("BouncyNoSlide", CollisionKind.BouncyNoSlide)]
+    [InlineData("Lava", CollisionKind.Lava)]
+    [InlineData("PressurePlate", CollisionKind.PressurePlate)]
+    [InlineData("SoftPressurePlate", CollisionKind.SoftPressurePlate)]
+    [InlineData("GameModeHard", CollisionKind.GameModeHard)]
+    [InlineData("Mud", CollisionKind.Mud)]
+    public void Parse_NamesEveryCollisionKindTheGameUses(string prefix, CollisionKind expected)
+    {
+        var xml = LevelXml.Level("Grove", "Grove", $"<{prefix}Collision X1=\"0\" X2=\"1\" Y=\"0\" />");
+
+        Assert.Equal(expected, Assert.Single(LevelDescParser.Parse(xml).Collisions).Kind);
+    }
+
+    [Fact]
+    public void Parse_SkipsACollisionKindItDoesNotKnow()
+    {
+        var xml = LevelXml.Level("Grove", "Grove", "<WarpCollision X1=\"0\" X2=\"1\" Y=\"0\" />");
+
+        var level = LevelDescParser.Parse(xml);
+
+        Assert.Empty(level.Collisions);
+        Assert.Empty(level.Platforms);
     }
 
     [Theory]

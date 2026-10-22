@@ -26,9 +26,65 @@ public static class LevelDescParser
             BuildCamera(root.Element("CameraBounds")),
             root.Elements("Background").Select(BuildBackground).ToList(),
             root.Elements()
-                .Where(e => !NonPlatformElements.Contains(e.Name.LocalName))
+                .Where(e => !NonPlatformElements.Contains(e.Name.LocalName) && !IsCollision(e))
                 .Select(BuildNode)
-                .ToList());
+                .ToList())
+        {
+            Collisions = BuildCollisions(root),
+        };
+    }
+
+    /// <summary>Every element named *Collision is collision, never part of the platform tree. DynamicCollision is
+    /// the one container among them.</summary>
+    private static bool IsCollision(XElement element) =>
+        element.Name.LocalName.EndsWith("Collision", StringComparison.Ordinal);
+
+    /// <summary>The lines of a DynamicCollision are relative to its X and Y and are stored offset by them, with its
+    /// PlatID (see <see cref="CollisionLine"/> for why the offset belongs here). A kind the enum does not name is
+    /// skipped.</summary>
+    private static List<CollisionLine> BuildCollisions(XElement root)
+    {
+        var lines = new List<CollisionLine>();
+        foreach (var element in root.Elements().Where(IsCollision))
+        {
+            if (element.Name.LocalName == "DynamicCollision")
+            {
+                var platId = Read(element, "PlatID");
+                var x = Num(element, "X", 0);
+                var y = Num(element, "Y", 0);
+                foreach (var child in element.Elements().Where(IsCollision))
+                {
+                    AddLine(lines, child, x, y, platId);
+                }
+            }
+            else
+            {
+                AddLine(lines, element, 0, 0, null);
+            }
+        }
+
+        return lines;
+    }
+
+    /// <summary>A horizontal line names one Y and a vertical line one X; both ends take it.</summary>
+    private static void AddLine(List<CollisionLine> lines, XElement element, double dx, double dy, string? platId)
+    {
+        var name = element.Name.LocalName[..^"Collision".Length];
+        if (!Enum.TryParse<CollisionKind>(name, out var kind) || !Enum.IsDefined(kind))
+        {
+            return;
+        }
+
+        var x = NumOrNull(element, "X");
+        var y = NumOrNull(element, "Y");
+        var anchorX = NumOrNull(element, "AnchorX");
+        var anchorY = NumOrNull(element, "AnchorY");
+        lines.Add(new CollisionLine(
+            kind,
+            dx + (NumOrNull(element, "X1") ?? x ?? 0), dy + (NumOrNull(element, "Y1") ?? y ?? 0),
+            dx + (NumOrNull(element, "X2") ?? x ?? 0), dy + (NumOrNull(element, "Y2") ?? y ?? 0),
+            platId,
+            dx + anchorX, dy + anchorY));
     }
 
     private static CameraBounds BuildCamera(XElement? element) =>

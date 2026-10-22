@@ -31,12 +31,45 @@ public sealed record PlatformNode(
     public double EffectiveScaleY => Scale * ScaleY;
 }
 
+/// <summary>The kind of a collision line: its element name without the "Collision" suffix, so HardCollision is
+/// <see cref="Hard"/>.</summary>
+public enum CollisionKind
+{
+    Hard,
+    Soft,
+    NoSlide,
+    BouncyHard,
+    BouncySoft,
+    BouncyNoSlide,
+    Lava,
+    PressurePlate,
+    SoftPressurePlate,
+    GameModeHard,
+    Mud,
+}
+
+/// <summary>One collision segment in level units, whichever of the game's three forms it was written in (X1 X2 Y,
+/// X Y1 Y2, or X1 X2 Y1 Y2). A curved line also names the control point it bends towards in
+/// <see cref="AnchorX"/> and <see cref="AnchorY"/>. <see cref="PlatId"/> is the PlatID of the DynamicCollision the
+/// line came from, null for a line that never moves. Such a line is already offset by its container's X and Y, which
+/// puts it where the game has it at rest: MapCompositor.Walk draws a MovingPlatform at its own X and Y and ignores its
+/// Animation, and the game moves the platform and the collision of the same PlatID by the same animation offset, so a
+/// later step that animates either adds that offset to both and needs nothing from the parser.</summary>
+public sealed record CollisionLine(
+    CollisionKind Kind, double X1, double Y1, double X2, double Y2, string? PlatId = null,
+    double? AnchorX = null, double? AnchorY = null);
+
+/// <summary><see cref="Collisions"/> sits outside the positional list so every caller that builds a level without
+/// collision keeps compiling; it is empty unless the parser fills it.</summary>
 public sealed record LevelDesc(
     string LevelName,
     string AssetDir,
     CameraBounds Camera,
     IReadOnlyList<LevelBackground> Backgrounds,
-    IReadOnlyList<PlatformNode> Platforms);
+    IReadOnlyList<PlatformNode> Platforms)
+{
+    public IReadOnlyList<CollisionLine> Collisions { get; init; } = [];
+}
 
 /// <summary><see cref="ThumbnailFile"/> is the map-select picture the game names in ThumbnailPNGFile, kept
 /// verbatim because the game names a .jpg in that field. Null when the level names none.</summary>
