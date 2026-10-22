@@ -446,6 +446,22 @@ public class SettingsStoreTests
     }
 
     [Fact]
+    public void SaveThenLoad_RoundTripsTheGuidesSwitch_OnByDefault()
+    {
+        using var tmp = new TempDir();
+        var path = tmp.Sub("settings.json");
+
+        Assert.True(SettingsStore.Load(path).ShowGuides);
+        File.WriteAllText(path, "{ \"gamePath\": \"C:\\Game\" }");
+        Assert.True(SettingsStore.Load(path).ShowGuides);
+
+        SettingsStore.Save(path, AppSettings.Default with { ShowGuides = false });
+
+        Assert.False(SettingsStore.Load(path).ShowGuides);
+        Assert.Contains("\"showGuides\": false", File.ReadAllText(path));
+    }
+
+    [Fact]
     public void Load_IgnoresTheDroppedThumbnailSwitch()
     {
         using var tmp = new TempDir();

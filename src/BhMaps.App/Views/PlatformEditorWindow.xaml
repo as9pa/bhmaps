@@ -47,6 +47,60 @@
       <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
+    <!-- G3: ChipToggle's chrome, hover and focus ring, with the state in an amber dot rather than ChipToggle's
+         white fill, so the switch never reads as a third chip of the All pieces / Selected only pair. -->
+    <Style x:Key="GuidesPill" TargetType="ToggleButton" BasedOn="{StaticResource ChipToggle}">
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ToggleButton">
+            <Border Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="{StaticResource RadiusPill}">
+              <Grid>
+                <Border x:Name="HoverFill"
+                        Background="{StaticResource Surface2Brush}"
+                        CornerRadius="{StaticResource RadiusPill}"
+                        Opacity="0" />
+                <StackPanel Margin="{TemplateBinding Padding}" Orientation="Horizontal">
+                  <Ellipse x:Name="Dot"
+                           Width="8"
+                           Height="8"
+                           Margin="0,0,8,0"
+                           VerticalAlignment="Center"
+                           Fill="Transparent"
+                           Stroke="{StaticResource WarnBrush}"
+                           StrokeThickness="1.5" />
+                  <ContentPresenter VerticalAlignment="Center" />
+                </StackPanel>
+              </Grid>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Trigger.EnterActions>
+                  <BeginStoryboard>
+                    <Storyboard>
+                      <DoubleAnimation Storyboard.TargetName="HoverFill" Storyboard.TargetProperty="Opacity" To="1" Duration="{StaticResource FadeDuration}" />
+                    </Storyboard>
+                  </BeginStoryboard>
+                </Trigger.EnterActions>
+                <Trigger.ExitActions>
+                  <BeginStoryboard>
+                    <Storyboard>
+                      <DoubleAnimation Storyboard.TargetName="HoverFill" Storyboard.TargetProperty="Opacity" To="0" Duration="{StaticResource FadeDuration}" />
+                    </Storyboard>
+                  </BeginStoryboard>
+                </Trigger.ExitActions>
+              </Trigger>
+              <Trigger Property="IsChecked" Value="True">
+                <Setter TargetName="Dot" Property="Fill" Value="{StaticResource WarnBrush}" />
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
     <!-- A row's own line under its readout, indented to the file name. Its own Text drives the visibility, so a
          row with nothing to say keeps the list as tight as it was (spec 5.2). -->
     <Style x:Key="RowNote" TargetType="TextBlock" BasedOn="{StaticResource HintText}">
@@ -128,37 +182,57 @@
                   controls:Icon.Glyph="{StaticResource Icon.ChevronRight}" />
         </Grid>
 
-        <!-- 1280x720 is the size the view model composes at; the Viewbox only scales what came back, so
-             nothing is resampled twice. -->
-        <Viewbox Grid.Row="1" Margin="16" Stretch="Uniform">
-          <Border Width="1280" Height="720" Background="{StaticResource BgBrush}">
-            <!-- Spec 6.2: dragging the picture that is laid across the platforms. The Image is the composed
-                 stage at its own 1280 by 720, so the code behind only has to undo the Viewbox's scale. -->
-            <Image MouseLeftButtonDown="Preview_MouseLeftButtonDown"
-                   MouseLeftButtonUp="Preview_MouseLeftButtonUp"
-                   MouseMove="Preview_MouseMove"
-                   MouseWheel="Preview_MouseWheel"
-                   RenderOptions.BitmapScalingMode="HighQuality"
-                   Source="{Binding Preview}"
-                   Stretch="Fill">
-              <Image.Style>
-                <Style TargetType="Image">
-                  <Style.Triggers>
-                    <DataTrigger Binding="{Binding CanPan}" Value="True">
-                      <Setter Property="Cursor" Value="SizeAll" />
-                    </DataTrigger>
-                  </Style.Triggers>
-                </Style>
-              </Image.Style>
-            </Image>
-          </Border>
-        </Viewbox>
+        <!-- G1/G3: the stage takes focus on a click, so G toggles the guides from it. The guides sit outside the
+             Viewbox, laid over it, so their lines are drawn in screen pixels; the code behind gives them the
+             Viewbox's scale and offset. -->
+        <Grid x:Name="Stage"
+              Grid.Row="1"
+              Margin="16"
+              AutomationProperties.Name="Stage"
+              Focusable="True"
+              FocusVisualStyle="{StaticResource DialogFocusRing}"
+              MouseLeave="Stage_MouseLeave"
+              MouseMove="Stage_MouseMove"
+              PreviewMouseDown="Stage_PreviewMouseDown">
+          <Grid.InputBindings>
+            <KeyBinding Key="G" Command="{Binding ToggleGuidesCommand}" />
+          </Grid.InputBindings>
+          <!-- 1280x720 is the size the view model composes at; the Viewbox only scales what came back, so
+               nothing is resampled twice. -->
+          <Viewbox x:Name="StageBox" SizeChanged="StageBox_SizeChanged" Stretch="Uniform">
+            <Border Width="1280" Height="720" Background="{StaticResource BgBrush}">
+              <!-- Spec 6.2: dragging the picture that is laid across the platforms. The Image is the composed
+                   stage at its own 1280 by 720, so the code behind only has to undo the Viewbox's scale. -->
+              <Image MouseLeftButtonDown="Preview_MouseLeftButtonDown"
+                     MouseLeftButtonUp="Preview_MouseLeftButtonUp"
+                     MouseMove="Preview_MouseMove"
+                     MouseWheel="Preview_MouseWheel"
+                     RenderOptions.BitmapScalingMode="HighQuality"
+                     Source="{Binding Preview}"
+                     Stretch="Fill">
+                <Image.Style>
+                  <Style TargetType="Image">
+                    <Style.Triggers>
+                      <DataTrigger Binding="{Binding CanPan}" Value="True">
+                        <Setter Property="Cursor" Value="SizeAll" />
+                      </DataTrigger>
+                    </Style.Triggers>
+                  </Style>
+                </Image.Style>
+              </Image>
+            </Border>
+          </Viewbox>
+
+          <controls:GuidesOverlay x:Name="GuidesLayer"
+                                  Guides="{Binding Guides}"
+                                  Visibility="{Binding ShowGuides, Converter={StaticResource BoolToVis}}" />
+        </Grid>
 
         <!-- 3.10: what the mouse does on the preview, one quiet line under it. -->
         <TextBlock Grid.Row="2"
                    Margin="16,0,16,12"
                    Style="{StaticResource HintText}"
-                   Text="Drag to move the picture. Scroll to zoom. Double-click to centre."
+                   Text="Drag to move the picture. Scroll to zoom. Double-click to centre. G shows or hides the guides."
                    Visibility="{Binding Preview, Converter={StaticResource NullToVis}}" />
 
         <!-- Spec 3.1: top left inside the card, on the image's own 16 px margin. A ListBox rather than two
@@ -184,6 +258,17 @@
                        Content="Selected only"
                        IsSelected="{Binding IsolatePreview, Mode=TwoWay}" />
         </ListBox>
+
+        <!-- G3: the guides switch at the right end of the chips' row, on the same 16 px margin. -->
+        <ToggleButton Grid.Row="1"
+                      Margin="0,16,16,0"
+                      HorizontalAlignment="Right"
+                      VerticalAlignment="Top"
+                      AutomationProperties.Name="Guides"
+                      Content="Guides"
+                      IsChecked="{Binding ShowGuides, Mode=TwoWay}"
+                      Style="{StaticResource GuidesPill}"
+                      Visibility="{Binding Preview, Converter={StaticResource NullToVis}}" />
 
         <!-- Spec 3.2: Selected only with nothing selected. The view model returns null when there is nothing to say,
              so the NullToVis the empty text already uses hides the line. -->
@@ -288,6 +373,8 @@
                           CornerRadius="{StaticResource Radius}"
                           Focusable="True"
                           FocusVisualStyle="{StaticResource DialogFocusRing}"
+                          MouseEnter="Row_MouseEnter"
+                          MouseLeave="Row_MouseLeave"
                           ToolTip="{Binding RelativePath}">
                     <Border.Style>
                       <Style TargetType="Border">

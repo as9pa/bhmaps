@@ -38,7 +38,11 @@ public sealed record AppSettings(
 
     /// <summary>3.9.3: the one-time rename of an old "My Backgrounds" pack to Custom Pack has run (or found nothing
     /// to rename), so a pack the user names My Backgrounds later is left alone.</summary>
-    bool MyBackgroundsMigrated = false)
+    bool MyBackgroundsMigrated = false,
+
+    /// <summary>G3: the platform editor draws its guides (piece boxes, overlaps, hitboxes) over the stage. On until
+    /// the user turns them off, and one switch for every map.</summary>
+    bool ShowGuides = true)
 {
     public const string DefaultGamePath = @"C:\Program Files (x86)\Steam\steamapps\common\Brawlhalla\mapArt";
 
