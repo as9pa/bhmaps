@@ -155,9 +155,114 @@ public class SeamMaskTests
         var outer = new Mover(1, [new Vector(), new Vector(500, 0)]);
         var inner = new Mover(2, [new Vector(), new Vector(0, 8)]);
 
-        Assert.Empty(SeamMask.Shifts([outer], [outer])!);
-        Assert.Equal([new Vector(), new Vector(0, 8)], SeamMask.Shifts([outer, inner], [outer])!.OrderBy(v => v.Y));
+        Assert.Empty(SeamMask.Shifts([outer], [outer])!.Offsets);
+        Assert.Equal(
+            [new Vector(), new Vector(0, 8)], SeamMask.Shifts([outer, inner], [outer])!.Offsets.OrderBy(v => v.Y));
         Assert.Null(SeamMask.Shifts([new Mover(3, null)], []));
+    }
+
+    private static PlatformTravel Travel(string animation) =>
+        LevelDescParser.Parse(
+                "<LevelDesc AssetDir=\"Grove\" LevelName=\"L\"><MovingPlatform PlatID=\"1\">"
+                + animation
+                + "</MovingPlatform></LevelDesc>")
+            .Platforms[0]
+            .Travel!;
+
+    private static PlatformNode Mover(string asset, PlatformTravel travel) =>
+        new(0, 0, 1, 1, 1, 0, null, [new LevelAsset(asset, 0, 0, 0, 0)], [], true, travel);
+
+    /// <summary>A platform right over the art below that holds there for frames 1..75 of a 100-frame cycle and
+    /// sits 200 to the right for the rest covers it three quarters of the time, so the art is corrected.</summary>
+    [Fact]
+    public void Compute_CorrectsArtAMovingPlatformCoversForMostOfItsCycle()
+    {
+        var still = Node(0, 0, new LevelAsset("a.png", 0, 0, 0, 0));
+        var moving = Mover("b.png", Travel(
+            "<Animation NumFrames=\"100\"><KeyFrame FrameNum=\"1\" /><KeyFrame FrameNum=\"75\" />"
+            + "<KeyFrame FrameNum=\"76\" X=\"200\" /><KeyFrame FrameNum=\"100\" X=\"200\" /></Animation>"));
+
+        var masks = SeamMask.Compute([Level("L", still, moving)], [Piece("a.png", 255, 0.5), Piece("b.png", 255, 0.5)]);
+
+        var lower = Assert.Single(masks);
+        Assert.Equal(@"Grove\a.png", lower.Key);
+        Assert.Equal(0f, lower.Value[5], 5);
+        Assert.Equal(0f, lower.Value[(39 * 40) + 39], 5);
+    }
+
+    /// <summary>The same platform holding over the art for only a quarter of its cycle leaves it at the plain
+    /// fade.</summary>
+    [Fact]
+    public void Compute_LeavesArtAMovingPlatformCoversForAQuarterOfItsCycle()
+    {
+        var still = Node(0, 0, new LevelAsset("a.png", 0, 0, 0, 0));
+        var moving = Mover("b.png", Travel(
+            "<Animation NumFrames=\"100\"><KeyFrame FrameNum=\"1\" /><KeyFrame FrameNum=\"25\" />"
+            + "<KeyFrame FrameNum=\"26\" X=\"200\" /><KeyFrame FrameNum=\"100\" X=\"200\" /></Animation>"));
+
+        var masks = SeamMask.Compute([Level("L", still, moving)], [Piece("a.png", 255, 0.5), Piece("b.png", 255, 0.5)]);
+
+        Assert.Empty(masks);
+    }
+
+    /// <summary>Keyframes in a Phase leave the timing unclear, so the platform falls back to covering only what it
+    /// covers at every keyframe: here it reaches 200 to the right, so nothing is corrected even though the
+    /// Animation's own keyframes hold over the art for three quarters of the cycle.</summary>
+    [Fact]
+    public void Compute_FallsBackToEveryKeyframeWhenAPhaseTimesThePlatform()
+    {
+        var travel = Travel(
+            "<Animation NumFrames=\"100\"><KeyFrame FrameNum=\"1\" /><KeyFrame FrameNum=\"75\" />"
+            + "<KeyFrame FrameNum=\"76\" X=\"200\" /><Phase StartFrame=\"90\"><KeyFrame FrameNum=\"1\" X=\"200\" />"
+            + "</Phase></Animation>");
+        var still = Node(0, 0, new LevelAsset("a.png", 0, 0, 0, 0));
+
+        var masks = SeamMask.Compute(
+            [Level("L", still, Mover("b.png", travel))], [Piece("a.png", 255, 0.5), Piece("b.png", 255, 0.5)]);
+
+        Assert.Equal(0, travel.Frames);
+        Assert.Null(travel.Sample());
+        Assert.Empty(masks);
+    }
+
+    /// <summary>Between keyframes the platform moves in a straight line by FrameNum, and after the last one it
+    /// heads back to the first, which it reaches a whole cycle after the first one's frame.</summary>
+    [Fact]
+    public void Sample_InterpolatesBetweenKeyframesAndWrapsBackToTheFirst()
+    {
+        var travel = Travel(
+            "<Animation NumFrames=\"4\"><KeyFrame FrameNum=\"1\" /><KeyFrame FrameNum=\"3\" X=\"8\" Y=\"-4\" /></Animation>");
+
+        Assert.Equal(4, travel.Frames);
+        Assert.Equal(
+            [new TravelOffset(0, 0), new TravelOffset(4, -2), new TravelOffset(8, -4), new TravelOffset(4, -2)],
+            travel.Sample());
+    }
+
+    /// <summary>Curve centres and keyframes without a FrameNum leave the timing unclear too.</summary>
+    [Fact]
+    public void Parse_LeavesTravelUntimedWithCurvesOrMissingFrames()
+    {
+        Assert.Equal(0, Travel("<Animation NumFrames=\"10\"><KeyFrame FrameNum=\"1\" CenterY=\"5\" /></Animation>").Frames);
+        Assert.Equal(0, Travel("<Animation NumFrames=\"10\"><KeyFrame X=\"5\" /></Animation>").Frames);
+        Assert.Equal(0, Travel("<Animation><KeyFrame FrameNum=\"1\" X=\"5\" /></Animation>").Frames);
+    }
+
+    /// <summary>A timed platform's cycle counts each shift by how many moments hold it, and turns around when it
+    /// carries the piece below.</summary>
+    [Fact]
+    public void Shifts_UseASingleTimedPlatformsCycle()
+    {
+        var mover = new Mover(
+            1, [new Vector(), new Vector(10, 0)], MoverShifts.Of([new Vector(), new Vector(10, 0), new Vector(10, 0)]));
+
+        var up = SeamMask.Shifts([mover], [])!;
+        var down = SeamMask.Shifts([], [mover])!;
+
+        Assert.Equal([new Vector(10, 0), new Vector()], up.Offsets);
+        Assert.Equal([2, 1], up.Samples!);
+        Assert.Equal([new Vector(-10, 0), new Vector()], down.Offsets);
+        Assert.Equal(3, down.Total);
     }
 
     private static readonly LevelDesc Overlapping =

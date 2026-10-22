@@ -11,7 +11,7 @@ internal sealed record PieceImage(int Width, int Height, byte[] Pixels, byte[] A
 
 /// <summary>Seam pixels left in one layout at one opacity while that layout is the one open in the editor, split by
 /// cause. <see cref="Moving"/> and <see cref="Other"/> stay even with the ideal one-layer fade (caused by moving
-/// platforms over art they do not cover at every keyframe, and everything else); <see cref="TwiceInMap"/> comes from uses of one file in the layout
+/// platforms over art they do not cover for most of their cycle, and everything else); <see cref="TwiceInMap"/> comes from uses of one file in the layout
 /// wanting different values; <see cref="SharedFile"/> from a file other layouts share. <see cref="Ideal"/> counts
 /// seam pixels in the ideal fade itself. <see cref="OtherMaps"/> is the cost elsewhere: file pixels the mask written
 /// for this layout leaves visibly wrong in other layouts, once per use.</summary>
@@ -103,7 +103,8 @@ internal sealed class SeamAuditor
             var maskWritten = ComputeMask(level, pieces, wrongElsewhere);
 
             // The ideal per use: faded under every use above it, under the mask's rule for moving platforms: a use
-            // that shifts against this one in game counts only where it covers this one at every keyframe.
+            // that shifts against this one in game counts only where it covers this one for more than half of its
+            // cycle, or at every keyframe where its timing is unclear (see SeamMask.Covers).
             // Elsewhere the ideal keeps the plain fade and its seams at rest land in the moving row as unfixable.
             var ideal = new List<float[]>();
             for (int k = 0; k < uses.Count; k++)
@@ -378,7 +379,8 @@ internal sealed class SeamAuditor
 
     /// <summary>The ideal mask of one use: the factor that makes it composite under <paramref name="above"/>
     /// (top first) like one layer at the plain opacity. A use that shifts against this one in game covers only where
-    /// it stays over it at every shift, as in the mask (see <see cref="SeamMask.Shifts"/>).</summary>
+    /// it counts as staying over it, as in the mask (see <see cref="SeamMask.Shifts"/> and
+    /// <see cref="SeamMask.Covers"/>).</summary>
     private static float[] Ideal(PieceUse own, List<PieceUse> above, float plain)
     {
         var mask = new float[own.Image.Width * own.Image.Height];
@@ -412,7 +414,7 @@ internal sealed class SeamAuditor
                         && shifts[j] is { } shift
                         && (
                             shift.Count == 0
-                            || SeamMask.CoversThroughout(o.From, o.Image.Width, o.Image.Height, pt, shift)
+                            || SeamMask.Covers(o.From, o.Image.Width, o.Image.Height, pt, shift)
                         )
                     )
                     {
