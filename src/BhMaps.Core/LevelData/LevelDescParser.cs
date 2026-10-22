@@ -147,15 +147,25 @@ public static class LevelDescParser
             return new PlatformTravel(offsets, turns);
         }
 
+        // Keyframes in Phases count from the phase's own start, and a curve bends the path off the straight line, so
+        // either leaves the timing to the bounds alone.
+        var frames = NumOrNull(animation, "NumFrames") ?? 0;
+        var keyFrames = animation.Descendants("KeyFrame").ToList();
+        var timed = frames > 0
+            && keyFrames.Count > 0
+            && !animation.Descendants("Phase").Any()
+            && keyFrames.Prepend(animation).All(e => NumOrNull(e, "CenterX") is null && NumOrNull(e, "CenterY") is null)
+            && keyFrames.All(e => NumOrNull(e, "FrameNum") is not null);
+
         AddCentre(offsets, animation);
-        foreach (var frame in animation.Descendants("KeyFrame"))
+        foreach (var frame in keyFrames)
         {
-            offsets.Add(new TravelOffset(Num(frame, "X", 0), Num(frame, "Y", 0)));
+            offsets.Add(new TravelOffset(Num(frame, "X", 0), Num(frame, "Y", 0), timed ? Num(frame, "FrameNum", 0) : 0));
             AddCentre(offsets, frame);
             turns |= Num(frame, "Rotation", 0) != 0;
         }
 
-        return new PlatformTravel(offsets, turns);
+        return new PlatformTravel(offsets, turns, timed ? frames : 0);
     }
 
     /// <summary>A curve centre names one or both coordinates; the missing one is 0, as on a KeyFrame.</summary>

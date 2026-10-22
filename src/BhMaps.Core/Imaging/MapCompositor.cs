@@ -84,8 +84,9 @@ public sealed record PlacedAsset(
 
 /// <summary>A moving platform a piece rides on: its group, and the level-space offsets from its rest position that
 /// its path stays inside, rest included (see <see cref="PlatformTravel"/>). Null offsets mean its keyframes turn it,
-/// which offsets cannot follow.</summary>
-public sealed record Mover(int Group, IReadOnlyList<Vector>? Offsets);
+/// which offsets cannot follow. <see cref="Cycle"/> is where it is over one animation cycle, in level space, when its
+/// timing is clear (see <see cref="PlatformTravel.Sample"/> and <see cref="MoverShifts"/>), and null otherwise.</summary>
+public sealed record Mover(int Group, IReadOnlyList<Vector>? Offsets, MoverShifts? Cycle = null);
 
 /// <summary>Draws a map the way the game composes it: the background stretched over the camera bounds,
 /// then the platform tree walked depth-first. Safe to call from any thread; every bitmap it returns is frozen.</summary>
@@ -382,7 +383,8 @@ public static class MapCompositor
             var offsets = travel is { Turns: true }
                 ? null
                 : (travel?.Offsets ?? []).Select(o => parent.Transform(new Vector(o.X, o.Y))).Prepend(new Vector()).ToList();
-            movers = [.. movers, new Mover(++groups, offsets)];
+            var cycle = offsets is null ? null : travel?.Sample()?.Select(o => parent.Transform(new Vector(o.X, o.Y)));
+            movers = [.. movers, new Mover(++groups, offsets, cycle is null ? null : MoverShifts.Of(cycle))];
         }
 
         var group = movers.Count == 0 ? 0 : movers[^1].Group;
