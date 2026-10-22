@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Media;
@@ -123,6 +124,12 @@ public partial class PlatformEditorViewModel : ObservableObject
 
     private long _sequence;
 
+    /// <summary>G1: each layout's file sizes by its index on the strip, read off the UI thread once, so a rebuild
+    /// for a new filter or new ticks never touches the disk again.</summary>
+    private readonly Dictionary<int, Task<Func<string, (int Width, int Height)?>>> _guideSizes = [];
+
+    private long _guidesSequence;
+
     /// <summary>How many times running the preview has found a watched file unreadable since the last render
     /// that worked (spec 6).</summary>
     private int _retries;
@@ -167,7 +174,14 @@ public partial class PlatformEditorViewModel : ObservableObject
         // opens in the mode the last chip click left behind.
         _restoringMode = true;
         IsolatePreview = request.OnlyFile is not null || services.Settings.PlatformPreviewIsolate;
+        ShowGuides = services.Settings.ShowGuides;
         _restoringMode = false;
+
+        // G4: a name this version does not know is skipped, so a layer a later version adds cannot break the set.
+        HiddenGuideLayers = services.Settings.HiddenGuides
+            .Select(name => Enum.TryParse<GuideLayer>(name, ignoreCase: true, out var layer) ? layer : (GuideLayer?)null)
+            .OfType<GuideLayer>()
+            .ToHashSet();
 
         // 3.6 E2: custom platforms go into a pack of their own, so the default is a fresh Custom Pack N. Opened on
         // a pack's own tile, the edit is of that pack and goes back into it; the Default pack is the one
@@ -218,6 +232,7 @@ public partial class PlatformEditorViewModel : ObservableObject
 
         _recordArt = LoadRecordArtAsync();
         SchedulePreview();
+        _ = RefreshGuidesAsync();
     }
 
     public event Action<bool>? CloseRequested;
@@ -284,6 +299,37 @@ public partial class PlatformEditorViewModel : ObservableObject
 
     [ObservableProperty]
     public partial ImageSource? Preview { get; set; }
+
+    /// <summary>G6: how many bitmap pixels the preview has per stage pixel. 1 at fit, so the stage is composed at
+    /// its own 1280 by 720 as before; the view raises it while it is zoomed in, so a closer look shows the art's
+    /// own detail rather than the fit preview blown up. <see cref="LevelToStage"/> stays in stage pixels.</summary>
+    [ObservableProperty]
+    public partial double PreviewScale { get; set; } = 1;
+
+    /// <summary>G3: the guides are drawn over the stage. One app-wide setting, on until the user turns it off and
+    /// remembered across restarts.</summary>
+    [ObservableProperty]
+    public partial bool ShowGuides { get; set; }
+
+    /// <summary>G1/G2: what the guides draw for the map on the strip, in level space. In Selected only it keeps
+    /// the ticked pieces' boxes and their overlaps. Null until the first build.</summary>
+    [ObservableProperty]
+    public partial PieceGuideSet? Guides { get; set; }
+
+    /// <summary>G4: the guide layers the legend switched off. One app-wide set, remembered across restarts like
+    /// <see cref="ShowGuides"/>, so a layer hidden on one map stays hidden on the next. Replaced, never changed in
+    /// place, so the overlay sees each change.</summary>
+    [ObservableProperty]
+    public partial IReadOnlyCollection<GuideLayer> HiddenGuideLayers { get; set; } = [];
+
+    /// <summary>G4: the legend under the stage, one line per layer the map on the strip has (<see
+    /// cref="PieceGuideSet.Layers"/>), each a button that hides or shows its layer.</summary>
+    public ObservableCollection<GuideLegendLineViewModel> GuideLegend { get; } = [];
+
+    /// <summary>Level space to the 1280 by 720 stage, for the camera the preview on show was composed with, so the
+    /// guides move with the picture and never ahead of it.</summary>
+    [ObservableProperty]
+    public partial Matrix LevelToStage { get; set; } = Matrix.Identity;
 
     /// <summary>Spec 6.2: true lays one picture across every platform and cuts each piece out of it, false fits
     /// the same picture to each piece on its own, as 2.4 did. Changing it cuts the ticked rows again. It can be
@@ -650,6 +696,7 @@ public partial class PlatformEditorViewModel : ObservableObject
         // The sliders and the Image line read the ticks, and this map's are not the last one's.
         OnTickedChanged();
         SchedulePreview();
+        _ = RefreshGuidesAsync();
     }
 
     /// <summary>The sliders move every ticked row, and a row moved on its own moves nothing else (spec 4).</summary>
@@ -699,6 +746,8 @@ public partial class PlatformEditorViewModel : ObservableObject
 
     /// <summary>The switch and the pan both mean the same thing: cut the ticked rows out of the loaded picture
     /// again. Nothing is loaded until a Replace or a record, and the record puts all three on at once.</summary>
+    partial void OnPreviewScaleChanged(double value) => SchedulePreview();
+
     partial void OnFitAcrossChanged(bool value) => ScheduleRecut();
 
     partial void OnFitChanged(PictureFit value) => ScheduleRecut();
@@ -730,7 +779,56 @@ public partial class PlatformEditorViewModel : ObservableObject
 
         // Spec 3.1: the chip re-renders through the existing 60 ms throttle. Spec 3.5: and is remembered.
         SchedulePreview();
+        _ = RefreshGuidesAsync();
         _services.UpdateSettings(_services.Settings with { PlatformPreviewIsolate = value });
+    }
+
+    partial void OnShowGuidesChanged(bool value)
+    {
+        if (!_restoringMode)
+        {
+            _services.UpdateSettings(_services.Settings with { ShowGuides = value });
+        }
+    }
+
+    /// <summary>G3: the G key on the stage.</summary>
+    [RelayCommand]
+    private void ToggleGuides() => ShowGuides = !ShowGuides;
+
+    /// <summary>G4: the legend follows the layers of the map on the strip. The same layers keep their lines, so a
+    /// rebuild for a tick or a filter does not take the keyboard focus off the line that has it.</summary>
+    partial void OnGuidesChanged(PieceGuideSet? value)
+    {
+        var layers = value?.Layers ?? [];
+        if (layers.SequenceEqual(GuideLegend.Select(line => line.Layer)))
+        {
+            return;
+        }
+
+        GuideLegend.Clear();
+        foreach (var layer in layers)
+        {
+            GuideLegend.Add(new GuideLegendLineViewModel(layer, HiddenGuideLayers.Contains(layer), ToggleGuideLayer));
+        }
+    }
+
+    /// <summary>G4: a legend line's click. Hides its layer or shows it again, and remembers the set app-wide.</summary>
+    private void ToggleGuideLayer(GuideLayer layer)
+    {
+        var hidden = HiddenGuideLayers.ToHashSet();
+        if (!hidden.Remove(layer))
+        {
+            hidden.Add(layer);
+        }
+
+        HiddenGuideLayers = hidden;
+        foreach (var line in GuideLegend)
+        {
+            line.IsHidden = hidden.Contains(line.Layer);
+        }
+
+        _services.UpdateSettings(
+            _services.Settings with { HiddenGuideLayers = [.. hidden.Order().Select(l => l.ToString())] });
     }
 
     /// <summary>Where each piece is read from: the file the record's values were worked out from when a pack
@@ -1838,6 +1936,7 @@ public partial class PlatformEditorViewModel : ObservableObject
         if (IsolatePreview)
         {
             SchedulePreview();
+            _ = RefreshGuidesAsync();
         }
     }
 
@@ -2123,6 +2222,52 @@ public partial class PlatformEditorViewModel : ObservableObject
         return (focus, PlatformBounds.For(level, PlatformBounds.Pad, aspect, focus));
     }
 
+    /// <summary>G1/G2: the guides for the map on the strip, rebuilt for the filter and the ticks it is opened with.
+    /// The file sizes are read once per layout off the UI thread; the geometry is built off it too. A newer call
+    /// wins, and a layout whose files cannot be read draws no guides, because they are an aid and not the map.</summary>
+    private async Task RefreshGuidesAsync()
+    {
+        var stamp = ++_guidesSequence;
+        var index = CurrentIndex;
+        var level = CurrentMap.BaseLevel;
+        IReadOnlySet<string>? only = IsolatePreview
+            ? new HashSet<string>(Pieces.Where(p => p.IsTicked).Select(p => p.RelativePath), StringComparer.OrdinalIgnoreCase)
+            : null;
+        if (!_guideSizes.TryGetValue(index, out var sizes))
+        {
+            var read = PieceGuides.SizesFrom(new AssetSources(_services.GamePath, _request.Pack?.FullPath));
+            sizes = Task.Run(() => ReadSizes(level, read));
+            _guideSizes[index] = sizes;
+        }
+
+        try
+        {
+            var size = await sizes;
+            var guides = await Task.Run(() => PieceGuides.Build(level, size, only));
+            if (stamp == _guidesSequence)
+            {
+                Guides = guides;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or FileFormatException or ArgumentException)
+        {
+            _guideSizes.Remove(index);
+            if (stamp == _guidesSequence)
+            {
+                Guides = null;
+            }
+        }
+    }
+
+    /// <summary>Every piece's size asked for once, kept, so the lookup it returns never reads a file again.</summary>
+    private static Func<string, (int Width, int Height)?> ReadSizes(
+        LevelDesc level, Func<string, (int Width, int Height)?> read)
+    {
+        var sizes = new Dictionary<string, (int Width, int Height)?>(StringComparer.OrdinalIgnoreCase);
+        PieceGuides.Outlines(level, path => sizes[path] = read(path));
+        return path => sizes.TryGetValue(path, out var size) ? size : null;
+    }
+
     /// <summary>Whether a file in the destination is one this editor put there for another program to edit, which
     /// is not the pack's own work and so is not what the Replace question is about.</summary>
     private bool IsWorkingCopy(string fullPath) =>
@@ -2140,6 +2285,8 @@ public partial class PlatformEditorViewModel : ObservableObject
         var background = Current.BackgroundPath;
         var (focus, viewport) = FocusFor(level);
         var model = _services.LevelData.Model;
+        var width = (int)Math.Round(MapCompositor.PanelWidth * PreviewScale);
+        var height = (int)Math.Round(MapCompositor.PanelHeight * PreviewScale);
         var reading = "";
         try
         {
@@ -2161,8 +2308,7 @@ public partial class PlatformEditorViewModel : ObservableObject
 
             var sources = new AssetSources(root, backgroundOverride: background);
             var bitmap = await _services.Renderer.RunAsync(
-                () => MapCompositor.Render(
-                    level, MapCompositor.PanelWidth, MapCompositor.PanelHeight, sources, viewport, focus),
+                () => MapCompositor.Render(level, width, height, sources, viewport, focus),
                 ct);
             if (ct.IsCancellationRequested || stamp != _sequence)
             {
@@ -2170,6 +2316,8 @@ public partial class PlatformEditorViewModel : ObservableObject
             }
 
             Preview = bitmap;
+            LevelToStage = MapCompositor.StageTransform(
+                viewport ?? level.Camera, MapCompositor.PanelWidth, MapCompositor.PanelHeight);
             Error = "";
             _retries = 0;
         }
